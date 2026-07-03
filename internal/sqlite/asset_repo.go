@@ -149,6 +149,35 @@ func (r *AssetRepo) FindByHash(ctx context.Context, hash string, sizeBytes int64
 	return a, err
 }
 
+// ListKnownFiles returns relative_path → (mtime, size, hash) for every live
+// asset in the source, in one query. The importer loads this once per scan to
+// skip unchanged files without a per-file lookup.
+func (r *AssetRepo) ListKnownFiles(ctx context.Context, sourceID string) (map[string]domain.FileStat, error) {
+	rows, err := r.DB.QueryContext(ctx,
+		"SELECT relative_path, mtime, size_bytes, partial_hash FROM assets WHERE source_id = ? AND is_deleted = 0",
+		sourceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	known := make(map[string]domain.FileStat)
+	for rows.Next() {
+		var relPath, mtime string
+		var size int64
+		var hash sql.NullString
+		if err := rows.Scan(&relPath, &mtime, &size, &hash); err != nil {
+			return nil, err
+		}
+		known[relPath] = domain.FileStat{
+			MTime:       parseTime(mtime),
+			SizeBytes:   size,
+			PartialHash: hash.String,
+		}
+	}
+	return known, rows.Err()
+}
+
 func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath string) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx,
 		"SELECT "+assetColumns+" FROM assets WHERE source_id = ? AND relative_path = ?",

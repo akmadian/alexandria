@@ -25,6 +25,7 @@ type AssetRepository interface {
 	BulkPatch(ctx context.Context, ids []string, patch AssetPatch) error
 	SoftDelete(ctx context.Context, id string) error
 	FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error)
+	ListKnownFiles(ctx context.Context, sourceID string) (map[string]domain.FileStat, error)
 
 	FindBySourcePath(ctx context.Context, sourceID, relativePath string) (*domain.Asset, error)
 	UpdatePath(ctx context.Context, assetID, sourceID, relativePath string) error

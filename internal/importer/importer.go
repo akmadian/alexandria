@@ -1,92 +1,152 @@
 package importer
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"os"
+	"io/fs"
 
-	"github.com/cespare/xxhash/v2"
-	"github.com/h2non/filetype"
+	"github.com/akmadian/alexandria/internal/catalog"
+	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/charmbracelet/log"
 )
 
-var (
-	entryMap = make(map[string]AssetDetails)
-)
-
-type AssetDetails struct {
-	BasePath string
-	Name     string
-
-	MTime       string
-	Size        int64
-	Type        filetype.Type
-	Hash        uint64
-	Fingerprint string
+// Importer indexes the files under a source into the catalog. It holds only
+// injected dependencies (no per-run state), so one Importer is safe to reuse
+// across imports.
+type Importer struct {
+	Assets catalog.AssetRepository
+	Dups   catalog.DuplicateRepository
+	Log    *log.Logger
 }
 
-func Run(path string) {
-	// Example usage of the logger
-	fmt.Println("Running importer...")
-
-	walkDir(path)
-
-	fmt.Println("Importer finished")
+// ImportError records one file that failed a stage. Per-file failures never
+// abort the run — they accumulate in ImportResult.Errors.
+type ImportError struct {
+	Path  string
+	Stage string
+	Err   error
 }
 
-func walkDir(path string) {
-	entries, err := os.ReadDir(path)
+// ImportResult summarizes a completed run.
+type ImportResult struct {
+	Added   int
+	Updated int
+	Moved   int
+	Skipped int
+	Dups    int
+	Errors  []ImportError
+}
+
+// Run scans fsys — the resolved filesystem for source — and indexes every
+// supported file into the catalog. source must already be registered; the
+// importer neither creates nor resolves sources. Only catastrophic failures
+// return an error; per-file failures land in the result and the scan continues.
+func (imp *Importer) Run(ctx context.Context, source *domain.Source, fsys fs.FS) (ImportResult, error) {
+	var result ImportResult
+
+	known, err := imp.Assets.ListKnownFiles(ctx, source.ID)
 	if err != nil {
-		fmt.Println("Error reading directory:", err)
+		return result, fmt.Errorf("loading known files for source %q: %w", source.ID, err)
+	}
+	imp.Log.Info("import started", "source", source.Name, "known", len(known))
+
+	err = fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, walkErr error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if walkErr != nil {
+			imp.recordError(&result, path, "scan", walkErr)
+			return nil // a single unreadable dir shouldn't abort the walk
+		}
+		if d.IsDir() {
+			return nil
+		}
+		imp.ingestOne(ctx, source, fsys, path, d, known, &result)
+		return nil
+	})
+	if err != nil {
+		imp.Log.Warn("import canceled", "source", source.Name, "err", err)
+		return result, err
+	}
+
+	imp.Log.Info("import finished", "source", source.Name,
+		"added", result.Added, "updated", result.Updated, "moved", result.Moved,
+		"skipped", result.Skipped, "dups", result.Dups, "errors", len(result.Errors))
+	return result, nil
+}
+
+// IngestFile indexes a single file (the watcher path): the same stages as Run,
+// minus the directory walk and the skip gate. A batch of one.
+func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error {
+	info, err := fs.Stat(fsys, name)
+	if err != nil {
+		return err
+	}
+	sf, ok := scan(name, info)
+	if !ok {
+		imp.Log.Debug("ignored unsupported file", "path", name)
+		return nil
+	}
+	hash, err := hashFile(fsys, sf)
+	if err != nil {
+		return err
+	}
+	act, existing, err := imp.classifyContent(ctx, source, sf, hash)
+	if err != nil {
+		return err
+	}
+	return imp.persist(ctx, source, sf, hash, act, existing)
+}
+
+func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, path string, d fs.DirEntry, known map[string]domain.FileStat, result *ImportResult) {
+	info, err := d.Info()
+	if err != nil {
+		imp.recordError(result, path, "scan", err)
+		return
+	}
+	sf, ok := scan(path, info)
+	if !ok {
+		imp.Log.Debug("skipped unsupported file", "path", path)
+		return
+	}
+	if unchanged(sf, known) {
+		result.Skipped++
 		return
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			walkDir(fmt.Sprintf("%s/%s", path, entry.Name()))
-		} else {
-			name := entry.Name()
-			info, _ := entry.Info()
-			mtime := info.ModTime()
-			size := info.Size()
+	hash, err := hashFile(fsys, sf)
+	if err != nil {
+		imp.recordError(result, path, "hashing", err)
+		return
+	}
+	act, existing, err := imp.classifyContent(ctx, source, sf, hash)
+	if err != nil {
+		imp.recordError(result, path, "dedup", err)
+		return
+	}
+	if err := imp.persist(ctx, source, sf, hash, act, existing); err != nil {
+		// Write failures are the serious ones — surface loudly, not just in the list.
+		imp.Log.Error("catalog write failed", "path", path, "err", err)
+		result.Errors = append(result.Errors, ImportError{Path: path, Stage: "write", Err: err})
+		return
+	}
 
-			kind, _ := filetype.MatchFile(fmt.Sprintf("%s/%s", path, name))
-			if kind == filetype.Unknown {
-				fmt.Printf("Unknown file type for %s/%s\n", path, name)
-				continue
-			}
-
-			if entryMap[name] != (AssetDetails{}) {
-				fmt.Printf("Duplicate file name found: %s. Skipping.\n", name)
-				continue
-			}
-
-			hash := computeHash(fmt.Sprintf("%s/%s", path, name))
-
-			entryMap[name] = AssetDetails{
-				BasePath:    path,
-				Name:        name,
-				MTime:       mtime.String(),
-				Size:        size,
-				Type:        kind,
-				Hash:        hash,
-				Fingerprint: fmt.Sprintf("%x_%x", hash, size),
-			}
-		}
+	switch act {
+	case actionNew:
+		result.Added++
+	case actionReimport:
+		result.Updated++
+	case actionMove:
+		result.Moved++
+		imp.Log.Info("relinked moved file", "path", path)
+	case actionDuplicate:
+		result.Added++
+		result.Dups++
+		imp.Log.Warn("duplicate content", "path", path)
 	}
 }
 
-func computeHash(filePath string) uint64 {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return 0
-	}
-	defer file.Close()
-
-	h := xxhash.New()
-	_, err = io.Copy(h, file)
-	if err != nil {
-		return 0
-	}
-
-	return h.Sum64()
+func (imp *Importer) recordError(result *ImportResult, path, stage string, err error) {
+	imp.Log.Warn("file skipped after error", "path", path, "stage", stage, "err", err)
+	result.Errors = append(result.Errors, ImportError{Path: path, Stage: stage, Err: err})
 }
