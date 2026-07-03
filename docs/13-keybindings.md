@@ -90,16 +90,15 @@ Seeded at first launch for the current platform. Platform-specific defaults diff
 
 ## Storage
 
-Bindings are stored in the `keybindings` table (see schema doc). Each row represents one binding:
+Default bindings live **in code** (`internal/keybindings/defaults.go`), per platform. The `keybindings` table (see schema doc) stores only user overrides, keyed by `(action, context)`. The effective binding set is defaults merged with overrides — an override wins for its action+context; an override with an empty `key_combo` means the user unbound a default.
 
 ```
 action      TEXT    -- e.g. "rate_1", "flag_pick", "nav_next"
 context     TEXT    -- "global", "grid", "detail", "import"
-key_combo   TEXT    -- e.g. "1", "primary+z", "shift+primary+z"
-is_default  INTEGER -- 1 = system default, 0 = user-modified
+key_combo   TEXT    -- e.g. "1", "primary+z"; "" = unbound
 ```
 
-The `UNIQUE(context, key_combo)` constraint prevents two actions from sharing the same key in the same context. Conflict detection is enforced at the application layer before writing, returning a typed error that the UI uses to show a helpful message ("This key is already bound to X. Reassign?").
+Conflict detection (two actions on the same key in the same context) is enforced at the application layer against the **merged** set before writing an override, returning a typed error that the UI uses to show a helpful message ("This key is already bound to X. Reassign?").
 
 Action constants are stable string identifiers defined in `internal/domain/keybindings.go`. They are the bridge between the stored string ("rate_1") and the application behaviour it triggers.
 
@@ -205,14 +204,9 @@ When the user tries to assign a key combo that is already bound in the same cont
 
 ## Reset to defaults
 
-The "Reset keybindings to defaults" action:
+The "Reset keybindings to defaults" action is simply `DELETE FROM keybindings` — with no overrides, the in-code defaults apply. Presented as a destructive action with a confirmation.
 
-1. Delete all rows from `keybindings` where `is_default = 0`
-2. Re-seed default bindings for the current platform
-
-This preserves no user customisation. It is presented as a destructive action with a confirmation.
-
-A more granular "reset this binding" option can be offered per-binding in the settings UI: find the binding by action + context, delete it if `is_default = 0`, re-seed the default for that specific action.
+"Reset this binding" per-binding is `DELETE ... WHERE action = ? AND context = ?`.
 
 ---
 
@@ -222,7 +216,6 @@ When adding a new user-facing action:
 
 1. Add a constant to `internal/domain/keybindings.go`: `ActionNewThing = "new_thing"`
 2. Add a default binding to the platform default sets in `internal/keybindings/defaults.go`
-3. Write a new migration that inserts the default binding into `keybindings` for existing installations
-4. Add the case to the frontend `dispatch` function
+3. Add the case to the frontend `dispatch` function
 
-The migration step is important — existing users will not have the new binding in their database unless a migration inserts it. The migration should use `INSERT OR IGNORE` so it doesn't conflict with users who have already customised that slot.
+No migration is needed — defaults live in code, so existing users pick up the new binding on update automatically (unless they have an override on that key, in which case the conflict is surfaced in the settings UI).

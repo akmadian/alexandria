@@ -53,15 +53,18 @@ Support means: thumbnail generation, metadata extraction, display in grid, open-
 | Category | Formats | Approach |
 |---|---|---|
 | JPEG / PNG / TIFF / GIF / BMP / WebP | Standard raster | Native Go image libraries |
-| RAW | ARW, CR3, CR2, NEF, DNG, RAF, ORF, RW2, and 700+ others | libraw bindings |
-| PSD (Photoshop) | .psd | Extract embedded composite via ImageMagick or psd library |
-| Illustrator | .ai | Treat as PDF (modern .ai files are PDF-compatible), Ghostscript for preview |
+| RAW | ARW, CR3, CR2, NEF, DNG, RAF, ORF, RW2, and 700+ others | Extract embedded preview via `exiftool`; fall back to `dcraw_emu`/libraw CLI for full decode |
+| PSD (Photoshop) | .psd | Extract embedded composite (ImageMagick CLI or Go psd library) |
+| Illustrator | .ai | Treat as PDF (modern .ai files are PDF-compatible), Ghostscript CLI for preview |
 | InDesign | .indd | Extract embedded preview from file header |
 | Affinity (.afphoto, .afdesign, .afpub) | Proprietary, no SDK | Extract embedded preview thumbnail from file header |
-| Video | MP4, MOV, AVI, MKV, ProRes, and common containers | FFmpeg for thumbnail frame and stream metadata |
-| Audio | MP3, WAV, AIFF, FLAC | FFmpeg for metadata, waveform thumbnail |
+| Video | MP4, MOV, AVI, MKV, ProRes, and common containers | `ffmpeg`/`ffprobe` CLI for thumbnail frame and stream metadata |
+| Audio | MP3, WAV, AIFF, FLAC | `ffmpeg` CLI for metadata, waveform thumbnail |
 | Vector | SVG | Rasterise for thumbnail |
-| PDF | .pdf | First page preview via Ghostscript or PDF library |
+| PDF | .pdf | First page preview via Ghostscript CLI or PDF library |
+| Markdown | .md | Treated as a document: text-preview thumbnail, content in full-text search |
+
+**External tools are invoked as subprocesses, not cgo bindings.** `exiftool` (batch `-stay_open` mode) and `ffmpeg`/`ffprobe` are bundled with (or resolved by) the app. Subprocesses sidestep cgo cross-compilation pain, and a tool crashing on a corrupt file kills the subprocess, not Alexandria — which is exactly the per-file-error-and-continue behaviour the ingest pipeline wants. Adding support for a new file type means adding a MIME/extension → dispatcher mapping and, at most, a new extractor/thumbnailer implementation — never a pipeline change.
 
 **On Affinity formats specifically:** Serif has not published an SDK for .afphoto/.afdesign/.afpub. These files contain an embedded preview thumbnail in the file header. Alexandria extracts this embedded preview — the same approach used by NeoFinder and XnView. This is the ceiling for any third-party tool without an SDK. It is good enough for a DAM: the user can see what the file is and open it in Affinity.
 
@@ -98,7 +101,9 @@ Support means: thumbnail generation, metadata extraction, display in grid, open-
 ### Ingest
 
 - Manual trigger only (v1). User clicks Import, selects a source, Alexandria scans and indexes it. No background auto-import without explicit user action.
-- Import UI locks to a full-screen modal during import. This is intentional: it prevents UX degradation during a heavy operation and gives the user clear progress feedback.
+- The app stays fully usable during import. Progress is shown in a persistent, non-blocking progress panel (LrC-style corner indicator with counts and current stage). WAL mode means the grid can be browsed and queried while the pipeline writes.
+- Imported assets appear in the grid incrementally as batches commit. Because thumbnails and metadata are generated *before* the catalog write (pipeline ordering), an asset is always fully rendered the moment it appears — no placeholder/blank-card state like LrC shows.
+- A "Previous Import" collection (like LrC's) collects the assets from the most recent import. It is revealed/updated when the import completes, so the user gets a clean, complete set to review rather than watching it trickle in.
 - Import is cancellable at any point.
 - Import is idempotent: re-running import on the same source is safe. Files that haven't changed (same mtime and size) are skipped. No duplicate assets are created.
 - At the end of import, a summary is shown: N added, N updated, N skipped, N errors. Errors include file path and reason.
@@ -125,14 +130,15 @@ Support means: thumbnail generation, metadata extraction, display in grid, open-
 - **Color labels:** Six labels: Red, Orange, Yellow, Green, Blue, Purple. Stored on each asset. Synced to/from XMP where applicable.
 - **Star ratings:** 0–5. Stored on each asset. Synced to/from XMP where applicable.
 - **Flags:** Pick or Reject. Stored on each asset. For triage workflows.
-- **Collections:** Manual collections (user curates membership) and smart collections (stored query, membership computed dynamically). Collections can be nested. Smart collections are evaluated lazily — only when the user opens them — to avoid unnecessary DB load.
+- **Notes:** A free-text note per asset. Included in full-text search. Synced to/from XMP `dc:description` (Lightroom's Caption field) when XMP sync is enabled.
+- **Collections:** Manual collections (user curates membership). Collections can be nested. Smart collections (stored query, membership computed dynamically) are schema-ready but the query builder UI is **deferred to P1** — see Deferred Features.
 - **Filesystem view:** The sidebar also exposes a filesystem tree view mirroring the actual folder structure of indexed sources. Assets can be browsed by their physical location.
 - **Asset groups (P1, deferred):** Related assets — a RAW file and its exported JPEG, a PSD and its exported PNG — can be grouped. In the grid, the group renders as a single card (showing the cover asset). Group members have roles (raw, jpeg_sidecar, source, export, member). This is a P1 feature, deferred from v1, but the schema accommodates it from day one.
 
 ### Search
 
 - Search on: filename, file type, tag, rating, color label, flag, capture date range, source, dimensions, duration, camera make/model
-- Full-text search on metadata fields via SQLite FTS5
+- Full-text search via SQLite FTS5 covers filename, camera/lens fields, **tag names**, and per-asset notes — typing a tag name into the search box finds tagged assets
 - Search results should return in under 200ms on a 500k asset catalog with proper indexing
 
 ### Lightroom Classic interop
@@ -160,17 +166,16 @@ Support means: thumbnail generation, metadata extraction, display in grid, open-
 
 ### Settings
 
-- Comprehensive user preferences system covering: XMP conflict resolution, duplicate handling, worker pool sizes, memory limits, catalog backup retention, undo stack depth, default sort orders, and more
-- Settings are stored in the catalog database in a key-value table with JSON values for complex types
-- Settings are not stored in a separate config file — they travel with the catalog
+- Comprehensive user preferences system covering: XMP conflict resolution, catalog backup retention, undo stack depth, default sort orders, and more
+- Catalog-scoped settings are stored in the catalog database in a key-value table with JSON values for complex types — they travel with the catalog
+- Machine-scoped settings (worker pool sizes, memory limit) live in a local `machine.json` file so a catalog restored on different hardware doesn't import another machine's tuning
 
 ### Updates
 
-- Alexandria checks GitHub Releases for new versions on launch
-- The user is notified of available updates via a non-intrusive indicator
-- Updates do not auto-install without user confirmation
-- Update binaries are distributed as: .dmg (macOS), .AppImage/.deb (Linux), .exe installer (Windows)
-- Releases are hosted on GitHub Releases. Tauri's built-in updater plugin handles version checking and installation.
+- Alexandria checks the GitHub Releases API for new versions on launch (at most once per 24h)
+- The user is notified via a non-intrusive indicator linking to the release page — **no in-app auto-install in v1**. Wails has no built-in updater; a self-update mechanism (download, verify, platform-specific replace, code-signing implications) is deferred.
+- Release binaries are distributed as: .dmg (macOS), .AppImage/.deb (Linux), .exe installer (Windows), hosted on GitHub Releases
+- Catalog compatibility across versions is protected independently of the update mechanism: the schema version check at startup (see Migrations doc) refuses to open a catalog newer than the app understands, and migrates older catalogs forward with an automatic backup
 
 ## Non-functional requirements
 
@@ -218,6 +223,7 @@ All batch operations and background jobs are designed to be idempotent. Re-runni
 - Plugin or extension system. Contributors add features via code contributions or feature requests. A plugin system is a maintenance and support burden that is not justified at this stage.
 - Team or multi-user features. Alexandria is a single-user application. The catalog is not designed for concurrent access from multiple users.
 - Cloud storage integration (S3, Google Drive, Dropbox, etc.). Network shares (SMB/NFS) are supported; cloud provider SDKs are not.
+- Media file backup. Alexandria backs up its own catalog only. Backing up the user's source files is the job of dedicated tools (restic, borg, Time Machine) that do it better; taking it on would be a liability. This is stated prominently in user documentation alongside the "back up catalog.db" guidance.
 - AI/ML tagging (face recognition, object detection, scene classification). This is a P2 feature. The schema does not preclude it but no infrastructure is built for it in v1.
 - Built-in image/video editing. Alexandria opens files in external apps.
 - Export/publishing workflows (web galleries, zip exports, FTP upload). Out of scope for v1.

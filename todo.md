@@ -1,13 +1,11 @@
-- How to make supporting new file types and such easy? I don't want to have to do a major rewrite to add support for Adobe after effects in addition to Davinci resolve projects. Asset groups are also important here. Ideally we can just let the user point to a davinci resolve project and we do the rest of the work, they don't have to manage knowledge of lots of other file types.
-- Want to support markdown notes
+# Resolved (2026-07-03, moved into docs)
 
-Code Design
-- Leverage polymorphism, inheritance, and interfaces where reasonable. Don't want to have to manage a billion interfaces for a billion different file types. At the same time, don't want to break interfaces too granularly. We need to right size the splits.
-- LOGGING - logs should be rich but concise and readable. Colors should be used to denote log levels and source components.
+- New file types without rewrites → MIME/extension → dispatcher map; external tools as subprocesses (exiftool/ffmpeg). See 01 + 04.
+- Markdown files → treated as documents (01). Per-asset notes → `assets.note`, in FTS, synced to XMP dc:description (03 + 07).
+- Media backup → explicitly out of scope; catalog backup only. Documented in 01.
+- Interface granularity → settled: repository interfaces + two dispatch interfaces (Thumbnailer, MetadataExtractor). Don't split further.
 
+# Open
 
-"Some day" features
-- More comprehensive backup system
-    - background backup worker/ daemon? destinations of smb/nfs shares? s3 pattern cloud storage buckets? borg support for cost effectiveness and incremental backup speed?
-    - Analyze best backup systems for media files. Most compression algos that I'm aware of don't perform particularly well with media files. Lossless compression is of course an absolute must.
-    - This feels like a potential liability. May be best to just leave media backup to other tools that do it better, and let us manage just the catalog files.
+- DaVinci Resolve / After Effects project support: parse project file, link referenced assets. Needs a `project_references`-style table (new table, cheap migration) — NOT asset_groups. Post-v1.
+- LOGGING - logs should be rich but concise and readable. Colors should be used to denote log levels and source components. (Note: file logs are JSON via slog; colored text handler for dev mode.)

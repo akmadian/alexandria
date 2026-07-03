@@ -57,16 +57,15 @@ This document tracks features that were explicitly discussed and deliberately de
 
 ---
 
-### Duplicate review queue
+### Duplicate resolution UI
 
-**What it is:** When `duplicate_handling = "review"`, import detects duplicates and queues them for the user to review rather than auto-dropping or auto-importing. The user sees a side-by-side comparison and decides: keep both, keep one, or link as variants.
+**What it is:** Duplicates (same content at two paths) are already detected at import, ingested as normal assets, and logged persistently to the `duplicates` table (see schema doc) — nothing is dropped or lost between sessions. What's deferred is the resolution UI: side-by-side comparison where the user decides keep both, remove one, or link as a group.
 
-**Why deferred:** The review queue UI is a distinct screen with complex interaction design. The backend detection is already implemented (dedup checker in the pipeline). The missing piece is the UI and the commands to act on queue items.
+**Why deferred:** The review screen is a distinct piece of interaction design. Because detections are persisted, deferring the UI costs nothing — pending rows wait in the table.
 
 **What's needed to implement:**
-1. A `duplicate_review_queue` table (or in-memory queue — duplicates are transient, only meaningful during/after an import session)
-2. UI: duplicate review screen showing both assets side-by-side with metadata comparison
-3. Commands: `ResolveDuplicateCommand` (options: keep_both, keep_first, keep_second, link_as_group)
+1. UI: duplicate review screen showing both assets side-by-side with metadata comparison, driven by `duplicates` rows with `status = 'pending'`
+2. Commands: `ResolveDuplicateCommand` (options: keep_both, remove_one, link_as_group), setting `status = 'resolved'`/`'ignored'`
 
 ---
 
@@ -77,7 +76,7 @@ This document tracks features that were explicitly discussed and deliberately de
 **Why deferred:** The UX for presenting integrity check results is non-trivial — you need to show the user what changed and what they should do about it. The background check implementation is straightforward.
 
 **What's needed to implement:**
-1. `IntegrityChecker` service: walks each online source, compares mtime/size (fast) or partial hash (slow, optional) against location records
+1. `IntegrityChecker` service: walks each online source, compares mtime/size (fast) or partial hash (slow, optional) against catalog records
 2. Results surfaced as a report: N assets verified, N missing, N changed, N moved (detected via hash match at different path)
 3. UI: integrity report screen with actions (re-link moved files, remove missing from catalog, re-ingest changed)
 4. Scheduled runs: configurable background integrity check (nightly, weekly)
@@ -88,7 +87,7 @@ This document tracks features that were explicitly discussed and deliberately de
 
 **What it is:** Rename multiple selected files on disk according to a template (e.g. `{date}_{camera}_{sequence}` → `2024-07-01_Sony_A7IV_001.arw`).
 
-**Why deferred:** Writes to source files on disk. Requires careful UX (preview before apply, confirmation, undo). The file rename is a location update in the catalog — the asset record is unchanged. The rename command must update the filesystem and the location record atomically (or handle partial failures gracefully).
+**Why deferred:** Writes to source files on disk. Requires careful UX (preview before apply, confirmation, undo). The rename is a path update on the asset record. The rename command must update the filesystem and the catalog atomically (or handle partial failures gracefully).
 
 ---
 
@@ -140,6 +139,14 @@ This document tracks features that were explicitly discussed and deliberately de
 **What it is:** A public API for third-party extensions to add new file format support, custom actions, or integrations.
 
 **Why this is permanently deferred (not just P2):** Explicitly decided against. A plugin system is a significant maintenance, security, and support burden. The API surface must be versioned and maintained forever once published. Contributors add features via code contributions or feature requests. This is a deliberate scope boundary.
+
+---
+
+### In-app auto-updater
+
+**What it is:** Download-and-install updates from within the app, rather than v1's notify-and-link-to-release-page.
+
+**Why deferred:** Wails has no built-in updater. A self-update mechanism means per-platform download/verify/replace logic, code-signing and notarisation interactions on macOS, and elevation handling on Windows. Notify-and-link delivers most of the value at a fraction of the risk. Catalog compatibility is protected independently by the schema version check at startup.
 
 ---
 

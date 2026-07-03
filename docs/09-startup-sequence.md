@@ -20,18 +20,17 @@ Determine where the catalog lives. This is platform-specific:
 
 Create the directory if it does not exist (first launch). Fail with a clear error dialog if the directory cannot be created (permissions issue, disk full).
 
-### Stage 2: Open SQLite connection (blocking, fatal on failure)
+### Stage 2: Acquire instance lock, open SQLite (blocking, fatal on failure)
 
-Open the catalog database at `{catalog_dir}/catalog.db`.
+**Instance lock first.** Acquire an exclusive advisory lock on `{catalog_dir}/alexandria.lock` (`flock(LOCK_EX|LOCK_NB)` on macOS/Linux, `LockFileEx` on Windows). If the lock is held, another Alexandria instance is running: surface "Alexandria is already running. Only one instance can open the catalog at a time." and exit cleanly. The lock is held for the process lifetime and released automatically by the OS on any exit, including crashes — no stale-lockfile handling needed.
 
-SQLite connection string includes:
+Note: a SQLite busy-timeout check cannot detect a second instance — WAL mode exists precisely to let multiple connections read concurrently, so a second instance's reads would succeed. The advisory lock is the only reliable mechanism.
+
+Then open the catalog database at `{catalog_dir}/catalog.db`. Connection string includes:
 - `_journal=WAL` — enable Write-Ahead Logging for concurrent read/write
-- `_timeout=100` — 100ms timeout on lock acquisition (used to detect another instance running)
 - `_foreign_keys=on` — enforce referential integrity
 
-**Lock detection:** Attempt a `PRAGMA user_version` read immediately after opening. If this fails with a lock error, another Alexandria instance has the catalog open. Surface a clear error: "Alexandria is already running. Only one instance can open the catalog at a time." Do not attempt recovery — exit cleanly.
-
-If the open fails for any other reason, surface the error with the catalog path. Exit.
+If the open fails, surface the error with the catalog path. Exit.
 
 ### Stage 3: Run migrations (blocking, fatal on failure)
 
@@ -54,8 +53,8 @@ If the check finds problems, emit a `catalog:integrity_warning` event to the fro
 Construct all repositories and services. This is pure in-memory work — no I/O. It must complete before anything else starts.
 
 Order of construction:
-1. Repositories (AssetRepo, LocationRepo, SourceRepo, TagRepo, CollectionRepo, KeybindingRepo, SettingsRepo)
-2. Settings (load from DB immediately — needed by all services)
+1. Repositories (AssetRepo, SourceRepo, TagRepo, CollectionRepo, KeybindingRepo, SettingsRepo)
+2. Settings (catalog settings from DB, machine-local settings from `machine.json` — needed by all services)
 3. Platform implementations (FileWatcher, VolumeMonitor, DriveIdentifier, Opener) — selected based on `runtime.GOOS`
 4. Pipeline components (Hasher, DispatchMetadataExtractor, DispatchThumbnailer)
 5. Importer (depends on pipeline components + repos)
@@ -67,10 +66,7 @@ Order of construction:
 
 ### Stage 6: Seed defaults (blocking, fast, first-launch only)
 
-On first launch (detected by checking if any rows exist in `settings` or `keybindings`), seed:
-
-- Default settings values (see schema doc for full list)
-- Default keybindings for the current platform
+On first launch (detected by checking if any rows exist in `settings`), seed default settings values (see schema doc for full list) and write a default `machine.json` if absent. Keybindings need no seeding — defaults live in code and the `keybindings` table stores only user overrides.
 
 This is idempotent — safe to call every launch. It checks before inserting.
 
@@ -107,6 +103,8 @@ The frontend transitions from its loading screen to the main UI on receipt of th
 After a short delay (2 seconds — let the user see the UI first), run a low-priority reconciliation scan against all active sources. This catches changes that happened while the app was closed: files modified overnight on a NAS, photos added to an external drive before connecting it.
 
 The delay is intentional: the user should see the app become responsive before any background I/O begins. Starting heavy I/O before the UI is interactive feels like the app is "hanging" even if the UI loads correctly.
+
+The reconciliation scan is also where offline-period moves and deletions are detected: files no longer at their recorded path are marked `missing` (badged in the UI, collected in the "Missing files" view), and the dedup/move checker relinks any that reappear elsewhere by hash+size+filename (see ingest pipeline, stage 3).
 
 ---
 

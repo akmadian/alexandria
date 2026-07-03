@@ -15,7 +15,7 @@ The backend has four kinds of state with different lifetimes and management stra
 
 ### 1. Catalog state (SQLite)
 
-Assets, tags, collections, sources, locations. This is the primary work product of the application. Managed by the repository layer. The source of truth. Never held in memory longer than needed — always query fresh from SQLite.
+Assets, tags, collections, sources. This is the primary work product of the application. Managed by the repository layer. The source of truth. Never held in memory longer than needed — always query fresh from SQLite.
 
 ### 2. Service state (in-memory, process lifetime)
 

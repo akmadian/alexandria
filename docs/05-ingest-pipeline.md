@@ -11,7 +11,7 @@ The pipeline is built as a series of stages connected by buffered Go channels. E
 ## Pipeline stages
 
 ```
-Scanner → Hasher → Dedup Checker → Metadata Extractor → Thumbnailer → Catalog Writer
+Scanner → Hasher → Dedup/Move Checker → Metadata Extractor → Thumbnailer → Catalog Writer
 ```
 
 Each arrow is a buffered channel. The buffer size is tuned to decouple stage speeds without holding excessive data in memory.
@@ -25,17 +25,20 @@ Each arrow is a buffered channel. The buffer size is tuned to decouple stage spe
 **Output:** `ScannedFile` channel
 
 **What it does:**
-1. Walks the source directory recursively (or non-recursively, per source config)
-2. For each file, reads filename, extension, size, mtime
-3. Infers MIME type from extension (fast path) or file header sniffing (fallback)
-4. Checks the catalog for an existing location record matching this source + relative path
-5. If a location record exists AND mtime + size match the stored values → skip (emit nothing, increment skipped count)
-6. If a location record exists BUT mtime or size differ → emit with `Reimport: true` flag
-7. If no location record → emit as new file
-8. Hidden files and system files are skipped
-9. Files with unsupported extensions are skipped (logged at debug level)
+1. Loads the source's known files into an in-memory map at scan start: one query, `relative_path → (mtime, size)` for every asset in this source. This avoids a per-file catalog query during the walk (500k point queries on a reconciliation scan would dominate scan time; the map is tens of MB at worst).
+2. Walks the source directory recursively (or non-recursively, per source config)
+3. For each file, reads filename, extension, size, mtime
+4. Infers MIME type from extension (fast path) or file header sniffing (fallback)
+5. Looks up the relative path in the in-memory map
+6. If known AND mtime + size match → skip (emit nothing, increment skipped count)
+7. If known BUT mtime or size differ → emit with `Reimport: true` flag
+8. If unknown → emit as new file
+9. Hidden files and system files are skipped
+10. Files with unsupported extensions are skipped (logged at debug level)
 
 **The skip check is the idempotency gate.** Re-running the import on the same unchanged source is essentially free — the scanner skips everything it already knows about.
+
+**mtime comparison tolerance:** filesystems differ in timestamp resolution — FAT/exFAT stores mtimes at 2-second granularity, and some SMB servers truncate sub-second precision. Compare mtimes with a 2-second tolerance, or a whole external drive can spuriously reimport after being touched by a coarse-resolution filesystem. Size must still match exactly.
 
 ```
 ScannedFile
@@ -74,25 +77,22 @@ HashedFile
   PartialHash  string
 ```
 
-### Stage 3: Dedup Checker
+### Stage 3: Dedup / Move Checker
 
 **Goroutines:** 1 (single goroutine — needs serialised DB access to avoid race conditions on detection)
 
 **Input:** `HashedFile` channel
 
-**Output:** `HashedFile` channel (pass-through) + `DuplicateFile` channel (for review queue)
+**Output:** `HashedFile` channel (pass-through, possibly annotated)
 
 **What it does:**
 1. Queries the catalog for an existing asset with the same partial hash AND same size
-2. **No match:** pass through to extraction
+2. **No match:** pass through to extraction — new asset
 3. **Match, same source + path:** this is a reimport of the same file (shouldn't reach here if scanner skip worked, but defensive check). Skip.
-4. **Match, different path:** duplicate detected. Route based on user setting:
-   - `auto_drop`: log at info level, emit nothing (file is skipped)
-   - `review`: add to duplicate review queue, emit nothing to main pipeline for now
+4. **Match, and the matched asset's file is `missing`** (or its recorded path no longer resolves on an online source): this is a **move**. Relink: update the existing asset's `source_id`/`relative_path`/`file_status` to the new path, preserving all tags, ratings, and collection memberships. Emit nothing downstream (metadata and thumbnail are already current — the content is unchanged). This is the single most important protection in the pipeline: a user reorganising folders while the app is closed must never lose organisational work.
+5. **Match, and the matched asset's file is still present at its recorded path:** this is a genuine **duplicate** (same content at two paths). The new file is still ingested normally as its own asset, AND a row is written to the `duplicates` table linking the pair. Nothing is dropped, nothing is held in memory — the detection survives app restarts. Resolution UI is deferred (see Deferred Features).
 
-**On the duplicate review queue:** When `duplicate_handling = "review"`, duplicates are held in a transient in-memory queue (not persisted). At the end of import, the summary shows "N duplicates need review" with a link to the review UI where the user can decide: keep both, keep one, or ignore. This is a UX detail — the key point is that duplicates do not flow into the catalog automatically.
-
-**What counts as a duplicate:** Same `partial_hash` AND same `size_bytes`. This is a probabilistic match — not guaranteed to catch every duplicate (different files could theoretically share a 64KB prefix and size), but reliable enough for a creative asset library. False positives are possible but extremely unlikely.
+**What counts as a content match:** Same `partial_hash` AND same `size_bytes`. This is a probabilistic match — not guaranteed to catch every duplicate (different files could theoretically share a 64KB prefix and size), but reliable enough for a creative asset library. Because a false positive on the *move* path would relink the wrong asset, automatic relinking additionally requires the **filename to match** (hash + size + filename = moved file, near-certain). A hash+size match with a different filename against a missing asset is not auto-relinked — it is surfaced in the relocate flow for the user to confirm. Duplicate *logging* needs no such caution — a false duplicate row is harmless.
 
 ### Stage 4: Metadata Extractor
 
@@ -153,9 +153,9 @@ ThumbedFile
 **What it does:**
 1. Accumulates incoming files into a batch (default batch size: 50)
 2. When batch is full OR input channel is closed, writes the batch in a single SQLite transaction
-3. For new assets: INSERT into `assets`, INSERT into `locations`
-4. For reimports: UPDATE `assets` (metadata, hash, mtime), UPDATE `locations`
-5. Updates `assets_fts` full-text search index
+3. For new assets: INSERT into `assets` (location fields included on the row)
+4. For reimports: UPDATE `assets` (metadata, hash, mtime)
+5. Updates `assets_fts` full-text search index (the writer is one of the few FTS write paths — see schema doc)
 6. After each batch commit: emits a progress event to the frontend via Wails events
 7. Collects any errors for the final summary
 
@@ -225,7 +225,7 @@ The pipeline is safe to re-run on the same source at any time:
 
 1. **Scanner skip:** Files with unchanged mtime + size are skipped before entering the pipeline. No hashing, no extraction, no thumbnailing, no DB write.
 2. **Reimport flag:** Files with changed mtime or size get `Reimport: true`, which causes the catalog writer to UPDATE rather than INSERT.
-3. **Dedup checker:** Prevents the same file content from being indexed twice even if it appears at two different paths.
+3. **Dedup/move checker:** Relinks moved files to their existing asset records instead of creating new ones; logs genuine duplicates to the `duplicates` table exactly once (the UNIQUE constraint makes re-detection a no-op).
 4. **Thumbnail skip:** Thumbnails are not regenerated if the asset hash hasn't changed.
 
 Re-running import on a 10,000-file source where nothing has changed should take a few seconds (just the scanner walk + mtime/size checks), not minutes.

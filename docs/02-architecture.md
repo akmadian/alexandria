@@ -65,6 +65,8 @@ The `app/` layer is thin: it translates between Wails IPC calls and internal ser
 
 **Trade-off:** The web frontend still requires NPM and a JavaScript framework. This is accepted. NPM complexity is manageable with a disciplined dependency approach (prefer fewer, well-maintained packages).
 
+**Webview divergence risk:** Using the OS webview means three rendering engines (WebKit, WebKitGTK, WebView2) instead of Electron's single Chromium. Correctness differences are minor with evergreen webviews; the real risk is WebKitGTK performance on Linux for the virtualised grid. Mitigations: the grid renders only the visible window plus a padding buffer (~200 items each side) queried on demand, uses small grid-resolution thumbnails, and loads higher-resolution previews only after scroll settles (debounced). A grid-performance spike on Linux is the validation gate before committing to heavy frontend work. **Fallback:** the architecture keeps Wails confined to `app/` and `cmd/`, and the frontend is a plain web app — if WebKitGTK proves unworkable, porting to Electron is a packaging change, not a rewrite.
+
 ### SQLite
 
 **Why:** The catalog is a single-user, single-process database on the local machine. SQLite is the right tool: embedded, zero-configuration, reliable, fast for read-heavy workloads, and well-supported in Go. A client-server database (Postgres, MySQL) would add operational complexity with no benefit.
@@ -79,7 +81,7 @@ The `app/` layer is thin: it translates between Wails IPC calls and internal ser
 
 ### GitHub Releases
 
-**Why:** Standard for open source desktop apps. Familiar to contributors and users. Tauri's built-in updater plugin supports it natively. Avoids the complexity of running release infrastructure.
+**Why:** Standard for open source desktop apps. Familiar to contributors and users. Avoids the complexity of running release infrastructure. v1 update flow is check-and-link only (query the Releases API, show an indicator linking to the release page) — Wails has no built-in updater and in-app self-update is deferred.
 
 ---
 
@@ -149,8 +151,8 @@ Watcher detects file modified (FSEvents / inotify / polling)
   → debounce (500ms) to handle temp-file-rename patterns
   → handleEvent routes by event type:
       Created/Modified → Importer.IngestFile() (enters pipeline at hasher stage)
-      Deleted → mark location as "missing" in catalog (never auto-remove asset)
-      Renamed → update location's relative_path (no new asset created)
+      Deleted → mark asset's file_status "missing" in catalog (never auto-remove asset)
+      Renamed → update asset's relative_path (no new asset created)
   → catalog change event emitted → frontend re-queries current view
 ```
 

@@ -73,7 +73,7 @@ ErrSchemaTooNew { Current, Known }
 
 Example caller:
 ```
-err := locationRepo.FindByAbsPath(ctx, path)
+err := assetRepo.FindBySourcePath(ctx, sourceID, relPath)
 
 var offline domain.SourceOfflineError
 if errors.As(err, &offline) {

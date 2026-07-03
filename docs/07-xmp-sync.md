@@ -17,7 +17,10 @@ XMP contains many fields. Alexandria only cares about the portable subset releva
 | `xmp:Rating` | `assets.rating` | Integer 0–5 |
 | `xmp:Label` | `assets.color_label` | String: "Red", "Yellow", "Green", "Blue", "Purple" |
 | `dc:subject` | `asset_tags` (keywords) | Array of strings |
-| `xmp:CreateDate` | `assets.captured_at` | ISO 8601 datetime |
+| `dc:description` | `assets.note` | Per-asset note. Maps to Lightroom's "Caption" field. |
+| `xmp:CreateDate` | `assets.captured_at` | **Fallback only.** EXIF `DateTimeOriginal` is authoritative for capture date; `xmp:CreateDate` is used only when the file has no EXIF capture date. It is a creation date, not strictly a capture date, and tools disagree on its semantics. |
+
+**Color label caveat:** Lightroom Classic has five labels (Red, Yellow, Green, Blue, Purple) — no Orange. Alexandria's Orange label is catalog-only: it is never written to XMP, and an outbound sync for an orange-labelled asset writes no `xmp:Label` (leaving any existing value untouched). This is documented in the UI where labels are configured.
 
 **Not synced:** Lightroom develop settings, crop data, local adjustments, collections, virtual copies, history. These are stored in Lightroom's own catalog format (`Lightroom Catalog.lrcat`) and are not part of the XMP spec. Alexandria neither reads nor writes these.
 
@@ -128,7 +131,9 @@ Three fields on each asset track XMP sync state:
 - `xmp_last_written_at`: timestamp of the last time Alexandria wrote XMP for this asset.
 - `xmp_hash`: hash of the XMP content at the last sync. Used to detect external changes. On each inbound sync check, the current sidecar is hashed and compared to this value. If they differ, an external tool has edited the XMP since Alexandria last synced.
 
-The hash is computed over the relevant XMP fields only (rating, label, keywords), not the entire XMP document. Full XMP documents contain timestamps and tool-specific metadata that changes on every write, which would cause false "conflicts" on every sync.
+The hash is computed over the relevant XMP fields only (rating, label, keywords, description), not the entire XMP document. Full XMP documents contain timestamps and tool-specific metadata that changes on every write, which would cause false "conflicts" on every sync.
+
+**Preventing self-triggered sync loops:** Alexandria's own sidecar writes generate file-watcher events on the `.xmp` file, which would otherwise trigger an inbound sync of our own write (and, via undo or `catalog_wins` mode, potentially a ping-pong of writes). The rule: the XMP writer computes and stores the new `xmp_hash` on the asset **synchronously, in the same operation as the sidecar write, before returning**. The inbound handler's first check is hash-vs-stored-hash; a match means "this is our own write (or nothing changed)" and the event is dropped. The debounced watcher event always arrives after the hash is already stored, so the loop cannot start.
 
 ---
 

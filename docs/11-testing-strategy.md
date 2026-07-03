@@ -108,7 +108,7 @@ The stub thumbnailer writes a real (tiny) PNG file to the output path so asserti
 ```
 testutil.FindAssetByFilename(t, db, filename) *domain.Asset
 testutil.AssertAssetCount(t, db, expected int)
-testutil.AssertLocationCount(t, db, assetID, expected int)
+testutil.AssertDuplicateCount(t, db, expected int)
 ```
 
 These query the database directly and fail the test with a clear message if the assertion doesn't hold.
@@ -214,10 +214,9 @@ TestAssetRepository_List_FilterByColorLabel
 TestAssetRepository_SoftDelete
 TestAssetRepository_FindByHash
 TestAssetRepository_BulkPatch
-
-TestLocationRepository_CreateAndGet
-TestLocationRepository_FindBySourcePath
-TestLocationRepository_MarkOfflineBySource
+TestAssetRepository_FindBySourcePath
+TestAssetRepository_MarkOfflineBySource
+TestAssetRepository_ListKnownFiles
 
 TestSourceRepository_FindByFilesystemUUID
 TestTagRepository_Tree
@@ -235,7 +234,9 @@ TestImportPipeline_BasicJPEG
 TestImportPipeline_RawFile
 TestImportPipeline_VideoFile
 TestImportPipeline_MultipleFileTypes
-TestImportPipeline_DuplicateDetection
+TestImportPipeline_DuplicateLoggedAndBothIngested
+TestImportPipeline_MovedFileRelinked_MetadataPreserved
+TestImportPipeline_MovedFileDifferentName_NotAutoRelinked
 TestImportPipeline_Idempotency_UnchangedFile
 TestImportPipeline_Reimport_ChangedFile
 TestImportPipeline_CorruptFileDoesNotAbortPipeline
@@ -286,8 +287,8 @@ Test with the mock file watcher and volume monitor:
 ```
 TestWatcher_FileCreated_TriggersIngest
 TestWatcher_FileModified_TriggersReingest
-TestWatcher_FileDeleted_MarksLocationMissing
-TestWatcher_FileRenamed_UpdatesLocationPath
+TestWatcher_FileDeleted_MarksAssetMissing
+TestWatcher_FileRenamed_UpdatesAssetPath
 TestWatcher_Debounce_MultipleEventsCollapsed
 TestWatcher_VolumeMount_ReconnectsKnownSource
 TestWatcher_VolumeUnmount_MarksSourceOffline
@@ -338,4 +339,4 @@ Tests should run in CI on every push. The test suite runs on macOS and Linux (pr
 
 The in-memory SQLite approach means no CI infrastructure is needed for database tests — everything runs in the process.
 
-FFmpeg, libraw, and ImageMagick bindings are needed for the real thumbnailer and extractor implementations. In CI, these should either be installed in the CI environment or the dispatch implementations should fall back to stubs when the underlying tools are not available.
+The real thumbnailer and extractor implementations shell out to `ffmpeg`/`ffprobe`, `exiftool`, and friends as subprocesses. In CI these are a package-manager install (`brew install` / `apt-get install`) — no cgo toolchain setup. Tests for the real implementations skip (`t.Skip`) when a required tool is not on PATH, so the suite still passes in minimal environments using the stubs.

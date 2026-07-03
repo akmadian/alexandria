@@ -62,9 +62,24 @@ CREATE INDEX idx_sources_status ON sources(status);
 
 The canonical record for a file. One row per logical asset. Heavily denormalized for query performance: any field that will be filtered, sorted, or displayed in the grid is a dedicated column rather than buried in a JSON blob.
 
+Each asset has exactly **one** physical location, stored directly on the asset row (`source_id` + `relative_path`). This matches the model used by Lightroom, Capture One, and digiKam. The same file content appearing at two paths is two assets plus a `duplicates` log entry — not one asset with two locations.
+
 ```sql
 CREATE TABLE assets (
     id                  TEXT PRIMARY KEY,
+
+    -- Physical location. Exactly one per asset.
+    source_id           TEXT NOT NULL REFERENCES sources(id),
+    -- relative_path is relative to source.base_path, so a source remounting
+    -- at a different mount point only requires updating source.base_path.
+    relative_path       TEXT NOT NULL,
+    -- file_status reflects the last known state of the file on disk.
+    -- 'online': verified, file exists and matches
+    -- 'offline': source is offline, file not checked
+    -- 'missing': source is online but file not found at this path
+    --   (deleted or moved — user resolves via the relocate flow)
+    file_status         TEXT NOT NULL DEFAULT 'online' CHECK(file_status IN ('online', 'offline', 'missing')),
+    last_verified_at    TEXT,
 
     -- File identity.
     filename            TEXT NOT NULL,
@@ -74,7 +89,7 @@ CREATE TABLE assets (
     -- Stored redundantly alongside mime_type because "show all images" is a constant query.
     file_type           TEXT NOT NULL CHECK(file_type IN ('image', 'video', 'raw', 'vector', 'document', 'audio')),
 
-    -- File stats from the most recently verified location.
+    -- File stats as observed at the last verification of the file on disk.
     size_bytes          INTEGER NOT NULL,
     mtime               TEXT NOT NULL,    -- ISO 8601, from filesystem
     -- partial_hash: xxHash of first 64KB of file contents concatenated with size_bytes.
@@ -119,6 +134,9 @@ CREATE TABLE assets (
     rating              INTEGER CHECK(rating IS NULL OR (rating >= 0 AND rating <= 5)),
     color_label         TEXT CHECK(color_label IN ('red', 'orange', 'yellow', 'green', 'blue', 'purple') OR color_label IS NULL),
     flag                TEXT CHECK(flag IN ('pick', 'reject') OR flag IS NULL),
+    -- Free-text note attached by the user. Included in full-text search.
+    -- Synced to/from XMP dc:description (Lightroom's "Caption" field) when XMP sync is enabled.
+    note                TEXT,
 
     -- XMP sync tracking.
     -- xmp_last_read_at: when Alexandria last read an XMP sidecar for this asset.
@@ -158,16 +176,26 @@ CREATE INDEX idx_assets_flag            ON assets(flag) WHERE is_deleted = 0;
 CREATE INDEX idx_assets_partial_hash    ON assets(partial_hash);
 -- ingested_at for "recently added" views
 CREATE INDEX idx_assets_ingested_at     ON assets(ingested_at) WHERE is_deleted = 0;
+-- Scanner skip check and filesystem tree view: prefix queries on relative_path within a source.
+CREATE UNIQUE INDEX idx_assets_source_path ON assets(source_id, relative_path);
+-- Per-source status queries (mark offline, find missing).
+CREATE INDEX idx_assets_source_status   ON assets(source_id, file_status);
 
--- Full-text search index on filename and extended metadata.
--- FTS5 allows efficient text search across all assets.
+-- Full-text search. A standalone FTS5 table (NOT external-content) maintained
+-- explicitly by application code. Since the catalog writer and tag/note commands
+-- are the only write paths (single-writer design), keeping this in sync in app
+-- code is simple and avoids the trigger machinery external-content tables need.
+-- The 'tags' column holds a space-joined list of the asset's tag names,
+-- rewritten whenever the asset's tags change. This is what makes typing a tag
+-- name into the search box work.
 CREATE VIRTUAL TABLE assets_fts USING fts5(
+    asset_id UNINDEXED,
     filename,
     camera_make,
     camera_model,
     lens_model,
-    content='assets',
-    content_rowid='rowid'
+    tags,
+    note
 );
 ```
 
@@ -177,52 +205,30 @@ CREATE VIRTUAL TABLE assets_fts USING fts5(
 
 ---
 
-## locations
+## duplicates
 
-Where an asset physically lives. An asset can have multiple locations — for example, the same file exists on both a local SSD and a NAS (duplicate), or a file has been moved and both the old and new locations are tracked pending reconciliation.
+Log of duplicate detections from import. When the dedup checker finds a new file whose content (partial hash + size) matches an existing asset that is still present on disk, the new file is still ingested as its own asset, and a row is written here linking the pair. Resolution UI (keep one, keep both, group) is deferred — this table exists from day one so detections are never lost between sessions.
 
 ```sql
-CREATE TABLE locations (
-    id              TEXT PRIMARY KEY,
-    asset_id        TEXT NOT NULL REFERENCES assets(id),
-    source_id       TEXT NOT NULL REFERENCES sources(id),
+CREATE TABLE duplicates (
+    id                  TEXT PRIMARY KEY,
+    -- The pre-existing asset that was matched.
+    original_asset_id   TEXT NOT NULL REFERENCES assets(id),
+    -- The newly ingested asset that duplicates it.
+    duplicate_asset_id  TEXT NOT NULL REFERENCES assets(id),
+    partial_hash        TEXT NOT NULL,
+    detected_at         TEXT NOT NULL,
+    -- 'pending' until the user resolves it (resolution UI is deferred).
+    status              TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'resolved', 'ignored')),
+    resolved_at         TEXT,
 
-    -- relative_path is the path of the file relative to source.base_path.
-    -- Stored as a relative path so that if the source's base_path changes
-    -- (e.g. drive mounts at a different mount point), the location record
-    -- remains valid after updating source.base_path.
-    relative_path   TEXT NOT NULL,
-    -- filename is denormalized from relative_path for query convenience.
-    filename        TEXT NOT NULL,
-
-    -- Integrity fields. Compared against assets.partial_hash to detect drift.
-    -- locations.partial_hash is what was observed on disk at last_verified_at.
-    -- assets.partial_hash is the canonical hash from the most recently verified location.
-    size_bytes      INTEGER NOT NULL,
-    mtime           TEXT NOT NULL,
-    partial_hash    TEXT,
-
-    -- Status reflects the last known state of this location.
-    -- 'online': verified recently, file exists and matches
-    -- 'offline': source is offline, file not checked
-    -- 'missing': source is online but file not found at this path
-    -- 'moved': file moved (detected via hash match at new path)
-    status          TEXT NOT NULL DEFAULT 'online' CHECK(status IN ('online', 'offline', 'missing', 'moved')),
-    last_verified_at TEXT,
-
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL,
-
-    -- A given relative path within a source can only point to one location record.
-    UNIQUE(source_id, relative_path)
+    UNIQUE(original_asset_id, duplicate_asset_id)
 );
 
-CREATE INDEX idx_locations_asset        ON locations(asset_id);
-CREATE INDEX idx_locations_source       ON locations(source_id, status);
-CREATE INDEX idx_locations_partial_hash ON locations(partial_hash);
+CREATE INDEX idx_duplicates_status ON duplicates(status);
 ```
 
-**On the partial_hash split between assets and locations:** `locations.partial_hash` is ground truth for what was observed at that path during the last verification pass. `assets.partial_hash` is copied from the canonical location (most recently verified online location) and is what's used for dedup queries across the asset table. This avoids a join through locations on every dedup check.
+**Move vs duplicate disambiguation:** a hash match against an existing asset whose file is `missing` (or whose source is offline and whose old path no longer resolves) is a **move**, not a duplicate — the existing asset is relinked to the new path and no duplicate row is written. Only a hash match against an asset that is still present at its recorded path is logged here. See the ingest pipeline doc.
 
 ---
 
@@ -363,7 +369,9 @@ CREATE INDEX idx_group_members_asset ON asset_group_members(asset_id);
 
 ## settings
 
-Key-value store for all user preferences. Values are JSON-encoded so complex settings (arrays, objects) don't require schema changes. The entire settings object is typically loaded at startup and held in memory.
+Key-value store for user preferences **that belong to the catalog** — organisational and behavioural settings that should travel with the catalog if it is restored on another machine. Values are JSON-encoded so complex settings (arrays, objects) don't require schema changes. The entire settings object is typically loaded at startup and held in memory.
+
+**Machine-local settings live in a local config file, not here.** Worker pool sizes, memory limit, and log verbosity are properties of the machine, not the catalog — a catalog restored onto a laptop should not import a workstation's worker counts. These live in a small JSON file next to the catalog (`{catalog_dir}/machine.json`) with the same defaults listed below.
 
 ```sql
 CREATE TABLE settings (
@@ -373,33 +381,38 @@ CREATE TABLE settings (
 );
 ```
 
-**Known settings keys (seeded at first launch with defaults):**
+**Catalog settings keys (seeded at first launch with defaults):**
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `xmp_conflict_resolution` | string | `"xmp_wins"` | `"xmp_wins"` or `"catalog_wins"` |
-| `duplicate_handling` | string | `"review"` | `"auto_drop"` or `"review"` |
 | `thumbnail_quality` | integer | `85` | JPEG quality for thumbnails (1–100) |
-| `hash_worker_count` | integer | `4` | Import pipeline hash workers |
-| `extract_worker_count` | integer | `2` | Import pipeline metadata extraction workers |
-| `thumb_worker_count` | integer | `2` | Import pipeline thumbnail workers |
 | `import_batch_size` | integer | `50` | Catalog write batch size during import |
-| `memory_limit_mb` | integer | `512` | Go runtime memory limit (GOMEMLIMIT) |
 | `catalog_backup_count` | integer | `10` | Rolling backup retention count |
 | `undo_stack_size` | integer | `50` | Maximum undo history depth |
 | `update_check_enabled` | boolean | `true` | Whether to check GitHub for updates on launch |
 | `default_sort_field` | string | `"captured_at"` | Default grid sort field |
 | `default_sort_dir` | string | `"desc"` | Default grid sort direction |
 
+**Machine-local settings (in `machine.json`, not in the catalog):**
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `hash_worker_count` | integer | `4` | Import pipeline hash workers |
+| `extract_worker_count` | integer | `2` | Import pipeline metadata extraction workers |
+| `thumb_worker_count` | integer | `2` | Import pipeline thumbnail workers |
+| `memory_limit_mb` | integer | `512` | Go runtime memory limit (GOMEMLIMIT) |
+
+(The `duplicate_handling` setting is removed: duplicates are always ingested and logged to the `duplicates` table; resolution is deferred.)
+
 ---
 
 ## keybindings
 
-User-configurable keyboard shortcuts. Scoped by context so the same key can mean different things in different parts of the app.
+User keybinding **overrides only**. Default bindings live in code (`internal/keybindings/defaults.go`), not in the database. The effective binding set is defaults merged with overrides (override wins per action+context). This makes "reset to defaults" a simple `DELETE FROM keybindings`, means new actions added in app updates need no migration to seed bindings for existing users, and removes the ambiguity of a "modified default" row.
 
 ```sql
 CREATE TABLE keybindings (
-    id          TEXT PRIMARY KEY,
     -- action is a stable string constant identifying what this binding does.
     -- e.g. 'rate_1', 'flag_pick', 'nav_next', 'open_in_app'
     -- Action constants are defined in the Go domain package.
@@ -410,18 +423,15 @@ CREATE TABLE keybindings (
     -- key_combo uses platform-neutral notation.
     -- 'primary' maps to Cmd on macOS, Ctrl on Windows/Linux.
     -- Examples: 'primary+z', 'shift+primary+z', '1', 'space', 'arrowleft'
+    -- An empty string means "unbound" (user removed a default binding).
     key_combo   TEXT NOT NULL,
-    -- is_default: 1 if this is the system default, 0 if user-modified.
-    -- "Reset to defaults" deletes all rows where is_default = 0 and re-seeds defaults.
-    is_default  INTEGER NOT NULL DEFAULT 1,
     updated_at  TEXT NOT NULL,
 
-    -- No two actions can share the same key in the same context.
-    UNIQUE(context, key_combo)
+    PRIMARY KEY (action, context)
 );
-
-CREATE INDEX idx_keybindings_context ON keybindings(context);
 ```
+
+Uniqueness of key combos within a context is enforced at the application layer against the **merged** (defaults + overrides) set, since a DB constraint can't see the in-code defaults.
 
 ---
 

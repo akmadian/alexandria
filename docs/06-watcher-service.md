@@ -31,13 +31,15 @@ All of this is started in `Service.Start(ctx)` and runs until the context is can
 
 ## Local source watching
 
-For local sources and external drives, Alexandria uses OS-provided filesystem events:
+For local sources and external drives, Alexandria uses OS-provided filesystem events. The mechanisms differ per platform in ways that matter — this is exactly why `FileWatcher` is a platform interface:
 
-- **macOS:** FSEvents (via `fsnotify`)
-- **Linux:** inotify (via `fsnotify`)
-- **Windows:** ReadDirectoryChangesW (via `fsnotify`)
+- **macOS: FSEvents via a dedicated FSEvents library** (e.g. `fsnotify/fsevents`), NOT the generic `fsnotify` package. Generic fsnotify uses kqueue on macOS, which requires an open file descriptor per watched file — a non-starter at 100k files. FSEvents is natively recursive: one event stream per source covers the whole tree with constant resource usage.
+- **Linux: inotify with per-directory watch management.** inotify is not recursive — the implementation must add one watch per directory (directories, never individual files: a 200k-file archive is typically only a few thousand directories). Watches are registered by walking the tree at attach time, and a `create` event for a new directory triggers adding a watch on it (plus a scan of it, since files may have landed before the watch was live). If the kernel watch limit is hit (`ENOSPC`), the source degrades gracefully to polling (same mechanism as network sources), a warning is surfaced, and the log notes how to raise `fs.inotify.max_user_watches`.
+- **Windows: ReadDirectoryChangesW via `fsnotify`** — natively recursive, no special handling.
 
-When a local source is attached, the watcher starts watching the source's `BasePath` recursively. Events flow into a per-source goroutine that debounces them before acting.
+Regardless of mechanism, the periodic reconciliation scan (startup + volume-mount) remains the safety net for any events the watcher missed.
+
+When a local source is attached, events flow into a per-source goroutine that debounces them before acting.
 
 **Debouncing is critical.** Applications like Photoshop, Illustrator, and most creative tools do not write files atomically. A typical save sequence looks like:
 
@@ -58,15 +60,19 @@ Events are routed based on type:
 This enters the ingest pipeline at the hasher stage. The same pipeline logic runs as for manual imports — hash check, dedup check, metadata extraction, thumbnail generation, catalog write. If the file already exists in the catalog (reimport case), it is updated rather than inserted.
 
 **Deleted:**
-→ `LocationRepository.UpdateStatus(ctx, locationID, LocationStatusMissing)`
-The location record is marked "missing". The asset record is NOT deleted. The user decides what to do with assets whose files are gone. Alexandria surfaces this in the UI (a missing-file indicator on the asset card) but does not make the decision on the user's behalf.
+→ `AssetRepository.UpdateFileStatus(ctx, assetID, FileStatusMissing)`
+The asset's `file_status` is marked "missing". The asset record is NOT deleted — thumbnail, metadata, tags, and ratings all remain, and the card shows a missing-file badge (Lightroom-style "?"). The user resolves it via the relocate flow (see below) or removes it from the catalog explicitly.
 
 **Renamed (Move within same source):**
-→ `LocationRepository.Update(ctx, location)` with new `RelativePath`
-The location's path is updated. No new asset record is created. Tags, ratings, collections, and all other metadata are preserved. This is the correct behaviour for a rename or move within a watched source.
+→ `AssetRepository.UpdatePath(ctx, assetID, newRelativePath)`
+The asset's path is updated in place. No new asset record is created. Tags, ratings, collections, and all other metadata are preserved.
 
 **Renamed across sources (file moved from one watched folder to another):**
-This is detected when a "deleted" event fires on source A and a "created" event fires on source B within a short window, and the hashes match. This is a complex case. For v1, it is handled as a delete + create (new asset record), not as a move. Cross-source move detection is a future enhancement.
+The "deleted" event on source A marks the asset missing; the "created" event on source B enters the ingest pipeline, where the dedup/move checker finds a hash+size+filename match against a missing asset and **relinks it** (see ingest pipeline, stage 3). No new asset record, no lost metadata. This same mechanism handles moves that happen while the app is closed — they are caught by the next reconciliation scan.
+
+### The relocate flow (missing files)
+
+Assets marked `missing` remain fully browsable (thumbnails and metadata are catalog-resident) but are badged. A "Missing files" view collects them. From there the user can point Alexandria at a new folder: the relocate flow scans it and matches missing assets by hash + size + filename, relinking matches in bulk — the LrC "Find missing folder" experience. Anything the automatic move detection already caught never appears here.
 
 ---
 
@@ -104,7 +110,7 @@ When a volume mounts:
 3. **Found:** This is a known drive.
    - Update `source.BasePath` to the new mount path (mount points can change: `/Volumes/MySSD`, `/Volumes/MySSD 1`, etc.)
    - Update `source.Status` to `active`
-   - Call `LocationRepository.MarkOnlineBySource(sourceID)` to mark all locations as potentially online (they'll be verified on the next scan)
+   - Call `AssetRepository.MarkOnlineBySource(sourceID)` to mark the source's assets as potentially online (verified on the next scan)
    - Start watching the source: `FileWatcher.Watch(source.BasePath)`
    - Trigger a reconciliation scan: `Importer.Run(ctx, ImportJob{SourceID: source.ID, Priority: Low})`
    - Emit `source:connected` event to the frontend
@@ -120,7 +126,7 @@ When a volume unmounts:
 2. If found:
    - Stop the file watcher for this source: `FileWatcher.Unwatch(source.BasePath)`
    - Update `source.Status` to `offline`
-   - Call `LocationRepository.MarkOfflineBySource(sourceID)` — marks all locations as offline
+   - Call `AssetRepository.MarkOfflineBySource(sourceID)` — marks the source's assets as offline
    - Emit `source:disconnected` event to the frontend
 3. Assets remain in the catalog, fully browsable with thumbnails. Only "open original" is disabled for offline assets.
 

@@ -15,6 +15,13 @@ This isolation is intentional. The domain types are the lingua franca of the app
 ```
 Asset
   ID              string          -- UUID
+
+  -- Physical location. Exactly one per asset (see schema doc).
+  SourceID        string
+  RelativePath    string          -- relative to source.BasePath
+  FileStatus      FileStatus      -- online | offline | missing
+  LastVerifiedAt  *time.Time
+
   Filename        string
   Extension       string          -- lowercase, no dot: "jpg", "psd", "mp4"
   MIMEType        string
@@ -46,6 +53,7 @@ Asset
   Rating          *int            -- 0–5, nil = unrated
   ColorLabel      *ColorLabel
   Flag            *Flag
+  Note            *string         -- free-text note; synced to XMP dc:description
 
   XMPLastReadAt    *time.Time
   XMPLastWrittenAt *time.Time
@@ -137,33 +145,31 @@ SourceStatusOffline = "offline"
 SourceStatusRemoved = "removed"
 ```
 
-### Location
+### FileStatus (enum)
+
+Status of the asset's file on disk. Lives on the Asset — each asset has exactly one location (see schema doc for the rationale; this matches LrC/Capture One/digiKam).
 
 ```
-Location
-  ID              string
-  AssetID         string
-  SourceID        string
-  RelativePath    string          -- relative to source.BasePath
-  Filename        string          -- denormalized from RelativePath
-  SizeBytes       int64
-  MTime           time.Time
-  PartialHash     *string
-  Status          LocationStatus
-  LastVerifiedAt  *time.Time
-  CreatedAt       time.Time
-  UpdatedAt       time.Time
+FileStatus string
+
+FileStatusOnline  = "online"
+FileStatusOffline = "offline"
+FileStatusMissing = "missing"
 ```
 
-### LocationStatus (enum)
+### Duplicate
+
+A logged duplicate detection (same content at two paths). Both files exist as full assets; this record links them for the (deferred) resolution UI.
 
 ```
-LocationStatus string
-
-LocationStatusOnline  = "online"
-LocationStatusOffline = "offline"
-LocationStatusMissing = "missing"
-LocationStatusMoved   = "moved"
+Duplicate
+  ID                string
+  OriginalAssetID   string
+  DuplicateAssetID  string
+  PartialHash       string
+  DetectedAt        time.Time
+  Status            string      -- "pending" | "resolved" | "ignored"
+  ResolvedAt        *time.Time
 ```
 
 ### Tag
@@ -414,34 +420,47 @@ AssetFilter
 
 ### AssetPatch
 
-A sparse update struct. Only non-nil fields are written. Used for partial updates (rating, label, etc.) without requiring a full asset read-modify-write cycle.
+A sparse update struct. Only set fields are written. Nullable catalog fields need three states ("don't touch", "set to X", "clear"), which is expressed with a small generic option type rather than pointer-to-pointer (which is error-prone and serialises badly):
 
 ```
+Opt[T]
+  Set   bool    -- false = don't touch this field
+  Value *T      -- when Set: nil = clear, non-nil = new value
+
 AssetPatch
-  Rating          *int
-  ColorLabel      **ColorLabel  -- pointer to pointer so nil = "don't update", &nil = "clear"
-  Flag            **Flag
-  ThumbnailPath   *string
-  ThumbnailAt     *time.Time
-  XMPLastReadAt   *time.Time
-  XMPLastWrittenAt *time.Time
-  XMPHash         *string
-  IsDeleted       *bool
-  DeletedAt       *time.Time
+  Rating          Opt[int]
+  ColorLabel      Opt[ColorLabel]
+  Flag            Opt[Flag]
+  Note            Opt[string]
+  ThumbnailPath   Opt[string]
+  ThumbnailAt     Opt[time.Time]
+  XMPLastReadAt   Opt[time.Time]
+  XMPLastWrittenAt Opt[time.Time]
+  XMPHash         Opt[string]
+  IsDeleted       Opt[bool]
+  DeletedAt       Opt[time.Time]
   XMPKeywords     []string      -- tag names from XMP, merged into asset_tags
 ```
 
-### LocationRepository
+### Location-related methods (on AssetRepository)
+
+With one location per asset, location operations are asset operations:
 
 ```
-LocationRepository
-  GetByAsset(ctx, assetID) → ([]*Location, error)
-  Create(ctx, location *Location) → error
-  Update(ctx, location *Location) → error
-  FindBySourcePath(ctx, sourceID, relativePath) → (*Location, error)
-  FindByAbsPath(ctx, absPath) → (*Location, error)
+  FindBySourcePath(ctx, sourceID, relativePath) → (*Asset, error)
+  UpdatePath(ctx, assetID, sourceID, relativePath) → error   -- move/relink
+  UpdateFileStatus(ctx, assetID, status FileStatus) → error
   MarkOfflineBySource(ctx, sourceID) → error
-  UpdateStatus(ctx, id, status LocationStatus) → error
+  MarkOnlineBySource(ctx, sourceID) → error
+  ListKnownFiles(ctx, sourceID) → (map[relativePath]FileStat, error)  -- scanner skip map
+```
+
+### DuplicateRepository
+
+```
+DuplicateRepository
+  Log(ctx, dup *Duplicate) → error        -- INSERT OR IGNORE (unique pair)
+  ListPending(ctx) → ([]*Duplicate, error)
 ```
 
 ### SourceRepository
@@ -507,9 +526,9 @@ FileEvent
 ```
 
 **Implementation notes:**
-- macOS: FSEvents via `fsnotify`
-- Linux: inotify via `fsnotify`
-- Windows: ReadDirectoryChangesW via `fsnotify`
+- macOS: FSEvents via a dedicated FSEvents library (natively recursive; generic fsnotify uses kqueue on macOS, which needs an fd per file — unusable at library scale)
+- Linux: inotify with per-directory watch management (not recursive; watch directories only, add watches for new directories on create events, degrade to polling on ENOSPC) — see Watcher Service doc
+- Windows: ReadDirectoryChangesW via `fsnotify` (natively recursive)
 - Network shares: FileWatcher is not used. Network sources use polling instead.
 - The watcher consumer is responsible for debouncing — events for the same path within 500ms should be collapsed before acting on them.
 
@@ -578,15 +597,15 @@ ThumbResult
   Height  int
 ```
 
-**Implementations:**
+**Implementations (external tools run as subprocesses, never cgo bindings — see vision doc):**
 - `ImageThumbnailer`: handles JPEG, PNG, TIFF, WebP, GIF, BMP via Go image libraries
-- `RawThumbnailer`: handles RAW formats via libraw bindings
-- `VideoThumbnailer`: extracts a frame via FFmpeg bindings
-- `PSDThumbnailer`: extracts embedded composite via ImageMagick or psd library
-- `PDFThumbnailer`: first page via Ghostscript
+- `RawThumbnailer`: extracts embedded preview via `exiftool`; falls back to libraw CLI for full decode
+- `VideoThumbnailer`: extracts a frame via `ffmpeg` subprocess
+- `PSDThumbnailer`: extracts embedded composite (ImageMagick CLI or Go psd library)
+- `PDFThumbnailer`: first page via Ghostscript CLI
 - `VectorThumbnailer`: SVG rasterisation
 - `EmbeddedPreviewThumbnailer`: reads embedded preview from file header (Affinity, InDesign)
-- `DispatchThumbnailer`: wraps all of the above, routes by MIME type
+- `DispatchThumbnailer`: wraps all of the above, routes by a MIME/extension → implementation map. Adding a new file type = a new map entry (and at most a new implementation); the pipeline never changes.
 
 ### MetadataExtractor
 
@@ -599,10 +618,10 @@ MetadataExtractor
 ```
 
 **Implementations:**
-- `EXIFExtractor`: handles images with EXIF data (JPEG, TIFF, RAW)
-- `VideoExtractor`: extracts stream info via FFmpeg
-- `XMPExtractor`: reads embedded or sidecar XMP
-- `DispatchMetadataExtractor`: routes by MIME type
+- `ExifToolExtractor`: EXIF/IPTC/XMP for images, RAW, PSD, and most formats via a persistent `exiftool -stay_open` subprocess (batch mode amortises process startup)
+- `VideoExtractor`: stream info via `ffprobe` subprocess
+- `XMPExtractor`: reads sidecar XMP files
+- `DispatchMetadataExtractor`: routes by MIME/extension map, same pattern as the thumbnailer
 
 ### Hasher
 
