@@ -1,4 +1,4 @@
-package catalog_test
+package sqlite_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/testutil"
 )
 
@@ -44,7 +45,7 @@ func TestMigration_ForeignKeysEnforced(t *testing.T) {
 
 func TestSourceRepo_CreateAndGet(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteSourceRepo{DB: db}
+	repo := &sqlite.SourceRepo{DB: db}
 	ctx := context.Background()
 
 	now := time.Now().UTC().Truncate(time.Second)
@@ -73,7 +74,7 @@ func TestSourceRepo_CreateAndGet(t *testing.T) {
 
 func TestSourceRepo_GetNotFound(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteSourceRepo{DB: db}
+	repo := &sqlite.SourceRepo{DB: db}
 	_, err := repo.Get(context.Background(), "nope")
 	var nf *domain.NotFoundError
 	if !errors.As(err, &nf) {
@@ -83,7 +84,7 @@ func TestSourceRepo_GetNotFound(t *testing.T) {
 
 func TestSourceRepo_List(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteSourceRepo{DB: db}
+	repo := &sqlite.SourceRepo{DB: db}
 	ctx := context.Background()
 
 	testutil.NewTestSource(t, db, "one")
@@ -100,7 +101,7 @@ func TestSourceRepo_List(t *testing.T) {
 
 func TestSourceRepo_UpdateStatus(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteSourceRepo{DB: db}
+	repo := &sqlite.SourceRepo{DB: db}
 	ctx := context.Background()
 	testutil.NewTestSource(t, db, "drive")
 
@@ -115,7 +116,7 @@ func TestSourceRepo_UpdateStatus(t *testing.T) {
 
 func TestSourceRepo_FindByFilesystemUUID(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteSourceRepo{DB: db}
+	repo := &sqlite.SourceRepo{DB: db}
 	ctx := context.Background()
 
 	now := time.Now().UTC().Truncate(time.Second)
@@ -148,7 +149,7 @@ func TestSourceRepo_FindByFilesystemUUID(t *testing.T) {
 
 func TestAssetRepo_CreateAndGet(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 
 	src := testutil.NewTestSource(t, db, "photos")
@@ -184,7 +185,7 @@ func TestAssetRepo_CreateAndGet(t *testing.T) {
 
 func TestAssetRepo_GetNotFound(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	_, err := repo.Get(context.Background(), "nope")
 	var nf *domain.NotFoundError
 	if !errors.As(err, &nf) {
@@ -194,7 +195,7 @@ func TestAssetRepo_GetNotFound(t *testing.T) {
 
 func TestAssetRepo_SoftDelete(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 
 	src := testutil.NewTestSource(t, db, "s")
@@ -217,7 +218,7 @@ func TestAssetRepo_SoftDelete(t *testing.T) {
 
 func TestAssetRepo_ListWithFilters(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
 
@@ -229,7 +230,7 @@ func TestAssetRepo_ListWithFilters(t *testing.T) {
 	repo.SoftDelete(ctx, "asset-c.jpg")
 
 	// List non-deleted (default)
-	assets, err := repo.List(ctx, domain.AssetFilter{})
+	assets, err := repo.List(ctx, catalog.AssetFilter{})
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -238,7 +239,7 @@ func TestAssetRepo_ListWithFilters(t *testing.T) {
 	}
 
 	// List including deleted
-	assets, err = repo.List(ctx, domain.AssetFilter{IncludeDeleted: true})
+	assets, err = repo.List(ctx, catalog.AssetFilter{IncludeDeleted: true})
 	if err != nil {
 		t.Fatalf("list all: %v", err)
 	}
@@ -247,7 +248,7 @@ func TestAssetRepo_ListWithFilters(t *testing.T) {
 	}
 
 	// Filter by file type
-	assets, err = repo.List(ctx, domain.AssetFilter{FileTypes: []domain.FileType{domain.FileTypeVideo}})
+	assets, err = repo.List(ctx, catalog.AssetFilter{FileTypes: []domain.FileType{domain.FileTypeVideo}})
 	if err != nil {
 		t.Fatalf("list video: %v", err)
 	}
@@ -258,7 +259,7 @@ func TestAssetRepo_ListWithFilters(t *testing.T) {
 
 func TestAssetRepo_Patch_SparseSetsOnlyRequestedFields(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
 
@@ -267,14 +268,14 @@ func TestAssetRepo_Patch_SparseSetsOnlyRequestedFields(t *testing.T) {
 		testutil.NewTestAsset(t, db, src.ID, name)
 	}
 	// Set initial ratings: r1=1, r2=3, r3=5
-	repo.Patch(ctx, "asset-r1.jpg", domain.AssetPatch{Rating: domain.SetOpt(1)})
-	repo.Patch(ctx, "asset-r2.jpg", domain.AssetPatch{Rating: domain.SetOpt(3)})
-	repo.Patch(ctx, "asset-r3.jpg", domain.AssetPatch{Rating: domain.SetOpt(5)})
+	repo.Patch(ctx, "asset-r1.jpg", catalog.AssetPatch{Rating: domain.SetOpt(1)})
+	repo.Patch(ctx, "asset-r2.jpg", catalog.AssetPatch{Rating: domain.SetOpt(3)})
+	repo.Patch(ctx, "asset-r3.jpg", catalog.AssetPatch{Rating: domain.SetOpt(5)})
 
 	// Now BulkPatch all to rating=4 — only rating should change
 	err := repo.BulkPatch(ctx,
 		[]string{"asset-r1.jpg", "asset-r2.jpg", "asset-r3.jpg"},
-		domain.AssetPatch{Rating: domain.SetOpt(4)})
+		catalog.AssetPatch{Rating: domain.SetOpt(4)})
 	if err != nil {
 		t.Fatalf("bulk patch: %v", err)
 	}
@@ -293,20 +294,20 @@ func TestAssetRepo_Patch_SparseSetsOnlyRequestedFields(t *testing.T) {
 
 func TestAssetRepo_Patch_ClearField(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 
 	// Set a rating
-	repo.Patch(ctx, "asset-x.jpg", domain.AssetPatch{Rating: domain.SetOpt(3)})
+	repo.Patch(ctx, "asset-x.jpg", catalog.AssetPatch{Rating: domain.SetOpt(3)})
 	got, _ := repo.Get(ctx, "asset-x.jpg")
 	if got.Rating == nil || *got.Rating != 3 {
 		t.Fatalf("setup: rating=%v", got.Rating)
 	}
 
 	// Clear it
-	repo.Patch(ctx, "asset-x.jpg", domain.AssetPatch{Rating: domain.ClearOpt[int]()})
+	repo.Patch(ctx, "asset-x.jpg", catalog.AssetPatch{Rating: domain.ClearOpt[int]()})
 	got, _ = repo.Get(ctx, "asset-x.jpg")
 	if got.Rating != nil {
 		t.Fatalf("after clear: rating=%v, want nil", got.Rating)
@@ -315,7 +316,7 @@ func TestAssetRepo_Patch_ClearField(t *testing.T) {
 
 func TestAssetRepo_FindByHash(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "dup.jpg")
@@ -340,7 +341,7 @@ func TestAssetRepo_FindByHash(t *testing.T) {
 
 func TestAssetRepo_FindBySourcePath(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "sub/photo.jpg")
@@ -356,7 +357,7 @@ func TestAssetRepo_FindBySourcePath(t *testing.T) {
 
 func TestAssetRepo_MarkOfflineOnlineBySource(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &catalog.SQLiteAssetRepo{DB: db}
+	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "drive")
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")

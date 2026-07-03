@@ -1,4 +1,4 @@
-package catalog
+package sqlite
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
-type SQLiteAssetRepo struct {
+type AssetRepo struct {
 	DB *sql.DB
 }
 
@@ -24,7 +25,7 @@ const assetColumns = `id, source_id, relative_path, file_status, last_verified_a
 	xmp_last_read_at, xmp_last_written_at, xmp_hash,
 	thumbnail_path, thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at`
 
-func (r *SQLiteAssetRepo) Get(ctx context.Context, id string) (*domain.Asset, error) {
+func (r *AssetRepo) Get(ctx context.Context, id string) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx, "SELECT "+assetColumns+" FROM assets WHERE id = ?", id)
 	a, err := scanAssetRow(row)
 	if err == sql.ErrNoRows {
@@ -33,7 +34,7 @@ func (r *SQLiteAssetRepo) Get(ctx context.Context, id string) (*domain.Asset, er
 	return a, err
 }
 
-func (r *SQLiteAssetRepo) Create(ctx context.Context, a *domain.Asset) error {
+func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 	extJSON, err := marshalExtended(a.ExtendedMetadata)
 	if err != nil {
 		return err
@@ -54,7 +55,7 @@ func (r *SQLiteAssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 	return err
 }
 
-func (r *SQLiteAssetRepo) Update(ctx context.Context, a *domain.Asset) error {
+func (r *AssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 	a.UpdatedAt = time.Now().UTC()
 	extJSON, err := marshalExtended(a.ExtendedMetadata)
 	if err != nil {
@@ -86,7 +87,7 @@ func (r *SQLiteAssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 	return checkRowsAffected(res, "asset", a.ID)
 }
 
-func (r *SQLiteAssetRepo) Patch(ctx context.Context, id string, patch domain.AssetPatch) error {
+func (r *AssetRepo) Patch(ctx context.Context, id string, patch catalog.AssetPatch) error {
 	setClauses, args := buildPatchSQL(patch)
 	if len(setClauses) == 0 {
 		return nil
@@ -103,7 +104,7 @@ func (r *SQLiteAssetRepo) Patch(ctx context.Context, id string, patch domain.Ass
 	return checkRowsAffected(res, "asset", id)
 }
 
-func (r *SQLiteAssetRepo) BulkPatch(ctx context.Context, ids []string, patch domain.AssetPatch) error {
+func (r *AssetRepo) BulkPatch(ctx context.Context, ids []string, patch catalog.AssetPatch) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -126,7 +127,7 @@ func (r *SQLiteAssetRepo) BulkPatch(ctx context.Context, ids []string, patch dom
 	return err
 }
 
-func (r *SQLiteAssetRepo) SoftDelete(ctx context.Context, id string) error {
+func (r *AssetRepo) SoftDelete(ctx context.Context, id string) error {
 	now := formatTime(time.Now().UTC())
 	res, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET is_deleted = 1, deleted_at = ?, updated_at = ? WHERE id = ?",
@@ -137,7 +138,7 @@ func (r *SQLiteAssetRepo) SoftDelete(ctx context.Context, id string) error {
 	return checkRowsAffected(res, "asset", id)
 }
 
-func (r *SQLiteAssetRepo) FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error) {
+func (r *AssetRepo) FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx,
 		"SELECT "+assetColumns+" FROM assets WHERE partial_hash = ? AND size_bytes = ? AND is_deleted = 0",
 		hash, sizeBytes)
@@ -148,7 +149,7 @@ func (r *SQLiteAssetRepo) FindByHash(ctx context.Context, hash string, sizeBytes
 	return a, err
 }
 
-func (r *SQLiteAssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath string) (*domain.Asset, error) {
+func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath string) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx,
 		"SELECT "+assetColumns+" FROM assets WHERE source_id = ? AND relative_path = ?",
 		sourceID, relativePath)
@@ -159,7 +160,7 @@ func (r *SQLiteAssetRepo) FindBySourcePath(ctx context.Context, sourceID, relati
 	return a, err
 }
 
-func (r *SQLiteAssetRepo) UpdatePath(ctx context.Context, assetID, sourceID, relativePath string) error {
+func (r *AssetRepo) UpdatePath(ctx context.Context, assetID, sourceID, relativePath string) error {
 	res, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET source_id = ?, relative_path = ?, updated_at = ? WHERE id = ?",
 		sourceID, relativePath, formatTime(time.Now().UTC()), assetID)
@@ -169,7 +170,7 @@ func (r *SQLiteAssetRepo) UpdatePath(ctx context.Context, assetID, sourceID, rel
 	return checkRowsAffected(res, "asset", assetID)
 }
 
-func (r *SQLiteAssetRepo) UpdateFileStatus(ctx context.Context, assetID string, status domain.FileStatus) error {
+func (r *AssetRepo) UpdateFileStatus(ctx context.Context, assetID string, status domain.FileStatus) error {
 	res, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET file_status = ?, updated_at = ? WHERE id = ?",
 		status, formatTime(time.Now().UTC()), assetID)
@@ -179,21 +180,21 @@ func (r *SQLiteAssetRepo) UpdateFileStatus(ctx context.Context, assetID string, 
 	return checkRowsAffected(res, "asset", assetID)
 }
 
-func (r *SQLiteAssetRepo) MarkOfflineBySource(ctx context.Context, sourceID string) error {
+func (r *AssetRepo) MarkOfflineBySource(ctx context.Context, sourceID string) error {
 	_, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET file_status = ? WHERE source_id = ? AND file_status = ?",
 		domain.FileStatusOffline, sourceID, domain.FileStatusOnline)
 	return err
 }
 
-func (r *SQLiteAssetRepo) MarkOnlineBySource(ctx context.Context, sourceID string) error {
+func (r *AssetRepo) MarkOnlineBySource(ctx context.Context, sourceID string) error {
 	_, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET file_status = ? WHERE source_id = ? AND file_status = ?",
 		domain.FileStatusOnline, sourceID, domain.FileStatusOffline)
 	return err
 }
 
-func (r *SQLiteAssetRepo) List(ctx context.Context, filter domain.AssetFilter) ([]*domain.Asset, error) {
+func (r *AssetRepo) List(ctx context.Context, filter catalog.AssetFilter) ([]*domain.Asset, error) {
 	where, args := buildFilterSQL(filter)
 	q := "SELECT " + assetColumns + " FROM assets"
 	if len(where) > 0 {
@@ -236,7 +237,7 @@ func (r *SQLiteAssetRepo) List(ctx context.Context, filter domain.AssetFilter) (
 
 // --- filter/patch SQL builders ---
 
-func buildFilterSQL(f domain.AssetFilter) ([]string, []any) {
+func buildFilterSQL(f catalog.AssetFilter) ([]string, []any) {
 	var where []string
 	var args []any
 
@@ -307,7 +308,7 @@ func buildFilterSQL(f domain.AssetFilter) ([]string, []any) {
 	return where, args
 }
 
-func buildPatchSQL(p domain.AssetPatch) ([]string, []any) {
+func buildPatchSQL(p catalog.AssetPatch) ([]string, []any) {
 	var clauses []string
 	var args []any
 

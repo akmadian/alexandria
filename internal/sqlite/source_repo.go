@@ -1,4 +1,4 @@
-package catalog
+package sqlite
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
-type SQLiteSourceRepo struct {
+type SourceRepo struct {
 	DB *sql.DB
 }
 
-func (r *SQLiteSourceRepo) List(ctx context.Context) ([]*domain.Source, error) {
+func (r *SourceRepo) List(ctx context.Context) ([]*domain.Source, error) {
 	rows, err := r.DB.QueryContext(ctx, `SELECT
 		id, name, kind, base_path, filesystem_uuid, disk_serial, volume_label,
 		host, share_name, poll_interval_secs, scan_recursively, status,
@@ -34,7 +34,7 @@ func (r *SQLiteSourceRepo) List(ctx context.Context) ([]*domain.Source, error) {
 	return sources, rows.Err()
 }
 
-func (r *SQLiteSourceRepo) Get(ctx context.Context, id string) (*domain.Source, error) {
+func (r *SourceRepo) Get(ctx context.Context, id string) (*domain.Source, error) {
 	row := r.DB.QueryRowContext(ctx, `SELECT
 		id, name, kind, base_path, filesystem_uuid, disk_serial, volume_label,
 		host, share_name, poll_interval_secs, scan_recursively, status,
@@ -48,7 +48,7 @@ func (r *SQLiteSourceRepo) Get(ctx context.Context, id string) (*domain.Source, 
 	return s, err
 }
 
-func (r *SQLiteSourceRepo) Create(ctx context.Context, s *domain.Source) error {
+func (r *SourceRepo) Create(ctx context.Context, s *domain.Source) error {
 	_, err := r.DB.ExecContext(ctx, `INSERT INTO sources
 		(id, name, kind, base_path, filesystem_uuid, disk_serial, volume_label,
 		 host, share_name, poll_interval_secs, scan_recursively, status,
@@ -60,7 +60,7 @@ func (r *SQLiteSourceRepo) Create(ctx context.Context, s *domain.Source) error {
 	return err
 }
 
-func (r *SQLiteSourceRepo) Update(ctx context.Context, s *domain.Source) error {
+func (r *SourceRepo) Update(ctx context.Context, s *domain.Source) error {
 	s.UpdatedAt = time.Now().UTC()
 	res, err := r.DB.ExecContext(ctx, `UPDATE sources SET
 		name = ?, kind = ?, base_path = ?, filesystem_uuid = ?, disk_serial = ?,
@@ -77,7 +77,7 @@ func (r *SQLiteSourceRepo) Update(ctx context.Context, s *domain.Source) error {
 	return checkRowsAffected(res, "source", s.ID)
 }
 
-func (r *SQLiteSourceRepo) UpdateStatus(ctx context.Context, id string, status domain.SourceStatus) error {
+func (r *SourceRepo) UpdateStatus(ctx context.Context, id string, status domain.SourceStatus) error {
 	res, err := r.DB.ExecContext(ctx, `UPDATE sources SET status = ?, updated_at = ? WHERE id = ?`,
 		status, formatTime(time.Now().UTC()), id)
 	if err != nil {
@@ -86,7 +86,7 @@ func (r *SQLiteSourceRepo) UpdateStatus(ctx context.Context, id string, status d
 	return checkRowsAffected(res, "source", id)
 }
 
-func (r *SQLiteSourceRepo) FindByFilesystemUUID(ctx context.Context, uuid string) (*domain.Source, error) {
+func (r *SourceRepo) FindByFilesystemUUID(ctx context.Context, uuid string) (*domain.Source, error) {
 	row := r.DB.QueryRowContext(ctx, `SELECT
 		id, name, kind, base_path, filesystem_uuid, disk_serial, volume_label,
 		host, share_name, poll_interval_secs, scan_recursively, status,
@@ -99,7 +99,7 @@ func (r *SQLiteSourceRepo) FindByFilesystemUUID(ctx context.Context, uuid string
 	return s, err
 }
 
-func (r *SQLiteSourceRepo) FindBySharePath(ctx context.Context, host, shareName string) (*domain.Source, error) {
+func (r *SourceRepo) FindBySharePath(ctx context.Context, host, shareName string) (*domain.Source, error) {
 	row := r.DB.QueryRowContext(ctx, `SELECT
 		id, name, kind, base_path, filesystem_uuid, disk_serial, volume_label,
 		host, share_name, poll_interval_secs, scan_recursively, status,

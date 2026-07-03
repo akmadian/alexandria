@@ -1,4 +1,4 @@
-package catalog
+package sqlite
 
 import (
 	"database/sql"

@@ -18,11 +18,11 @@ type SourceRepository interface {
 
 type AssetRepository interface {
 	Get(ctx context.Context, id string) (*domain.Asset, error)
-	List(ctx context.Context, filter domain.AssetFilter) ([]*domain.Asset, error)
+	List(ctx context.Context, filter AssetFilter) ([]*domain.Asset, error)
 	Create(ctx context.Context, asset *domain.Asset) error
 	Update(ctx context.Context, asset *domain.Asset) error
-	Patch(ctx context.Context, id string, patch domain.AssetPatch) error
-	BulkPatch(ctx context.Context, ids []string, patch domain.AssetPatch) error
+	Patch(ctx context.Context, id string, patch AssetPatch) error
+	BulkPatch(ctx context.Context, ids []string, patch AssetPatch) error
 	SoftDelete(ctx context.Context, id string) error
 	FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error)
 

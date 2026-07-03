@@ -2,6 +2,9 @@ package domain
 
 import "fmt"
 
+// Generic, cross-cutting errors. Domain-specific errors live with their type:
+// SourceOfflineError in source.go, ErrKeybindingConflict in keybindings.go.
+
 type NotFoundError struct {
 	Resource string
 	ID       string
@@ -21,15 +24,6 @@ func (e *ConflictError) Error() string {
 	return fmt.Sprintf("conflict on %s.%s: %s", e.Resource, e.Field, e.Message)
 }
 
-type SourceOfflineError struct {
-	SourceID string
-	Path     string
-}
-
-func (e *SourceOfflineError) Error() string {
-	return fmt.Sprintf("source %s is offline (path: %s)", e.SourceID, e.Path)
-}
-
 type CatalogLockedError struct {
 	Path string
 }
@@ -45,15 +39,6 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	return fmt.Sprintf("validation error on %s: %s", e.Field, e.Message)
-}
-
-type ErrKeybindingConflict struct {
-	Combo          string
-	ConflictAction string
-}
-
-func (e *ErrKeybindingConflict) Error() string {
-	return fmt.Sprintf("keybinding %s conflicts with action %s", e.Combo, e.ConflictAction)
 }
 
 type ErrSchemaTooOld struct {
