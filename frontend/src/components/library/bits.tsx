@@ -1,6 +1,7 @@
 import { CameraLens, File02, Flag01, Image01, SlashCircle01, Star01, VideoRecorder } from "@untitledui/icons";
 import type { FC } from "react";
-import { colorLabelClass, type ColorLabel, type FileStatus, type FileType, type Flag } from "@/lib/mock";
+import type { ColorLabel, FileStatus, FileType, Flag } from "@/api/contract";
+import { colorLabelClass } from "@/api/mock";
 import { cx } from "@/utils/cx";
 
 export const fileTypeIcon: Record<FileType, FC<{ className?: string }>> = {

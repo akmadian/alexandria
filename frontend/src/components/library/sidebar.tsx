@@ -8,7 +8,7 @@ import {
     Tag01,
 } from "@untitledui/icons";
 import type { FC } from "react";
-import { collections, colorLabelClass, sources, tags } from "@/lib/mock";
+import { collections, colorLabelClass, sources, tags } from "@/api/mock";
 import { cx } from "@/utils/cx";
 import { StatusDot } from "./bits";
 

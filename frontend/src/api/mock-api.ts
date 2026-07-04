@@ -11,18 +11,16 @@ import {
     sources as seedSources,
     tags as seedTags,
     thumbUrl,
-    type Asset,
-    type Collection,
-    type Source,
-    type Tag,
 } from "./mock.ts";
 import type {
     AlexandriaAPI,
+    Asset,
     AssetFilter,
     AssetRow,
     AssetScope,
     AssetSort,
     CatalogChange,
+    Collection,
     CollectionInput,
     CollectionPatch,
     FolderNode,
@@ -35,16 +33,18 @@ import type {
     PatchTarget,
     Settings,
     SettingsPatch,
+    Source,
     SourceInput,
     SourcePatch,
     SourceStatusEvent,
+    Tag,
     TagInput,
     TagPatch,
     Unsubscribe,
     UpdateAvailable,
     AssetPatch,
-} from "./api.ts";
-import { ApiError } from "./api.ts";
+} from "./contract.ts";
+import { ApiError } from "./contract.ts";
 
 // --- Smart collection predicates. Manual collections use an explicit membership set. ---
 const smartPredicate: Record<string, (a: Asset) => boolean> = {
@@ -257,6 +257,7 @@ export function createMockApi(): AlexandriaAPI {
         flag: a.flag,
         width: a.width,
         height: a.height,
+        sizeBytes: a.sizeBytes,
         durationSecs: a.durationSecs,
         capturedAt: a.capturedAt,
         thumbURL: `${thumbUrl(a, 480)}?v=${a.thumbnailAt}`,

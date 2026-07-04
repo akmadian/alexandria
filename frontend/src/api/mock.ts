@@ -1,65 +1,8 @@
-// Mock data modeled on internal/domain (Go). No backend yet — thumbnails use
-// picsum so the grid reads like a real photo library.
+// Mock seed data + format helpers. The domain shapes live in ./models.ts; this
+// file is only the fake catalog the UI runs against until the backend binds.
 // ponytail: static mock; swap for the Wails-bound catalog API when it exists.
 
-export type FileType = "image" | "video" | "raw" | "vector" | "document" | "audio";
-export type ColorLabel = "red" | "orange" | "yellow" | "green" | "blue" | "purple";
-export type Flag = "pick" | "reject" | null;
-export type FileStatus = "online" | "offline" | "missing";
-export type SourceStatus = "active" | "offline";
-
-export interface Asset {
-    id: string;
-    sourceId: string;
-    relativePath: string; // path within the source, '/'-separated, includes filename
-    filename: string;
-    extension: string;
-    fileType: FileType;
-    fileStatus: FileStatus;
-    sizeBytes: number;
-    width: number;
-    height: number;
-    durationSecs?: number; // temporal media only
-    capturedAt: string; // ISO
-    cameraMake?: string;
-    cameraModel?: string;
-    lensModel?: string;
-    focalLengthMM?: number;
-    aperture?: number;
-    shutterSpeed?: string;
-    iso?: number;
-    location?: string;
-    creator?: string;
-    rating: number; // 0-5
-    colorLabel: ColorLabel | null;
-    flag: Flag;
-    note: string | null;
-    tagIds: string[];
-    ingestedAt: string; // ISO
-    thumbnailAt: string; // ISO — content-address for the versioned thumbnail URL
-}
-
-export interface Source {
-    id: string;
-    name: string;
-    kind: "local" | "external_drive" | "smb" | "nfs";
-    status: SourceStatus;
-    count: number;
-}
-
-export interface Collection {
-    id: string;
-    name: string;
-    kind: "manual" | "smart";
-    count: number;
-}
-
-export interface Tag {
-    id: string;
-    name: string;
-    color: ColorLabel;
-    count: number;
-}
+import type { Asset, Collection, ColorLabel, FileStatus, FileType, Flag, Source, Tag } from "../models/index.ts";
 
 export const sources: Source[] = [
     { id: "src-main", name: "Main SSD", kind: "local", status: "active", count: 18 },

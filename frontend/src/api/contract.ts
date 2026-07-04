@@ -28,8 +28,10 @@ import type {
     Source,
     SourceStatus,
     Tag,
-} from "./mock.ts";
+} from "../models/index.ts";
 
+// Re-export the domain models as part of the contract, so consumers have one
+// door: import every backend type from `@/api/contract`.
 export type { Asset, Collection, ColorLabel, FileStatus, FileType, Flag, Source, SourceStatus, Tag };
 
 // ---------------------------------------------------------------------------
@@ -98,6 +100,7 @@ export interface AssetRow {
     flag: Flag;
     width: number;
     height: number;
+    sizeBytes: number;
     durationSecs?: number;
     capturedAt: string;
     thumbURL: string; // content-addressed, immutable
@@ -348,5 +351,6 @@ export interface AlexandriaAPI {
 //   startIntegrityCheck                             (job — reuses the job envelope)
 // Each lands as standard verbs on an existing channel; none reshapes what's above.
 //
-// The active backend singleton lives in ./client.ts (the composition point), so
-// this contract module stays a runtime leaf with no dependency on any impl.
+// The active backend singleton lives at the top of ./queries.ts (its only
+// consumer), so this contract module stays a runtime leaf with no dependency on
+// any implementation — it's the artifact that will mirror the Go domain types.

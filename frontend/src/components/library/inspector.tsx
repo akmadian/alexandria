@@ -1,16 +1,7 @@
 import { Camera01, Flag01, MarkerPin01, SlashCircle01, XClose } from "@untitledui/icons";
 import { Badge } from "@/components/base/badges/badges";
-import {
-    colorLabelClass,
-    formatBytes,
-    formatDate,
-    formatDateTime,
-    tags as allTags,
-    thumbUrl,
-    type Asset,
-    type ColorLabel,
-    type Flag,
-} from "@/lib/mock";
+import type { Asset, ColorLabel, Flag } from "@/api/contract";
+import { colorLabelClass, formatBytes, formatDate, formatDateTime, tags as allTags, thumbUrl } from "@/api/mock";
 import { cx } from "@/utils/cx";
 import { RatingStars, StatusDot, fileTypeIcon } from "./bits";
 

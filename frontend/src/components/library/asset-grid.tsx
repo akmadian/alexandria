@@ -1,5 +1,6 @@
 import { WifiOff } from "@untitledui/icons";
-import { formatBytes, thumbUrl, type Asset } from "@/lib/mock";
+import type { AssetRow } from "@/api/contract";
+import { formatBytes } from "@/api/mock";
 import { cx } from "@/utils/cx";
 import { ColorDot, FlagBadge, fileTypeIcon, RatingStars } from "./bits";
 import type { Density } from "./toolbar";
@@ -10,7 +11,7 @@ const AssetCard = ({
     onSelect,
     compact,
 }: {
-    asset: Asset;
+    asset: AssetRow;
     selected: boolean;
     onSelect: () => void;
     compact: boolean;
@@ -30,7 +31,7 @@ const AssetCard = ({
         >
             <div className="relative aspect-[4/3] overflow-hidden bg-secondary">
                 <img
-                    src={thumbUrl(asset, compact ? 320 : 480)}
+                    src={asset.thumbURL}
                     alt={asset.filename}
                     loading="lazy"
                     className={cx(
@@ -84,7 +85,7 @@ export const AssetGrid = ({
     onSelect,
     density,
 }: {
-    assets: Asset[];
+    assets: AssetRow[];
     selectedId: string | null;
     onSelect: (id: string) => void;
     density: Density;

@@ -22,7 +22,11 @@ This tells us where **not** to spend complexity. The metadata query path (SELECT
 
 The seam is the **only** place that touches `window.go.*` or `runtime.*`. Everything else imports the `AlexandriaAPI` interface. This keeps the app testable against a mock and makes the real backend a one-line swap (`createMockApi()` → `createWailsApi()`).
 
-*Implemented* (`frontend/src/lib/`): `api.ts` is the contract — types, the `AlexandriaAPI` interface, and `ApiError`, a runtime leaf with no dependency on any implementation. `mock-api.ts` is the in-memory `createMockApi()` the whole frontend is built against today. `client.ts` is the composition point exporting the `api` singleton — the one line that swaps to `createWailsApi()`. `mock-api.check.ts` is a framework-free behavioral check (`node src/lib/mock-api.check.ts`). Domain entity types + seed data live in `mock.ts` and will become Wails-generated types against `internal/domain` once the backend binds.
+*Implemented* in `frontend/src/api/`, one job per file:
+- `contract.ts` — the **contract**: seam types, the `AlexandriaAPI` interface, and `ApiError`. A runtime leaf with no dependency on any implementation or on React. Re-exports the domain models, so app code has one door: `import type { … } from "@/api/contract"`.
+- `models/` — the **domain shapes**, one file per entity (`asset.ts`, `source.ts`, `collection.ts`, `tag.ts`) plus `enums.ts` and a barrel. Hand-written today; this directory is where Wails-generated types (from Go `internal/domain`) land later, invisibly to everything above it.
+- `mock-api.ts` — `createMockApi()`, the in-memory implementation the frontend runs against today. `wails-api.ts` (`createWailsApi()`) joins it later; `mock-api.check.ts` is a framework-free behavioral check (`node src/api/mock-api.check.ts`). `mock.ts` holds seed data + format helpers.
+- `queries.ts` — the **query layer** (§7): the TanStack hooks components consume, plus the live `api` singleton at its top (its only consumer). Swapping `createMockApi()` → `createWailsApi()` there is the one-line change to go real. Hooks stay separate from the contract so `contract.ts` remains framework-agnostic.
 
 The boundary is **thin**: type translation, event subscription, and error normalization. It does **not** contain caching, debouncing, or coalescing — those live one layer up in the query layer (§7), because they are consumer concerns, not transport concerns.
 
@@ -238,6 +242,8 @@ URLs are content-addressed (`?v={hash}` from `ThumbnailAt`/preview hash) so rege
 ## 7. Caching & throttling: TanStack Query + a custom thumbnail loader
 
 The PRD's "no cache" is reconciled as: **no normalized store, but a thin stale-while-revalidate layer** — and that layer is **TanStack Query**, not hand-rolled machinery. Single-flight dedupe, SWR, LRU (`gcTime`), request cancellation, and query-key-based superseding are exactly its feature set, it's the canonical "fewer, well-maintained packages" dependency, and it deletes roughly half of this section's implementation burden.
+
+*Implemented* (`frontend/src/api/queries.ts`, `providers/query-provider.tsx`): typed hooks (`useAssets`, `useAsset`, reference-data hooks, `usePatchAssets`), the query-key map below, optimistic triage (§10) via `onMutate`/rollback across both list and detail caches, and `useCatalogSync()` — the `catalog:changed`/`job:done`/`source:status` → `invalidateQueries` bridge, mounted once at the library root. Components consume hooks only; they never touch `api`. Verified end-to-end in the browser: grid renders `AssetRow` pages, selection fetches the full `Asset`, a rating edit updates the selected card and inspector instantly while leaving other rows untouched. The thumbnail loader (below) stays the one bespoke piece and is not built yet.
 
 Query-key conventions:
 

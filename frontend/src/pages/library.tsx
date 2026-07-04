@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { AssetGrid } from "@/components/library/asset-grid";
 import { Inspector } from "@/components/library/inspector";
 import { Sidebar } from "@/components/library/sidebar";
-import { Toolbar, type Filters } from "@/components/library/toolbar";
-import { assets as seedAssets, collections, sources, tags, type Asset } from "@/lib/mock";
+import { Toolbar, type Filters, type SortKey } from "@/components/library/toolbar";
+import type { Asset, AssetFilter, AssetPatch, AssetScope, AssetSort, FileType, ListQuery } from "@/api/contract";
+import { collections, sources, tags } from "@/api/mock";
+import { useAsset, useAssets, useCatalogSync, usePatchAssets } from "@/api/queries";
 
 const titleFor = (view: string): string => {
     if (view === "all") return "All Assets";
@@ -15,31 +17,39 @@ const titleFor = (view: string): string => {
     return from ?? "Assets";
 };
 
-const matchesView = (a: Asset, view: string): boolean => {
-    if (view === "all" || view === "recent") return true;
-    if (view === "picks") return a.flag === "pick";
+// A "view" is where you're looking: sources/tags are filter fields, a collection
+// is a scope, and "picks" is a filter preset (docs/frontend-architecture.md §3).
+const scopeAndFilterFor = (view: string): { scope: AssetScope; viewFilter: AssetFilter } => {
     const [kind, id] = view.split(":");
-    if (kind === "source") return a.sourceId === id;
-    if (kind === "tag") return a.tagIds.includes(id);
-    if (kind === "collection") {
-        if (id === "col-5star") return a.rating === 5;
-        if (id === "col-untagged") return a.tagIds.length === 0;
-        // Manual collections have no membership table in the mock — fake a stable subset.
-        return (a.id.charCodeAt(a.id.length - 1) + id.length) % 2 === 0;
-    }
-    return true;
+    if (kind === "collection") return { scope: { kind: "collection", id }, viewFilter: {} };
+    if (kind === "source") return { scope: { kind: "library" }, viewFilter: { sourceIds: [id] } };
+    if (kind === "tag") return { scope: { kind: "library" }, viewFilter: { tagIds: [id] } };
+    if (view === "picks") return { scope: { kind: "library" }, viewFilter: { flags: ["pick"] } };
+    return { scope: { kind: "library" }, viewFilter: {} };
 };
 
-const sorters: Record<Filters["sort"], (a: Asset, b: Asset) => number> = {
-    "captured-desc": (a, b) => b.capturedAt.localeCompare(a.capturedAt),
-    "captured-asc": (a, b) => a.capturedAt.localeCompare(b.capturedAt),
-    "rating-desc": (a, b) => b.rating - a.rating || b.capturedAt.localeCompare(a.capturedAt),
-    "name-asc": (a, b) => a.filename.localeCompare(b.filename),
-    "size-desc": (a, b) => b.sizeBytes - a.sizeBytes,
+const sortFor: Record<SortKey, AssetSort> = {
+    "captured-desc": { field: "captured", dir: "desc" },
+    "captured-asc": { field: "captured", dir: "asc" },
+    "rating-desc": { field: "rating", dir: "desc" },
+    "name-asc": { field: "filename", dir: "asc" },
+    "size-desc": { field: "size", dir: "desc" },
+};
+
+/** Inspector edits arrive as a Partial<Asset>; keep only the triage fields the
+ *  AssetPatch envelope carries. */
+const toPatch = (p: Partial<Asset>): AssetPatch => {
+    const patch: AssetPatch = {};
+    if ("rating" in p) patch.rating = p.rating;
+    if ("colorLabel" in p) patch.colorLabel = p.colorLabel;
+    if ("flag" in p) patch.flag = p.flag;
+    if ("note" in p) patch.note = p.note;
+    return patch;
 };
 
 export const Library = () => {
-    const [assets, setAssets] = useState<Asset[]>(seedAssets);
+    useCatalogSync(); // catalog:changed / job:done / source:status → cache invalidation
+
     const [view, setView] = useState("all");
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [filters, setFilters] = useState<Filters>({
@@ -50,26 +60,31 @@ export const Library = () => {
         density: "comfortable",
     });
 
-    const visible = useMemo(() => {
-        const q = filters.search.trim().toLowerCase();
-        const list = assets.filter((a) => {
-            if (!matchesView(a, view)) return false;
-            if (filters.fileType !== "all" && a.fileType !== filters.fileType) return false;
-            if (a.rating < filters.minRating) return false;
-            if (q) {
-                const hay = `${a.filename} ${a.cameraModel ?? ""} ${a.lensModel ?? ""} ${a.location ?? ""}`.toLowerCase();
-                if (!hay.includes(q)) return false;
-            }
-            return true;
-        });
-        list.sort(sorters[filters.sort]);
-        return view === "recent" ? list.slice(0, 12) : list;
-    }, [assets, view, filters]);
+    const query = useMemo<ListQuery>(() => {
+        const { scope, viewFilter } = scopeAndFilterFor(view);
+        const filter: AssetFilter = { ...viewFilter };
+        if (filters.search.trim()) filter.searchText = filters.search.trim();
+        if (filters.fileType !== "all") filter.fileTypes = [filters.fileType as FileType];
+        if (filters.minRating > 0) filter.ratingMin = filters.minRating;
+        const isRecent = view === "recent";
+        return {
+            scope,
+            filter,
+            sort: isRecent ? { field: "added", dir: "desc" } : sortFor[filters.sort],
+            ...(isRecent ? { page: { limit: 12, offset: 0 } } : null),
+        };
+    }, [view, filters]);
 
-    const selected = assets.find((a) => a.id === selectedId) ?? null;
+    const { data, isPending } = useAssets(query);
+    const rows = data?.items ?? [];
 
-    const updateSelected = (patch: Partial<Asset>) =>
-        setAssets((prev) => prev.map((a) => (a.id === selectedId ? { ...a, ...patch } : a)));
+    const { data: selected } = useAsset(selectedId);
+    const patchAssets = usePatchAssets();
+
+    const updateSelected = (p: Partial<Asset>) => {
+        if (!selectedId) return;
+        patchAssets.mutate({ target: { ids: [selectedId] }, patch: toPatch(p) });
+    };
 
     return (
         <div className="flex h-dvh overflow-hidden bg-primary">
@@ -79,17 +94,21 @@ export const Library = () => {
                     setView(k);
                     setSelectedId(null);
                 }}
-                total={assets.length}
+                total={data?.total ?? 0}
             />
 
             <main className="flex min-w-0 flex-1 flex-col">
-                <Toolbar title={titleFor(view)} count={visible.length} filters={filters} onChange={(f) => setFilters((p) => ({ ...p, ...f }))} />
+                <Toolbar title={titleFor(view)} count={data?.total ?? 0} filters={filters} onChange={(f) => setFilters((p) => ({ ...p, ...f }))} />
                 <div className="min-h-0 flex-1 overflow-y-auto">
-                    <AssetGrid assets={visible} selectedId={selectedId} onSelect={setSelectedId} density={filters.density} />
+                    {isPending ? (
+                        <div className="p-5 text-sm text-tertiary">Loading…</div>
+                    ) : (
+                        <AssetGrid assets={rows} selectedId={selectedId} onSelect={setSelectedId} density={filters.density} />
+                    )}
                 </div>
             </main>
 
-            <Inspector asset={selected} onUpdate={updateSelected} onClose={() => setSelectedId(null)} />
+            <Inspector asset={selected ?? null} onUpdate={updateSelected} onClose={() => setSelectedId(null)} />
         </div>
     );
 };
