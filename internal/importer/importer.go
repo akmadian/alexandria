@@ -55,7 +55,7 @@ func (imp *Importer) Run(ctx context.Context, source *domain.Source, fsys fs.FS)
 			return ctx.Err()
 		}
 		if walkErr != nil {
-			imp.recordError(&result, path, "scan", walkErr)
+			imp.recordError(&result.Errors, path, "scan", walkErr)
 			return nil // a single unreadable dir shouldn't abort the walk
 		}
 		if d.IsDir() {
@@ -101,7 +101,7 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, path string, d fs.DirEntry, known map[string]domain.FileStat, result *ImportResult) {
 	info, err := d.Info()
 	if err != nil {
-		imp.recordError(result, path, "scan", err)
+		imp.recordError(&result.Errors, path, "scan", err)
 		return
 	}
 	sf, ok := scan(path, info)
@@ -116,12 +116,12 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 
 	hash, err := hashFile(fsys, sf)
 	if err != nil {
-		imp.recordError(result, path, "hashing", err)
+		imp.recordError(&result.Errors, path, "hashing", err)
 		return
 	}
 	act, existing, err := imp.classifyContent(ctx, source, sf, hash)
 	if err != nil {
-		imp.recordError(result, path, "dedup", err)
+		imp.recordError(&result.Errors, path, "dedup", err)
 		return
 	}
 	if err := imp.persist(ctx, source, sf, hash, act, existing); err != nil {
@@ -146,7 +146,9 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 	}
 }
 
-func (imp *Importer) recordError(result *ImportResult, path, stage string, err error) {
+// recordError logs a per-file failure at warn level and appends it to the given
+// error slice. Shared by Run and Reconcile.
+func (imp *Importer) recordError(errs *[]ImportError, path, stage string, err error) {
 	imp.Log.Warn("file skipped after error", "path", path, "stage", stage, "err", err)
-	result.Errors = append(result.Errors, ImportError{Path: path, Stage: stage, Err: err})
+	*errs = append(*errs, ImportError{Path: path, Stage: stage, Err: err})
 }

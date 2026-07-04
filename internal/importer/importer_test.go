@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 
@@ -95,5 +96,94 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	}
 	if res2.Added != 0 || res2.Skipped != 3 {
 		t.Fatalf("re-run: added=%d skipped=%d, want 0/3", res2.Added, res2.Skipped)
+	}
+}
+
+func TestReconcile_MarksMissingAndRestores(t *testing.T) {
+	imp, src, assets := newImporter(t)
+	ctx := context.Background()
+	full := fstest.MapFS{
+		"a.jpg": {Data: []byte("a")},
+		"b.jpg": {Data: []byte("b")},
+	}
+	if _, err := imp.Run(ctx, src, full); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// b.jpg vanished from disk.
+	res, err := imp.Reconcile(ctx, src, fstest.MapFS{"a.jpg": full["a.jpg"]})
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if res.Missing != 1 || res.Restored != 0 {
+		t.Fatalf("reconcile: missing=%d restored=%d, want 1/0", res.Missing, res.Restored)
+	}
+	b, _ := assets.FindBySourcePath(ctx, src.ID, "b.jpg")
+	if b == nil || b.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("b.jpg status = %v, want missing", b)
+	}
+
+	// b.jpg came back.
+	res, err = imp.Reconcile(ctx, src, full)
+	if err != nil {
+		t.Fatalf("reconcile back: %v", err)
+	}
+	if res.Restored != 1 {
+		t.Fatalf("reconcile: restored=%d, want 1", res.Restored)
+	}
+	if b, _ = assets.FindBySourcePath(ctx, src.ID, "b.jpg"); b.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("b.jpg status = %q, want online", b.FileStatus)
+	}
+}
+
+func TestReconcile_SourceOfflineMarksAllOffline(t *testing.T) {
+	imp, src, assets := newImporter(t)
+	ctx := context.Background()
+	if _, err := imp.Run(ctx, src, fstest.MapFS{"a.jpg": {Data: []byte("a")}}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	// Unreachable filesystem: a nonexistent directory.
+	res, err := imp.Reconcile(ctx, src, os.DirFS(filepath.Join(t.TempDir(), "gone")))
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if res.Missing != 0 {
+		t.Fatalf("offline source must not mark files missing, got missing=%d", res.Missing)
+	}
+	a, _ := assets.FindBySourcePath(ctx, src.ID, "a.jpg")
+	if a.FileStatus != domain.FileStatusOffline {
+		t.Fatalf("a.jpg status = %q, want offline", a.FileStatus)
+	}
+}
+
+// The capstone: reconcile + import together relink a moved file instead of
+// duplicating it — the pipeline's most important protection, now active.
+func TestMoveRelink_AfterReconcile(t *testing.T) {
+	imp, src, assets := newImporter(t)
+	ctx := context.Background()
+	content := []byte("the same photo bytes")
+
+	if _, err := imp.Run(ctx, src, fstest.MapFS{"old/photo.jpg": {Data: content}}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	// Folder reorganized while the app was closed: the old path is gone.
+	if _, err := imp.Reconcile(ctx, src, fstest.MapFS{}); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	// Re-import finds the same file (same name + content) at a new path.
+	res, err := imp.Run(ctx, src, fstest.MapFS{"new/photo.jpg": {Data: content}})
+	if err != nil {
+		t.Fatalf("re-import: %v", err)
+	}
+	if res.Moved != 1 || res.Added != 0 {
+		t.Fatalf("re-import: moved=%d added=%d, want 1/0 (relink, not duplicate)", res.Moved, res.Added)
+	}
+	all, _ := assets.List(ctx, catalog.AssetFilter{IncludeDeleted: true})
+	if len(all) != 1 {
+		t.Fatalf("expected 1 relinked asset, got %d (duplicated?)", len(all))
+	}
+	if all[0].RelativePath != "new/photo.jpg" || all[0].FileStatus != domain.FileStatusOnline {
+		t.Fatalf("relinked asset at %q status %q, want new/photo.jpg online",
+			all[0].RelativePath, all[0].FileStatus)
 	}
 }
