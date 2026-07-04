@@ -25,10 +25,12 @@ import type {
     PatchTarget,
 } from "./contract.ts";
 
-// The live backend. Its only consumer is this module — the hooks are the proxy
-// between components and the backend, so components never touch `api` directly.
+// The live backend. Components consume the hooks below, never `api` directly for
+// queries/mutations. The one sanctioned direct use is event subscription
+// (onJobProgress/onJobDone/…), which isn't request/response and has no hook —
+// features/jobs/use-jobs.ts imports it for exactly that.
 // Swap createMockApi() → createWailsApi() to go real; nothing below changes.
-const api = createMockApi();
+export const api = createMockApi();
 
 // --- Query keys. Reference data is stable; lists are keyed by the whole query. ---
 export const keys = {

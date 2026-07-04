@@ -1,0 +1,105 @@
+/* Design tokens — the entire visual identity lives here and in themes/.
+ *
+ * Two layers:
+ *   1. Primitives   — raw scales (greys, spacing, type, radii). Themes may use them.
+ *   2. Semantic     — what components are ALLOWED to use. Themes override these.
+ *
+ * Component CSS uses semantic tokens only. If a component needs a primitive,
+ * that's a missing semantic token, not an excuse.
+ *
+ * The default values below ARE the graphite theme; themes/dark.css and
+ * themes/light.css override the semantic layer under [data-theme="..."].
+ * Chrome is hue-free in every theme (color-critical work); hue is reserved for
+ * user data (color labels, tag colors) and the single accent.
+ */
+
+:root {
+    /* ---- primitives: neutral grey ramp (zero chroma) ---- */
+    --grey-0: #ffffff;
+    --grey-50: #f4f4f4;
+    --grey-100: #e8e8e8;
+    --grey-200: #cfcfcf;
+    --grey-300: #ababab;
+    --grey-400: #8a8a8a;
+    --grey-500: #6e6e6e;
+    --grey-600: #525252;
+    --grey-700: #3d3d3d;
+    --grey-750: #333333;
+    --grey-800: #2a2a2a;
+    --grey-850: #232323;
+    --grey-900: #1c1c1c;
+    --grey-950: #141414;
+    --grey-1000: #0c0c0c;
+
+    /* ---- primitives: data colors (identical across themes — they mean something) ---- */
+    --label-red: #c25b4e;
+    --label-orange: #c98a3d;
+    --label-yellow: #c9b83d;
+    --label-green: #6da45c;
+    --label-blue: #5583b8;
+    --label-purple: #8f6bb3;
+
+    /* ---- primitives: spacing (rem so UI-scale is one root font-size away) ---- */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+    --space-8: 3rem;
+
+    /* ---- primitives: type. Compact — this UI respects screen space. ---- */
+    --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: ui-monospace, "SF Mono", "Cascadia Mono", monospace; /* metadata values, counts — the retrofuturistic register */
+    --text-xs: 0.6875rem;
+    --text-sm: 0.75rem;
+    --text-md: 0.8125rem;
+    --text-lg: 0.9375rem;
+    --text-xl: 1.125rem;
+    /* Section/label voice: small caps + tracking. Use via the .u-label utility in global.css. */
+    --label-tracking: 0.08em;
+
+    /* ---- primitives: shape & motion ---- */
+    --radius-sm: 2px;
+    --radius-md: 4px;
+    --radius-lg: 6px;
+    --duration-fast: 100ms;
+    --duration-slow: 200ms;
+
+    /* z-order in one place */
+    --z-toast: 40;
+    --z-overlay: 30;
+
+    /* ======================================================================
+     * Semantic layer — DEFAULT = GRAPHITE (neutral mid-grey, the shipping default)
+     * ==================================================================== */
+    color-scheme: dark;
+
+    --bg-sunken: var(--grey-900); /* wells: grid backdrop, inputs */
+    --bg-surface: var(--grey-850); /* panes, chrome */
+    --bg-raised: var(--grey-800); /* cards, popovers, modals */
+    --bg-hover: var(--grey-750);
+    --bg-active: var(--grey-700);
+    --bg-overlay: rgb(0 0 0 / 0.55);
+
+    --text-primary: var(--grey-100);
+    --text-secondary: var(--grey-300);
+    --text-tertiary: var(--grey-400);
+    --text-disabled: var(--grey-600);
+    --text-on-accent: var(--grey-1000);
+
+    --border-subtle: var(--grey-800);
+    --border-default: var(--grey-750);
+    --border-strong: var(--grey-600);
+
+    --accent: #d9a45b; /* muted amber — the one hue the chrome is allowed */
+    --accent-hover: #e5b878;
+    --bg-selected: color-mix(in srgb, var(--accent) 14%, var(--bg-raised));
+    --border-selected: color-mix(in srgb, var(--accent) 55%, transparent);
+
+    --danger: #cf6459;
+    --success: #6da45c;
+    --warning: #c98a3d;
+
+    --focus-ring: var(--accent);
+}

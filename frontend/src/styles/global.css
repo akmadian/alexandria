@@ -1,0 +1,94 @@
+/* Global styles: reset, base typography, focus, scrollbars, motion. Everything
+ * else is a CSS Module next to its component. Keep this file boring and short. */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+* {
+    margin: 0;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    font-family: var(--font-ui);
+    font-size: var(--text-md);
+    line-height: 1.45;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden; /* the shell owns all scrolling */
+    user-select: none; /* desktop app chrome; opt back in for text content */
+}
+
+img,
+video {
+    display: block;
+    max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+/* One focus treatment for the whole app, all themes. */
+:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -1px;
+}
+
+::selection {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Compact scrollbars that match the chrome. */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* The label voice: section headings, metadata keys. Small caps + tracking is
+ * the app's typographic signature — use the class, don't re-create it. */
+.u-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: var(--label-tracking);
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+
+/* Data values (counts, dimensions, timestamps) render in the mono register. */
+.u-data {
+    font-family: var(--font-data);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}

@@ -1,0 +1,119 @@
+{
+    "app": {
+        "title": "Alexandria"
+    },
+    "browser": {
+        "mode": {
+            "sources": "Sources",
+            "collections": "Collections",
+            "tags": "Tags"
+        },
+        "allAssets": "All Assets",
+        "recent": "Recent Imports",
+        "empty": "Nothing here yet"
+    },
+    "filterBar": {
+        "searchPlaceholder": "Search assets…",
+        "count_one": "{{count}} asset",
+        "count_other": "{{count}} assets",
+        "fileType": {
+            "all": "All types"
+        },
+        "minRating": "Minimum rating",
+        "sort": {
+            "captured-desc": "Newest capture",
+            "captured-asc": "Oldest capture",
+            "rating-desc": "Highest rated",
+            "name-asc": "Filename A–Z",
+            "size-desc": "Largest file"
+        },
+        "theme": "Switch color scheme"
+    },
+    "grid": {
+        "empty": "No assets match this view",
+        "loading": "Loading…"
+    },
+    "inspector": {
+        "empty": "Select an asset to inspect it",
+        "rating": "Rating",
+        "flag": "Flag",
+        "colorLabel": "Label",
+        "note": "Note",
+        "notePlaceholder": "Add a note…",
+        "tags": "Tags",
+        "file": "File",
+        "captured": "Captured",
+        "camera": "Camera",
+        "lens": "Lens",
+        "exposure": "Exposure",
+        "dimensions": "Dimensions",
+        "size": "Size",
+        "location": "Location",
+        "clearFlag": "Clear flag",
+        "close": "Close inspector"
+    },
+    "flag": {
+        "pick": "Pick",
+        "reject": "Reject"
+    },
+    "colorLabel": {
+        "red": "Red",
+        "orange": "Orange",
+        "yellow": "Yellow",
+        "green": "Green",
+        "blue": "Blue",
+        "purple": "Purple",
+        "none": "None"
+    },
+    "fileType": {
+        "image": "Image",
+        "raw": "RAW",
+        "video": "Video",
+        "vector": "Vector",
+        "document": "Document",
+        "audio": "Audio",
+        "unknown": "File"
+    },
+    "sourceKind": {
+        "local": "Local disk",
+        "external_drive": "External drive",
+        "smb": "Network share (SMB)",
+        "nfs": "Network share (NFS)",
+        "unknown": "Source"
+    },
+    "sourceStatus": {
+        "active": "Online",
+        "offline": "Offline"
+    },
+    "statusBar": {
+        "selected_one": "{{count}} selected",
+        "selected_other": "{{count}} selected",
+        "job": {
+            "import": "Importing"
+        }
+    },
+    "modal": {
+        "close": "Close"
+    },
+    "errors": {
+        "panelCrashed": "This panel hit an error.",
+        "reloadPanel": "Reload panel",
+        "appCrashed": "Alexandria hit an unexpected error.",
+        "copyDetails": "Copy error details",
+        "restartHint": "Restarting the app is the fastest fix. If it keeps happening, export logs from Help and attach them to a bug report."
+    },
+    "actions": {
+        "rate_0": "Clear rating",
+        "rate_1": "Rate 1 star",
+        "rate_2": "Rate 2 stars",
+        "rate_3": "Rate 3 stars",
+        "rate_4": "Rate 4 stars",
+        "rate_5": "Rate 5 stars",
+        "flag_pick": "Flag as pick",
+        "flag_reject": "Flag as reject",
+        "clear_flag": "Clear flag",
+        "select_all": "Select all",
+        "clear_selection": "Clear selection",
+        "command_palette": "Command palette"
+    }
+}

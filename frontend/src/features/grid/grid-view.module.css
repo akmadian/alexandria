@@ -1,0 +1,27 @@
+.scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-2);
+}
+
+.inner {
+    position: relative;
+}
+
+.row {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--tile-size), 1fr));
+    gap: 8px;
+}
+
+.state {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    color: var(--text-tertiary);
+    font-size: var(--text-sm);
+}

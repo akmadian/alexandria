@@ -13,6 +13,16 @@
 - AI face detection and grouping?
 - AI assisted culling? - probably not, this feels more like a LrC or photo management specific task.
 - Maybe allow user to select "LrC is source of truth" or "alexandria is source of truth" for metadata. This will give a clean and well understandable choice as to which program owns raw and rasterized image metadata.
+- Write "catalog file" like LrC. This will make it easy to test in a particular catalog environment, manage multiple catalogs, and make backups for general use and before updates.
+
+- Tags should have an optional customizable color with optional color inheritance by children
+
+## Building and Deploying
+- Should have per piece testing and build scripts, then scripts at root for building and testing
+- Packaging can be done in dev environment and by github actions scripts (both github and forgejo runners)
+- Releases will be manual and will be done via github
+- How will app be updated? The update flow is still completely undecided
+
 
 ## UI
 - Logging - important. Want users to be able to upload a log file in case they're having an issue

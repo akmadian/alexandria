@@ -1,0 +1,11 @@
+.stars {
+    display: flex;
+    gap: 2px;
+}
+
+.star {
+    padding: 2px;
+    background: none;
+    border: none;
+    cursor: default;
+}
