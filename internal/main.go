@@ -8,6 +8,7 @@ import (
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
+	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/migrations"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/charmbracelet/log"
@@ -39,9 +40,10 @@ func main() {
 
 	sources := &sqlite.SourceRepo{DB: db}
 	imp := &importer.Importer{
-		Assets: &sqlite.AssetRepo{DB: db},
-		Dups:   &sqlite.DuplicateRepo{DB: db},
-		Log:    log.Default(),
+		Assets:   &sqlite.AssetRepo{DB: db},
+		Dups:     &sqlite.DuplicateRepo{DB: db},
+		Metadata: metadata.Default(),
+		Log:      log.Default(),
 	}
 
 	now := time.Now().UTC()

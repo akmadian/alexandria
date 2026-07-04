@@ -72,6 +72,9 @@ type Asset struct {
 	GPSLat        *float64
 	GPSLon        *float64
 
+	Creator   *string // EXIF Artist / IPTC By-line / XMP dc:creator
+	Copyright *string // EXIF Copyright / IPTC CopyrightNotice / XMP dc:rights
+
 	ExtendedMetadata map[string]any
 
 	Rating     *int

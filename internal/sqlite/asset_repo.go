@@ -20,7 +20,7 @@ const assetColumns = `id, source_id, relative_path, file_status, last_verified_a
 	filename, extension, mime_type, file_type, size_bytes, mtime, partial_hash,
 	width, height, duration_secs, color_space, bit_depth,
 	captured_at, camera_make, camera_model, lens_model, focal_length_mm,
-	aperture, shutter_speed, iso, gps_lat, gps_lon,
+	aperture, shutter_speed, iso, gps_lat, gps_lon, creator, copyright,
 	extended_metadata, rating, color_label, flag, note,
 	xmp_last_read_at, xmp_last_written_at, xmp_hash,
 	thumbnail_path, thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at`
@@ -41,12 +41,13 @@ func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 	}
 	_, err = r.DB.ExecContext(ctx, `INSERT INTO assets
 		(`+assetColumns+`) VALUES
-		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?,?)`,
+		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?,?)`,
 		a.ID, a.SourceID, a.RelativePath, a.FileStatus, formatTimePtr(a.LastVerifiedAt),
 		a.Filename, a.Extension, a.MIMEType, a.FileType, a.SizeBytes, formatTime(a.MTime), a.PartialHash,
 		a.Width, a.Height, a.DurationSecs, a.ColorSpace, a.BitDepth,
 		formatTimePtr(a.CapturedAt), a.CameraMake, a.CameraModel, a.LensModel, a.FocalLengthMM,
 		a.Aperture, a.ShutterSpeed, a.ISO, a.GPSLat, a.GPSLon,
+		a.Creator, a.Copyright,
 		extJSON, a.Rating, nilColorLabel(a.ColorLabel), nilFlag(a.Flag), a.Note,
 		formatTimePtr(a.XMPLastReadAt), formatTimePtr(a.XMPLastWrittenAt), a.XMPHash,
 		a.ThumbnailPath, formatTimePtr(a.ThumbnailAt),
@@ -66,7 +67,7 @@ func (r *AssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 		filename=?, extension=?, mime_type=?, file_type=?, size_bytes=?, mtime=?, partial_hash=?,
 		width=?, height=?, duration_secs=?, color_space=?, bit_depth=?,
 		captured_at=?, camera_make=?, camera_model=?, lens_model=?, focal_length_mm=?,
-		aperture=?, shutter_speed=?, iso=?, gps_lat=?, gps_lon=?,
+		aperture=?, shutter_speed=?, iso=?, gps_lat=?, gps_lon=?, creator=?, copyright=?,
 		extended_metadata=?, rating=?, color_label=?, flag=?, note=?,
 		xmp_last_read_at=?, xmp_last_written_at=?, xmp_hash=?,
 		thumbnail_path=?, thumbnail_at=?, is_deleted=?, deleted_at=?, updated_at=?
@@ -76,6 +77,7 @@ func (r *AssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 		a.Width, a.Height, a.DurationSecs, a.ColorSpace, a.BitDepth,
 		formatTimePtr(a.CapturedAt), a.CameraMake, a.CameraModel, a.LensModel, a.FocalLengthMM,
 		a.Aperture, a.ShutterSpeed, a.ISO, a.GPSLat, a.GPSLon,
+		a.Creator, a.Copyright,
 		extJSON, a.Rating, nilColorLabel(a.ColorLabel), nilFlag(a.Flag), a.Note,
 		formatTimePtr(a.XMPLastReadAt), formatTimePtr(a.XMPLastWrittenAt), a.XMPHash,
 		a.ThumbnailPath, formatTimePtr(a.ThumbnailAt),
@@ -434,13 +436,14 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	var colorSpace, cameraMake, cameraModel, lensModel, shutterSpeed sql.NullString
 	var extMetadata, colorLabel, flag, note sql.NullString
 	var xmpHash, thumbnailPath sql.NullString
+	var creator, copyright sql.NullString
 
 	err := sc.Scan(
 		&a.ID, &a.SourceID, &a.RelativePath, &a.FileStatus, &lastVerifiedAt,
 		&a.Filename, &a.Extension, &a.MIMEType, &a.FileType, &a.SizeBytes, &mtime, &a.PartialHash,
 		&width, &height, &durationSecs, &colorSpace, &bitDepth,
 		&capturedAt, &cameraMake, &cameraModel, &lensModel, &focalLengthMM,
-		&aperture, &shutterSpeed, &iso, &gpsLat, &gpsLon,
+		&aperture, &shutterSpeed, &iso, &gpsLat, &gpsLon, &creator, &copyright,
 		&extMetadata, &rating, &colorLabel, &flag, &note,
 		&xmpLastReadAt, &xmpLastWrittenAt, &xmpHash,
 		&thumbnailPath, &thumbnailAt, &isDeleted, &deletedAt, &ingestedAt, &updatedAt)
@@ -465,6 +468,8 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	a.ISO = nullIntPtr(iso)
 	a.GPSLat = nullFloat64Ptr(gpsLat)
 	a.GPSLon = nullFloat64Ptr(gpsLon)
+	a.Creator = nullStringPtr(creator)
+	a.Copyright = nullStringPtr(copyright)
 	if extMetadata.Valid && extMetadata.String != "" {
 		a.ExtendedMetadata = make(map[string]any)
 		json.Unmarshal([]byte(extMetadata.String), &a.ExtendedMetadata)

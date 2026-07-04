@@ -7,6 +7,7 @@ import (
 
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/charmbracelet/log"
 )
 
@@ -14,9 +15,10 @@ import (
 // injected dependencies (no per-run state), so one Importer is safe to reuse
 // across imports.
 type Importer struct {
-	Assets catalog.AssetRepository
-	Dups   catalog.DuplicateRepository
-	Log    *log.Logger
+	Assets   catalog.AssetRepository
+	Dups     catalog.DuplicateRepository
+	Metadata metadata.Extractor
+	Log      *log.Logger
 }
 
 // ImportError records one file that failed a stage. Per-file failures never
@@ -95,7 +97,8 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 	if err != nil {
 		return err
 	}
-	return imp.persist(ctx, source, sf, hash, act, existing)
+	md := imp.metadataFor(fsys, sf, act)
+	return imp.persist(ctx, source, sf, hash, md, act, existing)
 }
 
 func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, path string, d fs.DirEntry, known map[string]domain.FileStat, result *ImportResult) {
@@ -124,7 +127,8 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 		imp.recordError(&result.Errors, path, "dedup", err)
 		return
 	}
-	if err := imp.persist(ctx, source, sf, hash, act, existing); err != nil {
+	md := imp.metadataFor(fsys, sf, act)
+	if err := imp.persist(ctx, source, sf, hash, md, act, existing); err != nil {
 		// Write failures are the serious ones — surface loudly, not just in the list.
 		imp.Log.Error("catalog write failed", "path", path, "err", err)
 		result.Errors = append(result.Errors, ImportError{Path: path, Stage: "write", Err: err})

@@ -11,6 +11,7 @@ import (
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
+	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/testutil"
 	"github.com/charmbracelet/log"
@@ -22,9 +23,10 @@ func newImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.Asse
 	src := testutil.NewTestSource(t, db, "photos")
 	assets := &sqlite.AssetRepo{DB: db}
 	imp := &importer.Importer{
-		Assets: assets,
-		Dups:   &sqlite.DuplicateRepo{DB: db},
-		Log:    log.New(io.Discard), // injected quiet logger — no test output noise
+		Assets:   assets,
+		Dups:     &sqlite.DuplicateRepo{DB: db},
+		Metadata: metadata.Default(),
+		Log:      log.New(io.Discard), // injected quiet logger — no test output noise
 	}
 	return imp, src, assets
 }
@@ -87,6 +89,19 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 		if a.PartialHash == "" {
 			t.Errorf("asset %s has no hash", a.RelativePath)
 		}
+	}
+
+	// Metadata extraction ran through the pipeline: real files carry dimensions
+	// and rights (these fixtures are exports without camera EXIF).
+	sample, err := assets.FindBySourcePath(context.Background(), src.ID, "_6160345-.jpg")
+	if err != nil || sample == nil {
+		t.Fatalf("sample asset: %v", err)
+	}
+	if sample.Width == nil || *sample.Width != 2160 || sample.Height == nil || *sample.Height != 1620 {
+		t.Errorf("dimensions not extracted end-to-end: %v x %v", sample.Width, sample.Height)
+	}
+	if sample.Creator == nil || *sample.Creator != "Ari Madian" {
+		t.Errorf("creator not extracted end-to-end: %v", sample.Creator)
 	}
 
 	// Idempotent on real files too (mtime tolerance absorbs RFC3339 truncation).

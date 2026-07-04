@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/google/uuid"
 )
 
@@ -51,7 +52,7 @@ func (imp *Importer) classifyContent(ctx context.Context, source *domain.Source,
 // persist applies the decided action. New/duplicate insert a fresh asset;
 // reimport updates in place (preserving user metadata); move relinks the
 // existing record. Duplicates also log the pair.
-func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scannedFile, hash string, act action, existing *domain.Asset) error {
+func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scannedFile, hash string, md metadata.Metadata, act action, existing *domain.Asset) error {
 	switch act {
 	case actionMove:
 		if err := imp.Assets.UpdatePath(ctx, existing.ID, source.ID, sf.relPath); err != nil {
@@ -61,10 +62,11 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scan
 
 	case actionReimport:
 		applyFileFields(existing, sf, hash)
+		applyMetadata(existing, md)
 		return imp.Assets.Update(ctx, existing)
 
 	default: // actionNew, actionDuplicate
-		asset := buildAsset(source, sf, hash)
+		asset := buildAsset(source, sf, hash, md)
 		if err := imp.Assets.Create(ctx, asset); err != nil {
 			return err
 		}
@@ -82,11 +84,11 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scan
 	}
 }
 
-// buildAsset creates a new asset from scan + hash. Metadata and thumbnail fields
-// are left nil — those stages are deferred.
-func buildAsset(source *domain.Source, sf scannedFile, hash string) *domain.Asset {
+// buildAsset creates a new asset from scan + hash, then overlays extracted
+// metadata. Thumbnail fields are left nil — that stage is deferred.
+func buildAsset(source *domain.Source, sf scannedFile, hash string, md metadata.Metadata) *domain.Asset {
 	now := time.Now().UTC()
-	return &domain.Asset{
+	a := &domain.Asset{
 		ID:           uuid.NewString(),
 		SourceID:     source.ID,
 		RelativePath: sf.relPath,
@@ -100,6 +102,72 @@ func buildAsset(source *domain.Source, sf scannedFile, hash string) *domain.Asse
 		PartialHash:  hash,
 		IngestedAt:   now,
 		UpdatedAt:    now,
+	}
+	applyMetadata(a, md)
+	return a
+}
+
+// applyMetadata overlays extracted metadata onto an asset. Only non-nil fields
+// are written, so a reimport with empty extraction never clears existing values.
+func applyMetadata(a *domain.Asset, md metadata.Metadata) {
+	if md.Width != nil {
+		a.Width = md.Width
+	}
+	if md.Height != nil {
+		a.Height = md.Height
+	}
+	if md.DurationSecs != nil {
+		a.DurationSecs = md.DurationSecs
+	}
+	if md.CapturedAt != nil {
+		a.CapturedAt = md.CapturedAt
+	}
+	if md.CameraMake != nil {
+		a.CameraMake = md.CameraMake
+	}
+	if md.CameraModel != nil {
+		a.CameraModel = md.CameraModel
+	}
+	if md.LensModel != nil {
+		a.LensModel = md.LensModel
+	}
+	if md.FocalLengthMM != nil {
+		a.FocalLengthMM = md.FocalLengthMM
+	}
+	if md.Aperture != nil {
+		a.Aperture = md.Aperture
+	}
+	if md.ShutterSpeed != nil {
+		a.ShutterSpeed = md.ShutterSpeed
+	}
+	if md.ISO != nil {
+		a.ISO = md.ISO
+	}
+	if md.GPSLat != nil {
+		a.GPSLat = md.GPSLat
+	}
+	if md.GPSLon != nil {
+		a.GPSLon = md.GPSLon
+	}
+	if md.ColorSpace != nil {
+		a.ColorSpace = md.ColorSpace
+	}
+	if md.BitDepth != nil {
+		a.BitDepth = md.BitDepth
+	}
+	if md.Creator != nil {
+		a.Creator = md.Creator
+	}
+	if md.Copyright != nil {
+		a.Copyright = md.Copyright
+	}
+	if len(md.Extended) > 0 {
+		if a.ExtendedMetadata == nil {
+			a.ExtendedMetadata = make(map[string]any, len(md.Extended))
+		}
+		for k, v := range md.Extended {
+			a.ExtendedMetadata[k] = v
+		}
 	}
 }
 

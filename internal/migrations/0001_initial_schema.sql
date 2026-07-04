@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS assets (
     iso                 INTEGER,
     gps_lat             REAL,
     gps_lon             REAL,
+    creator             TEXT,
+    copyright           TEXT,
     extended_metadata   TEXT,
     rating              INTEGER CHECK(rating IS NULL OR (rating >= 0 AND rating <= 5)),
     color_label         TEXT CHECK(color_label IN ('red', 'orange', 'yellow', 'green', 'blue', 'purple') OR color_label IS NULL),
