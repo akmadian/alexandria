@@ -67,26 +67,26 @@ func (imp *Importer) classifyContent(ctx context.Context, source *domain.Source,
 // persist applies the decided action. New/duplicate insert a fresh asset;
 // reimport updates in place (preserving user metadata); move relinks the
 // existing record. Duplicates also log the pair.
-func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scannedFile, hash string, md metadata.Metadata, act action, existing *domain.Asset) error {
+func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scannedFile, hash string, md metadata.Metadata, act action, existing *domain.Asset) (string, error) {
 	switch act {
 	case actionMove:
 		if err := imp.Assets.UpdatePath(ctx, existing.ID, source.ID, sf.relPath); err != nil {
-			return err
+			return "", err
 		}
-		return imp.Assets.UpdateFileStatus(ctx, existing.ID, domain.FileStatusOnline)
+		return existing.ID, imp.Assets.UpdateFileStatus(ctx, existing.ID, domain.FileStatusOnline)
 
 	case actionReimport:
 		applyFileFields(existing, sf, hash)
 		applyMetadata(existing, md)
-		return imp.Assets.Update(ctx, existing)
+		return existing.ID, imp.Assets.Update(ctx, existing)
 
 	default: // actionNew, actionDuplicate
 		asset := buildAsset(source, sf, hash, md)
 		if err := imp.Assets.Create(ctx, asset); err != nil {
-			return err
+			return "", err
 		}
 		if act == actionDuplicate {
-			return imp.Dups.Log(ctx, &domain.Duplicate{
+			return asset.ID, imp.Dups.Log(ctx, &domain.Duplicate{
 				ID:               uuid.NewString(),
 				OriginalAssetID:  existing.ID,
 				DuplicateAssetID: asset.ID,
@@ -95,12 +95,13 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scan
 				Status:           "pending",
 			})
 		}
-		return nil
+		return asset.ID, nil
 	}
 }
 
 // buildAsset creates a new asset from scan + hash, then overlays extracted
-// metadata. Thumbnail fields are left nil — that stage is deferred.
+// metadata. ThumbnailAt is left nil here — the thumbnail stage patches it after
+// the asset is written (see thumbnail.go).
 func buildAsset(source *domain.Source, sf scannedFile, hash string, md metadata.Metadata) *domain.Asset {
 	now := time.Now().UTC()
 	a := &domain.Asset{

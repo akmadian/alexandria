@@ -14,7 +14,6 @@ type AssetPatch struct {
 	ColorLabel       domain.Opt[domain.ColorLabel]
 	Flag             domain.Opt[domain.Flag]
 	Note             domain.Opt[string]
-	ThumbnailPath    domain.Opt[string]
 	ThumbnailAt      domain.Opt[time.Time]
 	XMPLastReadAt    domain.Opt[time.Time]
 	XMPLastWrittenAt domain.Opt[time.Time]

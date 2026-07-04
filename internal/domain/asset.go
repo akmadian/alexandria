@@ -86,8 +86,10 @@ type Asset struct {
 	XMPLastWrittenAt *time.Time
 	XMPHash          *string
 
-	ThumbnailPath *string
-	ThumbnailAt   *time.Time
+	// ThumbnailAt records when thumbnails were generated (and doubles as the
+	// "has a thumbnail?" flag). The file path is derived from the asset ID, not
+	// stored — see internal/thumbnailer.Registry.Path.
+	ThumbnailAt *time.Time
 
 	IsDeleted  bool
 	DeletedAt  *time.Time

@@ -77,11 +77,17 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	fsys := os.DirFS("../../testdata")
 	// Derive the expected count from the fixtures actually present, so adding or
-	// removing sample files doesn't break the test.
-	jpgs, _ := filepath.Glob("../../testdata/*.jpg")
-	want := len(jpgs)
+	// removing sample files doesn't break the test. Count every supported type
+	// (any case, any extension) — that's exactly what the importer indexes.
+	want := 0
+	filepath.WalkDir("../../testdata", func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && domain.IsSupported(filepath.Ext(d.Name())) {
+			want++
+		}
+		return nil
+	})
 	if want == 0 {
-		t.Skip("no JPEG fixtures in testdata/")
+		t.Skip("no supported fixtures in testdata/")
 	}
 
 	res, err := imp.Run(context.Background(), src, fsys)

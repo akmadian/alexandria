@@ -23,7 +23,7 @@ const assetColumns = `id, source_id, relative_path, file_status, last_verified_a
 	aperture, shutter_speed, iso, gps_lat, gps_lon, creator, copyright,
 	extended_metadata, rating, color_label, flag, note,
 	xmp_last_read_at, xmp_last_written_at, xmp_hash,
-	thumbnail_path, thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at`
+	thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at`
 
 func (r *AssetRepo) Get(ctx context.Context, id string) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx, "SELECT "+assetColumns+" FROM assets WHERE id = ?", id)
@@ -41,7 +41,7 @@ func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 	}
 	_, err = r.DB.ExecContext(ctx, `INSERT INTO assets
 		(`+assetColumns+`) VALUES
-		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?,?)`,
+		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?)`,
 		a.ID, a.SourceID, a.RelativePath, a.FileStatus, formatTimePtr(a.LastVerifiedAt),
 		a.Filename, a.Extension, a.MIMEType, a.FileType, a.SizeBytes, formatTime(a.MTime), a.PartialHash,
 		a.Width, a.Height, a.DurationSecs, a.ColorSpace, a.BitDepth,
@@ -50,7 +50,7 @@ func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 		a.Creator, a.Copyright,
 		extJSON, a.Rating, nilColorLabel(a.ColorLabel), nilFlag(a.Flag), a.Note,
 		formatTimePtr(a.XMPLastReadAt), formatTimePtr(a.XMPLastWrittenAt), a.XMPHash,
-		a.ThumbnailPath, formatTimePtr(a.ThumbnailAt),
+		formatTimePtr(a.ThumbnailAt),
 		boolToInt(a.IsDeleted), formatTimePtr(a.DeletedAt),
 		formatTime(a.IngestedAt), formatTime(a.UpdatedAt))
 	return err
@@ -70,7 +70,7 @@ func (r *AssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 		aperture=?, shutter_speed=?, iso=?, gps_lat=?, gps_lon=?, creator=?, copyright=?,
 		extended_metadata=?, rating=?, color_label=?, flag=?, note=?,
 		xmp_last_read_at=?, xmp_last_written_at=?, xmp_hash=?,
-		thumbnail_path=?, thumbnail_at=?, is_deleted=?, deleted_at=?, updated_at=?
+		thumbnail_at=?, is_deleted=?, deleted_at=?, updated_at=?
 		WHERE id=?`,
 		a.SourceID, a.RelativePath, a.FileStatus, formatTimePtr(a.LastVerifiedAt),
 		a.Filename, a.Extension, a.MIMEType, a.FileType, a.SizeBytes, formatTime(a.MTime), a.PartialHash,
@@ -80,7 +80,7 @@ func (r *AssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 		a.Creator, a.Copyright,
 		extJSON, a.Rating, nilColorLabel(a.ColorLabel), nilFlag(a.Flag), a.Note,
 		formatTimePtr(a.XMPLastReadAt), formatTimePtr(a.XMPLastWrittenAt), a.XMPHash,
-		a.ThumbnailPath, formatTimePtr(a.ThumbnailAt),
+		formatTimePtr(a.ThumbnailAt),
 		boolToInt(a.IsDeleted), formatTimePtr(a.DeletedAt), formatTime(a.UpdatedAt),
 		a.ID)
 	if err != nil {
@@ -367,10 +367,6 @@ func buildPatchSQL(p catalog.AssetPatch) ([]string, []any) {
 		clauses = append(clauses, "note = ?")
 		args = append(args, p.Note.Value)
 	}
-	if p.ThumbnailPath.Set {
-		clauses = append(clauses, "thumbnail_path = ?")
-		args = append(args, p.ThumbnailPath.Value)
-	}
 	if p.ThumbnailAt.Set {
 		clauses = append(clauses, "thumbnail_at = ?")
 		if p.ThumbnailAt.Value != nil {
@@ -435,7 +431,7 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	var durationSecs, focalLengthMM, aperture, gpsLat, gpsLon sql.NullFloat64
 	var colorSpace, cameraMake, cameraModel, lensModel, shutterSpeed sql.NullString
 	var extMetadata, colorLabel, flag, note sql.NullString
-	var xmpHash, thumbnailPath sql.NullString
+	var xmpHash sql.NullString
 	var creator, copyright sql.NullString
 
 	err := sc.Scan(
@@ -446,7 +442,7 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 		&aperture, &shutterSpeed, &iso, &gpsLat, &gpsLon, &creator, &copyright,
 		&extMetadata, &rating, &colorLabel, &flag, &note,
 		&xmpLastReadAt, &xmpLastWrittenAt, &xmpHash,
-		&thumbnailPath, &thumbnailAt, &isDeleted, &deletedAt, &ingestedAt, &updatedAt)
+		&thumbnailAt, &isDeleted, &deletedAt, &ingestedAt, &updatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +486,6 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	a.XMPLastReadAt = parseNullTime(xmpLastReadAt)
 	a.XMPLastWrittenAt = parseNullTime(xmpLastWrittenAt)
 	a.XMPHash = nullStringPtr(xmpHash)
-	a.ThumbnailPath = nullStringPtr(thumbnailPath)
 	a.ThumbnailAt = parseNullTime(thumbnailAt)
 	a.IsDeleted = isDeleted != 0
 	a.DeletedAt = parseNullTime(deletedAt)

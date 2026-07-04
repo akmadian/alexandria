@@ -7,6 +7,8 @@ package metadata
 import (
 	"io"
 	"time"
+
+	"github.com/charmbracelet/log"
 )
 
 // Metadata is the normalized target every extractor maps onto. Pointer fields
@@ -50,8 +52,11 @@ type Registry struct {
 func (reg Registry) Extract(r io.ReadSeeker, mime string) (Metadata, error) {
 	fn, ok := reg.byMIME[mime]
 	if !ok {
+		// Supported asset type with no extractor yet (raw, video, audio, …).
+		log.Warn("no metadata extractor for file type", "mime", mime)
 		return Metadata{}, nil
 	}
+	log.Debug("extracting metadata", "mime", mime)
 	return fn(r)
 }
 

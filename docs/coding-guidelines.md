@@ -145,8 +145,8 @@ The code that inspects files is a few pure functions living *with the concern
 that owns them*, not a `file_helpers`/`probe`/`fileutil` grab-bag:
 
 - **Hashing** → an unexported func in `importer` (it *is* the hasher stage).
-- **MIME/type** → `filetype.Match` (existing dep) + a small
-  `filetype.Type → domain.FileType` mapping func.
+- **MIME/type** → `domain.Classify` (the file-type registry — the single source
+  of truth for extension→MIME/FileType; see `domain/filetype.go`).
 - **Metadata (EXIF/XMP)** → its own `metadata` package **when it's actually
   built**, shaped `metadata.Extract(r io.ReadSeeker, mime string) (Metadata, error)`.
 

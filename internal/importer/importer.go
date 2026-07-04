@@ -8,6 +8,7 @@ import (
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
+	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/charmbracelet/log"
 )
 
@@ -15,10 +16,11 @@ import (
 // injected dependencies (no per-run state), so one Importer is safe to reuse
 // across imports.
 type Importer struct {
-	Assets   catalog.AssetRepository
-	Dups     catalog.DuplicateRepository
-	Metadata metadata.Extractor
-	Log      *log.Logger
+	Assets    catalog.AssetRepository
+	Dups      catalog.DuplicateRepository
+	Metadata  metadata.Extractor
+	Thumbnail thumbnailer.Thumbnailer
+	Log       *log.Logger
 }
 
 // ImportError records one file that failed a stage. Per-file failures never
@@ -98,7 +100,12 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 		return err
 	}
 	md := imp.metadataFor(fsys, sf, act)
-	return imp.persist(ctx, source, sf, hash, md, act, existing)
+	assetID, err := imp.persist(ctx, source, sf, hash, md, act, existing)
+	if err != nil {
+		return err
+	}
+	imp.thumbnail(ctx, fsys, sf, assetID, act)
+	return nil
 }
 
 func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, path string, d fs.DirEntry, known map[string]domain.FileStat, result *ImportResult) {
@@ -133,12 +140,14 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 	imp.Log.Debug("classified", "path", path, "action", act, "type", sf.fileType)
 
 	md := imp.metadataFor(fsys, sf, act)
-	if err := imp.persist(ctx, source, sf, hash, md, act, existing); err != nil {
+	assetID, err := imp.persist(ctx, source, sf, hash, md, act, existing)
+	if err != nil {
 		// Write failures are the serious ones — surface loudly, not just in the list.
 		imp.Log.Error("catalog write failed", "path", path, "err", err)
 		result.Errors = append(result.Errors, ImportError{Path: path, Stage: "write", Err: err})
 		return
 	}
+	imp.thumbnail(ctx, fsys, sf, assetID, act)
 
 	switch act {
 	case actionNew:

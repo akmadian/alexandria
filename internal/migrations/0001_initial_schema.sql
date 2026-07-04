@@ -57,7 +57,6 @@ CREATE TABLE IF NOT EXISTS assets (
     xmp_last_read_at    TEXT,
     xmp_last_written_at TEXT,
     xmp_hash            TEXT,
-    thumbnail_path      TEXT,
     thumbnail_at        TEXT,
     is_deleted          INTEGER NOT NULL DEFAULT 0,
     deleted_at          TEXT,
