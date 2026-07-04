@@ -114,6 +114,7 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 	}
 	if unchanged(sf, known) {
 		result.Skipped++
+		imp.Log.Debug("skip unchanged", "path", path, "size", sf.size)
 		return
 	}
 
@@ -122,11 +123,15 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 		imp.recordError(&result.Errors, path, "hashing", err)
 		return
 	}
+	imp.Log.Debug("hashed", "path", path, "hash", hash, "size", sf.size)
+
 	act, existing, err := imp.classifyContent(ctx, source, sf, hash)
 	if err != nil {
 		imp.recordError(&result.Errors, path, "dedup", err)
 		return
 	}
+	imp.Log.Debug("classified", "path", path, "action", act, "type", sf.fileType)
+
 	md := imp.metadataFor(fsys, sf, act)
 	if err := imp.persist(ctx, source, sf, hash, md, act, existing); err != nil {
 		// Write failures are the serious ones — surface loudly, not just in the list.
@@ -138,8 +143,10 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 	switch act {
 	case actionNew:
 		result.Added++
+		imp.Log.Debug("indexed new asset", "path", path)
 	case actionReimport:
 		result.Updated++
+		imp.Log.Debug("reindexed changed asset", "path", path)
 	case actionMove:
 		result.Moved++
 		imp.Log.Info("relinked moved file", "path", path)

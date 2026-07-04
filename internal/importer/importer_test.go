@@ -76,13 +76,20 @@ func TestRun_Idempotent(t *testing.T) {
 func TestRun_RealFilesOnDisk(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	fsys := os.DirFS("../../testdata")
+	// Derive the expected count from the fixtures actually present, so adding or
+	// removing sample files doesn't break the test.
+	jpgs, _ := filepath.Glob("../../testdata/*.jpg")
+	want := len(jpgs)
+	if want == 0 {
+		t.Skip("no JPEG fixtures in testdata/")
+	}
 
 	res, err := imp.Run(context.Background(), src, fsys)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if res.Added != 3 {
-		t.Fatalf("added=%d, want 3 sample JPEGs (the .txt in subdir is unsupported)", res.Added)
+	if res.Added != want {
+		t.Fatalf("added=%d, want %d JPEGs (the .txt in subdir is unsupported)", res.Added, want)
 	}
 	got, _ := assets.List(context.Background(), catalog.AssetFilter{})
 	for _, a := range got {
@@ -109,8 +116,8 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-run: %v", err)
 	}
-	if res2.Added != 0 || res2.Skipped != 3 {
-		t.Fatalf("re-run: added=%d skipped=%d, want 0/3", res2.Added, res2.Skipped)
+	if res2.Added != 0 || res2.Skipped != want {
+		t.Fatalf("re-run: added=%d skipped=%d, want 0/%d", res2.Added, res2.Skipped, want)
 	}
 }
 

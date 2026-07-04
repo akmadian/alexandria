@@ -19,6 +19,21 @@ const (
 	actionDuplicate
 )
 
+func (a action) String() string {
+	switch a {
+	case actionNew:
+		return "new"
+	case actionReimport:
+		return "reimport"
+	case actionMove:
+		return "move"
+	case actionDuplicate:
+		return "duplicate"
+	default:
+		return "unknown"
+	}
+}
+
 // classifyContent decides what to do with a hashed file. The returned asset is
 // the existing/matched record the action refers to (nil for a brand-new file).
 func (imp *Importer) classifyContent(ctx context.Context, source *domain.Source, sf scannedFile, hash string) (action, *domain.Asset, error) {

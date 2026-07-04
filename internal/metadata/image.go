@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -36,11 +37,14 @@ func extractImage(r io.ReadSeeker) (Metadata, error) {
 	}
 	rawExif, err := exif.SearchAndExtractExifWithReader(r)
 	if err != nil {
-		return md, nil // no EXIF (png/gif/plain jpeg) is normal, not a failure
+		if errors.Is(err, exif.ErrNoExif) {
+			return md, nil // no EXIF (png/gif/plain jpeg) is normal
+		}
+		return md, fmt.Errorf("reading exif: %w", err) // corrupt: caller logs, keeps dimensions
 	}
 	tags, _, err := exif.GetFlatExifData(rawExif, nil)
 	if err != nil {
-		return md, nil
+		return md, fmt.Errorf("parsing exif: %w", err)
 	}
 	applyExif(&md, indexTags(tags))
 	return md, nil

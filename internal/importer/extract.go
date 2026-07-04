@@ -34,8 +34,18 @@ func (imp *Importer) extractMetadata(fsys fs.FS, sf scannedFile) metadata.Metada
 
 	md, err := imp.Metadata.Extract(rs, sf.mime)
 	if err != nil {
-		imp.Log.Warn("metadata: extraction failed", "path", sf.relPath, "err", err)
+		// Best-effort: log and keep whatever partial metadata came back.
+		imp.Log.Warn("metadata extraction failed", "path", sf.relPath, "err", err)
 	}
+	w, h := 0, 0
+	if md.Width != nil {
+		w = *md.Width
+	}
+	if md.Height != nil {
+		h = *md.Height
+	}
+	imp.Log.Debug("metadata extracted", "path", sf.relPath,
+		"width", w, "height", h, "camera", md.CameraMake != nil, "gps", md.GPSLat != nil)
 	return md
 }
 

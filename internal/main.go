@@ -22,11 +22,16 @@ func main() {
 		ReportTimestamp: true,
 		TimeFormat:      time.Kitchen,
 	}))
+	// Deep per-file tracing lives at debug; opt in without recompiling.
+	if os.Getenv("ALEXANDRIA_DEBUG") != "" {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	ctx := context.Background()
 
 	// In-memory catalog for this smoke run. One connection so the :memory: DB
 	// isn't recreated per connection (see testutil).
+	log.Debug("opening catalog", "dsn", ":memory:")
 	db, err := sql.Open("sqlite", ":memory:?_pragma=foreign_keys(1)")
 	if err != nil {
 		log.Fatal("open catalog", "err", err)
@@ -36,7 +41,8 @@ func main() {
 	if err := migrations.Migrate(db); err != nil {
 		log.Fatal("migrate catalog", "err", err)
 	}
-	log.Info("DB Connection successful")
+	schema, _ := migrations.LatestVersion()
+	log.Info("catalog ready", "schema", schema)
 
 	sources := &sqlite.SourceRepo{DB: db}
 	imp := &importer.Importer{
@@ -60,6 +66,7 @@ func main() {
 	if err := sources.Create(ctx, src); err != nil {
 		log.Fatal("register source", "err", err)
 	}
+	log.Debug("source registered", "id", src.ID, "kind", src.Kind, "path", src.BasePath)
 
 	// Run twice to show idempotency: the second pass skips everything.
 	for pass := 1; pass <= 2; pass++ {
