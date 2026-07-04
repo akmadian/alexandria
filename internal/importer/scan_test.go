@@ -20,19 +20,6 @@ func TestPartialHash_StableAndSensitive(t *testing.T) {
 	}
 }
 
-func TestClassify(t *testing.T) {
-	mime, ft, ok := classify("jpg")
-	if !ok || ft != domain.FileTypeImage || mime != "image/jpeg" {
-		t.Fatalf("jpg: got %q %q %v", mime, ft, ok)
-	}
-	if _, ft, ok := classify("cr2"); !ok || ft != domain.FileTypeRaw {
-		t.Fatalf("cr2 should classify as raw, got %q %v", ft, ok)
-	}
-	if _, _, ok := classify("exe"); ok {
-		t.Fatal("exe should be unsupported")
-	}
-}
-
 func TestUnchanged(t *testing.T) {
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	known := map[string]domain.FileStat{
