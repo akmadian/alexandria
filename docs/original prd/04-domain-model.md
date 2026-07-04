@@ -399,6 +399,8 @@ AssetRepository
 
 Used by `AssetRepository.List()` and by the smart collection query evaluator. Covers all fields that can be filtered, sorted, or paginated in the grid.
 
+> **Scope vs filter (design invariant — see `docs/frontend-architecture.md` §3).** A *filter* is a predicate ("rating ≥ 4"); a *scope* is where you're looking (whole library, a specific collection's membership, a folder subtree, later a group). Collections are scopes, not predicates — a collection refers to an explicit subset of the library, not a condition assets satisfy. The seam-level list query is `scope × filter × sort × page`, and the two must not be conflated: never add a `CollectionID` or path field to the predicate struct. The service layer resolves scope to a base set (JOIN on membership, path prefix, or smart-query evaluation), then applies the predicate. `AssetFilter` below is the predicate half.
+
 ```
 AssetFilter
   FileTypes       []FileType

@@ -1,0 +1,10 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(terraform providers schema *)",
+            "Bash(terraform validate *)",
+            "Bash(gofmt -l *)",
+            "mcp__garmin__query_activities"
+        ]
+    }
+}

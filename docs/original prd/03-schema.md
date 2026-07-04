@@ -177,6 +177,10 @@ CREATE INDEX idx_assets_partial_hash    ON assets(partial_hash);
 -- ingested_at for "recently added" views
 CREATE INDEX idx_assets_ingested_at     ON assets(ingested_at) WHERE is_deleted = 0;
 -- Scanner skip check and filesystem tree view: prefix queries on relative_path within a source.
+-- Invariant: relative_path uses '/' separators on every platform (normalized at ingest) —
+-- the derived folder tree (docs/frontend-architecture.md §3) groups byte-wise on this column.
+-- If folder-scope queries or tree builds ever show up in profiles, the upgrade is an
+-- ingest-written dir_path column + (source_id, dir_path) index; folders stay derived, never stored.
 CREATE UNIQUE INDEX idx_assets_source_path ON assets(source_id, relative_path);
 -- Per-source status queries (mark offline, find missing).
 CREATE INDEX idx_assets_source_status   ON assets(source_id, file_status);

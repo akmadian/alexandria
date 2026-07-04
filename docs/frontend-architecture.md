@@ -20,9 +20,11 @@ This tells us where **not** to spend complexity. The metadata query path (SELECT
 
 ## 2. The seam: four channels, six conventions
 
-One module — `frontend/src/lib/api.ts` — wraps the Wails-generated bindings and is the **only** place that touches `window.go.*` or `runtime.*`. Everything else imports the `AlexandriaAPI` interface. This keeps the app testable against a mock and makes the real backend a one-line swap (`createMockApi()` → `createWailsApi()`).
+The seam is the **only** place that touches `window.go.*` or `runtime.*`. Everything else imports the `AlexandriaAPI` interface. This keeps the app testable against a mock and makes the real backend a one-line swap (`createMockApi()` → `createWailsApi()`).
 
-The boundary module is **thin**: type translation, event subscription, and error normalization. It does **not** contain caching, debouncing, or coalescing — those live one layer up in the query layer (§7), because they are consumer concerns, not transport concerns.
+*Implemented* (`frontend/src/lib/`): `api.ts` is the contract — types, the `AlexandriaAPI` interface, and `ApiError`, a runtime leaf with no dependency on any implementation. `mock-api.ts` is the in-memory `createMockApi()` the whole frontend is built against today. `client.ts` is the composition point exporting the `api` singleton — the one line that swaps to `createWailsApi()`. `mock-api.check.ts` is a framework-free behavioral check (`node src/lib/mock-api.check.ts`). Domain entity types + seed data live in `mock.ts` and will become Wails-generated types against `internal/domain` once the backend binds.
+
+The boundary is **thin**: type translation, event subscription, and error normalization. It does **not** contain caching, debouncing, or coalescing — those live one layer up in the query layer (§7), because they are consumer concerns, not transport concerns.
 
 The seam has exactly **four channels**. Every feature, present or future, maps onto one of them:
 

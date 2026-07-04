@@ -11,19 +11,19 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&display=swap" rel="stylesheet" />
 
-        <title>Starter kit — Untitled UI</title>
+        <title>Alexandria — Digital Asset Manager</title>
     </head>
 
     <body class="size-full bg-primary antialiased">
         <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
         <script>
-            // On page load or when changing themes, best to add inline in `head` to avoid FOUC
-            if (localStorage.theme === "dark" || (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-                document.documentElement.classList.add("dark-mode");
-            } else {
+            // ponytail: light mode only for now — opt into dark explicitly via localStorage.theme.
+            // if (localStorage.theme === "dark") {
+            //     document.documentElement.classList.add("dark-mode");
+            // } else {
                 document.documentElement.classList.remove("dark-mode");
-            }
+            //}
         </script>
     </body>
 </html>
