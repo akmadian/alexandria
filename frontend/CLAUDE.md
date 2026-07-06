@@ -3,6 +3,13 @@
 React 19 + TypeScript + Vite desktop UI for the Alexandria DAM. Talks to a Go/Wails
 backend through a typed seam; runs against an in-memory mock until the backend binds.
 
+> **Status (2026-07): frontend work is DEFERRED** until the backend milestones and the seam design
+> round complete — see `../docs/v2/claude-dumps/post-ingest-design/00-START-HERE.md`. Where the v2
+> decision log conflicts with the frontend docs below, the decision log wins (known pending changes:
+> `SourceStatus` → `enabled` + `connectivity`; keybinding overrides move to the settings KV via
+> `getUIState/setUIState`; UI runtime — Wails vs alternatives — is an open question).
+> `src/api/contract.ts` remains design-authoritative and deliberately network-shaped.
+
 **Read these first** — they are the source of truth, not this file:
 - `../docs/frontend-architecture.md` — the API seam: contract, query model, caching, call patterns. `src/api/` and `src/models/` implement it and are settled.
 - `../docs/frontend-ui-architecture.md` — the UI: layout, components, state, styling, i18n, logging, keyboard, testing.

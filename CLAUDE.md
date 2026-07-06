@@ -1,0 +1,44 @@
+# Alexandria — Agent Instructions
+
+Local-first DAM for creative professionals. Go engine + React UI + SQLite catalog.
+
+## Design authority (read before designing or implementing anything)
+
+1. **`docs/v2/claude-dumps/post-ingest-design/00-START-HERE.md`** — the current design handoff.
+   Its decision log (`02-decision-log.md`) **wins every conflict** with older docs and existing code.
+2. `docs/functional-requirements.md` — feature source of truth (P0–P4).
+3. Older design docs in `docs/` are superseded — see `docs/AGENTS.md` for known conflicts.
+4. Existing code follows the disposition table (`.../05-code-disposition.md`): specs win; you have
+   explicit license to delete what it marks deleted.
+
+## Commands
+
+- Backend: `go test ./...` · `go vet ./...` (run from repo root)
+- Frontend: `bun run check` (in `frontend/` — typecheck + lint + tests; must pass before commit)
+- Dev harness (once built): `go run ./cmd/dev`
+
+## Hard rules — violating any of these is a bug, not a style choice
+
+- **Writer classes:** ingest/watcher code writes observation columns only; judgment columns
+  (rating/label/flag/note/deletes) are written only by the user-action path, which is the ONLY
+  place `judgment_modified_at` is bumped. XMP sync writes judgment values but never that timestamp.
+- **One cook:** every catalog mutation flows through the pipeline's single writer goroutine /
+  repo transaction. Watcher, reconciler, volume monitor are sensors emitting hints — never writers.
+- **Events are hints, not facts:** file events mean "go re-examine this path"; truth is re-derived
+  via the identity matrix.
+- **Derived state carries a rebuild path:** anything computed (FTS, thumbnails, auto-groups) must
+  be deletable + recomputable via a registered rebuild function.
+- **Pre-release schema policy:** edit `internal/migrations/0001_initial_schema.sql` in place; do
+  NOT stack migrations until a real release exists.
+- IDs via the shared helper (UUIDv7), never inline `uuid.NewString()`.
+- `internal/domain` imports stdlib only. No `utils`/`helpers`/`models`/`common` packages, ever.
+- Interfaces are carved at the *second* implementation — no speculative abstraction.
+- Per-OS code = build-tagged files inside the owning package; no shared `platform` package.
+- Pipeline channels are created/wired/closed in ONE function; stages take directional channel params.
+- External binaries via the `dependency` package (subprocesses, never cgo); no silent downloads.
+- No new third-party dependency where stdlib or an existing dep works.
+
+## Detailed standards
+
+`docs/coding-guidelines.md` — package layout, pure-core/orchestration split, error/logging/test
+conventions. Read it before writing Go. Frontend rules: `frontend/CLAUDE.md`.

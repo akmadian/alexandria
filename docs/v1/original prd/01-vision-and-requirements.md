@@ -9,9 +9,11 @@ Existing tools fail this user in specific ways:
 - **Photo-only tools** (digiKam, Darktable, Damselfly) don't understand creative files like PSD, AI, INDD, AFPHOTO
 - **Enterprise DAMs** (ResourceSpace, Pimcore, Phraseanet) are designed for teams, have dated web UIs, and are painful to self-host
 - **Lightroom** comes closest for photos but is subscription-locked to Adobe, has no support for non-Adobe creative formats, and its catalog is a black box
-- **Nothing** in the open source space has a UI a designer would actually enjoy using
+- **Eagle** is the closest commercial competitor — local-first, beautiful UI, broad format support — but is Mac/Windows only (no Linux), closed source, has no Lightroom XMP interop, and doesn't auto-group RAW+JPEG pairs. RAW support is inconsistent and format-dependent (ORF previews broken, DNG triggers an external Photoshop/Camera Raw launch). For InDesign files, Eagle uses AppleScript to launch and script InDesign directly rather than extracting the embedded preview from the file header — meaning it silently opens Photoshop and InDesign in the background during normal browsing, consuming significant system resources on a machine likely already running Lightroom Classic and DaVinci Resolve. This approach also means Eagle's creative format support is contingent on the corresponding Adobe app being installed. Eagle embeds Google Analytics telemetry. The project has accumulated significant scope creep (plugin marketplace, community hub, AI features) and is drifting from its original focus.
+- **NeoFinder** is a capable Mac-only reference DAM with creative file and Affinity support, but is Mac-only, closed source, and has no Lightroom interop.
+- **Nothing** in the open source space has a UI a designer would actually enjoy using, handles the full creative file stack, and integrates with Lightroom Classic workflows.
 
-The gap: a **local-first, cross-platform, modern-UI DAM** that handles the full creative file stack. It does not exist.
+The gap: a **local-first, cross-platform, open source DAM** with a modern UI that handles the full creative file stack and integrates cleanly with Lightroom Classic via XMP. It does not exist.
 
 ## Target user
 
@@ -28,17 +30,34 @@ The core need is: **find, see, and open**. Not edit, not publish, not collaborat
 
 ## What makes Alexandria different
 
-| Capability | digiKam | ResourceSpace | Lightroom | Alexandria |
-|---|---|---|---|---|
-| Local-first, no subscription | ✓ | ✓ | ✗ | ✓ |
-| Works offline (drive disconnected) | Partial | ✗ | Partial | ✓ |
-| Modern UI | ✗ | ✗ | ✓ | ✓ |
-| Creative file support (PSD, AI, AFPHOTO) | ✗ | Partial | Partial | ✓ |
-| Video support | Partial | ✓ | Partial | ✓ |
-| Cross-platform (Mac + Linux) | ✓ | ✓ | ✓ | ✓ |
-| GPL open source | ✓ | ✓ | ✗ | ✓ |
-| Reference model (doesn't move files) | ✓ | ✓ | ✓ | ✓ |
-| Lightroom XMP interop | ✗ | ✗ | N/A | ✓ |
+| Capability | digiKam | Eagle | NeoFinder | Lightroom | Alexandria |
+|---|---|---|---|---|---|
+| Local-first, no subscription | ✓ | ✓ (one-time $30) | ✓ (paid) | ✗ | ✓ |
+| Works offline (drive disconnected) | Partial | Partial | ✓ | Partial | ✓ |
+| Modern UI | ✗ | ✓ | Partial | ✓ | ✓ |
+| Creative file support (PSD, AI, AFPHOTO) | ✗ | ✓ | ✓ | Partial | ✓ |
+| Broad RAW support (700+ formats, correct) | ✓ | Partial ¹ | ✓ | ✓ | ✓ |
+| Video support | Partial | ✓ | Partial | Partial | ✓ |
+| Cross-platform (Mac + Linux) | ✓ | ✗ (Mac/Win) | ✗ (Mac only) | ✓ | ✓ |
+| GPL open source | ✓ | ✗ | ✗ | ✗ | ✓ |
+| Reference model (doesn't move files) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Lightroom XMP interop | ✗ | ✗ | Partial | N/A | ✓ |
+| Auto-group RAW+JPEG+XMP sidecars | ✗ | ✗ | ✗ | ✓ | ✓ |
+| No third-party telemetry | ✓ | ✗ (Google Analytics) | Unknown | ✗ | ✓ |
+
+¹ Eagle RAW support is inconsistent: Fuji RAF renders correctly; Olympus ORF previews are broken; DNG triggers an external Photoshop/Camera Raw open rather than rendering a preview inline — incorrect behaviour for a DAM. Alexandria extracts the embedded JPEG preview via exiftool for all RAW formats, which is correct, fast, and requires no external app.
+
+## Data portability and user trust
+
+Alexandria's catalog is an open SQLite database with a documented schema. Your metadata — ratings, tags, color labels, collections, notes — is never locked away. XMP sidecars are written by default (not opt-in), ensuring metadata is portable to any XMP-aware tool at all times. A "Write all metadata to files" bulk operation — equivalent to LrC's Metadata → Save Metadata to Files — is available as a one-shot action and on a schedule, so users can flush the entire catalog to XMP at any time. If Alexandria ceased to exist tomorrow, your catalog would still be readable by any SQLite client and your metadata would live in standard XMP files alongside your assets.
+
+No telemetry is collected without explicit opt-in. No files or metadata are sent to any server. No AI training on user content. These are not policies subject to terms-of-service revision — they are structural properties of how the software works.
+
+## Thumbnailing and metadata: no external app launches
+
+Alexandria never launches a creative application to generate a thumbnail or extract metadata. Every supported format either embeds a preview at save/capture time (InDesign, Affinity, PSD, RAW) or can be rendered by a bundled CLI tool (Ghostscript for `.ai`/PDF, ffmpeg for video/audio, ImageMagick for raster conversion). If the embedded preview is low-resolution, that is the ceiling — Alexandria is honest about it rather than compensating by silently opening Photoshop or InDesign. This keeps resource usage predictable and means format support does not depend on any Adobe or third-party creative application being installed.
+
+Alexandria makes no claim to understand the internal structure of proprietary formats beyond what is publicly accessible (embedded previews, file headers, XMP sidecars). Full fidelity rendering remains the job of the authoring application.
 
 ## Reference vs managed
 
