@@ -51,8 +51,11 @@ roots need the disjoint invariant strictly.
 **Cross-source duplicates → user action, not auto-merge (resolved 2026-07-07).**
 The same physical file under two roots mints two identities; that is acceptable
 *provided we surface it*. Route it into the existing `duplicates` table
-(`status='pending'` + `DuplicateRepo.ListPending` already exist — the review queue
-is built) for the user to resolve. Never silently unify across sources.
+(`status='pending'` + `DuplicateRepo.ListPending` already exist — the *storage* is
+built) for the user to resolve. Never silently unify across sources. The queue's
+kind-classification and resolution actions — which now also cover probable
+moves/renames — are specced in **§5**; a cross-source duplicate is one kind it
+holds.
 
 This gives a scoping **principle**: the matrix's *auto-mutating* verdicts — relink
 and delete-side merge — must be **same-source** (`WHERE source_id = ?`). Today
@@ -221,6 +224,100 @@ that reconciles the thumbnail dir against live asset IDs.
 
 **Trigger:** orphans measurably accumulate, or the first other hard-delete path
 lands.
+
+---
+
+## 5. Review queue is not just duplicates — it also holds probable moves/renames
+
+**Surfaced:** impl/05 close-out (2026-07-07) — a live-watch test of `mv img.jpeg
+img2.jpeg` exposed that an unpaired rename (the OS emits an independent
+remove+create; `notify` gives no portable from→to link, so pairing is deferred)
+cannot be *safely* auto-relinked, and forced the question of how it should surface.
+
+**The decision (conservative, "never auto-merge on a heuristic").** A filename
+change is only a *probable* move, so we do **not** auto-relink it. We record it and
+let the user resolve it. This keeps faith with the codebase's structural-trust
+ethos: the one thing we auto-heal by content is the *unambiguous* case; anything
+uncertain is surfaced, never silently merged. Concretely the policy line is:
+
+| Trigger | Behavior |
+|---|---|
+| Same basename, unjudged, copy-then-delete (`mv a/x.jpg b/x.jpg`, or an app's temp-rewrite) | **auto-heal** — the delete-side merge (`healMovedAway`, zero-judgment guarded) absorbs it. No review. |
+| Name changed (`mv a.jpg b.jpg`) | **review** — original left `missing`, new path minted as a distinct asset, pair recorded `pending`. |
+| Any *judged* file moved/renamed | **review** — the zero-judgment guard forbids auto-heal, protecting judgment. |
+
+Why the partial hash makes the name guard load-bearing: `partial_hash` is
+xxhash(first 64KB + size), a change-detection *fingerprint*, not a full-content
+hash. Waiving the name check (auto-relink any missing→present content match) was
+considered and rejected — it would let a rare fingerprint collision silently
+*merge two differently-named files into one identity* (data-loss-shaped from the
+user's view), with no cheap way to re-verify because the missing file is gone. The
+market splits exactly here: path-based DAMs (Lightroom Classic, Capture One) mark
+external renames "missing" and make the user relink; only hash-based digiKam
+auto-reconnects by content. We chose the conservative camp, with a review queue as
+the resolution surface.
+
+**Kind is DERIVED from live `file_status`, not stored — this is the load-bearing
+design idea.** The existing `duplicates` table already records the pair in *both*
+event orderings (verified: delete-first and create-first both end at "original
+missing + new online + one `pending` row"). There is **no reliable detect-time
+kind** (create-first looks like a plain duplicate until the original later
+vanishes), so don't try to stamp one. Instead the two kinds fall out of the pair's
+*current* status at read time:
+
+| Original asset | Other asset | Kind | Resolution offered |
+|---|---|---|---|
+| online | online | **duplicate** | delete one / keep both (ignore) |
+| **missing** | online | **probable move/rename** | confirm move (relink, keep judgments) / reject (keep separate) |
+
+So `duplicates` is really a **pending content-match / resolution ledger**: its job
+is to remember which pairs exist and what the user *decided* (`pending`/`resolved`/
+`ignored`). **Keep the table and name as-is** (decided 2026-07-07) — no migration,
+ordering-proof; the projection names the kinds.
+
+**What is already built (impl/05 baseline — the entry point stands):**
+- Detection + recording: a name-changed content match to a missing asset flows to
+  `actionDuplicate`, minting the new path and logging a `pending` duplicates row
+  linking original→new. Holds in both event orderings and on both the walk and the
+  single-path (watcher) entry. Locked by `TestUnpairedRename_RecordedForReview`.
+- Nothing is auto-merged and no judgment is touched for a name change.
+- `DuplicateRepo.ListPending` returns the raw pending pairs.
+
+**What is deferred (build with the source-management / review-UX milestone, which
+owns the consuming UI — none exists yet):**
+
+1. **Projection read** — `ListPendingReviewItems(ctx) []ReviewItem`, a pure read
+   that joins each `pending` duplicates row to *both* assets' current rows and tags
+   each `kind: duplicate | move` per the table above (plus the two asset summaries
+   the UI shows). Could be a SQL view over `duplicates ⨝ assets ⨝ assets`. Edge
+   rows to fold in: both-missing (stale — hide or auto-resolve `ignored`); the
+   `duplicate_asset_id` itself now missing (both gone).
+2. **Resolution actions** — these are structural / judgment-class writes, so they
+   belong to the **user-action service** (NOT ingest's observation writer, which
+   structurally cannot touch judgment). Each flips the ledger row to `resolved`/
+   `ignored` and stamps `resolved_at`:
+   - **move → confirm:** relink — adopt the new path onto the *missing original*
+     and hard-delete the throwaway new identity, preserving the original's
+     judgments. This is exactly the existing `actionMove` + `healMovedAway`
+     machinery (`AssetRepo.UpdatePath` + `DeleteByID`, FK-cascade cleans the dup
+     row) — lift it behind a user-triggered `ConfirmMove(originalID, newID)` rather
+     than re-implementing. Handle the case where the user judged the *new* row in
+     the meantime (warn, or merge-judgments — pick with the UI).
+   - **move → reject:** keep separate — original stays `missing`, new stays its own
+     asset, row → `ignored` so it stops surfacing.
+   - **duplicate → delete one / keep both:** `SoftDelete` the unwanted identity, or
+     mark `ignored` to keep both. (Overlaps §1's cross-source duplicate flow —
+     same table, same actions.)
+3. **Source-scoping interaction (see §1).** Once `FindByHash` /
+   `FindMoveHealCandidate` are scoped to `source_id`, a *move* is intrinsically
+   **same-source** (missing here, present here); a **cross-source** identical file
+   is always a *duplicate*, never a move. The projection's kind rule should read:
+   same-source missing→present = move; anything cross-source = duplicate. Fold this
+   in when the source-scoping fix (§1) lands so the two features ship coherent.
+
+**Trigger:** the review-UX / source-management milestone (the first UI that lists
+pairs for the user), or the source-scoping fix in §1 — whichever lands first should
+pull in at least the projection so the kinds are computed in one place.
 
 ---
 

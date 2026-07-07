@@ -163,20 +163,24 @@ func (pipe *pipeline) markThumbnail(ctx context.Context, repos sqlite.Repos, ite
 func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata, verdict action, existing *domain.Asset) (string, error) {
 	switch verdict {
 	case actionMove:
+		imp.Log.Debug("write.persist: relinking missing asset", "path", scanned.relPath, "assetID", existing.ID)
 		if err := imp.Obs.UpdatePath(ctx, existing.ID, source.ID, scanned.relPath); err != nil {
 			return "", err
 		}
 		return existing.ID, imp.Obs.SetFileStatus(ctx, existing.ID, domain.FileStatusOnline)
 
 	case actionReimport:
+		imp.Log.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
 		return existing.ID, imp.Obs.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing))
 
 	default: // actionNew, actionDuplicate
+		imp.Log.Debug("write.persist: new asset detected - minting!", "path", scanned.relPath)
 		asset := buildAsset(domain.NewID(), source, scanned, hash, extractedMetadata)
 		if err := imp.Obs.Create(ctx, asset); err != nil {
 			return "", err
 		}
 		if verdict == actionDuplicate {
+			imp.Log.Debug("write.persist: duplicate detected", "path", scanned.relPath, "assetID", asset.ID)
 			return asset.ID, imp.Dups.Log(ctx, &domain.Duplicate{
 				ID:               domain.NewID(),
 				OriginalAssetID:  existing.ID,

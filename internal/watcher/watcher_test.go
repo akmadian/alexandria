@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/charmbracelet/log"
@@ -100,6 +102,61 @@ func startWatcher(t *testing.T) (string, chan Event, *spyIngester) {
 	return root, events, spy
 }
 
+// spyObs records the watcher's ONE sanctioned catalog write (connectivity). The
+// other AssetObservationWriter methods are unused by the watcher — they exist only
+// to satisfy the interface and must never be called (they panic if they are).
+type spyObs struct {
+	mu    sync.Mutex
+	calls []bool // online value of each MarkConnectivityBySource call, in order
+	fired chan struct{}
+}
+
+func newSpyObs() *spyObs { return &spyObs{fired: make(chan struct{}, 16)} }
+
+func (o *spyObs) MarkConnectivityBySource(_ context.Context, _ string, online bool) error {
+	o.mu.Lock()
+	o.calls = append(o.calls, online)
+	o.mu.Unlock()
+	select {
+	case o.fired <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+func (o *spyObs) Create(context.Context, *domain.Asset) error { panic("unused") }
+func (o *spyObs) ApplyFilePatch(context.Context, string, catalog.FilePatch) error {
+	panic("unused")
+}
+func (o *spyObs) UpdatePath(context.Context, string, string, string) error       { panic("unused") }
+func (o *spyObs) SetFileStatus(context.Context, string, domain.FileStatus) error { panic("unused") }
+
+// last reports the most recent connectivity value written, or ok=false if none.
+func (o *spyObs) last() (online bool, ok bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if len(o.calls) == 0 {
+		return false, false
+	}
+	return o.calls[len(o.calls)-1], true
+}
+
+func (o *spyObs) waitFor(t *testing.T, wantOnline bool) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		if online, ok := o.last(); ok && online == wantOnline {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("connectivity never became online=%v (calls=%v)", wantOnline, o.calls)
+		case <-o.fired:
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
 func write(t *testing.T, root, rel string, data []byte) {
 	t.Helper()
 	full := filepath.Join(root, rel)
@@ -172,4 +229,62 @@ func TestWatcher_IgnoreListAtIntake(t *testing.T) {
 	if _, ingests := spy.snapshot(); len(ingests) != 1 || ingests[0] != "photo.jpg" {
 		t.Fatalf("the .tmp must be ignored at intake; want only photo.jpg, got %v", ingests)
 	}
+}
+
+// The poll monitor flips connectivity offline when the root stops stat-ing and
+// back online (with a catch-up reconcile) when it returns — the watcher's one
+// sanctioned catalog write. This replaces the old importer-side offline flip.
+func TestWatcher_PollFlipsConnectivityOnUnmount(t *testing.T) {
+	root := t.TempDir()
+	spy := newSpy()
+	obs := newSpyObs()
+	w := &Watcher{
+		Ingester:     spy,
+		Obs:          obs,
+		Source:       &domain.Source{ID: "src-1", Name: "test"},
+		Root:         root,
+		Log:          log.New(io.Discard),
+		PollInterval: 20 * time.Millisecond,
+		events:       func(context.Context, string) (<-chan Event, error) { return make(chan Event), nil },
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go w.Run(ctx)
+	spy.waitFor(t, func(runs int, _ []string) bool { return runs == 1 }) // startup reconcile
+
+	// Unmount: the root stops existing, so probeReachable fails → offline.
+	os.RemoveAll(root)
+	obs.waitFor(t, false)
+
+	// Remount: the root returns → online + a catch-up reconcile (a second Run).
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	obs.waitFor(t, true)
+	spy.waitFor(t, func(runs int, _ []string) bool { return runs >= 2 })
+}
+
+// A failed event subscribe (e.g. inotify watch-limit) must not crash — the unit
+// degrades to polling, where the poll monitor's periodic reconcile catches changes.
+func TestWatcher_SubscribeFailureDegradesToPolling(t *testing.T) {
+	root := t.TempDir()
+	spy := newSpy()
+	w := &Watcher{
+		Ingester:     spy,
+		Obs:          newSpyObs(),
+		Source:       &domain.Source{ID: "src-1", Name: "test"},
+		Root:         root,
+		Log:          log.New(io.Discard),
+		PollInterval: 20 * time.Millisecond,
+		events: func(context.Context, string) (<-chan Event, error) {
+			return nil, errors.New("inotify watch limit exhausted")
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go w.Run(ctx)
+
+	// Run #1 is the startup reconcile; polling then re-walks each tick, so the
+	// count keeps climbing with no live events at all — and nothing panicked.
+	spy.waitFor(t, func(runs int, _ []string) bool { return runs >= 3 })
 }

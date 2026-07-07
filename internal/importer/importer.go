@@ -83,28 +83,16 @@ func (imp *Importer) Run(ctx context.Context, source *domain.Source, fsys fs.FS)
 
 // IngestFile indexes a single file (the watcher path): the same stages as the
 // pipeline, minus the walk, the skip gate, and batching. A batch of one, run
-// sequentially — the hint consumer for impl/05.
+// sequentially — the hint consumer for impl/05. A gone path marks the asset
+// missing (with a delete-side merge); a present file whose content matches a
+// missing asset relinks to it — including a rename, since the match is on content
+// alone, so a mv a.jpg b.jpg heals without any OS rename-pairing.
 func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error {
-	return imp.ingestOne(ctx, source, fsys, name, false)
-}
-
-// IngestRenamed is IngestFile for the destination of a verified paired rename
-// (impl/05 rename enrichment). The caller (the watcher) MUST have already routed
-// the rename's from-path to missing; this then relinks to that missing asset even
-// though the filename changed. If the rename turns out unpaired or the from-path
-// wasn't missing, this degrades to the normal duplicate/new flow — never wrong,
-// just less tidy (a later reconcile heals it).
-func (imp *Importer) IngestRenamed(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error {
-	return imp.ingestOne(ctx, source, fsys, name, true)
-}
-
-func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, name string, renamed bool) error {
 	info, err := fs.Stat(fsys, name)
 	if err != nil {
 		// Gone → the SAME action the walk-end diff takes: mark missing, attempting a
 		// delete-side merge first. This is what makes a watcher-fed delete heal
-		// identically to a walk-detected one (impl/05 corrected model). renamed is
-		// irrelevant on a gone path — a rename's to-path is present, not gone.
+		// identically to a walk-detected one (impl/05 corrected model).
 		if errors.Is(err, fs.ErrNotExist) {
 			return imp.markGone(ctx, source, name)
 		}
@@ -119,7 +107,7 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 	if err != nil {
 		return err
 	}
-	verdict, existing, err := imp.classify(ctx, source, scanned, hash, nil, renamed)
+	verdict, existing, err := imp.classify(ctx, source, scanned, hash, nil)
 	if err != nil {
 		return err
 	}
@@ -129,11 +117,13 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 		return err
 	}
 	imp.thumbnail(ctx, fsys, scanned, assetID, verdict)
+	// The single-path result — the watcher's analog of RunJob's "import finished".
+	imp.Log.Info("ingested file", "source", source.Name, "path", scanned.relPath, "verdict", verdict, "asset", assetID)
 	return nil
 }
 
 // recordError logs a per-file failure at warn level and appends it to the given
-// error slice. Shared by the pipeline and Reconcile.
+// error slice. Shared by the pipeline stages.
 func (imp *Importer) recordError(errs *[]ImportError, path, stage string, err error) {
 	imp.Log.Warn("file skipped after error", "path", path, "stage", stage, "err", err)
 	*errs = append(*errs, ImportError{Path: path, Stage: stage, Err: err})

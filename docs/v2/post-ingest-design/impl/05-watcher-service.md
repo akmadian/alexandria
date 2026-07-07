@@ -1,6 +1,6 @@
 # impl/05 — Watcher Service
 
-**Status (2026-07-07): 05.1 (matrix extensions, `internal/importer`) DONE and kept. 05.2 + 05.3 (the `internal/watcher` service) are being REBUILT — the first cut drifted from the Prime Directives (the watcher was deciding actions and writing `file_status`); see "Corrected architecture" below.**
+**Status (2026-07-07): impl/05 COMPLETE. 05.1 (matrix extensions, `internal/importer`) DONE and kept; 05.2 (the `internal/watcher` sensor) and 05.3 (connectivity via poll timer + `reconcile.go` retired) rebuilt against the corrected architecture and DONE. The rebuild fixed the first cut's drift (the watcher was deciding actions and writing `file_status`); the watcher now hands over PATHS only and makes exactly one write (connectivity). Rename policy settled at close-out: an unpaired name-changing rename is recorded as a *probable move* for review, not auto-relinked (see DEFERRED §5). See "Corrected architecture" below.**
 **Scope:** new `internal/watcher` + matrix extensions in `internal/importer`. **References:** D14, D9.
 
 > **Corrected architecture (2026-07-07) — the boundary that must not blur.** The first watcher build
@@ -69,25 +69,30 @@
 >   `TestDeleteSideMerge_GuardedByJudgment`. **Corrected-model follow-up (part of the rebuild):** the
 >   importer's single-path entry must gain the gone→**mark missing + delete-side merge** branch, so a
 >   watcher-fed delete heals identically to a walk-detected one (today only the walk-end path heals).
-> - **05.2 — Watcher service** 🔄 **REBUILDING** (`internal/watcher`) against the corrected
+> - **05.2 — Watcher service** ✅ **DONE** (`internal/watcher`) against the corrected
 >   architecture above. The first cut worked but blurred the boundary: it stat-decided in the watcher
->   and wrote `file_status` via a `MarkMissing`/`Fidelity` surface. Rebuild target: watcher owns the
+>   and wrote `file_status` via a `MarkMissing`/`Fidelity` surface. Rebuilt so the watcher owns the
 >   dirty set (500ms debounce), ignore-list at intake, settle-stat, and graduation; it hands the
 >   importer a **path** (present or gone) and nothing else; overflow / kill-9 → schedule a full-walk
 >   reconcile. `rjeczalik/notify` stays the one event-source file; `EvalSymlinks` root fix stays.
 >   No `Ingester`/`Fidelity` split — one seam onto the importer's single-path entry. Deferred
->   (`ponytail:`): rename *pairing* (notify has no portable from→to link), sidecar echo check
->   (nothing writes `xmp_hash` until impl/06).
-> - **05.3 — Connectivity via poll timer** 🔄 **REBUILDING**: per-source poll ticker → `mode`
->   (`events ⇄ polling ⇄ offline`), root-stat probe via the pure `classifyProbe`. Unreachable →
->   the watcher's **one** sanctioned write, `sources.connectivity` offline + assets online→offline
->   (connectivity **(a)**), then quiesce; reachable-again → online + schedule catch-up walk. Subscribe
->   failure (inotify watch-limit) → degrade to polling, never crash. The `classifyProbe`/`mode`/
->   `statRoot` logic from the first cut is sound and carries over; what changes is that the connectivity
->   write is the watcher's own (not routed through a `Fidelity` interface), and batch reconcile is the
->   importer's `Run` that the watcher *schedules*. **Known gaps (deferred, `ponytail:`):** plain-stat
->   probe misses an unmount that leaves an empty mountpoint (needs the filesystem-UUID monitor);
->   after remount the unit stays poll-driven rather than re-subscribing live events.
+>   (`ponytail:`): rename *pairing* (notify has no portable from→to link) — and, decided at
+>   close-out, an unpaired rename (name changed) is **not** auto-relinked at all; it is recorded
+>   as a *probable move* for user review (DEFERRED §5), because a 64KB+size fingerprint match is
+>   not certain enough to silently merge two differently-named files. Also deferred: sidecar echo
+>   check (nothing writes `xmp_hash` until impl/06).
+> - **05.3 — Connectivity via poll timer** ✅ **DONE** (`internal/watcher/poll.go`): per-source poll
+>   ticker → `mode` (`events ⇄ polling ⇄ offline`), root-stat probe via the pure `probeReachable`.
+>   Unreachable → the watcher's **one** sanctioned write, `MarkConnectivityBySource` (assets
+>   online→offline, never missing — connectivity **(a)**), then quiesce (the `offline` gate stops the
+>   event loop feeding paths); reachable-again → online + schedule catch-up walk. Subscribe failure
+>   (inotify watch-limit) → degrade to polling, never crash. `reconcile.go` **retired** — its
+>   offline-flip moved here, its missing/restore half was already the pipeline walk. The connectivity
+>   write is the watcher's own (not routed through a `Fidelity` interface); batch reconcile is the
+>   importer's `Run` the watcher *schedules*. **Known gaps (deferred, `ponytail:`):** plain-stat probe
+>   misses an unmount that leaves an empty mountpoint (needs the filesystem-UUID monitor); after
+>   remount the unit stays poll-driven rather than re-subscribing live events. The `sources.connectivity`
+>   *column* (`SourceRepo.SetConnectivity`) is not written yet — no consumer reads it (P3 health panel).
 >
 > **Deferred with `ponytail:` markers (add when the trigger fires):** per-OS mount daemons (poll
 > covers correctness — add for latency) · P3 health panel (the per-source status snapshot feeds it;
@@ -175,8 +180,9 @@ lives here**: hash the sidecar; equal to the asset's `xmp_hash` (what we last wr
 ## Acceptance
 
 - Save-storm fixture (temp write + rename + double-write within 400ms) → exactly one ingest.
-- Rename fixture: paired events relink (judgments preserved); simulated unpaired → missing then
-  heals on next reconcile.
+- Rename fixture: a same-name move (mv a/x.jpg b/x.jpg), unjudged → auto-heals (delete-side
+  merge); a name-changing rename (mv a.jpg b.jpg) → original left missing + new path minted +
+  one pending pair (a *probable move* recorded for review, NOT auto-relinked — DEFERRED §5).
 - Copy-then-delete fixture → delete-side merge preserves judgments, no stranded missing row.
 - Kill -9 the app during watch; restart → startup reconcile converges; no duplicate identities.
 - Unmount/remount a test volume (or bind-mount simulation) → connectivity flips, catch-up

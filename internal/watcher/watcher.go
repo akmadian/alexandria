@@ -18,11 +18,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/charmbracelet/log"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -59,10 +62,20 @@ type Ingester interface {
 // DEFERRED §2), not the watcher's.
 type Watcher struct {
 	Ingester Ingester
-	Source   *domain.Source
-	Root     string // absolute path of the source root (watched, and the DirFS base)
-	Log      *log.Logger
-	Debounce time.Duration // 0 → defaultDebounce
+	// Obs is the watcher's ONE sanctioned catalog write: sources.connectivity via
+	// MarkConnectivityBySource (asset file_status online⇄offline on mount/unmount).
+	// It performs no other write — every per-file action goes through Ingester.
+	Obs          catalog.AssetObservationWriter
+	Source       *domain.Source
+	Root         string // absolute path of the source root (watched, and the DirFS base)
+	Log          *log.Logger
+	Debounce     time.Duration // 0 → defaultDebounce
+	PollInterval time.Duration // 0 → defaultPoll (connectivity probe / poll-driven reconcile)
+
+	// offline gates the event loop while the volume is gone: the poll monitor sets
+	// it on unmount so graduate stops feeding paths (a vanished path during an
+	// unmount is not a delete). Set only by poll, read by graduate.
+	offline atomic.Bool
 
 	// events is the event-source seam. nil → notifyEvents (the real OS backend).
 	// Tests set a fake source here.
@@ -93,12 +106,26 @@ func (w *Watcher) Run(ctx context.Context) error {
 	if source == nil {
 		source = notifyEvents
 	}
+	// Subscribe failure (e.g. inotify watch-limit exhaustion) is not fatal: degrade
+	// to polling, where the poll monitor's periodic reconcile is the change detector.
 	events, err := source(ctx, root)
+	pollDriven := false
 	if err != nil {
-		return fmt.Errorf("watching %s: %w", w.Root, err)
+		w.Log.Warn("watcher: event subscribe failed — degrading to polling", "root", root, "err", err)
+		pollDriven = true
+	} else {
+		w.Log.Info("watcher: watching", "root", root)
 	}
-	w.Log.Info("watcher: watching", "root", root)
-	return w.loop(ctx, fsys, events)
+
+	// Event loop and connectivity monitor run together; either returning (or ctx
+	// cancel) tears both down. The monitor owns mount state; the loop owns changes.
+	group, ctx := errgroup.WithContext(ctx)
+	group.Go(func() error { return w.poll(ctx, fsys, pollDriven) })
+	if !pollDriven {
+		w.Log.Info("watcher: event loop started", "root", root)
+		group.Go(func() error { return w.loop(ctx, fsys, events) })
+	}
+	return group.Wait()
 }
 
 // loop is the single goroutine that owns the dirty set. Per-path timers are the
@@ -116,6 +143,7 @@ func (w *Watcher) loop(ctx context.Context, fsys fs.FS, events <-chan Event) err
 	// resets its timer — that dedup is what collapses a save storm to one handoff.
 	arm := func(relPath string) {
 		if timer, ok := timers[relPath]; ok {
+			w.Log.Debug("watcher: timer rearmed", "path", relPath)
 			timer.Reset(delay)
 			return
 		}
@@ -140,6 +168,7 @@ func (w *Watcher) loop(ctx context.Context, fsys fs.FS, events <-chan Event) err
 			return ctx.Err()
 
 		case event, ok := <-events:
+			w.Log.Debug("watcher: event received", "path", event.Path)
 			if !ok {
 				return nil // source closed (its ctx was cancelled)
 			}
@@ -154,6 +183,7 @@ func (w *Watcher) loop(ctx context.Context, fsys fs.FS, events <-chan Event) err
 				continue
 			}
 			if importer.Ignored(path.Base(event.Path)) {
+				w.Log.Debug("watcher: event ignored", "path", event.Path)
 				continue // ignore-list at intake: a .tmp storm never enters the set
 			}
 			arm(event.Path)
@@ -180,11 +210,18 @@ func (w *Watcher) loop(ctx context.Context, fsys fs.FS, events <-chan Event) err
 // turns its stat result into a verdict. Returns true if the path is still
 // changing and should be re-debounced.
 func (w *Watcher) graduate(ctx context.Context, fsys fs.FS, relPath string) (requeue bool) {
+	if w.offline.Load() {
+		// Volume gone (poll monitor flipped us offline): a vanished path here is the
+		// unmount, not a delete. Drop it; the catch-up reconcile on remount heals.
+		w.Log.Debug("watcher: graduate skipped (offline)", "path", relPath)
+		return false
+	}
 	if info, err := fs.Stat(fsys, relPath); err == nil {
 		if info.IsDir() {
 			return false // directory events are noise; its files graduate on their own
 		}
 		if !settled(fsys, relPath, info) {
+			w.Log.Debug("watcher: graduate deferred (not settled)", "path", relPath)
 			return true // mid-write: come back after it stops changing
 		}
 	}
@@ -194,6 +231,7 @@ func (w *Watcher) graduate(ctx context.Context, fsys fs.FS, relPath string) (req
 	if err := w.Ingester.IngestFile(ctx, w.Source, fsys, relPath); err != nil {
 		w.Log.Error("watcher: ingest failed", "path", relPath, "err", err)
 	}
+	w.Log.Info("watcher: graduate completed", "path", relPath)
 	return false
 }
 

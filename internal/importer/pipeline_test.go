@@ -129,7 +129,7 @@ func TestMatrix_RelinkOutranksReimport(t *testing.T) {
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{"b.mp4": {Data: content}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ingester.Reconcile(ctx, source, fstest.MapFS{}); err != nil {
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{}); err != nil {
 		t.Fatal(err)
 	}
 	if missing, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4"); missing == nil || missing.FileStatus != domain.FileStatusMissing {
@@ -146,56 +146,71 @@ func TestMatrix_RelinkOutranksReimport(t *testing.T) {
 	}
 }
 
-// TestRenameEnrichment_WaivesNameMatch proves impl/05's rename enrichment: a
-// paired rename (from-path already missing) relinks to the missing asset even
-// though the filename changed — where a plain hint would only see a duplicate.
-func TestRenameEnrichment_WaivesNameMatch(t *testing.T) {
-	ingester, source, assets := newImporter(t)
-	ctx := context.Background()
+// TestUnpairedRename_RecordedForReview proves the conservative policy for
+// `mv a.mp4 b.mp4` fed as two independent hints (delete + create, no OS rename
+// pairing): a name change is NOT auto-relinked. Instead the original is left
+// missing and the new path is minted as a distinct asset, LINKED by a pending
+// duplicates row — the "probable move" the review queue surfaces (a duplicate
+// whose original is missing). No judgment is touched. Holds in BOTH orderings.
+func TestUnpairedRename_RecordedForReview(t *testing.T) {
 	content := []byte("bytes-that-get-renamed")
 
-	if _, err := ingester.Run(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}); err != nil {
-		t.Fatal(err)
-	}
-	original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
-	// Watcher routes the rename's from-path to missing before ingesting the to-path.
-	if _, err := ingester.Reconcile(ctx, source, fstest.MapFS{}); err != nil {
-		t.Fatal(err)
-	}
+	// Ordering A — the delete graduates first (old already missing when new lands).
+	t.Run("delete-then-create", func(t *testing.T) {
+		ingester, source, assets := newImporter(t)
+		ctx := context.Background()
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"new.mp4": {Data: content}}, "new.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		assertProbableMove(t, assets, source.ID, original.ID)
+	})
 
-	// Same content, DIFFERENT name. A plain IngestFile would see a duplicate;
-	// IngestRenamed waives the name-match and relinks.
-	fsys := fstest.MapFS{"new.mp4": {Data: content}}
-	if err := ingester.IngestRenamed(ctx, source, fsys, "new.mp4"); err != nil {
-		t.Fatal(err)
-	}
+	// Ordering B — the create graduates first (both paths exist, then old vanishes).
+	t.Run("create-then-delete", func(t *testing.T) {
+		ingester, source, assets := newImporter(t)
+		ctx := context.Background()
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
+		both := fstest.MapFS{"old.mp4": {Data: content}, "new.mp4": {Data: content}}
+		if err := ingester.IngestFile(ctx, source, both, "new.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"new.mp4": {Data: content}}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		assertProbableMove(t, assets, source.ID, original.ID)
+	})
+}
 
-	relinked, _ := assets.FindBySourcePath(ctx, source.ID, "new.mp4")
-	if relinked == nil || relinked.ID != original.ID {
-		t.Fatalf("rename should relink to the same identity: got %v, want id %s", relinked, original.ID)
+// assertProbableMove checks B's end state: two distinct assets (original missing,
+// new online) and a pending duplicates row linking them — the review-queue signal
+// for "probable move", with nothing auto-merged.
+func assertProbableMove(t *testing.T, assets *sqlite.AssetRepo, sourceID, originalID string) {
+	t.Helper()
+	ctx := context.Background()
+	old, _ := assets.FindBySourcePath(ctx, sourceID, "old.mp4")
+	if old == nil || old.ID != originalID || old.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("original must be left MISSING, not merged: got %v", old)
 	}
-	if relinked.FileStatus != domain.FileStatusOnline {
-		t.Fatalf("relinked asset should be online, got %s", relinked.FileStatus)
+	fresh, _ := assets.FindBySourcePath(ctx, sourceID, "new.mp4")
+	if fresh == nil || fresh.ID == originalID || fresh.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("new path must be a distinct online asset: got %v", fresh)
 	}
-	all, _ := assets.List(ctx, catalog.AssetFilter{})
-	if len(all) != 1 {
-		t.Fatalf("rename must not mint a new identity: got %d assets, want 1", len(all))
+	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
+	if len(dups) != 1 {
+		t.Fatalf("a probable move must be recorded as one pending pair, got %d", len(dups))
 	}
-
-	// Negative control: without the rename signal, the same move is a duplicate.
-	ingester2, source2, assets2 := newImporter(t)
-	if _, err := ingester2.Run(ctx, source2, fstest.MapFS{"old.mp4": {Data: content}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ingester2.Reconcile(ctx, source2, fstest.MapFS{}); err != nil {
-		t.Fatal(err)
-	}
-	if err := ingester2.IngestFile(ctx, source2, fstest.MapFS{"new.mp4": {Data: content}}, "new.mp4"); err != nil {
-		t.Fatal(err)
-	}
-	all2, _ := assets2.List(ctx, catalog.AssetFilter{})
-	if len(all2) != 2 {
-		t.Fatalf("plain hint with a new name should NOT relink (duplicate): got %d assets, want 2", len(all2))
+	if dups[0].OriginalAssetID != originalID || dups[0].DuplicateAssetID != fresh.ID {
+		t.Fatalf("pending pair should link original→new: got %+v", dups[0])
 	}
 }
 

@@ -202,7 +202,12 @@ func TestIngestFile_GoneHealsCopyThenDelete(t *testing.T) {
 	}
 }
 
-func TestReconcile_MarksMissingAndRestores(t *testing.T) {
+// TestWalk_MarksMissingThenRestores proves the full walk (Run) subsumes the old
+// standalone reconcile (retired in impl/05.3): an unvisited known file is marked
+// missing, and reappears online on the next walk (the matrix relinks it).
+// Whole-source-offline is no longer the importer's job — the watcher's poll
+// monitor owns it (see internal/watcher poll tests).
+func TestWalk_MarksMissingThenRestores(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	ctx := context.Background()
 	full := fstest.MapFS{
@@ -213,54 +218,30 @@ func TestReconcile_MarksMissingAndRestores(t *testing.T) {
 		t.Fatalf("import: %v", err)
 	}
 
-	// b.jpg vanished from disk.
-	res, err := imp.Reconcile(ctx, src, fstest.MapFS{"a.jpg": full["a.jpg"]})
+	// b.jpg vanished: a walk that doesn't visit it marks it missing.
+	res, err := imp.Run(ctx, src, fstest.MapFS{"a.jpg": full["a.jpg"]})
 	if err != nil {
-		t.Fatalf("reconcile: %v", err)
+		t.Fatalf("walk: %v", err)
 	}
-	if res.Missing != 1 || res.Restored != 0 {
-		t.Fatalf("reconcile: missing=%d restored=%d, want 1/0", res.Missing, res.Restored)
+	if res.Missing != 1 {
+		t.Fatalf("walk: missing=%d, want 1", res.Missing)
 	}
 	b, _ := assets.FindBySourcePath(ctx, src.ID, "b.jpg")
 	if b == nil || b.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("b.jpg status = %v, want missing", b)
 	}
 
-	// b.jpg came back.
-	res, err = imp.Reconcile(ctx, src, full)
-	if err != nil {
-		t.Fatalf("reconcile back: %v", err)
-	}
-	if res.Restored != 1 {
-		t.Fatalf("reconcile: restored=%d, want 1", res.Restored)
+	// b.jpg came back: the next walk relinks it online (same content+name).
+	if _, err := imp.Run(ctx, src, full); err != nil {
+		t.Fatalf("walk back: %v", err)
 	}
 	if b, _ = assets.FindBySourcePath(ctx, src.ID, "b.jpg"); b.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("b.jpg status = %q, want online", b.FileStatus)
 	}
 }
 
-func TestReconcile_SourceOfflineMarksAllOffline(t *testing.T) {
-	imp, src, assets := newImporter(t)
-	ctx := context.Background()
-	if _, err := imp.Run(ctx, src, fstest.MapFS{"a.jpg": {Data: []byte("a")}}); err != nil {
-		t.Fatalf("import: %v", err)
-	}
-	// Unreachable filesystem: a nonexistent directory.
-	res, err := imp.Reconcile(ctx, src, os.DirFS(filepath.Join(t.TempDir(), "gone")))
-	if err != nil {
-		t.Fatalf("reconcile: %v", err)
-	}
-	if res.Missing != 0 {
-		t.Fatalf("offline source must not mark files missing, got missing=%d", res.Missing)
-	}
-	a, _ := assets.FindBySourcePath(ctx, src.ID, "a.jpg")
-	if a.FileStatus != domain.FileStatusOffline {
-		t.Fatalf("a.jpg status = %q, want offline", a.FileStatus)
-	}
-}
-
-// The capstone: reconcile + import together relink a moved file instead of
-// duplicating it — the pipeline's most important protection, now active.
+// The capstone: a walk after a folder reorg relinks a moved file instead of
+// duplicating it — the pipeline's most important protection.
 func TestMoveRelink_AfterReconcile(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	ctx := context.Background()
@@ -269,9 +250,10 @@ func TestMoveRelink_AfterReconcile(t *testing.T) {
 	if _, err := imp.Run(ctx, src, fstest.MapFS{"old/photo.jpg": {Data: content}}); err != nil {
 		t.Fatalf("import: %v", err)
 	}
-	// Folder reorganized while the app was closed: the old path is gone.
-	if _, err := imp.Reconcile(ctx, src, fstest.MapFS{}); err != nil {
-		t.Fatalf("reconcile: %v", err)
+	// Folder reorganized while the app was closed: the old path is gone, so a walk
+	// that doesn't visit it marks it missing (the relink target).
+	if _, err := imp.Run(ctx, src, fstest.MapFS{}); err != nil {
+		t.Fatalf("walk: %v", err)
 	}
 	// Re-import finds the same file (same name + content) at a new path.
 	res, err := imp.Run(ctx, src, fstest.MapFS{"new/photo.jpg": {Data: content}})

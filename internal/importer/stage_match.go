@@ -21,9 +21,7 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 			}
 			continue
 		}
-		// A full walk never carries rename pairs (renamed=false); paired renames
-		// arrive only through the watcher's single-path IngestRenamed entry.
-		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, item.scanned, item.hash, inRunHashes, false)
+		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, item.scanned, item.hash, inRunHashes)
 		if err != nil {
 			item.rejected = true
 			item.addError("match", "match_failed", err.Error())
@@ -57,26 +55,28 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 //  1. Relink: content+name match vs a MISSING asset → adopt the new path. This
 //     OUTRANKS a path-based reimport: an in-place edit changes content, so its
 //     hash cannot match a missing asset; a hash that DOES match one means a lost
-//     file reappeared at an occupied address (delete-and-copy), not an edit.
+//     file reappeared at an occupied address (delete-and-copy), not an edit. The
+//     name must ALSO match: a same-content match to a missing asset with a
+//     DIFFERENT name is only a PROBABLE move (a rename), not a certain one — we do
+//     not auto-relink it. It falls through to (3) duplicate, which records the pair
+//     for user review; a missing "original" is how the review queue tells a move
+//     apart from a plain duplicate. (partial_hash is a 64KB+size fingerprint, not a
+//     full hash — the name guard is the cheap confidence backstop against a false
+//     merge of two differently-named files.)
 //  2. Reimport: path match, content differs → refresh observations only.
-//  3. Duplicate: content matches a PRESENT asset (in the catalog or minted this
-//     run) → mint a new identity + a duplicates row.
+//  3. Duplicate: content matches another asset (present, or a missing one under a
+//     different name → a probable move) → mint a new identity + a duplicates row.
 //  4. New: no match → mint.
-//
-// renamed is the watcher's rename-enrichment signal (impl/05): the OS delivered a
-// paired rename whose from-path was already routed to missing, so this file IS
-// that missing asset under a new name. It waives ONLY the relink name-match —
-// hash+size (via FindByHash) still verify identity, and the asset must still be
-// missing. A full walk always passes false.
-func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, inRunHashes map[string]string, renamed bool) (action, *domain.Asset, error) {
+func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, inRunHashes map[string]string) (action, *domain.Asset, error) {
 	contentMatch, err := imp.Reader.FindByHash(ctx, hash, scanned.size)
 	if err != nil {
 		return actionNew, nil, err
 	}
-	// (1) Relink — checked before the path, per the precedence above. A verified
-	// paired rename waives the name-match (a rename is expected to change the name).
+	// (1) Relink — checked before the path, per the precedence above. Requires the
+	// name to match too; a name change is only a probable move (handled at (3)).
 	if contentMatch != nil && contentMatch.FileStatus == domain.FileStatusMissing &&
-		(renamed || contentMatch.Filename == scanned.filename) {
+		contentMatch.Filename == scanned.filename {
+		imp.Log.Debug("relinking missing asset", "path", scanned.relPath, "assetID", contentMatch.ID)
 		return actionMove, contentMatch, nil
 	}
 
@@ -86,19 +86,23 @@ func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanne
 		return actionNew, nil, err
 	}
 	if atPath != nil {
+		imp.Log.Debug("reimporting existing asset", "path", scanned.relPath, "assetID", atPath.ID)
 		return actionReimport, atPath, nil
 	}
 
 	// (3) Duplicate — content matches a present asset (catalog or this run).
 	if contentMatch != nil {
+		imp.Log.Debug("duplicate detected", "path", scanned.relPath, "assetID", contentMatch.ID)
 		return actionDuplicate, contentMatch, nil
 	}
 	if inRunAssetID, ok := inRunHashes[hash]; ok {
 		// The original was minted this run and isn't committed yet, so FindByHash
 		// can't see it; the in-run map can. Only the ID is needed to log the pair.
+		imp.Log.Debug("duplicate detected", "path", scanned.relPath, "assetID", inRunAssetID)
 		return actionDuplicate, &domain.Asset{ID: inRunAssetID}, nil
 	}
 
 	// (4) New.
+	imp.Log.Debug("new asset detected", "path", scanned.relPath)
 	return actionNew, nil, nil
 }

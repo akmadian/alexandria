@@ -305,15 +305,20 @@ func (imp *Importer) markGone(ctx context.Context, source *domain.Source, relPat
 		return err
 	}
 	if existing == nil || existing.FileStatus != domain.FileStatusOnline {
+		imp.Log.Debug("gone path is not a tracked online asset — nothing to do", "path", relPath)
 		return nil
 	}
 	mintedAfter := time.Now().Add(-moveHealWindow)
 	return imp.Store.InTx(ctx, func(repos sqlite.Repos) error {
 		healed, err := imp.healMovedAway(ctx, repos, source.ID, existing.ID, mintedAfter)
 		if err != nil || healed {
+			return err // healMovedAway logs the absorb on success
+		}
+		if err := repos.Assets.SetFileStatus(ctx, existing.ID, domain.FileStatusMissing); err != nil {
 			return err
 		}
-		return repos.Assets.SetFileStatus(ctx, existing.ID, domain.FileStatusMissing)
+		imp.Log.Info("marked asset missing", "source", source.Name, "path", relPath, "asset", existing.ID)
+		return nil
 	})
 }
 

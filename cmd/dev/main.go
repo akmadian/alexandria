@@ -382,11 +382,15 @@ func cmdReconcile(args []string) error {
 	if err != nil {
 		return err
 	}
-	result, err := newIngester(catalog).Reconcile(ctx, source, os.DirFS(absolutePath))
+	// "Reconcile is a schedule, not a component" (D14): a reconcile is just the
+	// pipeline in full-walk mode. The walk-end diff marks vanished files missing and
+	// the matrix relinks reappeared ones — the standalone Reconcile retired in 05.3.
+	result, err := newIngester(catalog).Run(ctx, source, os.DirFS(absolutePath))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("reconcile: missing=%d restored=%d errors=%d\n", result.Missing, result.Restored, len(result.Errors))
+	fmt.Printf("reconcile: added=%d updated=%d moved=%d missing=%d errors=%d\n",
+		result.Added, result.Updated, result.Moved, result.Missing, len(result.Errors))
 	return nil
 }
 
@@ -417,6 +421,7 @@ func cmdWatch(args []string) error {
 	}
 	w := &watcher.Watcher{
 		Ingester: newIngester(catalog),
+		Obs:      &sqlite.AssetRepo{DB: catalog.store.DB}, // the one sanctioned write: connectivity
 		Source:   source,
 		Root:     absolutePath,
 		Log:      log.Default(),

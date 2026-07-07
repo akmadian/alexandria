@@ -72,10 +72,13 @@ func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath
 
 // FindMoveHealCandidate finds the young, unjudged duplicate that a going-missing
 // asset may actually have "moved" into (impl/05 delete-side merge). It matches by
-// content (partial_hash + size) AND filename, requires the row be present
-// (online, not deleted) and freshly minted (ingested_at >= mintedAfter), and —
-// the load-bearing guard — that it carry ZERO judgments. excludeID keeps the
-// going-missing asset from matching itself. nil = no safe candidate.
+// content (partial_hash + size) AND filename: only a SAME-NAME copy-then-delete
+// (the unambiguous external-app "move") is auto-absorbed; a name change is a
+// probable RENAME, left for user review rather than silently merged. It requires
+// the row be present (online, not deleted) and freshly minted (ingested_at >=
+// mintedAfter), and — the load-bearing guard — that it carry ZERO judgments.
+// excludeID keeps the going-missing asset from matching itself. nil = no safe
+// candidate.
 func (r *AssetRepo) FindMoveHealCandidate(ctx context.Context, hash string, sizeBytes int64, filename, excludeID string, mintedAfter time.Time) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx,
 		"SELECT "+assetColumns+" FROM assets "+

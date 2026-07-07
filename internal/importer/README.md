@@ -73,16 +73,16 @@ until per-machine config lands.
   whole source. `RunJob` adds a job id for progress events (see `jobs.go`); `Run`
   is `RunJob` with no id. This is the normal path.
 - **`Importer.IngestFile`** (`importer.go`) — the same stages for a single path,
-  run sequentially (a batch of one). This is the seam the watcher will feed
-  hints into (impl/05). It reuses the stage transforms directly.
-- **`Importer.Reconcile`** (`reconcile.go`) — **transitional, retiring in
-  impl/05.** No ingest; just flips `file_status` for files that vanished or
-  reappeared, and marks a whole source offline when its root is unreachable. Its
-  missing/restore half is already duplicated by the pipeline's walk-end diff
-  (`markMissing`), because "reconcile is a schedule, not a component" (D14) — it's
-  the pipeline in full-walk mode. It survives only because the whole-source-offline
-  flip has no other home until the watcher's volume monitor lands. See the note at
-  the top of `reconcile.go`.
+  run sequentially (a batch of one). This is the seam the watcher feeds hints into
+  (impl/05): present → ingest, gone → mark missing + delete-side merge (`markGone`),
+  the *same* per-path decision the walk makes, so a watcher-fed change heals
+  identically to a walk-detected one. It reuses the stage transforms directly.
+- **Reconcile is not a component** (D14) — "reconcile is a schedule, not a
+  component": it's just `Run` in full-walk mode. The walk-end diff (`markMissing`)
+  marks vanished files missing and the matrix relinks reappeared ones. The old
+  standalone `Reconcile` retired in impl/05.3; its only unique piece — the
+  whole-source-offline flip — moved to the watcher's poll monitor (`internal/watcher`,
+  the one sanctioned `sources.connectivity` write).
 
 ## The identity matrix (precedence)
 
