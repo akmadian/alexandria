@@ -124,23 +124,6 @@ func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys 
 	return nil
 }
 
-// MarkMissing flips the asset at relPath to missing — the watcher's delete hint
-// (a remove/rename-away event whose path no longer exists on disk). It is
-// deliberately weak: if nothing is indexed there, or it is already missing, it
-// does nothing, and it NEVER removes the row. A delete is an observation, not a
-// fact about identity — the file may reappear (moved back, remount), and relink
-// or a reconcile restores it. Truth is always re-derivable from the filesystem.
-func (imp *Importer) MarkMissing(ctx context.Context, source *domain.Source, relPath string) error {
-	asset, err := imp.Reader.FindBySourcePath(ctx, source.ID, relPath)
-	if err != nil || asset == nil {
-		return err
-	}
-	if asset.FileStatus == domain.FileStatusMissing {
-		return nil
-	}
-	return imp.Obs.SetFileStatus(ctx, asset.ID, domain.FileStatusMissing)
-}
-
 // recordError logs a per-file failure at warn level and appends it to the given
 // error slice. Shared by the pipeline and Reconcile.
 func (imp *Importer) recordError(errs *[]ImportError, path, stage string, err error) {

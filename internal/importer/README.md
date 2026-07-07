@@ -75,14 +75,14 @@ until per-machine config lands.
 - **`Importer.IngestFile`** (`importer.go`) — the same stages for a single path,
   run sequentially (a batch of one). This is the seam the watcher will feed
   hints into (impl/05). It reuses the stage transforms directly.
-- **`Importer.Reconcile`** (`reconcile.go`) — no ingest; flips `file_status` for
-  files that vanished or reappeared, and marks a whole source offline when its root
-  is unreachable. Two halves with different fates: the **whole-source-offline flip**
-  retires into impl/05.3's poll-timer + EIO probe; but the **per-file stat-and-flip**
-  is *not* just a duplicate of the pipeline's walk-end diff — it's the fidelity
-  primitive for *referenced loose files* (which must never run the walk-end
-  "everything unvisited = missing" logic), so it likely earns a permanent home. See
-  the note at the top of `reconcile.go` and `impl/DEFERRED.md §1`.
+- **`Importer.Reconcile`** (`reconcile.go`) — **transitional, retiring in
+  impl/05.** No ingest; just flips `file_status` for files that vanished or
+  reappeared, and marks a whole source offline when its root is unreachable. Its
+  missing/restore half is already duplicated by the pipeline's walk-end diff
+  (`markMissing`), because "reconcile is a schedule, not a component" (D14) — it's
+  the pipeline in full-walk mode. It survives only because the whole-source-offline
+  flip has no other home until the watcher's volume monitor lands. See the note at
+  the top of `reconcile.go`.
 
 ## The identity matrix (precedence)
 
