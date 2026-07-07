@@ -310,3 +310,46 @@ same non-destructive editability, smaller, and Lightroom already has the menu it
 **Revisit trigger:** the catalog-wide LrC prep pass proves impractical at very large library sizes
 (multi-day Convert-to-DNG runs, disk-space doubling) → consider a Lua-SDK LrC plugin that automates
 prep incrementally; does not revisit the core call against decoding `crs:` ourselves.
+
+## D22 — Tag system: adjacency + materialized path, direct-attach junction, judgment tombstones
+
+**Decision (2026-07-07).** Build the long-deferred tag repository (blocked consumers now exist:
+impl/06 keyword union, impl/09 LrC import). Storage shape: `tags` keeps `parent_id` as structural
+truth (adjacency) and gains a **derived materialized `path`** (`/rootId/…/selfId/`) for subtree
+queries via indexed `GLOB` prefix — Lightroom's `AgLibraryKeyword.genealogy` move, materialized on
+the *small* table. `asset_tags` stays **direct-attachments only** (implied ancestors resolved at
+read time through `path`, never stored). Hierarchy attaches **leaf-only**; a parent filter expands
+to its subtree. Keyword ingest maps `dc:subject` + `lr:hierarchicalSubject` with
+`hierarchicalSubject` authoritative and flat names deduped against hierarchy node names; slugs
+normalize case/whitespace only (keep non-ASCII), Lightroom's `lc_name`. Colors are a `color_mode`
+tri-state (`inherit`/`custom`/`none`) with the effective color **derived, never stored** (recolor/
+reparent propagates for free). User removal of a tag is a **judgment tombstone** (`asset_tags.
+removed_at`), and sync unions with `ON CONFLICT DO NOTHING` so an observation-class writer can never
+resurrect a user-suppressed keyword. Full spec: `impl/10`.
+
+**Rationale.** The dominant read — "tag with N assets under it" — is **result-bound**: returning N
+assets costs the same under a recursive CTE, a materialized path, or a closure table, because the
+hierarchy walk runs over the small tag tree and the N-row read is inherent. So we optimize only the
+cheap, safe part (path on the small table) and refuse the expensive denormalization (per-asset
+implied-membership rows: write amplification, implied/explicit bookkeeping, reparent recomputation,
+sidecar-writeback hazards). The composite PK `(asset_id, tag_id)` already makes asset→tags a
+contiguous indexed seek, so the junction needs no help in that direction. Tombstones fall straight
+out of D8: a removal is a judgment, judgments beat observations, so the sync path structurally
+cannot undo one.
+
+**Rejected.** Tags denormalized onto the `assets` row (breaks the many-to-many, the reverse lookup,
+and per-relationship metadata; only the FTS *text* projection is a safe denormalization). A separate
+descendant-materialized `tag_assets`/closure table now (optimizes a read that is result-bound
+anyway; its one real win — live descendant-inclusive counts across the whole tree — is not a current
+requirement and is named as the revisit trigger). `LIKE` for the path prefix (won't use the index;
+`GLOB` does). ASCII-only slugs (would drop CJK/accented keywords). Building the full `TagRepository`
+CRUD now (no UI consumer — carve at the second implementation).
+
+**Deferred (named).** FTS ⋈ tags integration (ancestor-inclusion, per-asset text maintenance,
+rename/reparent rebuild) pends a dedicated FTS schema deep-dive — the tag repo leaves `assets_fts.
+tags` untouched until then. `source='ai'` at P4. Materialized membership/closure for whole-tree live
+counts. Tag-UI backend (`Tree`/`Update`/`Delete`/replace-`SetAssetTags`).
+
+**Revisit trigger:** live descendant-inclusive counts on the entire tag tree become a requirement,
+or a real catalog's tag tree is deep/wide enough that `GLOB`-prefix expansion measurably regresses →
+add the closure/materialized-membership table then.

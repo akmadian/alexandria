@@ -24,7 +24,8 @@ Class assignments by column group:
 - `sources`: name/base_path/scan-config/`enabled` = judgment · fs UUID/serial/label/`connectivity` = observation ·
   `last_scanned_at` = sync-state
 - `tags`, `collections`, `collection_assets`, `settings` = judgment
-- `asset_tags` = judgment or observation per-row (`source`: user|xmp|lr)
+- `asset_tags` = judgment or observation per-row (`source`: user|xmp|lr); `removed_at` (judgment
+  tombstone — user deletion of an imported tag, respected over sync, D22/impl/10)
 - `asset_groups` = judgment or derived per-row (`origin`: manual|auto). Recompute may freely
   destroy/rebuild `auto` rows; must NEVER touch `manual`.
 - `sidecar_files` = observation, EXCEPT `attached_asset_id` = derived (grouping engine writes it)
@@ -58,8 +59,8 @@ Special cases resolved by the classification:
 | `sources` | uuid | — | fs_uuid |
 | `assets` | uuid | source_id (RESTRICT) | `UNIQUE(source_id, relative_path) WHERE is_deleted=0` ← soft-delete trap fix · (partial_hash, size_bytes) · partial sort idx: captured_at, ingested_at, rating, filename, size_bytes |
 | `sidecar_files` | uuid | source_id (CASCADE), attached_asset_id (SET NULL) | (source_id, dir, stem) · ext |
-| `tags` | uuid | parent_id (CASCADE) | `UNIQUE(slug, IFNULL(parent_id,''))` ← NULL-parent trap fix |
-| `asset_tags` | (asset_id, tag_id) | both CASCADE | tag_id reverse |
+| `tags` | uuid | parent_id (CASCADE) | `UNIQUE(slug, IFNULL(parent_id,''))` ← NULL-parent trap fix · `path` (derived materialized ancestry, GLOB-prefix idx) · `color_mode` (D22/impl/10) |
+| `asset_tags` | (asset_id, tag_id) | both CASCADE | tag_id reverse **partial** `WHERE removed_at IS NULL` (D22/impl/10) |
 | `collections` | uuid | parent_id (CASCADE), cover (SET NULL) | parent_id |
 | `collection_assets` | (collection_id, asset_id) | both CASCADE | (collection_id, position) · asset_id reverse |
 | `asset_groups` / `_members` | uuid / (group_id, asset_id) | CASCADE | asset_id reverse · groups carry `origin` |

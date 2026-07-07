@@ -20,11 +20,12 @@
 > over an unchanged sidecar is a no-op (acceptance #1 judgment half). `WriteBackEnabled` is hard-false;
 > outbound/catalog-wins verdicts log and skip until the write path ships.
 >
-> **Still pending** (unchanged from below, minus what landed): keyword union — blocked on the tag
-> repository (find-or-create + hierarchy + FTS tags), still unbuilt from impl/04; caption/title —
-> blocked on a sparse observation-metadata writer (`ApplyFilePatch` rewrites file-fact columns, so it
-> can't set caption/title alone); outbound sidecar write + `xmpWriteBack`/`xmpConflictResolution`
-> settings; ingest/watcher triggers + debounce; `alexandria:Flag` custom namespace.
+> **Still pending** (unchanged from below, minus what landed): keyword union — now **designed in
+> `impl/10` (D22)** and its immediate driver; `ImportKeywords(assetID, flat, hierarchical, "xmp")` is
+> the seam the Syncer will call (FTS⋈tags deferred within impl/10). caption/title — blocked on a
+> sparse observation-metadata writer (`ApplyFilePatch` rewrites file-fact columns, so it can't set
+> caption/title alone); outbound sidecar write + `xmpWriteBack`/`xmpConflictResolution` settings;
+> ingest/watcher triggers + debounce; `alexandria:Flag` custom namespace.
 
 > **DONE (2026-07-07) — the self-contained, daemon-backed read core.** Built on the impl/07
 > exiftool slice; the DB-application wiring is a distinct next increment (see below).

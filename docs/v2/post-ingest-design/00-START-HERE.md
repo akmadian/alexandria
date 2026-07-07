@@ -29,6 +29,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/07-dependency-fleet.md` | **🔨 exiftool slice DONE (2026-07-07)** — daemon + discovery; other tools / downloads / one-shot Run deferred |
 | `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
 | `impl/09-lrc-migration.md` | **Design only, not started.** Lightroom Classic catalog migration — D21; engine-first (`internal/lrcimport` + `cmd/lrcimport`), Wails wizard wraps it later; pure-read preflight, LrC-side DNG/XMP prep instead of hand-parsing Develop settings |
+| `impl/10-tag-system.md` | **Design complete, not started.** Tag repository — D22; adjacency + materialized `path`, direct-attach junction, `color_mode` tri-state, judgment tombstones. Unblocks impl/06 keyword union and impl/09 import. FTS⋈tags deferred to an FTS deep-dive |
 
 ## Where the project is right now
 
