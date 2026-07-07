@@ -10,10 +10,13 @@ NFR references → `01-requirements-distilled.md`.
 > not `filetype` (Type = format category vs Kind = entity variant). **D12 (pipeline shape),
 > D13 (DLQ = import_errors, no retry machinery), D17 (jobs: registry map + OnProgress), and
 > D18 (ignore list) are realized in impl/04.** D14 (watcher) is IN PROGRESS (impl/05, started
-> 2026-07-07): three PRs (05.1 matrix extensions → 05.2 watcher service → 05.3 poll-timer
-> connectivity). Reconciled build plan at the top of `impl/05` — the per-OS event adapters collapse
-> to one dep (`rjeczalik/notify`), the volume monitor to a poll timer. The standalone `Reconcile`
-> remains the transitional offline-flip stand-in until 05.3 retires it. Everything else is
+> 2026-07-07): **05.1 (matrix extensions) + 05.2 (watcher service) DONE; 05.3 (poll-timer
+> connectivity) remaining.** Reconciled build plan at the top of `impl/05` — the per-OS event
+> adapters collapsed to one dep (`rjeczalik/notify`), the volume monitor to a poll timer. Building
+> 05.2 surfaced the broader **import/tracking model** (one-shot vs. watched sources, `sync_mode`,
+> loose-files vs. directories, cross-source dup handling) — captured in `impl/DEFERRED.md`, deferred
+> to the source-management milestone. Note: `Reconcile` is **no longer** slated for removal — its
+> per-file logic is the loose-file fidelity primitive (see `DEFERRED.md §1`). Everything else is
 > design-only so far.
 
 ## D1 — Single-process desktop app; engine as embedded Go library behind one transport-agnostic async contract

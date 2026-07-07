@@ -17,6 +17,13 @@ var ignorePatterns = []string{
 }
 
 // matchIgnore returns the pattern that name matched, or "" if none. Malformed
+// Ignored reports whether a base file/dir name matches the ignore list (D18).
+// It is the watcher's intake chokepoint — the second of D18's two — so a `.tmp`
+// save-storm never even enters the debouncer. SCAN uses matchIgnore directly
+// (it also needs the matched pattern, for the per-pattern skip tally).
+func Ignored(name string) bool { return matchIgnore(name) != "" }
+
+// matchIgnore returns the pattern that name matched, or "" if none. Malformed
 // patterns (path.Match only errors on bad syntax, which our constants never
 // have) are treated as non-matches.
 func matchIgnore(name string) string {

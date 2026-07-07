@@ -1,7 +1,14 @@
 # impl/05 — Watcher Service
 
-**Status: IN PROGRESS (started 2026-07-07). impl/04 shipped and stabilized (2026-07-06), so this is unblocked.**
+**Status: IN PROGRESS (2026-07-07). 05.1 (matrix extensions) + 05.2 (watcher service) DONE; 05.3 (poll-timer connectivity) remaining.**
 **Scope:** new `internal/watcher` + matrix extensions in `internal/importer`. **References:** D14, D9.
+
+> **Cross-cutting design that surfaced building 05.2 lives in [`DEFERRED.md`](DEFERRED.md), not here.**
+> The watcher forced the question "when may the catalog change on its own?" — which opened the import/
+> tracking model (one-shot import vs. watched folders; `sync_mode` = Manual/Scheduled/Watched;
+> loose-files vs. directories; cross-source duplicates → user action; source-scoping the auto-mutating
+> matrix lookups). All of that is recorded in `DEFERRED.md §1`, deferred to the source-management
+> milestone (cleanly additive — see its Urgency note). This spec covers only the watcher *mechanism*.
 
 > **Reconciled plan (2026-07-07).** The original design below stands as the target; this section
 > is how we actually build it and where we deliberately spend less than the letter of the spec.
@@ -38,19 +45,33 @@
 >   WaivesNameMatch` (+ negative control), `TestDeleteSideMerge_HealsCopyThenDelete` (judgment
 >   preserved, dup row cascade-cleaned), `TestDeleteSideMerge_GuardedByJudgment`. The rename-true
 >   runtime path (mark the from-path missing, then `IngestRenamed` the to-path) is wired by 05.2.
-> - **05.2 — Watcher service** (`internal/watcher`): per-source unit state machine
->   (`events ⇄ polling ⇄ offline`), debounced dirty SET (500ms/path + settle double-stat), ignore-list
->   at intake (reuse `importer` ignore rules), `rjeczalik/notify` normalized → `IngestFile`, overflow/
->   watch-limit → drop set + schedule reconcile, sidecar echo check (hash == asset's `xmp_hash` → drop
->   silently). Hosted via a new `cmd/dev watch <path>` subcommand — there is no long-running app
->   process yet (Wails deferred), so the dev harness is the only host. Acceptance: save-storm → one
->   ingest; kill-9 → startup reconcile converges.
-> - **05.3 — Connectivity via poll timer**: startup reconcile (+2s), per-source poll timer, EIO/ENODEV
->   probe → offline + quiesce unit, root reappears → online + catch-up reconcile.
->   `MarkConnectivityBySource` is the only observation write. Retires `Reconcile`'s offline branch
->   ([reconcile.go](../../../../internal/importer/reconcile.go)) once it lands. Acceptance:
->   unmount/remount flips connectivity, assets browsable while offline; inotify-limit sim degrades to
->   polling.
+> - **05.2 — Watcher service** ✅ **DONE (2026-07-07)** (`internal/watcher`): debounced dirty SET
+>   (500ms/path + 50ms settle double-stat), ignore-list at intake (`importer.Ignored`),
+>   `rjeczalik/notify` normalized → hints, overflow → drop set + reconcile, startup reconcile
+>   (kill-9 recovery). **Key simplification vs. the prose below:** graduation *re-derives truth from
+>   the filesystem* — a dirty path that exists is ingested (`IngestFile`), one that's gone is marked
+>   missing (`importer.MarkMissing`, the sole delete observation). So the watcher never branches on
+>   OS event type (create/write/delete/rename all just mark the path dirty); the stat at graduation
+>   is the fact. Hosted via `cmd/dev watch <path>`. Files: `watcher.go` (service + debounce loop),
+>   `source_notify.go` (the one file touching the notify backend), `event.go`. Tests
+>   (`watcher_test.go`, race-clean, fake event source): save-storm → one ingest, ignore-at-intake,
+>   delete → missing, overflow → reconcile; plus a live FSEvents smoke through `cmd/dev watch`.
+>   **Deferred with `ponytail:` markers:** rename *pairing* (notify gives no portable from→to link;
+>   the 05.1 `IngestRenamed` seam waits for an inotify-cookie enhancement — an unpaired rename
+>   degrades to missing+duplicate, healed by reconcile) · sidecar echo check (nothing writes
+>   `xmp_hash` until impl/06, so it has nothing to echo against — YAGNI until then) · the full
+>   `events ⇄ polling ⇄ offline` state machine (05.3 owns connectivity). **macOS gotcha handled:**
+>   `Run` canonicalizes the root via `EvalSymlinks` so `/var`→`/private/var` doesn't make every
+>   FSEvents path look like it escaped the tree.
+> - **05.3 — Connectivity via poll timer** (remaining): startup reconcile (+2s), per-source poll timer,
+>   EIO/ENODEV probe → offline + quiesce unit, root reappears → online + catch-up reconcile.
+>   `MarkConnectivityBySource` is the only observation write. Acceptance: unmount/remount flips
+>   connectivity, assets browsable while offline; inotify-limit sim degrades to polling.
+>   **Scope grew out of the 05.2 discussion:** the same poll timer is also the **"Scheduled" sync tier**
+>   (`DEFERRED.md §1`), and the per-file `Reconcile` it wraps is the **loose-file fidelity primitive** —
+>   so `Reconcile` ([reconcile.go](../../../../internal/importer/reconcile.go)) is **no longer slated
+>   for removal**; its whole-source-offline branch moves to the volume monitor, but its per-file
+>   stat-and-flip logic likely earns a permanent home rather than retiring. Decide when wiring 05.3.
 >
 > **Deferred with `ponytail:` markers (add when the trigger fires):** per-OS mount daemons (poll
 > covers correctness — add for latency) · P3 health panel (the per-source status snapshot struct is

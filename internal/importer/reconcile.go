@@ -9,23 +9,22 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
-// TRANSITIONAL — slated for removal in impl/05 (the watcher).
+// Two jobs live here, with diverging fates (see docs/v2/.../impl/DEFERRED.md §1):
 //
-// In the target design there is no standalone reconciler: "reconcile is a
-// schedule, not a component" (D14) — it's the pipeline run in full-walk mode
-// (kind='reconcile'). impl/04 already moved the core of this file INTO the
-// pipeline: RunJob's walk-end diff (markMissing in pipeline.go) marks
-// unvisited-but-known files missing, and a reappeared file is restored by
-// flowing through the matrix. So the missing/restore logic below is now
-// duplicated by a full pipeline run.
+//  1. Per-file stat-and-flip (missing/restored). For a FULL directory source this
+//     is duplicated by the pipeline's walk-end diff (markMissing in pipeline.go) —
+//     "reconcile is a schedule, not a component" (D14). BUT it is NOT redundant for
+//     the loose-files-vs-directories model: a referenced set of individual files
+//     must NOT run the walk-end "everything unvisited = missing" logic (it would
+//     mark the rest of the volume missing), so this per-file scope is the
+//     loose-file fidelity primitive. It therefore likely earns a PERMANENT home
+//     rather than retiring — decision deferred to source management.
+//  2. Whole-source-offline flip when the root is unreachable. impl/05.3 moves this
+//     to the poll-timer + EIO probe (→ sources.connectivity, the watcher's one
+//     sanctioned observation write). This branch retires then.
 //
-// What still lives ONLY here, and why the file survives until impl/05: the
-// whole-source-offline flip (below) when the root is unreachable. impl/05 moves
-// that to the machine-level volume monitor (mount/unmount + EIO probe →
-// sources.connectivity, the one sanctioned observation write from the watcher),
-// at which point this method and its tests retire. Until then it is the only
-// code path that handles an unmounted source, and cmd/dev's `reconcile`
-// subcommand exercises it.
+// Until 05.3 lands this is the only code path that handles an unmounted source, and
+// cmd/dev's `reconcile` subcommand exercises it.
 
 // ReconcileResult summarizes a reconciliation pass.
 type ReconcileResult struct {
