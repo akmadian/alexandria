@@ -10,7 +10,6 @@ import (
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
-	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/migrations"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
@@ -38,7 +37,6 @@ func main() {
 		Obs:       assets,
 		Derived:   assets,
 		Dups:      &sqlite.DuplicateRepo{DB: db},
-		Metadata:  metadata.Default(),
 		Thumbnail: thumbnailer.New(thumbDir),
 		Log:       logger,
 	}

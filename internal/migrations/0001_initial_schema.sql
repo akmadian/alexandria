@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS assets (
     filename            TEXT NOT NULL,
     extension           TEXT NOT NULL,
     mime_type           TEXT NOT NULL,
-    file_type           TEXT NOT NULL,                             -- no CHECK: file types grow (P3); validated in domain.Classify
+    file_type           TEXT NOT NULL,                             -- no CHECK: file types grow (P3); validated in assettype.Classify
     size_bytes          INTEGER NOT NULL,
     mtime               TEXT NOT NULL,
     partial_hash        TEXT NOT NULL,                             -- always written by the hasher

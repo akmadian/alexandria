@@ -24,7 +24,7 @@ func TestExtract_RealJPEG_DimensionsAndRights(t *testing.T) {
 	}
 	defer f.Close()
 
-	md, err := metadata.Default().Extract(f, "image/jpeg")
+	md, err := metadata.ExtractImage(f)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
@@ -40,21 +40,15 @@ func TestExtract_RealJPEG_DimensionsAndRights(t *testing.T) {
 }
 
 func TestExtract_Graceful(t *testing.T) {
-	// Garbage bytes for a registered type → best-effort, no panic, no dimensions.
-	md, err := metadata.Default().Extract(strings.NewReader("not a real jpeg"), "image/jpeg")
+	// Garbage bytes → best-effort, no panic, no dimensions. (Whether a type HAS an
+	// extractor is the assettype registry's concern; here we only prove the decoder
+	// degrades on junk input.)
+	md, err := metadata.ExtractImage(strings.NewReader("not a real jpeg"))
 	if err != nil {
 		t.Fatalf("garbage jpeg: %v", err)
 	}
 	if md.Width != nil {
 		t.Error("garbage input should yield no dimensions")
-	}
-	// Unregistered MIME → zero metadata.
-	md, err = metadata.Default().Extract(strings.NewReader("x"), "application/pdf")
-	if err != nil {
-		t.Fatalf("unknown mime: %v", err)
-	}
-	if md.Width != nil || md.Creator != nil {
-		t.Error("unknown mime should yield empty metadata")
 	}
 }
 
@@ -70,7 +64,7 @@ func TestExtract_FullEXIF(t *testing.T) {
 	}
 	defer f.Close()
 
-	md, err := metadata.Default().Extract(f, "image/jpeg")
+	md, err := metadata.ExtractImage(f)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}

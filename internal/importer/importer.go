@@ -7,7 +7,6 @@ import (
 
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
-	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/charmbracelet/log"
 )
@@ -21,12 +20,16 @@ import (
 // thumbnail marker). It is given NO judgment or sync writer — ingest cannot touch
 // ratings/flags/notes, so a reimport can never clobber user judgment. That
 // guarantee is structural (the types), not a convention.
+//
+// Metadata extraction has no injected dependency: each file's extractor comes
+// from its TypeHandler (resolved at scan). Thumbnailing keeps an injected
+// Thumbnailer because it needs runtime config (the output directory); the
+// per-type generator still comes from the TypeHandler.
 type Importer struct {
 	Reader    catalog.AssetReader
 	Obs       catalog.AssetObservationWriter
 	Derived   catalog.AssetDerivedWriter
 	Dups      catalog.DuplicateRepository
-	Metadata  metadata.Extractor
 	Thumbnail thumbnailer.Thumbnailer
 	Log       *log.Logger
 }

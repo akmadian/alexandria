@@ -18,11 +18,11 @@ import (
 	exifcommon "github.com/dsoprea/go-exif/v3/common"
 )
 
-// extractImage reads pixel dimensions (via the stdlib image decoders) and, when
-// present, EXIF. Everything is best-effort: a failure in one part leaves those
-// fields nil rather than failing the whole extraction — a corrupt EXIF block
-// must not stop the file being indexed.
-func extractImage(r io.ReadSeeker) (Metadata, error) {
+// ExtractImage reads pixel dimensions (via the stdlib image decoders) and, when
+// present, EXIF. It is a metadata.ExtractFunc. Everything is best-effort: a
+// failure in one part leaves those fields nil rather than failing the whole
+// extraction — a corrupt EXIF block must not stop the file being indexed.
+func ExtractImage(r io.ReadSeeker) (Metadata, error) {
 	var md Metadata
 
 	if _, err := r.Seek(0, io.SeekStart); err == nil {

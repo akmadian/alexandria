@@ -8,10 +8,10 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/akmadian/alexandria/internal/assettype"
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
-	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/testutil"
 	"github.com/charmbracelet/log"
@@ -23,12 +23,11 @@ func newImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.Asse
 	src := testutil.NewTestSource(t, db, "photos")
 	assets := &sqlite.AssetRepo{DB: db}
 	imp := &importer.Importer{
-		Reader:   assets,
-		Obs:      assets,
-		Derived:  assets,
-		Dups:     &sqlite.DuplicateRepo{DB: db},
-		Metadata: metadata.Default(),
-		Log:      log.New(io.Discard), // injected quiet logger — no test output noise
+		Reader:  assets,
+		Obs:     assets,
+		Derived: assets,
+		Dups:    &sqlite.DuplicateRepo{DB: db},
+		Log:     log.New(io.Discard), // injected quiet logger — no test output noise
 	}
 	return imp, src, assets
 }
@@ -83,7 +82,7 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	// (any case, any extension) — that's exactly what the importer indexes.
 	want := 0
 	filepath.WalkDir("../../testdata", func(_ string, d os.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && domain.IsSupported(filepath.Ext(d.Name())) {
+		if err == nil && !d.IsDir() && assettype.IsSupported(filepath.Ext(d.Name())) {
 			want++
 		}
 		return nil

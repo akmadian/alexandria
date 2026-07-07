@@ -5,16 +5,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/assettype"
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
-// scannedFile is the file-level facts gathered before hashing.
+// scannedFile is the file-level facts gathered before hashing. handler carries
+// the per-type capability funcs (metadata/thumbnail) so the extract and thumbnail
+// stages dispatch off the row we already resolved here — no second lookup.
 type scannedFile struct {
 	relPath  string
 	filename string
 	ext      string
 	mime     string
 	fileType domain.FileType
+	handler  assettype.Handler
 	size     int64
 	mtime    time.Time
 }
@@ -27,7 +31,7 @@ func scan(path string, info fs.FileInfo) (scannedFile, bool) {
 		return scannedFile{}, false
 	}
 	e := ext(name)
-	kind, ok := domain.Classify(e)
+	kind, ok := assettype.Classify(e)
 	if !ok {
 		return scannedFile{}, false
 	}
@@ -37,6 +41,7 @@ func scan(path string, info fs.FileInfo) (scannedFile, bool) {
 		ext:      e,
 		mime:     kind.MIME,
 		fileType: kind.Type,
+		handler:  kind,
 		size:     info.Size(),
 		mtime:    info.ModTime(),
 	}, true

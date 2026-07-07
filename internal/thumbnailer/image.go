@@ -17,9 +17,9 @@ import (
 	"golang.org/x/image/draw"
 )
 
-// generateImage decodes a raster image once, then writes one JPEG per size, each
-// scaled to fit that long edge.
-func generateImage(r io.ReadSeeker, sizes []int, quality int, dst func(int) string) error {
+// GenerateImage decodes a raster image once, then writes one JPEG per size, each
+// scaled to fit that long edge. It is a thumbnailer.GenFunc.
+func GenerateImage(r io.ReadSeeker, sizes []int, quality int, dst func(int) string) error {
 	src, _, err := image.Decode(r)
 	if err != nil {
 		return fmt.Errorf("decode: %w", err)

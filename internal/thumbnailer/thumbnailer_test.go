@@ -43,7 +43,7 @@ func dims(t *testing.T, path string) (int, int) {
 
 func TestGenerate_DownscalesPreservingAspect(t *testing.T) {
 	reg := thumbnailer.New(t.TempDir())
-	if ok, err := reg.Generate(pngReader(t, 1000, 800), "image/png", "ab1234"); err != nil || !ok {
+	if ok, err := reg.Generate(thumbnailer.GenerateImage, pngReader(t, 1000, 800), "ab1234"); err != nil || !ok {
 		t.Fatalf("generate: ok=%v err=%v", ok, err)
 	}
 	w, h := dims(t, reg.Path("ab1234", 512))
@@ -54,7 +54,7 @@ func TestGenerate_DownscalesPreservingAspect(t *testing.T) {
 
 func TestGenerate_DoesNotUpscale(t *testing.T) {
 	reg := thumbnailer.New(t.TempDir())
-	if ok, err := reg.Generate(pngReader(t, 100, 80), "image/png", "cd5678"); err != nil || !ok {
+	if ok, err := reg.Generate(thumbnailer.GenerateImage, pngReader(t, 100, 80), "cd5678"); err != nil || !ok {
 		t.Fatalf("generate: ok=%v err=%v", ok, err)
 	}
 	if w, h := dims(t, reg.Path("cd5678", 512)); w != 100 || h != 80 {
@@ -62,11 +62,11 @@ func TestGenerate_DoesNotUpscale(t *testing.T) {
 	}
 }
 
-func TestGenerate_UnsupportedMIMEIsNoOp(t *testing.T) {
+func TestGenerate_NilGenIsNoOp(t *testing.T) {
 	reg := thumbnailer.New(t.TempDir())
-	ok, err := reg.Generate(pngReader(t, 100, 100), "application/pdf", "ef9012")
+	ok, err := reg.Generate(nil, pngReader(t, 100, 100), "ef9012")
 	if err != nil || ok {
-		t.Fatalf("unsupported mime should be a no-op, got ok=%v err=%v", ok, err)
+		t.Fatalf("nil generator should be a no-op, got ok=%v err=%v", ok, err)
 	}
 	if _, err := os.Stat(reg.Path("ef9012", 512)); !os.IsNotExist(err) {
 		t.Error("no-op should not write a file")

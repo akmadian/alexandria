@@ -18,11 +18,12 @@ func (imp *Importer) metadataFor(fsys fs.FS, sf scannedFile, act action) metadat
 	return imp.extractMetadata(fsys, sf)
 }
 
-// extractMetadata runs the metadata extractor for a file, best-effort: any
-// failure logs a warning and yields empty metadata rather than failing ingest
-// (a corrupt EXIF block must not stop the file being indexed).
+// extractMetadata runs the file's extractor (from its TypeHandler), best-effort:
+// any failure logs a warning and yields empty metadata rather than failing ingest
+// (a corrupt EXIF block must not stop the file being indexed). A type with no
+// extractor (handler.Metadata == nil) yields empty metadata — not an error.
 func (imp *Importer) extractMetadata(fsys fs.FS, sf scannedFile) metadata.Metadata {
-	if imp.Metadata == nil {
+	if sf.handler.Metadata == nil {
 		return metadata.Metadata{}
 	}
 	rs, closeFn, err := openSeeker(fsys, sf.relPath)
@@ -32,7 +33,7 @@ func (imp *Importer) extractMetadata(fsys fs.FS, sf scannedFile) metadata.Metada
 	}
 	defer closeFn()
 
-	md, err := imp.Metadata.Extract(rs, sf.mime)
+	md, err := sf.handler.Metadata(rs)
 	if err != nil {
 		// Best-effort: log and keep whatever partial metadata came back.
 		imp.Log.Warn("metadata extraction failed", "path", sf.relPath, "err", err)

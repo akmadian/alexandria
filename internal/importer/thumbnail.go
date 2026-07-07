@@ -22,7 +22,7 @@ func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, sf scannedFile, 
 	}
 	defer closeFn()
 
-	ok, err := imp.Thumbnail.Generate(rs, sf.mime, assetID)
+	ok, err := imp.Thumbnail.Generate(sf.handler.Thumb, rs, assetID)
 	if err != nil {
 		imp.Log.Warn("thumbnail generation failed", "path", sf.relPath, "err", err)
 		return
