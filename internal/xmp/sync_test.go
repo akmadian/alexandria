@@ -2,6 +2,7 @@ package xmp
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -73,8 +74,66 @@ func TestSyncSidecarInbound(t *testing.T) {
 	}
 }
 
-// TestToTriagePatch checks the judgment mapping in isolation: set-only, range-
-// guarded rating, locale label, and unknown label left unmapped.
+// TestSyncSidecarClearsRemovedRating is point-2 end-to-end: once an asset is
+// synced from a sidecar, editing the sidecar to REMOVE the rating clears it in the
+// catalog (sidecar wins wholesale) — still without bumping judgment_modified_at.
+func TestSyncSidecarClearsRemovedRating(t *testing.T) {
+	status := dependency.Discover(dependency.Exiftool, "")
+	if !status.Available() {
+		t.Skipf("exiftool not available (%s)", status.State)
+	}
+	daemon, err := dependency.StartExiftool(status, log.Default())
+	if err != nil {
+		t.Fatalf("start daemon: %v", err)
+	}
+	defer daemon.Close()
+
+	db := testutil.NewTestDB(t)
+	source := testutil.NewTestSource(t, db, "s")
+	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
+	repo := &sqlite.AssetRepo{DB: db}
+	syncer := NewSyncer(daemon, repo, PolicyXMPWins, log.Default())
+	ctx := context.Background()
+
+	// First sync applies rating 4 from the full sidecar.
+	if _, err := syncer.SyncSidecar(ctx, asset, "testdata/lightroom.xmp"); err != nil {
+		t.Fatalf("first sync: %v", err)
+	}
+	synced, err := repo.Get(ctx, asset.ID)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if synced.Rating == nil || *synced.Rating != 4 {
+		t.Fatalf("precondition: Rating = %v, want 4", synced.Rating)
+	}
+
+	// A different sidecar with no rating (a rating removed in LrC) → apply-inbound
+	// clears the catalog rating.
+	action, err := syncer.SyncSidecar(ctx, synced, "testdata/no-rating.xmp")
+	if err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if action != ActionApplyInbound {
+		t.Fatalf("action = %q, want %q", action, ActionApplyInbound)
+	}
+	cleared, err := repo.Get(ctx, asset.ID)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if cleared.Rating != nil {
+		t.Errorf("Rating = %v, want nil (removed in sidecar → cleared)", *cleared.Rating)
+	}
+	if cleared.ColorLabel != nil {
+		t.Errorf("ColorLabel = %v, want nil (absent in sidecar → cleared)", *cleared.ColorLabel)
+	}
+	if cleared.JudgmentModifiedAt != nil {
+		t.Errorf("judgment_modified_at bumped on a clear — must not (oscillator guard)")
+	}
+}
+
+// TestToTriagePatch checks the wholesale judgment mapping: present fields set,
+// ABSENT fields clear (sidecar wins, upholding the conflict policy), out-of-range
+// rating clears, unknown/empty label clears.
 func TestToTriagePatch(t *testing.T) {
 	syncer := NewSyncer(nil, nil, PolicyXMPWins, log.Default())
 	rating := func(n int) *int { return &n }
@@ -82,24 +141,22 @@ func TestToTriagePatch(t *testing.T) {
 	cases := []struct {
 		name       string
 		fields     Fields
-		wantRating bool
-		ratingVal  int
-		wantLabel  bool
-		labelVal   domain.ColorLabel
+		wantRating domain.Opt[int]
+		wantLabel  domain.Opt[domain.ColorLabel]
 	}{
-		{"rating+german-label", Fields{Rating: rating(4), Label: "Rot"}, true, 4, true, domain.ColorLabelRed},
-		{"rating-only", Fields{Rating: rating(2)}, true, 2, false, ""},
-		{"out-of-range-rating-skipped", Fields{Rating: rating(-1)}, false, 0, false, ""},
-		{"unknown-label-unmapped", Fields{Label: "Krypton"}, false, 0, false, ""},
-		{"empty", Fields{}, false, 0, false, ""},
+		{"rating+german-label", Fields{Rating: rating(4), Label: "Rot"}, domain.SetOpt(4), domain.SetOpt(domain.ColorLabelRed)},
+		{"rating-only-clears-label", Fields{Rating: rating(2)}, domain.SetOpt(2), domain.ClearOpt[domain.ColorLabel]()},
+		{"out-of-range-clears-rating", Fields{Rating: rating(-1)}, domain.ClearOpt[int](), domain.ClearOpt[domain.ColorLabel]()},
+		{"unknown-label-clears-both", Fields{Label: "Krypton"}, domain.ClearOpt[int](), domain.ClearOpt[domain.ColorLabel]()},
+		{"empty-clears-both", Fields{}, domain.ClearOpt[int](), domain.ClearOpt[domain.ColorLabel]()},
 	}
 	for _, tc := range cases {
 		patch := syncer.toTriagePatch(tc.fields, "asset-x")
-		if patch.Rating.Set != tc.wantRating || (tc.wantRating && *patch.Rating.Value != tc.ratingVal) {
-			t.Errorf("%s: Rating = %+v, want set=%v val=%d", tc.name, patch.Rating, tc.wantRating, tc.ratingVal)
+		if !reflect.DeepEqual(patch.Rating, tc.wantRating) {
+			t.Errorf("%s: Rating = %+v, want %+v", tc.name, patch.Rating, tc.wantRating)
 		}
-		if patch.ColorLabel.Set != tc.wantLabel || (tc.wantLabel && *patch.ColorLabel.Value != tc.labelVal) {
-			t.Errorf("%s: ColorLabel = %+v, want set=%v val=%q", tc.name, patch.ColorLabel, tc.wantLabel, tc.labelVal)
+		if !reflect.DeepEqual(patch.ColorLabel, tc.wantLabel) {
+			t.Errorf("%s: ColorLabel = %+v, want %+v", tc.name, patch.ColorLabel, tc.wantLabel)
 		}
 	}
 }

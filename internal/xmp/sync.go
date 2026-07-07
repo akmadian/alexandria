@@ -22,7 +22,9 @@ import (
 // Deliberately NOT here yet, each blocked on infrastructure that does not exist:
 //   - Keyword union (dc:subject/lr:hierarchicalSubject → asset_tags source='xmp')
 //     needs the whole tag repository (find-or-create, hierarchy nodes, FTS tags
-//     maintenance) — deferred from impl/04, not built.
+//     maintenance) — deferred from impl/04, not built. NOTE when it lands: tags are
+//     the documented exception to the wholesale/clear-on-absence rule below — they
+//     always UNION, never delete on absence (impl/06 "Tags exception").
 //   - Caption/title (dc:description/dc:title → observation columns) needs a sparse
 //     observation-metadata writer; ApplyFilePatch always rewrites the file-fact
 //     columns, so it would clobber them with zeros here.
@@ -90,29 +92,40 @@ func (s *Syncer) SyncSidecar(ctx context.Context, asset *domain.Asset, sidecarPa
 	return action, nil
 }
 
-// toTriagePatch maps the judgment subset of a sidecar onto a TriagePatch. It is
-// SET-ONLY: a field absent from the sidecar is left untouched, never cleared — a
-// sparse sidecar (rating but no label, say) must not wipe a judgment the user set
-// in Alexandria. Note is never synced (Alexandria-private); flag lives in a custom
-// namespace we don't read yet (best-effort, open question #8).
+// toTriagePatch maps the judgment subset of a sidecar onto a TriagePatch. Inbound
+// apply is WHOLESALE, not an overlay: the sidecar is authoritative, so a field it
+// omits CLEARS the catalog value. This is what upholds the conflict policy — under
+// xmp_wins the sidecar wins including its removals (matching LrC "Read Metadata");
+// under catalog_wins we never reach here (that verdict writes outbound instead), so
+// the catalog is upheld either way. Clearing is safe because the 3-way merge already
+// routed any user judgment newer than the last sync to a conflict — a plain
+// apply-inbound only clears state that was already in sync, i.e. a genuine sidecar
+// removal. Note is never synced (Alexandria-private); flag lives in a custom
+// namespace we don't read yet (best-effort, open question #8) so it stays untouched.
 func (s *Syncer) toTriagePatch(fields Fields, assetID string) catalog.TriagePatch {
 	var patch catalog.TriagePatch
 
-	if fields.Rating != nil {
+	switch {
+	case fields.Rating == nil:
+		patch.Rating = domain.ClearOpt[int]()
+	case *fields.Rating >= 0 && *fields.Rating <= 5:
+		patch.Rating = domain.SetOpt(*fields.Rating)
+	default:
 		// XMP ratings range -1..5 (-1 = "rejected"); our schema's CHECK allows only
-		// 0..5. Skip out-of-range rather than let it abort the whole apply — and we
-		// never map a rejected rating onto flag (lossy mapping is opt-in P3, D15).
-		if *fields.Rating >= 0 && *fields.Rating <= 5 {
-			patch.Rating = domain.SetOpt(*fields.Rating)
-		} else {
-			s.logger.Warn("xmp: rating out of range, skipped", "asset", assetID, "rating", *fields.Rating)
-		}
+		// 0..5. An unrepresentable value clears rather than leaving a stale rating —
+		// still upholding "sidecar wins". Never mapped onto flag (lossy, opt-in P3, D15).
+		patch.Rating = domain.ClearOpt[int]()
+		s.logger.Warn("xmp: rating out of range, cleared", "asset", assetID, "rating", *fields.Rating)
 	}
-	if fields.Label != "" {
-		if label, ok := NormalizeLabel(fields.Label); ok {
-			patch.ColorLabel = domain.SetOpt(label)
-		} else {
-			s.logger.Warn("xmp: unrecognized color label, left unmapped", "asset", assetID, "label", fields.Label)
+
+	if label, ok := NormalizeLabel(fields.Label); ok {
+		patch.ColorLabel = domain.SetOpt(label)
+	} else {
+		// Empty or unrecognized: the field map leaves color_label unset (the raw
+		// string is preserved for round-trip by the outbound write, once it exists).
+		patch.ColorLabel = domain.ClearOpt[domain.ColorLabel]()
+		if fields.Label != "" {
+			s.logger.Warn("xmp: unrecognized color label, left unset", "asset", assetID, "label", fields.Label)
 		}
 	}
 	return patch

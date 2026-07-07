@@ -7,12 +7,18 @@
 > `Syncer.SyncSidecar(ctx, asset, path)` hashes the sidecar (`HashSidecar` = xxhash of raw bytes,
 > exported for the watcher's file-level echo check), reduces the asset's cursors to the `SyncState`
 > booleans, calls `Decide`, and on an inbound verdict maps the judgment subset → `TriagePatch` →
-> `AssetSyncWriter.ApplyXMPInbound` (rating + color label; SET-ONLY so a sparse sidecar never clears
-> a user judgment; rating range-guarded to 0..5 so a "rejected" -1 can't abort the apply; flag/note
-> never touched). Verified against a real SQLite catalog + real exiftool: rating+label apply,
-> `judgment_modified_at` stays nil (oscillator guard, acceptance #3), second pass is a no-op
-> (acceptance #1 judgment half). `WriteBackEnabled` is hard-false; outbound/catalog-wins verdicts log
-> and skip until the write path ships.
+> `AssetSyncWriter.ApplyXMPInbound` (rating + color label). The apply is **wholesale**, upholding the
+> conflict policy: under `xmp_wins` the sidecar is authoritative including its removals, so a field it
+> omits CLEARS the catalog value (matching LrC "Read Metadata"); under `catalog_wins` the verdict is
+> outbound, never this path, so the catalog is upheld either way. Clearing is safe because the 3-way
+> merge already routes any user judgment newer than the last sync to a conflict — a plain apply-inbound
+> only clears already-synced state, i.e. a genuine sidecar removal. Rating is range-guarded to 0..5 (an
+> unrepresentable "rejected" -1 clears rather than aborting the apply); flag/note untouched. **Tags stay
+> the documented exception** (union, never clear on absence) when they land. Verified against a real
+> SQLite catalog + real exiftool: rating+label apply, `judgment_modified_at` stays nil (oscillator
+> guard, acceptance #3), a removed rating clears on the next pass (also without bumping), second pass
+> over an unchanged sidecar is a no-op (acceptance #1 judgment half). `WriteBackEnabled` is hard-false;
+> outbound/catalog-wins verdicts log and skip until the write path ships.
 >
 > **Still pending** (unchanged from below, minus what landed): keyword union — blocked on the tag
 > repository (find-or-create + hierarchy + FTS tags), still unbuilt from impl/04; caption/title —
