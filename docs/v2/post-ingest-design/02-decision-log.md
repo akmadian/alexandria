@@ -278,3 +278,35 @@ ladder's *detection* role stand; only their licence to auto-mutate identity is r
 
 **Revisit trigger:** measured review burden too high in real multi-source use → build the user-rules
 engine, or a narrow, explicitly opt-in auto-relink.
+
+## D21 — LrC catalog migration: engine does structure, Lightroom does its own lossy translation
+
+**Decision (2026-07-07, design-only).** Never hand-parse Lightroom Classic's Develop settings (the
+`crs:` payload — Lua-serialized, undocumented, drifts across LrC releases). Instead the migration
+requires a documented, one-time, catalog-wide prep pass performed *inside Lightroom*: `Convert
+Photo to DNG` on raw masters (non-destructive; bakes Develop history into the DNG's own embedded
+XMP, which Photoshop/ACR reads natively) and `Save Metadata to Files` on everything else. The
+migration engine's job is metadata + structure — ratings/labels/keywords/captions via the existing
+impl/06 XMP field map unmodified, plus collections and virtual-copy/stack relationships read
+directly (read-only SQLite connection) from `.lrcat`, the one thing the XMP prep pass can't carry.
+`Preflight` is pure read with **zero durable writes anywhere** (not the `.lrcat`, not the catalog
+DB, not a scratch file) — cheap to rerun after every prep fix, safe to discard. `Commit` is the
+only writing step, and it writes through the unmodified impl/04 pipeline. Full spec: `impl/09`.
+
+**Rationale.** Reimplementing Adobe's proprietary Develop-settings decoder buys nothing — there is
+no destination for non-destructive Develop history once editing moves to Photoshop/Pixelmator, so
+either baked pixels or ACR-compatible XMP is all either target tool can consume, and Lightroom
+already knows how to produce both. This mirrors D15's move (never hand-parse RDF/XML, let exiftool
+speak the standard dialect) one layer up: let Lightroom be the authority on its own format. Trust
+is the actual product here — a prospective migrator is choosing whether to trust Alexandria with
+years of catalog work, so every mechanism is chosen to make "we cannot have touched your library"
+provable (read-only URI, before/after hash) rather than merely promised.
+
+**Rejected.** Hand-decoding `crs:` in Go (fragile, no documentation, breaks silently across
+versions). A cloud/account step anywhere in the flow (violates NFR-6, and undermines the one thing
+this feature is selling). Flattened-TIFF as the primary edit-handoff format (DNG dominates it —
+same non-destructive editability, smaller, and Lightroom already has the menu item).
+
+**Revisit trigger:** the catalog-wide LrC prep pass proves impractical at very large library sizes
+(multi-day Convert-to-DNG runs, disk-space doubling) → consider a Lua-SDK LrC plugin that automates
+prep incrementally; does not revisit the core call against decoding `crs:` ourselves.

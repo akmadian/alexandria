@@ -28,6 +28,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/06-xmp-sync.md` | **🔨 IN PROGRESS (2026-07-07)** — inbound read path + conflict decision DONE; DB application, outbound write, triggers pending |
 | `impl/07-dependency-fleet.md` | **🔨 exiftool slice DONE (2026-07-07)** — daemon + discovery; other tools / downloads / one-shot Run deferred |
 | `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
+| `impl/09-lrc-migration.md` | **Design only, not started.** Lightroom Classic catalog migration — D21; engine-first (`internal/lrcimport` + `cmd/lrcimport`), Wails wizard wraps it later; pure-read preflight, LrC-side DNG/XMP prep instead of hand-parsing Develop settings |
 
 ## Where the project is right now
 
