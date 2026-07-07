@@ -1,7 +1,24 @@
 # impl/06 — XMP Sync
 
-**Status: inbound read path + conflict decision DONE (2026-07-07); DB application, outbound write, and triggers pending.**
+**Status: inbound read + conflict decision + judgment DB application DONE (2026-07-07); tags/caption application, outbound write, and triggers pending.**
 **Scope:** new `internal/xmp`. **References:** D15, `03-data-model.md` §1.
+
+> **DONE increment 2 (2026-07-07) — inbound JUDGMENT application, end-to-end.** `sync.go`:
+> `Syncer.SyncSidecar(ctx, asset, path)` hashes the sidecar (`HashSidecar` = xxhash of raw bytes,
+> exported for the watcher's file-level echo check), reduces the asset's cursors to the `SyncState`
+> booleans, calls `Decide`, and on an inbound verdict maps the judgment subset → `TriagePatch` →
+> `AssetSyncWriter.ApplyXMPInbound` (rating + color label; SET-ONLY so a sparse sidecar never clears
+> a user judgment; rating range-guarded to 0..5 so a "rejected" -1 can't abort the apply; flag/note
+> never touched). Verified against a real SQLite catalog + real exiftool: rating+label apply,
+> `judgment_modified_at` stays nil (oscillator guard, acceptance #3), second pass is a no-op
+> (acceptance #1 judgment half). `WriteBackEnabled` is hard-false; outbound/catalog-wins verdicts log
+> and skip until the write path ships.
+>
+> **Still pending** (unchanged from below, minus what landed): keyword union — blocked on the tag
+> repository (find-or-create + hierarchy + FTS tags), still unbuilt from impl/04; caption/title —
+> blocked on a sparse observation-metadata writer (`ApplyFilePatch` rewrites file-fact columns, so it
+> can't set caption/title alone); outbound sidecar write + `xmpWriteBack`/`xmpConflictResolution`
+> settings; ingest/watcher triggers + debounce; `alexandria:Flag` custom namespace.
 
 > **DONE (2026-07-07) — the self-contained, daemon-backed read core.** Built on the impl/07
 > exiftool slice; the DB-application wiring is a distinct next increment (see below).
