@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
@@ -31,13 +30,13 @@ func (imp *Importer) Reconcile(ctx context.Context, source *domain.Source, fsys 
 	// Whole source unreachable → offline, no per-file work.
 	if _, err := fs.Stat(fsys, "."); err != nil {
 		imp.Log.Warn("source unreachable, marking offline", "source", source.Name, "err", err)
-		if err := imp.Assets.MarkOfflineBySource(ctx, source.ID); err != nil {
+		if err := imp.Obs.MarkConnectivityBySource(ctx, source.ID, false); err != nil {
 			return result, fmt.Errorf("marking source %q offline: %w", source.ID, err)
 		}
 		return result, nil
 	}
 
-	assets, err := imp.Assets.List(ctx, catalog.AssetFilter{SourceIDs: []string{source.ID}})
+	assets, err := imp.Reader.ListPathsStatus(ctx, source.ID)
 	if err != nil {
 		return result, fmt.Errorf("listing assets for source %q: %w", source.ID, err)
 	}
@@ -51,7 +50,7 @@ func (imp *Importer) Reconcile(ctx context.Context, source *domain.Source, fsys 
 		switch {
 		case statErr == nil:
 			if a.FileStatus != domain.FileStatusOnline {
-				if err := imp.Assets.UpdateFileStatus(ctx, a.ID, domain.FileStatusOnline); err != nil {
+				if err := imp.Obs.SetFileStatus(ctx, a.ID, domain.FileStatusOnline); err != nil {
 					imp.recordError(&result.Errors, a.RelativePath, "reconcile", err)
 					continue
 				}
@@ -60,7 +59,7 @@ func (imp *Importer) Reconcile(ctx context.Context, source *domain.Source, fsys 
 			}
 		case errors.Is(statErr, fs.ErrNotExist):
 			if a.FileStatus != domain.FileStatusMissing {
-				if err := imp.Assets.UpdateFileStatus(ctx, a.ID, domain.FileStatusMissing); err != nil {
+				if err := imp.Obs.SetFileStatus(ctx, a.ID, domain.FileStatusMissing); err != nil {
 					imp.recordError(&result.Errors, a.RelativePath, "reconcile", err)
 					continue
 				}

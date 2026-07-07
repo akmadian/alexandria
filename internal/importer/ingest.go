@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
 )
@@ -38,7 +39,7 @@ func (a action) String() string {
 func (imp *Importer) classifyContent(ctx context.Context, source *domain.Source, sf scannedFile, hash string) (action, *domain.Asset, error) {
 	// Something already indexed at this exact path → reimport (content changed;
 	// unchanged files were skipped before hashing).
-	existing, err := imp.Assets.FindBySourcePath(ctx, source.ID, sf.relPath)
+	existing, err := imp.Reader.FindBySourcePath(ctx, source.ID, sf.relPath)
 	if err != nil {
 		return actionNew, nil, err
 	}
@@ -47,7 +48,7 @@ func (imp *Importer) classifyContent(ctx context.Context, source *domain.Source,
 	}
 
 	// New path: is this content already known elsewhere?
-	match, err := imp.Assets.FindByHash(ctx, hash, sf.size)
+	match, err := imp.Reader.FindByHash(ctx, hash, sf.size)
 	if err != nil {
 		return actionNew, nil, err
 	}
@@ -63,25 +64,24 @@ func (imp *Importer) classifyContent(ctx context.Context, source *domain.Source,
 	return actionDuplicate, match, nil
 }
 
-// persist applies the decided action. New/duplicate insert a fresh asset;
-// reimport updates in place (preserving user metadata); move relinks the
-// existing record. Duplicates also log the pair.
+// persist applies the decided action. New/duplicate mint a fresh asset; reimport
+// refreshes observation columns ONLY (judgments untouched — the writer split
+// makes touching them impossible); move relinks the existing record. Duplicates
+// also log the pair.
 func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scannedFile, hash string, md metadata.Metadata, act action, existing *domain.Asset) (string, error) {
 	switch act {
 	case actionMove:
-		if err := imp.Assets.UpdatePath(ctx, existing.ID, source.ID, sf.relPath); err != nil {
+		if err := imp.Obs.UpdatePath(ctx, existing.ID, source.ID, sf.relPath); err != nil {
 			return "", err
 		}
-		return existing.ID, imp.Assets.UpdateFileStatus(ctx, existing.ID, domain.FileStatusOnline)
+		return existing.ID, imp.Obs.SetFileStatus(ctx, existing.ID, domain.FileStatusOnline)
 
 	case actionReimport:
-		applyFileFields(existing, sf, hash)
-		applyMetadata(existing, md)
-		return existing.ID, imp.Assets.Update(ctx, existing)
+		return existing.ID, imp.Obs.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(sf, hash, md, existing))
 
 	default: // actionNew, actionDuplicate
 		asset := buildAsset(source, sf, hash, md)
-		if err := imp.Assets.Create(ctx, asset); err != nil {
+		if err := imp.Obs.Create(ctx, asset); err != nil {
 			return "", err
 		}
 		if act == actionDuplicate {
@@ -96,6 +96,53 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scan
 		}
 		return asset.ID, nil
 	}
+}
+
+// reimportFilePatch maps the scanned file + extracted metadata onto an
+// observation-only FilePatch. Metadata fields ride straight from md (same
+// overlay semantics: nil preserves the prior value). extended_metadata is merged
+// with the existing map here — the caller has the loaded asset, the patch writer
+// does not.
+func reimportFilePatch(sf scannedFile, hash string, md metadata.Metadata, existing *domain.Asset) catalog.FilePatch {
+	p := catalog.FilePatch{
+		Filename:    sf.filename,
+		Extension:   sf.ext,
+		MIMEType:    sf.mime,
+		FileType:    sf.fileType,
+		SizeBytes:   sf.size,
+		MTime:       sf.mtime,
+		PartialHash: hash,
+		FileStatus:  domain.FileStatusOnline,
+
+		Width:         md.Width,
+		Height:        md.Height,
+		DurationSecs:  md.DurationSecs,
+		CapturedAt:    md.CapturedAt,
+		CameraMake:    md.CameraMake,
+		CameraModel:   md.CameraModel,
+		LensModel:     md.LensModel,
+		FocalLengthMM: md.FocalLengthMM,
+		Aperture:      md.Aperture,
+		ShutterSpeed:  md.ShutterSpeed,
+		ISO:           md.ISO,
+		GPSLat:        md.GPSLat,
+		GPSLon:        md.GPSLon,
+		ColorSpace:    md.ColorSpace,
+		BitDepth:      md.BitDepth,
+		Creator:       md.Creator,
+		Copyright:     md.Copyright,
+	}
+	if len(md.Extended) > 0 || len(existing.ExtendedMetadata) > 0 {
+		merged := make(map[string]any, len(existing.ExtendedMetadata)+len(md.Extended))
+		for k, v := range existing.ExtendedMetadata {
+			merged[k] = v
+		}
+		for k, v := range md.Extended {
+			merged[k] = v
+		}
+		p.Extended = merged
+	}
+	return p
 }
 
 // buildAsset creates a new asset from scan + hash, then overlays extracted
@@ -184,17 +231,4 @@ func applyMetadata(a *domain.Asset, md metadata.Metadata) {
 			a.ExtendedMetadata[k] = v
 		}
 	}
-}
-
-// applyFileFields updates the file-level fields on a reimport, leaving user
-// metadata (rating, labels, tags, XMP) untouched.
-func applyFileFields(a *domain.Asset, sf scannedFile, hash string) {
-	a.Filename = sf.filename
-	a.Extension = sf.ext
-	a.MIMEType = sf.mime
-	a.FileType = sf.fileType
-	a.SizeBytes = sf.size
-	a.MTime = sf.mtime
-	a.PartialHash = hash
-	a.FileStatus = domain.FileStatusOnline
 }

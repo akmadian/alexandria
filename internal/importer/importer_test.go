@@ -23,7 +23,9 @@ func newImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.Asse
 	src := testutil.NewTestSource(t, db, "photos")
 	assets := &sqlite.AssetRepo{DB: db}
 	imp := &importer.Importer{
-		Assets:   assets,
+		Reader:   assets,
+		Obs:      assets,
+		Derived:  assets,
 		Dups:     &sqlite.DuplicateRepo{DB: db},
 		Metadata: metadata.Default(),
 		Log:      log.New(io.Discard), // injected quiet logger — no test output noise

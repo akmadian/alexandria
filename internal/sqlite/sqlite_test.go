@@ -162,18 +162,20 @@ func TestAssetRepo_CreateAndGet(t *testing.T) {
 
 	src := testutil.NewTestSource(t, db, "photos")
 	now := time.Now().UTC().Truncate(time.Second)
-	rating := 4
-	cl := domain.ColorLabelBlue
 	a := &domain.Asset{
 		ID: "a1", SourceID: src.ID, RelativePath: "vacation/beach.jpg",
 		FileStatus: domain.FileStatusOnline, Filename: "beach.jpg",
 		Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
 		SizeBytes: 4096, MTime: now, PartialHash: "hash123",
-		Rating: &rating, ColorLabel: &cl,
 		IngestedAt: now, UpdatedAt: now,
 	}
 	if err := repo.Create(ctx, a); err != nil {
 		t.Fatalf("create: %v", err)
+	}
+	// Judgments are set through the judgment writer, never at minting.
+	if err := repo.ApplyTriagePatch(ctx, []string{"a1"},
+		catalog.TriagePatch{Rating: domain.SetOpt(4), ColorLabel: domain.SetOpt(domain.ColorLabelBlue)}); err != nil {
+		t.Fatalf("triage: %v", err)
 	}
 
 	got, err := repo.Get(ctx, "a1")
@@ -188,6 +190,24 @@ func TestAssetRepo_CreateAndGet(t *testing.T) {
 	}
 	if got.ColorLabel == nil || *got.ColorLabel != domain.ColorLabelBlue {
 		t.Fatalf("color_label: got %v", got.ColorLabel)
+	}
+}
+
+// Minting is observation-only: Create must reject an asset carrying judgment.
+func TestAssetRepo_Create_RejectsJudgmentFields(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	repo := &sqlite.AssetRepo{DB: db}
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+	now := time.Now().UTC()
+	rating := 3
+	a := &domain.Asset{
+		ID: "bad", SourceID: src.ID, RelativePath: "x.jpg", FileStatus: domain.FileStatusOnline,
+		Filename: "x.jpg", Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
+		SizeBytes: 1, MTime: now, PartialHash: "h", Rating: &rating, IngestedAt: now, UpdatedAt: now,
+	}
+	if err := repo.Create(ctx, a); err == nil {
+		t.Fatal("Create must reject a minted asset that carries a rating")
 	}
 }
 
@@ -209,7 +229,7 @@ func TestAssetRepo_SoftDelete(t *testing.T) {
 	src := testutil.NewTestSource(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
 
-	if err := repo.SoftDelete(ctx, "asset-photo.jpg"); err != nil {
+	if err := repo.SoftDelete(ctx, []string{"asset-photo.jpg"}); err != nil {
 		t.Fatalf("soft delete: %v", err)
 	}
 	got, err := repo.Get(ctx, "asset-photo.jpg")
@@ -235,7 +255,7 @@ func TestAssetRepo_ListWithFilters(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "c.jpg")
 
 	// Set one to deleted
-	repo.SoftDelete(ctx, "asset-c.jpg")
+	repo.SoftDelete(ctx, []string{"asset-c.jpg"})
 
 	// List non-deleted (default)
 	assets, err := repo.List(ctx, catalog.AssetFilter{})
@@ -265,57 +285,46 @@ func TestAssetRepo_ListWithFilters(t *testing.T) {
 	}
 }
 
-func TestAssetRepo_Patch_SparseSetsOnlyRequestedFields(t *testing.T) {
+func TestAssetRepo_ApplyTriagePatch_BulkSetsOnlyJudgment(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
 
-	// Insert three assets with different initial ratings
 	for _, name := range []string{"r1.jpg", "r2.jpg", "r3.jpg"} {
 		testutil.NewTestAsset(t, db, src.ID, name)
 	}
-	// Set initial ratings: r1=1, r2=3, r3=5
-	repo.Patch(ctx, "asset-r1.jpg", catalog.AssetPatch{Rating: domain.SetOpt(1)})
-	repo.Patch(ctx, "asset-r2.jpg", catalog.AssetPatch{Rating: domain.SetOpt(3)})
-	repo.Patch(ctx, "asset-r3.jpg", catalog.AssetPatch{Rating: domain.SetOpt(5)})
-
-	// Now BulkPatch all to rating=4 — only rating should change
-	err := repo.BulkPatch(ctx,
-		[]string{"asset-r1.jpg", "asset-r2.jpg", "asset-r3.jpg"},
-		catalog.AssetPatch{Rating: domain.SetOpt(4)})
-	if err != nil {
-		t.Fatalf("bulk patch: %v", err)
+	ids := []string{"asset-r1.jpg", "asset-r2.jpg", "asset-r3.jpg"}
+	if err := repo.ApplyTriagePatch(ctx, ids, catalog.TriagePatch{Rating: domain.SetOpt(4)}); err != nil {
+		t.Fatalf("bulk triage: %v", err)
 	}
 
-	for _, name := range []string{"r1.jpg", "r2.jpg", "r3.jpg"} {
-		got, _ := repo.Get(ctx, "asset-"+name)
+	for _, id := range ids {
+		got, _ := repo.Get(ctx, id)
 		if got.Rating == nil || *got.Rating != 4 {
-			t.Errorf("asset-%s: rating=%v, want 4", name, got.Rating)
+			t.Errorf("%s: rating=%v, want 4", id, got.Rating)
 		}
-		// FileStatus should be unchanged
+		// A judgment write must not disturb observation columns.
 		if got.FileStatus != domain.FileStatusOnline {
-			t.Errorf("asset-%s: file_status=%q, want online", name, got.FileStatus)
+			t.Errorf("%s: file_status=%q, want online", id, got.FileStatus)
 		}
 	}
 }
 
-func TestAssetRepo_Patch_ClearField(t *testing.T) {
+func TestAssetRepo_ApplyTriagePatch_ClearField(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 
-	// Set a rating
-	repo.Patch(ctx, "asset-x.jpg", catalog.AssetPatch{Rating: domain.SetOpt(3)})
+	repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)})
 	got, _ := repo.Get(ctx, "asset-x.jpg")
 	if got.Rating == nil || *got.Rating != 3 {
 		t.Fatalf("setup: rating=%v", got.Rating)
 	}
 
-	// Clear it
-	repo.Patch(ctx, "asset-x.jpg", catalog.AssetPatch{Rating: domain.ClearOpt[int]()})
+	repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Rating: domain.ClearOpt[int]()})
 	got, _ = repo.Get(ctx, "asset-x.jpg")
 	if got.Rating != nil {
 		t.Fatalf("after clear: rating=%v, want nil", got.Rating)
@@ -363,7 +372,7 @@ func TestAssetRepo_FindBySourcePath(t *testing.T) {
 	}
 }
 
-func TestAssetRepo_MarkOfflineOnlineBySource(t *testing.T) {
+func TestAssetRepo_MarkConnectivityBySource(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
@@ -371,7 +380,7 @@ func TestAssetRepo_MarkOfflineOnlineBySource(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
 
-	if err := repo.MarkOfflineBySource(ctx, src.ID); err != nil {
+	if err := repo.MarkConnectivityBySource(ctx, src.ID, false); err != nil {
 		t.Fatalf("mark offline: %v", err)
 	}
 	got, _ := repo.Get(ctx, "asset-a.jpg")
@@ -379,7 +388,7 @@ func TestAssetRepo_MarkOfflineOnlineBySource(t *testing.T) {
 		t.Fatalf("got %q, want offline", got.FileStatus)
 	}
 
-	if err := repo.MarkOnlineBySource(ctx, src.ID); err != nil {
+	if err := repo.MarkConnectivityBySource(ctx, src.ID, true); err != nil {
 		t.Fatalf("mark online: %v", err)
 	}
 	got, _ = repo.Get(ctx, "asset-a.jpg")
@@ -399,7 +408,7 @@ func TestSchema_SoftDeleteThenReimportSamePath(t *testing.T) {
 	src := testutil.NewTestSource(t, db, "s")
 
 	a1 := testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
-	if err := repo.SoftDelete(ctx, a1.ID); err != nil {
+	if err := repo.SoftDelete(ctx, []string{a1.ID}); err != nil {
 		t.Fatalf("soft delete: %v", err)
 	}
 
@@ -483,5 +492,124 @@ func TestRebuildFTS_IncludesTags(t *testing.T) {
 	}
 	if id != a.ID {
 		t.Fatalf("got %q, want %q", id, a.ID)
+	}
+}
+
+// --- Writer-class invariants (impl/02 acceptance) ---
+
+// The reimport clobber bug, made impossible: an observation write (ApplyFilePatch)
+// changes file facts but must leave rating AND judgment_modified_at untouched.
+func TestAssetRepo_ApplyFilePatch_PreservesJudgment(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	repo := &sqlite.AssetRepo{DB: db}
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+	testutil.NewTestAsset(t, db, src.ID, "p.jpg")
+
+	// User rates it (judgment write → stamps judgment_modified_at).
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-p.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
+		t.Fatalf("triage: %v", err)
+	}
+	before, _ := repo.Get(ctx, "asset-p.jpg")
+	if before.Rating == nil || *before.Rating != 5 || before.JudgmentModifiedAt == nil {
+		t.Fatalf("setup: rating=%v judgmentModifiedAt=%v", before.Rating, before.JudgmentModifiedAt)
+	}
+
+	// A reimport changes file facts.
+	const newSize = int64(9999)
+	if err := repo.ApplyFilePatch(ctx, "asset-p.jpg", catalog.FilePatch{
+		Filename: "p.jpg", Extension: "jpg", MIMEType: "image/jpeg",
+		FileType: domain.FileTypeImage, SizeBytes: newSize,
+		MTime: time.Now().UTC(), PartialHash: "newhash", FileStatus: domain.FileStatusOnline,
+	}); err != nil {
+		t.Fatalf("file patch: %v", err)
+	}
+
+	after, _ := repo.Get(ctx, "asset-p.jpg")
+	if after.SizeBytes != newSize {
+		t.Fatalf("observation not updated: size=%d", after.SizeBytes)
+	}
+	if after.Rating == nil || *after.Rating != 5 {
+		t.Fatalf("reimport clobbered rating: %v", after.Rating)
+	}
+	if after.JudgmentModifiedAt == nil || !after.JudgmentModifiedAt.Equal(*before.JudgmentModifiedAt) {
+		t.Fatalf("reimport must not touch judgment_modified_at: before=%v after=%v",
+			before.JudgmentModifiedAt, after.JudgmentModifiedAt)
+	}
+}
+
+// The XMP oscillator guard: ApplyXMPInbound applies judgment VALUES but must not
+// bump judgment_modified_at, whereas a user triage does.
+func TestAssetRepo_XMPInbound_DoesNotBumpJudgmentModified(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	repo := &sqlite.AssetRepo{DB: db}
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+	testutil.NewTestAsset(t, db, src.ID, "x.jpg")
+
+	a0, _ := repo.Get(ctx, "asset-x.jpg")
+	if a0.JudgmentModifiedAt != nil {
+		t.Fatalf("fresh asset already has judgment_modified_at: %v", a0.JudgmentModifiedAt)
+	}
+
+	if err := repo.ApplyXMPInbound(ctx, "asset-x.jpg",
+		catalog.TriagePatch{Rating: domain.SetOpt(3)}, time.Now().UTC(), "xmphash1"); err != nil {
+		t.Fatalf("xmp inbound: %v", err)
+	}
+	a1, _ := repo.Get(ctx, "asset-x.jpg")
+	if a1.Rating == nil || *a1.Rating != 3 {
+		t.Fatalf("xmp value not applied: %v", a1.Rating)
+	}
+	if a1.JudgmentModifiedAt != nil {
+		t.Fatalf("xmp inbound must not bump judgment_modified_at, got %v", a1.JudgmentModifiedAt)
+	}
+	if a1.XMPHash == nil || *a1.XMPHash != "xmphash1" {
+		t.Fatalf("xmp cursor not recorded: %v", a1.XMPHash)
+	}
+
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Flag: domain.SetOpt(domain.FlagPick)}); err != nil {
+		t.Fatalf("triage: %v", err)
+	}
+	a2, _ := repo.Get(ctx, "asset-x.jpg")
+	if a2.JudgmentModifiedAt == nil {
+		t.Fatal("user triage must bump judgment_modified_at")
+	}
+}
+
+// InTx rolls back every statement on a returned error (the multi-statement relink
+// case: UpdatePath then fail).
+func TestStore_InTxRollback(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	store := sqlite.NewStore(db)
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+	testutil.NewTestAsset(t, db, src.ID, "m.jpg")
+
+	sentinel := errors.New("boom")
+	err := store.InTx(ctx, func(r sqlite.Repos) error {
+		if err := r.Assets.UpdatePath(ctx, "asset-m.jpg", src.ID, "moved.jpg"); err != nil {
+			return err
+		}
+		return sentinel // force rollback after a successful write
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("InTx should surface fn's error, got %v", err)
+	}
+	got, _ := (&sqlite.AssetRepo{DB: db}).Get(ctx, "asset-m.jpg")
+	if got.RelativePath != "m.jpg" {
+		t.Fatalf("rollback failed: path=%q, want m.jpg", got.RelativePath)
+	}
+}
+
+func TestAssetRepo_List_RejectsUnknownSortField(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	repo := &sqlite.AssetRepo{DB: db}
+	ctx := context.Background()
+
+	if _, err := repo.List(ctx, catalog.AssetFilter{SortField: "filename; DROP TABLE assets"}); err == nil {
+		t.Fatal("expected error for non-whitelisted sort field")
+	}
+	if _, err := repo.List(ctx, catalog.AssetFilter{SortField: "filename"}); err != nil {
+		t.Fatalf("whitelisted sort field should work: %v", err)
 	}
 }

@@ -9,7 +9,7 @@ import (
 )
 
 type SourceRepo struct {
-	DB *sql.DB
+	DB DBTX
 }
 
 const sourceColumns = `id, name, kind, base_path, filesystem_uuid, disk_serial, volume_label,

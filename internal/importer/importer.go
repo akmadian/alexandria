@@ -15,8 +15,16 @@ import (
 // Importer indexes the files under a source into the catalog. It holds only
 // injected dependencies (no per-run state), so one Importer is safe to reuse
 // across imports.
+//
+// The catalog dependencies are the writer-scoped interfaces (docs/v2/.../03-data-
+// model.md §1): a reader, the observation writer, and the derived writer (for the
+// thumbnail marker). It is given NO judgment or sync writer — ingest cannot touch
+// ratings/flags/notes, so a reimport can never clobber user judgment. That
+// guarantee is structural (the types), not a convention.
 type Importer struct {
-	Assets    catalog.AssetRepository
+	Reader    catalog.AssetReader
+	Obs       catalog.AssetObservationWriter
+	Derived   catalog.AssetDerivedWriter
 	Dups      catalog.DuplicateRepository
 	Metadata  metadata.Extractor
 	Thumbnail thumbnailer.Thumbnailer
@@ -48,7 +56,7 @@ type ImportResult struct {
 func (imp *Importer) Run(ctx context.Context, source *domain.Source, fsys fs.FS) (ImportResult, error) {
 	var result ImportResult
 
-	known, err := imp.Assets.ListKnownFiles(ctx, source.ID)
+	known, err := imp.Reader.ListKnownFiles(ctx, source.ID)
 	if err != nil {
 		return result, fmt.Errorf("loading known files for source %q: %w", source.ID, err)
 	}

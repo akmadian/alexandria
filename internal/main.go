@@ -32,8 +32,11 @@ func main() {
 	sources := &sqlite.SourceRepo{DB: db}
 	thumbDir := filepath.Join(os.TempDir(), "alexandria-thumbs")
 	os.RemoveAll(thumbDir)
+	assets := &sqlite.AssetRepo{DB: db}
 	imp := &importer.Importer{
-		Assets:    &sqlite.AssetRepo{DB: db},
+		Reader:    assets,
+		Obs:       assets,
+		Derived:   assets,
 		Dups:      &sqlite.DuplicateRepo{DB: db},
 		Metadata:  metadata.Default(),
 		Thumbnail: thumbnailer.New(thumbDir),

@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"time"
 
 	"github.com/akmadian/alexandria/internal/domain"
 )
@@ -16,22 +17,49 @@ type SourceRepository interface {
 	FindBySharePath(ctx context.Context, host, shareName string) (*domain.Source, error)
 }
 
-type AssetRepository interface {
+// The asset repository is split by writer CLASS (see docs/v2/.../03-data-model.md
+// §1). Each consumer is injected only the interface for the columns it is allowed
+// to touch, so a cross-class write is a compile error, not a code-review catch.
+// One concrete type (sqlite.AssetRepo) satisfies them all; scoping happens at
+// injection.
+
+// AssetReader — read-only. Anyone may hold it.
+type AssetReader interface {
 	Get(ctx context.Context, id string) (*domain.Asset, error)
 	List(ctx context.Context, filter AssetFilter) ([]*domain.Asset, error)
-	Create(ctx context.Context, asset *domain.Asset) error
-	Update(ctx context.Context, asset *domain.Asset) error
-	Patch(ctx context.Context, id string, patch AssetPatch) error
-	BulkPatch(ctx context.Context, ids []string, patch AssetPatch) error
-	SoftDelete(ctx context.Context, id string) error
-	FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error)
-	ListKnownFiles(ctx context.Context, sourceID string) (map[string]domain.FileStat, error)
-
+	FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error) // is_deleted=0 only
 	FindBySourcePath(ctx context.Context, sourceID, relativePath string) (*domain.Asset, error)
+	ListKnownFiles(ctx context.Context, sourceID string) (map[string]domain.FileStat, error)
+	ListPathsStatus(ctx context.Context, sourceID string) ([]PathStatus, error)
+}
+
+// AssetObservationWriter — ingest / watcher / reconciler ONLY. No judgment,
+// sync, or derived column is reachable through it.
+type AssetObservationWriter interface {
+	Create(ctx context.Context, asset *domain.Asset) error // minting; judgment fields must be zero
+	ApplyFilePatch(ctx context.Context, id string, p FilePatch) error
 	UpdatePath(ctx context.Context, assetID, sourceID, relativePath string) error
-	UpdateFileStatus(ctx context.Context, assetID string, status domain.FileStatus) error
-	MarkOfflineBySource(ctx context.Context, sourceID string) error
-	MarkOnlineBySource(ctx context.Context, sourceID string) error
+	SetFileStatus(ctx context.Context, assetID string, status domain.FileStatus) error
+	MarkConnectivityBySource(ctx context.Context, sourceID string, online bool) error
+}
+
+// AssetJudgmentWriter — the user-action service ONLY. Every write bumps
+// judgment_modified_at (this is the single code path that does).
+type AssetJudgmentWriter interface {
+	ApplyTriagePatch(ctx context.Context, ids []string, p TriagePatch) error
+	SoftDelete(ctx context.Context, ids []string) error
+}
+
+// AssetSyncWriter — XMP sync ONLY. Applies inbound judgment VALUES under the
+// conflict policy but must NEVER bump judgment_modified_at; owns the xmp_* cursor.
+type AssetSyncWriter interface {
+	ApplyXMPInbound(ctx context.Context, id string, p TriagePatch, readAt time.Time, xmpHash string) error
+	RecordXMPWritten(ctx context.Context, id string, writtenAt time.Time, xmpHash string) error
+}
+
+// AssetDerivedWriter — jobs / ingest thumbnail stage ONLY.
+type AssetDerivedWriter interface {
+	SetThumbnailAt(ctx context.Context, id string, t time.Time) error
 }
 
 type TagRepository interface {

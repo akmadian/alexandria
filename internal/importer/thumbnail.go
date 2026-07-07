@@ -4,9 +4,6 @@ import (
 	"context"
 	"io/fs"
 	"time"
-
-	"github.com/akmadian/alexandria/internal/catalog"
-	"github.com/akmadian/alexandria/internal/domain"
 )
 
 // thumbnail generates thumbnails for a freshly written asset and records
@@ -35,7 +32,7 @@ func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, sf scannedFile, 
 	}
 
 	now := time.Now().UTC()
-	if err := imp.Assets.Patch(ctx, assetID, catalog.AssetPatch{ThumbnailAt: domain.SetOpt(now)}); err != nil {
+	if err := imp.Derived.SetThumbnailAt(ctx, assetID, now); err != nil {
 		imp.Log.Warn("thumbnail: recording failed", "path", sf.relPath, "err", err)
 		return
 	}

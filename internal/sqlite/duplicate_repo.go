@@ -8,7 +8,7 @@ import (
 )
 
 type DuplicateRepo struct {
-	DB *sql.DB
+	DB DBTX
 }
 
 // Log records a duplicate pair. INSERT OR IGNORE makes re-detection a no-op (the
