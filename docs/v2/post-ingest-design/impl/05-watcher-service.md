@@ -1,7 +1,31 @@
 # impl/05 — Watcher Service
 
-**Status: IN PROGRESS (2026-07-07). 05.1 (matrix extensions) + 05.2 (watcher service) DONE; 05.3 (poll-timer connectivity) remaining.**
+**Status (2026-07-07): 05.1 (matrix extensions, `internal/importer`) DONE and kept. 05.2 + 05.3 (the `internal/watcher` service) are being REBUILT — the first cut drifted from the Prime Directives (the watcher was deciding actions and writing `file_status`); see "Corrected architecture" below.**
 **Scope:** new `internal/watcher` + matrix extensions in `internal/importer`. **References:** D14, D9.
+
+> **Corrected architecture (2026-07-07) — the boundary that must not blur.** The first watcher build
+> drifted because the doc's old "deleted → mark missing" line read as a *watcher* action. It isn't.
+> The clean split, now enforced in the Prime Directives:
+>
+> - **Watcher = sensor.** Owns the dirty-path set, debounce, the settle-stat, and graduation rules.
+>   On graduation it hands the importer a **path, never a verdict**. It schedules reconciles (calls the
+>   importer's full walk) on overflow / poll / remount. It makes exactly **one** catalog write of its
+>   own: `sources.connectivity` (mount/unmount — connectivity **(a)**: the watcher writes it directly,
+>   since it is what detects mount state). It does **not** stat-to-decide-an-action, and does **not**
+>   write `file_status`.
+> - **Importer single-path entry = the actor.** Receives a path, stats it, and decides: present →
+>   ingest (matrix); gone → mark missing + delete-side merge. This is the *same* decision the full
+>   walk makes per item, in one place — so a watcher-fed delete heals identically to a walk-detected
+>   one. Mark-missing lives HERE, not in the watcher.
+> - **No `Ingester` / `Fidelity` interface split.** The watcher depends on the importer's single-path
+>   entry (one seam) plus its own connectivity write. There is no separate "fidelity" surface the
+>   watcher performs — that framing was what let the sensor start acting.
+> - **Batch reconcile is importer-side** (`Run`, full-walk mode); the watcher only *schedules* it.
+>   The standalone per-file `Reconcile` variant (dev harness / future loose-files) is likewise a
+>   pipeline-family operation, not watcher-owned.
+>
+> **One instance per source; orchestration is a higher layer** (the app-host supervisor — DEFERRED §2),
+> not the watcher's concern.
 
 > **Cross-cutting design that surfaced building 05.2 lives in [`DEFERRED.md`](DEFERRED.md), not here.**
 > The watcher forced the question "when may the catalog change on its own?" — which opened the import/
@@ -35,59 +59,60 @@
 > **Staging** — three PRs, correctness-first (the judgment-preservation logic has zero platform risk
 > and is the sacred part, so it lands before any OS code):
 >
-> - **05.1 — Matrix extensions** ✅ **DONE (2026-07-07)** (`internal/importer`, pure catalog logic, no
+> - **05.1 — Matrix extensions** ✅ **DONE and kept** (`internal/importer`, pure catalog logic, no
 >   watcher): rename enrichment (paired rename waives the matrix name-match; hash+size still verify)
 >   and delete-side merge (asset → missing + exact content/name in a *recently-minted, ZERO-judgment*
 >   asset → absorb; the zero-judgment guard is what makes it always safe). Built: `classify(...,
->   renamed bool)` + `Importer.IngestRenamed` seam for 05.2; `AssetRepo.FindMoveHealCandidate` /
->   `DeleteByID`; `pipeline.healMovedAway` folded into the walk-end `markMissing` (a "move" now heals
->   instead of stranding a missing row). Tests in `pipeline_test.go`: `TestRenameEnrichment_
->   WaivesNameMatch` (+ negative control), `TestDeleteSideMerge_HealsCopyThenDelete` (judgment
->   preserved, dup row cascade-cleaned), `TestDeleteSideMerge_GuardedByJudgment`. The rename-true
->   runtime path (mark the from-path missing, then `IngestRenamed` the to-path) is wired by 05.2.
-> - **05.2 — Watcher service** ✅ **DONE (2026-07-07)** (`internal/watcher`): debounced dirty SET
->   (500ms/path + 50ms settle double-stat), ignore-list at intake (`importer.Ignored`),
->   `rjeczalik/notify` normalized → hints, overflow → drop set + reconcile, startup reconcile
->   (kill-9 recovery). **Key simplification vs. the prose below:** graduation *re-derives truth from
->   the filesystem* — a dirty path that exists is ingested (`IngestFile`), one that's gone is marked
->   missing (`importer.MarkMissing`, the sole delete observation). So the watcher never branches on
->   OS event type (create/write/delete/rename all just mark the path dirty); the stat at graduation
->   is the fact. Hosted via `cmd/dev watch <path>`. Files: `watcher.go` (service + debounce loop),
->   `source_notify.go` (the one file touching the notify backend), `event.go`. Tests
->   (`watcher_test.go`, race-clean, fake event source): save-storm → one ingest, ignore-at-intake,
->   delete → missing, overflow → reconcile; plus a live FSEvents smoke through `cmd/dev watch`.
->   **Deferred with `ponytail:` markers:** rename *pairing* (notify gives no portable from→to link;
->   the 05.1 `IngestRenamed` seam waits for an inotify-cookie enhancement — an unpaired rename
->   degrades to missing+duplicate, healed by reconcile) · sidecar echo check (nothing writes
->   `xmp_hash` until impl/06, so it has nothing to echo against — YAGNI until then) · the full
->   `events ⇄ polling ⇄ offline` state machine (05.3 owns connectivity). **macOS gotcha handled:**
->   `Run` canonicalizes the root via `EvalSymlinks` so `/var`→`/private/var` doesn't make every
->   FSEvents path look like it escaped the tree.
-> - **05.3 — Connectivity via poll timer** (remaining): startup reconcile (+2s), per-source poll timer,
->   EIO/ENODEV probe → offline + quiesce unit, root reappears → online + catch-up reconcile.
->   `MarkConnectivityBySource` is the only observation write. Acceptance: unmount/remount flips
->   connectivity, assets browsable while offline; inotify-limit sim degrades to polling.
->   **Scope grew out of the 05.2 discussion:** the same poll timer is also the **"Scheduled" sync tier**
->   (`DEFERRED.md §1`), and the per-file `Reconcile` it wraps is the **loose-file fidelity primitive** —
->   so `Reconcile` ([reconcile.go](../../../../internal/importer/reconcile.go)) is **no longer slated
->   for removal**; its whole-source-offline branch moves to the volume monitor, but its per-file
->   stat-and-flip logic likely earns a permanent home rather than retiring. Decide when wiring 05.3.
+>   renamed bool)` + `Importer.IngestRenamed`; `AssetRepo.FindMoveHealCandidate` / `DeleteByID`;
+>   `pipeline.healMovedAway` folded into the walk-end `markMissing`. Tests in `pipeline_test.go`:
+>   `TestRenameEnrichment_WaivesNameMatch` (+ control), `TestDeleteSideMerge_HealsCopyThenDelete`,
+>   `TestDeleteSideMerge_GuardedByJudgment`. **Corrected-model follow-up (part of the rebuild):** the
+>   importer's single-path entry must gain the gone→**mark missing + delete-side merge** branch, so a
+>   watcher-fed delete heals identically to a walk-detected one (today only the walk-end path heals).
+> - **05.2 — Watcher service** 🔄 **REBUILDING** (`internal/watcher`) against the corrected
+>   architecture above. The first cut worked but blurred the boundary: it stat-decided in the watcher
+>   and wrote `file_status` via a `MarkMissing`/`Fidelity` surface. Rebuild target: watcher owns the
+>   dirty set (500ms debounce), ignore-list at intake, settle-stat, and graduation; it hands the
+>   importer a **path** (present or gone) and nothing else; overflow / kill-9 → schedule a full-walk
+>   reconcile. `rjeczalik/notify` stays the one event-source file; `EvalSymlinks` root fix stays.
+>   No `Ingester`/`Fidelity` split — one seam onto the importer's single-path entry. Deferred
+>   (`ponytail:`): rename *pairing* (notify has no portable from→to link), sidecar echo check
+>   (nothing writes `xmp_hash` until impl/06).
+> - **05.3 — Connectivity via poll timer** 🔄 **REBUILDING**: per-source poll ticker → `mode`
+>   (`events ⇄ polling ⇄ offline`), root-stat probe via the pure `classifyProbe`. Unreachable →
+>   the watcher's **one** sanctioned write, `sources.connectivity` offline + assets online→offline
+>   (connectivity **(a)**), then quiesce; reachable-again → online + schedule catch-up walk. Subscribe
+>   failure (inotify watch-limit) → degrade to polling, never crash. The `classifyProbe`/`mode`/
+>   `statRoot` logic from the first cut is sound and carries over; what changes is that the connectivity
+>   write is the watcher's own (not routed through a `Fidelity` interface), and batch reconcile is the
+>   importer's `Run` that the watcher *schedules*. **Known gaps (deferred, `ponytail:`):** plain-stat
+>   probe misses an unmount that leaves an empty mountpoint (needs the filesystem-UUID monitor);
+>   after remount the unit stays poll-driven rather than re-subscribing live events.
 >
 > **Deferred with `ponytail:` markers (add when the trigger fires):** per-OS mount daemons (poll
-> covers correctness — add for latency) · P3 health panel (the per-source status snapshot struct is
-> built and populated; no UI consumes it yet) · XMP inbound trigger (impl/06 owns it — the echo check
-> ships here, but a sidecar that survives the echo check just routes to the sidecar upsert for now).
+> covers correctness — add for latency) · P3 health panel (the per-source status snapshot feeds it;
+> no UI consumes it yet) · XMP inbound trigger (impl/06 owns it).
 
 ## Prime directives
 
-1. **Sensors, not actors.** The service never writes the catalog. Its only outputs: hint paths fed
-   to the pipeline, `sources.connectivity` flips (the one sanctioned observation write, via
-   ObservationWriter), and reconcile-schedule requests.
-2. **Events are hints, not facts.** Truth is re-derived by the pipeline's matrix from the
-   filesystem. Event loss degrades freshness, never correctness.
+1. **Sensors, not actors — the watcher hands over PATHS, never verdicts.** The service makes exactly
+   ONE catalog write of its own: `sources.connectivity` flips (mount/unmount — the watcher is what
+   detects mount state; written via ObservationWriter). Everything else it produces is a *hint path*
+   fed to the importer, or a reconcile-schedule request. It does **not** decide or perform any
+   per-file catalog action — not ingest, and **not mark-missing**. A deleted path is fed to the
+   importer exactly like any other path; the *importer* marks it missing.
+2. **Events are hints; the importer re-derives truth from the filesystem.** The watcher never trusts
+   *what* an event claims (create / write / delete / rename). It debounces the path and hands it
+   over; the importer's single-path entry stats it and decides the action — present → ingest (matrix:
+   new / reimport / relink / duplicate); gone → mark missing + delete-side merge. This is why event
+   loss degrades freshness, never correctness, and why the "what is this path now?" decision lives in
+   exactly ONE place (the importer) for both the full walk and a single fed path. The watcher **does**
+   stat — for the settle check, to *time* the handoff — but a stat result is never turned into a
+   catalog decision.
 3. **The reconciler is a schedule, not a component**: it's the pipeline in full-walk mode
    (`kind='reconcile'`), triggered at startup (+2s), per poll timer, on remount, on demand, and on
-   any watcher failure.
+   any watcher failure. The watcher *schedules* it (calls the importer's full walk); it does not own
+   or perform reconciliation.
 
 ## Structure
 
@@ -111,10 +136,14 @@ probe → treat failed probe as unmount.
 ## The debounced dirty set
 
 A SET (dedupes storms) of paths, each with a 500ms timer reset on every new event. Ignore-list is
-checked at intake (a .tmp storm never enters). On graduation: settle check (double-stat, stable
-size+mtime) → feed pipeline single-path entry. Mid-processing invalidation: mtime changed while
-hashing/extracting → abandon, re-queue with backoff. Overflow event from the OS → drop set for
-that source, schedule reconcile (one answer to all failures).
+checked at intake (a .tmp storm never enters). On graduation: a settle check (double-stat, stable
+size+mtime) confirms a *present* file has stopped changing before handoff; a path that is simply
+*gone* is already terminal and graduates as-is. Either way the watcher feeds the **path** — never a
+verdict — to the importer's single-path entry, which stats it and decides the action (present →
+ingest; gone → mark missing). The settle stat only *times* the handoff; it does not choose the
+action. Mid-processing invalidation: mtime changed while hashing/extracting → abandon, re-queue with
+backoff. Overflow event from the OS → drop set for that source, schedule reconcile (one answer to all
+failures).
 
 ## Matrix extensions that land WITH this milestone
 
@@ -126,8 +155,17 @@ that source, schedule reconcile (one answer to all failures).
   asset has ZERO judgments → absorb: old identity adopts the young row's path; young row deleted;
   duplicates row cleaned if one was logged. Heals copy-then-delete "moves" from external apps.
   The zero-judgment guard is what makes this always-safe.
-- Event routing per FR: created/modified → hint; deleted → mark missing (NEVER auto-remove);
-  rename → enriched hint.
+- **Event handling (the watcher does NOT route by type).** Every event — create, write, delete —
+  just marks its path dirty. On graduation the path is fed to the importer, which stats and decides:
+  present → ingest; gone → mark missing (NEVER auto-remove) + delete-side merge. Event *type* informs
+  only two things, and never the catalog action: (a) debounce set membership, and (b) rename-pairing
+  — a paired rename is passed as an enriched hint so the matrix can waive the relink name-match.
+  "Deleted → mark missing" is therefore the *importer's* action on a gone path, not the watcher's.
+
+**The single-path entry owns "what is this path now?".** Both the full walk's per-item logic and a
+watcher-fed path go through the *same* importer decision so mark-missing and its delete-side merge
+can never be bypassed or duplicated: stat → present → matrix (ingest); gone → mark missing + attempt
+delete-side merge. The watcher supplies the path; it never supplies the verdict.
 
 ## Sidecar hints
 

@@ -232,7 +232,9 @@ self-contained tuning knob, so they live as inline comments (harvest anytime wit
 
 - Jobs = map+mutex, River later — **D17** (`importer/jobs.go`).
 - `--debug` HTTP server — **impl/08** (`cmd/dev/main.go`).
-- EIO→offline probe / volume monitor — **impl/05.3** (`watcher/watcher.go`).
+- Volume-monitor precision — **impl/05.3 shipped the lazy poll-stat form**; the
+  filesystem-UUID monitor (detects an unmount that leaves an empty mountpoint) and
+  re-subscribing live events after a remount remain deferred (`watcher/watcher.go`).
 - Ignore-list editable in settings KV — **settings service / D16** (`importer/ignore.go`).
 - Thumbnail size tiers (one 512 for v1) — thumbnail feature (`thumbnailer/thumbnailer.go`).
 - tx `BEGIN` deferred→`IMMEDIATE`, per-item re-commit on poisoned batch, 10-min
