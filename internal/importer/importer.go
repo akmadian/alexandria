@@ -84,6 +84,20 @@ func (imp *Importer) Run(ctx context.Context, source *domain.Source, fsys fs.FS)
 // pipeline, minus the walk, the skip gate, and batching. A batch of one, run
 // sequentially — the hint consumer for impl/05.
 func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error {
+	return imp.ingestOne(ctx, source, fsys, name, false)
+}
+
+// IngestRenamed is IngestFile for the destination of a verified paired rename
+// (impl/05 rename enrichment). The caller (the watcher) MUST have already routed
+// the rename's from-path to missing; this then relinks to that missing asset even
+// though the filename changed. If the rename turns out unpaired or the from-path
+// wasn't missing, this degrades to the normal duplicate/new flow — never wrong,
+// just less tidy (a later reconcile heals it).
+func (imp *Importer) IngestRenamed(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error {
+	return imp.ingestOne(ctx, source, fsys, name, true)
+}
+
+func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, name string, renamed bool) error {
 	info, err := fs.Stat(fsys, name)
 	if err != nil {
 		return err
@@ -97,7 +111,7 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 	if err != nil {
 		return err
 	}
-	verdict, existing, err := imp.classify(ctx, source, scanned, hash, nil)
+	verdict, existing, err := imp.classify(ctx, source, scanned, hash, nil, renamed)
 	if err != nil {
 		return err
 	}

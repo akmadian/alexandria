@@ -33,6 +33,13 @@ const (
 	writeLull      = 500 * time.Millisecond
 )
 
+// moveHealWindow bounds the delete-side merge (impl/05): only a duplicate minted
+// within this window of an asset going missing is treated as the same file having
+// "moved" (copy-then-delete by an external app), not an unrelated copy.
+// ponytail: fixed 10min heuristic; widen or key off the import session if real
+// moves ever slip past it.
+const moveHealWindow = 10 * time.Minute
+
 // poolSizes are the per-stage worker counts. Hardcoded defaults for now; the
 // machine.json config that tunes them per host arrives in a later milestone.
 type poolSizes struct{ hash, extract, thumb int }
@@ -236,35 +243,85 @@ func (pipe *pipeline) tally(item *pipelineItem) {
 // markMissing flips online→missing for known assets whose paths the walk didn't
 // visit. It re-reads status AFTER the run so a relinked asset (path updated
 // mid-run) shows its new, visited path and is correctly left alone.
+//
+// Before marking a candidate missing it tries a delete-side merge (impl/05): the
+// file may not be gone, just copy-then-deleted to a new path that this same walk
+// already ingested as a fresh duplicate. If so, that duplicate is absorbed and
+// the identity stays online — so nothing is marked missing for a plain "move".
 func (pipe *pipeline) markMissing(ctx context.Context) error {
 	pathStatuses, err := pipe.importer.Reader.ListPathsStatus(ctx, pipe.source.ID)
 	if err != nil {
 		return err
 	}
-	var missingIDs []string
+	var candidateIDs []string
 	for _, pathStatus := range pathStatuses {
 		if pathStatus.FileStatus != domain.FileStatusOnline {
 			continue
 		}
 		if _, seen := pipe.visited[pathStatus.RelativePath]; !seen {
-			missingIDs = append(missingIDs, pathStatus.ID)
+			candidateIDs = append(candidateIDs, pathStatus.ID)
 		}
 	}
-	if len(missingIDs) == 0 {
+	if len(candidateIDs) == 0 {
 		return nil
 	}
+	mintedAfter := time.Now().Add(-moveHealWindow)
+	var healed, missing int
 	err = pipe.importer.Store.InTx(ctx, func(repos sqlite.Repos) error {
-		for _, id := range missingIDs {
+		healed, missing = 0, 0 // reset per attempt (InTx may retry)
+		for _, id := range candidateIDs {
+			ok, err := pipe.healMovedAway(ctx, repos, id, mintedAfter)
+			if err != nil {
+				return err
+			}
+			if ok {
+				healed++
+				continue
+			}
 			if err := repos.Assets.SetFileStatus(ctx, id, domain.FileStatusMissing); err != nil {
 				return err
 			}
+			missing++
 		}
 		return nil
 	})
-	if err == nil {
-		pipe.missingCount = len(missingIDs)
+	if err != nil {
+		return err
 	}
-	return err
+	pipe.missingCount += missing
+	pipe.movedCount += healed
+	return nil
+}
+
+// healMovedAway implements impl/05's delete-side merge. A going-missing asset may
+// have been copy-then-deleted to a new path an external app chose; if that copy
+// was just ingested as a fresh, still-unjudged duplicate, adopt its path onto
+// THIS identity (preserving all judgments and history) and delete the throwaway
+// duplicate row. The zero-judgment guard (in FindMoveHealCandidate) is what makes
+// this always safe — a copy the user has already rated is never absorbed. Returns
+// true if a merge happened (the identity stays online), false to fall through to
+// marking missing.
+func (pipe *pipeline) healMovedAway(ctx context.Context, repos sqlite.Repos, missingID string, mintedAfter time.Time) (bool, error) {
+	gone, err := repos.Assets.Get(ctx, missingID)
+	if err != nil {
+		return false, err
+	}
+	young, err := repos.Assets.FindMoveHealCandidate(ctx, gone.PartialHash, gone.SizeBytes, gone.Filename, gone.ID, mintedAfter)
+	if err != nil || young == nil {
+		return false, err
+	}
+	// Delete the throwaway identity first — the (source_id, relative_path) unique
+	// index forbids two live rows at the same path, so the old identity can only
+	// adopt young's path once young's row is gone (FK cascade drops its dup rows).
+	if err := repos.Assets.DeleteByID(ctx, young.ID); err != nil {
+		return false, err
+	}
+	if err := repos.Assets.UpdatePath(ctx, gone.ID, pipe.source.ID, young.RelativePath); err != nil {
+		return false, err
+	}
+	pipe.importer.Log.Info("delete-side merge: absorbed moved copy",
+		"identity", gone.ID, "from", gone.RelativePath, "to", young.RelativePath)
+	return true, nil
 }
 
 func (pipe *pipeline) addRunError(relativePath, stage string, err error) {

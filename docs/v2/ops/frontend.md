@@ -84,10 +84,8 @@ bump, not something to automate.
 
 ## CI
 
-No second workflow — `scripts/check.sh` already ends by calling into
-`frontend/`, so a single `ci.yml` step (after `oven-sh/setup-bun`) covers
-both stacks. One pass/fail signal per PR, not two workflows that can
-disagree about whether it's mergeable.
+See [ci.md](ci.md) for the actual workflow — path-filtered so frontend-only
+changes don't trigger a backend build and vice versa.
 
 ## Explicitly out of scope
 

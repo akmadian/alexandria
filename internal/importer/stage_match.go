@@ -21,7 +21,9 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 			}
 			continue
 		}
-		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, item.scanned, item.hash, inRunHashes)
+		// A full walk never carries rename pairs (renamed=false); paired renames
+		// arrive only through the watcher's single-path IngestRenamed entry.
+		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, item.scanned, item.hash, inRunHashes, false)
 		if err != nil {
 			item.rejected = true
 			item.addError("match", "match_failed", err.Error())
@@ -60,13 +62,21 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 //  3. Duplicate: content matches a PRESENT asset (in the catalog or minted this
 //     run) → mint a new identity + a duplicates row.
 //  4. New: no match → mint.
-func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, inRunHashes map[string]string) (action, *domain.Asset, error) {
+//
+// renamed is the watcher's rename-enrichment signal (impl/05): the OS delivered a
+// paired rename whose from-path was already routed to missing, so this file IS
+// that missing asset under a new name. It waives ONLY the relink name-match —
+// hash+size (via FindByHash) still verify identity, and the asset must still be
+// missing. A full walk always passes false.
+func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, inRunHashes map[string]string, renamed bool) (action, *domain.Asset, error) {
 	contentMatch, err := imp.Reader.FindByHash(ctx, hash, scanned.size)
 	if err != nil {
 		return actionNew, nil, err
 	}
-	// (1) Relink — checked before the path, per the precedence above.
-	if contentMatch != nil && contentMatch.FileStatus == domain.FileStatusMissing && contentMatch.Filename == scanned.filename {
+	// (1) Relink — checked before the path, per the precedence above. A verified
+	// paired rename waives the name-match (a rename is expected to change the name).
+	if contentMatch != nil && contentMatch.FileStatus == domain.FileStatusMissing &&
+		(renamed || contentMatch.Filename == scanned.filename) {
 		return actionMove, contentMatch, nil
 	}
 

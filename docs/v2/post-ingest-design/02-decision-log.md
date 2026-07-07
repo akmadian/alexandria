@@ -9,9 +9,12 @@ NFR references → `01-requirements-distilled.md`.
 > (magic-byte classifier) are realized in impl/03 — note the package shipped as **`assettype`**,
 > not `filetype` (Type = format category vs Kind = entity variant). **D12 (pipeline shape),
 > D13 (DLQ = import_errors, no retry machinery), D17 (jobs: registry map + OnProgress), and
-> D18 (ignore list) are realized in impl/04.** D14 (watcher) is designed but NOT built — it's the
-> next milestone (impl/05); the standalone `Reconcile` is a transitional stand-in until then.
-> Everything else is design-only so far.
+> D18 (ignore list) are realized in impl/04.** D14 (watcher) is IN PROGRESS (impl/05, started
+> 2026-07-07): three PRs (05.1 matrix extensions → 05.2 watcher service → 05.3 poll-timer
+> connectivity). Reconciled build plan at the top of `impl/05` — the per-OS event adapters collapse
+> to one dep (`rjeczalik/notify`), the volume monitor to a poll timer. The standalone `Reconcile`
+> remains the transitional offline-flip stand-in until 05.3 retires it. Everything else is
+> design-only so far.
 
 ## D1 — Single-process desktop app; engine as embedded Go library behind one transport-agnostic async contract
 

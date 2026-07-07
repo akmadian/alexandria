@@ -1,7 +1,61 @@
 # impl/05 — Watcher Service
 
-**Status: design complete; DO NOT START until the ingest pipeline (impl/04) ships and stabilizes.**
-**Scope:** new `internal/watcher`. **References:** D14, D9.
+**Status: IN PROGRESS (started 2026-07-07). impl/04 shipped and stabilized (2026-07-06), so this is unblocked.**
+**Scope:** new `internal/watcher` + matrix extensions in `internal/importer`. **References:** D14, D9.
+
+> **Reconciled plan (2026-07-07).** The original design below stands as the target; this section
+> is how we actually build it and where we deliberately spend less than the letter of the spec.
+> Where the two disagree, this section wins (same convention as impl/04).
+>
+> **Two rungs collapse most of the milestone.** The spec's six OS-specific subsystems (three cgo
+> event adapters + three volume monitors) become one dependency plus a timer:
+>
+> - **Event adapters → `github.com/rjeczalik/notify` (pinned).** It wraps exactly the three backends
+>   the spec names — recursive **FSEvents** on macOS (NOT kqueue, which the spec rejects for the same
+>   reason we do: fd-per-file, no recursion), **inotify** on Linux (surfaces the watch-limit/overflow
+>   signals we degrade on), **ReadDirectoryChangesW** on Windows. We keep the event-source boundary
+>   to ONE normalize function (`notify.EventInfo → {path, op, renamePair?}`) with a `ponytail:` marker,
+>   so swapping the backend later is a one-file change. Hand-rolling three cgo adapters is rung-6 work
+>   when rung-4 is sitting right there. (fsnotify was considered and rejected: kqueue on macOS, no
+>   recursion — wrong for large photo trees.)
+> - **Volume monitor → the poll timer we already owe.** Network sources poll on a timer regardless
+>   (D14). Remount detection is that same timer stat-probing the source root and flipping connectivity
+>   + scheduling a reconcile. This covers mount/unmount/yanked-drive **everywhere with zero per-OS
+>   code**. Ceiling: a remount is noticed within one poll interval, not instantly. Deferred with a
+>   `ponytail:` marker; add DiskArbitration / mountinfo-epoll / WM_DEVICECHANGE only when that latency
+>   is measured to matter.
+>
+> **Staging** — three PRs, correctness-first (the judgment-preservation logic has zero platform risk
+> and is the sacred part, so it lands before any OS code):
+>
+> - **05.1 — Matrix extensions** ✅ **DONE (2026-07-07)** (`internal/importer`, pure catalog logic, no
+>   watcher): rename enrichment (paired rename waives the matrix name-match; hash+size still verify)
+>   and delete-side merge (asset → missing + exact content/name in a *recently-minted, ZERO-judgment*
+>   asset → absorb; the zero-judgment guard is what makes it always safe). Built: `classify(...,
+>   renamed bool)` + `Importer.IngestRenamed` seam for 05.2; `AssetRepo.FindMoveHealCandidate` /
+>   `DeleteByID`; `pipeline.healMovedAway` folded into the walk-end `markMissing` (a "move" now heals
+>   instead of stranding a missing row). Tests in `pipeline_test.go`: `TestRenameEnrichment_
+>   WaivesNameMatch` (+ negative control), `TestDeleteSideMerge_HealsCopyThenDelete` (judgment
+>   preserved, dup row cascade-cleaned), `TestDeleteSideMerge_GuardedByJudgment`. The rename-true
+>   runtime path (mark the from-path missing, then `IngestRenamed` the to-path) is wired by 05.2.
+> - **05.2 — Watcher service** (`internal/watcher`): per-source unit state machine
+>   (`events ⇄ polling ⇄ offline`), debounced dirty SET (500ms/path + settle double-stat), ignore-list
+>   at intake (reuse `importer` ignore rules), `rjeczalik/notify` normalized → `IngestFile`, overflow/
+>   watch-limit → drop set + schedule reconcile, sidecar echo check (hash == asset's `xmp_hash` → drop
+>   silently). Hosted via a new `cmd/dev watch <path>` subcommand — there is no long-running app
+>   process yet (Wails deferred), so the dev harness is the only host. Acceptance: save-storm → one
+>   ingest; kill-9 → startup reconcile converges.
+> - **05.3 — Connectivity via poll timer**: startup reconcile (+2s), per-source poll timer, EIO/ENODEV
+>   probe → offline + quiesce unit, root reappears → online + catch-up reconcile.
+>   `MarkConnectivityBySource` is the only observation write. Retires `Reconcile`'s offline branch
+>   ([reconcile.go](../../../../internal/importer/reconcile.go)) once it lands. Acceptance:
+>   unmount/remount flips connectivity, assets browsable while offline; inotify-limit sim degrades to
+>   polling.
+>
+> **Deferred with `ponytail:` markers (add when the trigger fires):** per-OS mount daemons (poll
+> covers correctness — add for latency) · P3 health panel (the per-source status snapshot struct is
+> built and populated; no UI consumes it yet) · XMP inbound trigger (impl/06 owns it — the echo check
+> ships here, but a sidecar that survives the echo check just routes to the sidecar upsert for now).
 
 ## Prime directives
 

@@ -257,25 +257,9 @@ Adjust the exclude list as generated/wiring-only files appear.
 
 ## CI (GitHub Actions)
 
-Single job, single step, calling the same script as local dev:
-
-```yaml
-name: ci
-on: [push, pull_request]
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - run: ./scripts/check.sh
-```
-
-`setup-go`'s built-in cache (`cache: true`) covers module + build cache — no
-extra caching config needed.
+See [ci.md](ci.md) for the actual workflow — it covers both backend and
+frontend triggering together (path-filtered, only runs the stack that
+changed), which is why it's no longer split per-doc here.
 
 ## Explicitly out of scope
 

@@ -70,6 +70,39 @@ func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath
 	return a, err
 }
 
+// FindMoveHealCandidate finds the young, unjudged duplicate that a going-missing
+// asset may actually have "moved" into (impl/05 delete-side merge). It matches by
+// content (partial_hash + size) AND filename, requires the row be present
+// (online, not deleted) and freshly minted (ingested_at >= mintedAfter), and —
+// the load-bearing guard — that it carry ZERO judgments. excludeID keeps the
+// going-missing asset from matching itself. nil = no safe candidate.
+func (r *AssetRepo) FindMoveHealCandidate(ctx context.Context, hash string, sizeBytes int64, filename, excludeID string, mintedAfter time.Time) (*domain.Asset, error) {
+	row := r.DB.QueryRowContext(ctx,
+		"SELECT "+assetColumns+" FROM assets "+
+			"WHERE partial_hash = ? AND size_bytes = ? AND filename = ? AND id != ? "+
+			"AND is_deleted = 0 AND file_status = 'online' AND ingested_at >= ? "+
+			"AND rating IS NULL AND color_label IS NULL AND flag IS NULL AND note IS NULL "+
+			"LIMIT 1",
+		hash, sizeBytes, filename, excludeID, formatTime(mintedAfter.UTC()))
+	a, err := scanAssetRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return a, err
+}
+
+// DeleteByID hard-deletes an asset row. Unlike SoftDelete (a user judgment), this
+// physically removes a throwaway ingest artifact — the young duplicate absorbed
+// by a delete-side merge. FK cascades clean its duplicates rows; the FTS delete
+// trigger clears its index entry.
+// ponytail: leaves the deleted row's thumbnail file orphaned on disk. Harmless
+// (byte-identical to the surviving identity's own thumbnail); a thumbnail GC
+// sweeps it if orphans ever accumulate.
+func (r *AssetRepo) DeleteByID(ctx context.Context, id string) error {
+	_, err := r.DB.ExecContext(ctx, "DELETE FROM assets WHERE id = ?", id)
+	return err
+}
+
 // ListKnownFiles returns relative_path → (mtime, size, hash) for every ONLINE
 // asset in the source, in one query. The importer loads this once per scan to
 // skip unchanged files without a per-file lookup.

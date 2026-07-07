@@ -146,6 +146,148 @@ func TestMatrix_RelinkOutranksReimport(t *testing.T) {
 	}
 }
 
+// TestRenameEnrichment_WaivesNameMatch proves impl/05's rename enrichment: a
+// paired rename (from-path already missing) relinks to the missing asset even
+// though the filename changed — where a plain hint would only see a duplicate.
+func TestRenameEnrichment_WaivesNameMatch(t *testing.T) {
+	ingester, source, assets := newImporter(t)
+	ctx := context.Background()
+	content := []byte("bytes-that-get-renamed")
+
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}); err != nil {
+		t.Fatal(err)
+	}
+	original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
+	// Watcher routes the rename's from-path to missing before ingesting the to-path.
+	if _, err := ingester.Reconcile(ctx, source, fstest.MapFS{}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same content, DIFFERENT name. A plain IngestFile would see a duplicate;
+	// IngestRenamed waives the name-match and relinks.
+	fsys := fstest.MapFS{"new.mp4": {Data: content}}
+	if err := ingester.IngestRenamed(ctx, source, fsys, "new.mp4"); err != nil {
+		t.Fatal(err)
+	}
+
+	relinked, _ := assets.FindBySourcePath(ctx, source.ID, "new.mp4")
+	if relinked == nil || relinked.ID != original.ID {
+		t.Fatalf("rename should relink to the same identity: got %v, want id %s", relinked, original.ID)
+	}
+	if relinked.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("relinked asset should be online, got %s", relinked.FileStatus)
+	}
+	all, _ := assets.List(ctx, catalog.AssetFilter{})
+	if len(all) != 1 {
+		t.Fatalf("rename must not mint a new identity: got %d assets, want 1", len(all))
+	}
+
+	// Negative control: without the rename signal, the same move is a duplicate.
+	ingester2, source2, assets2 := newImporter(t)
+	if _, err := ingester2.Run(ctx, source2, fstest.MapFS{"old.mp4": {Data: content}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ingester2.Reconcile(ctx, source2, fstest.MapFS{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ingester2.IngestFile(ctx, source2, fstest.MapFS{"new.mp4": {Data: content}}, "new.mp4"); err != nil {
+		t.Fatal(err)
+	}
+	all2, _ := assets2.List(ctx, catalog.AssetFilter{})
+	if len(all2) != 2 {
+		t.Fatalf("plain hint with a new name should NOT relink (duplicate): got %d assets, want 2", len(all2))
+	}
+}
+
+// TestDeleteSideMerge_HealsCopyThenDelete proves impl/05's delete-side merge: an
+// external app that "moves" a file by copying it to a new path and deleting the
+// old one leaves NO stranded missing row and PRESERVES the original's judgments —
+// the freshly-minted copy is absorbed back into the original identity.
+func TestDeleteSideMerge_HealsCopyThenDelete(t *testing.T) {
+	ingester, source, assets := newImporter(t)
+	ctx := context.Background()
+	content := []byte("photo-content-that-gets-moved")
+
+	// Original, then a user judgment on it (this is what must survive).
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{"a/photo.mp4": {Data: content}}); err != nil {
+		t.Fatal(err)
+	}
+	original, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4")
+	if err := assets.ApplyTriagePatch(ctx, []string{original.ID}, catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Copy-then-delete "move": same filename, new dir; old path is gone.
+	result, err := ingester.Run(ctx, source, fstest.MapFS{"b/photo.mp4": {Data: content}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Missing != 0 {
+		t.Fatalf("delete-side merge must leave no missing row: missing=%d, want 0", result.Missing)
+	}
+
+	all, _ := assets.List(ctx, catalog.AssetFilter{})
+	if len(all) != 1 {
+		t.Fatalf("the copy must be absorbed, not left as a second identity: got %d assets, want 1", len(all))
+	}
+	survivor := all[0]
+	if survivor.ID != original.ID {
+		t.Fatalf("the ORIGINAL identity must survive: got %s, want %s", survivor.ID, original.ID)
+	}
+	if survivor.RelativePath != "b/photo.mp4" || survivor.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("survivor should be online at the new path: path=%s status=%s", survivor.RelativePath, survivor.FileStatus)
+	}
+	if survivor.Rating == nil || *survivor.Rating != 5 {
+		t.Fatalf("the user's rating must be preserved through the merge: got %v", survivor.Rating)
+	}
+	if gone, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4"); gone != nil {
+		t.Fatalf("the old path should be gone, got %v", gone)
+	}
+	// The duplicates row logged for the copy must be cleaned (FK cascade).
+	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
+	if len(dups) != 0 {
+		t.Fatalf("duplicates row should be cascade-deleted with the absorbed copy: got %d", len(dups))
+	}
+}
+
+// TestDeleteSideMerge_GuardedByJudgment proves the safety guard: if the copy has
+// already been judged, it is NOT absorbed — the original goes missing normally and
+// both identities survive. (Here the guard is exercised by rating the whole
+// content set so the young copy is non-zero-judgment.)
+func TestDeleteSideMerge_GuardedByJudgment(t *testing.T) {
+	ingester, source, assets := newImporter(t)
+	ctx := context.Background()
+	content := []byte("content-copied-and-then-judged")
+
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{"a/photo.mp4": {Data: content}}); err != nil {
+		t.Fatal(err)
+	}
+	// Ingest the copy FIRST (present duplicate), judge it, THEN drop the original.
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{
+		"a/photo.mp4": {Data: content},
+		"b/photo.mp4": {Data: content},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	copyAsset, _ := assets.FindBySourcePath(ctx, source.ID, "b/photo.mp4")
+	if err := assets.ApplyTriagePatch(ctx, []string{copyAsset.ID}, catalog.TriagePatch{Rating: domain.SetOpt(3)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Original vanishes. The copy is judged → must NOT be absorbed.
+	result, err := ingester.Run(ctx, source, fstest.MapFS{"b/photo.mp4": {Data: content}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Missing != 1 {
+		t.Fatalf("a judged copy must not heal the delete: missing=%d, want 1", result.Missing)
+	}
+	all, _ := assets.List(ctx, catalog.AssetFilter{})
+	if len(all) != 2 {
+		t.Fatalf("both identities must survive when the guard trips: got %d assets, want 2", len(all))
+	}
+}
+
 // --- Sidecars: tracked, not indexed ---
 
 func TestSidecar_TrackedNotIndexed(t *testing.T) {
