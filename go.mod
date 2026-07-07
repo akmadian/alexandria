@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/log v1.0.0
 	github.com/dsoprea/go-exif/v3 v3.0.1
 	github.com/google/uuid v1.6.0
+	github.com/rjeczalik/notify v0.9.3
 	golang.org/x/image v0.43.0
 	golang.org/x/sync v0.21.0
 	modernc.org/sqlite v1.53.0
@@ -32,7 +33,6 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/net v0.0.0-20221002022538-bcab6841153b // indirect
