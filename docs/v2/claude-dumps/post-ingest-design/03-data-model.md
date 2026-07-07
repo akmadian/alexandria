@@ -70,7 +70,7 @@ Special cases resolved by the classification:
 
 Dropped vs the old schema: `keybindings` table (→ settings KV). Dropped constraints: CHECKs on
 `color_label` and `file_type` (guaranteed to change: custom labels P2, new file types P3; SQLite
-CHECKs can't be altered without a 500k-row table rebuild — validation moves to `domain.Classify`).
+CHECKs can't be altered without a 500k-row table rebuild — validation moves to `assettype.Classify`, the type registry — realized in impl/03).
 CHECKs KEPT on stable enums: flag, file_status, sort_dir, sources.kind, asset_tags.source,
 asset_groups.origin.
 
@@ -85,12 +85,19 @@ width/height. Promotion later = ALTER + backfill from blob; never re-reads files
 
 ## 5. FTS5 spec
 
-External-content table over `assets` (no duplicated text storage). Columns: filename, camera_make,
-camera_model, lens_model, note, title, caption, tags. Insert/update/delete triggers maintain all
-asset-resident columns. The `tags` column CANNOT be trigger-maintained (it's a join through
-`asset_tags`) → `SetAssetTags` rewrites that asset's FTS row (recommended over dropping the column:
-FR P0 explicitly requires search over tag names). Rebuild path: drop + re-populate from `assets` ⋈
-`asset_tags` (registered rebuild function).
+> **Realized in impl/01 — chose STANDALONE FTS5, not external-content.** The plan below leaned
+> external-content; implementation went standalone (the table stores its own text copy) because
+> external-content's old-value bookkeeping for a non-content `tags` column was more code than
+> trivial per-row triggers. Non-negotiables all met: asset-resident columns trigger-maintained
+> (the UPDATE trigger scoped `AFTER UPDATE OF` the text columns so status/thumb churn doesn't
+> reindex), `tags` app-maintained, rebuild via `sqlite.RebuildFTS`. FTS keys on `assets.rowid` →
+> no plain in-place VACUUM (use VACUUM INTO; RebuildFTS is the escape hatch). Columns: filename,
+> camera_make, camera_model, lens_model, title, caption, note, tags (+ `asset_id UNINDEXED`).
+
+Original plan (superseded by the note above): external-content table over `assets` (no duplicated
+text storage). The `tags` column CANNOT be trigger-maintained (it's a join through `asset_tags`) →
+`SetAssetTags` rewrites that asset's FTS row (kept over dropping the column: FR P0 requires search
+over tag names). Rebuild path: drop + re-populate from `assets` ⋈ `asset_tags`.
 
 ## 6. Identity & the reconciliation matrix (D9)
 

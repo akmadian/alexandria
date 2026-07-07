@@ -2,11 +2,25 @@
 
 What a design-refinement instance should pick up. Ordered by when they block.
 
+## Resolved during implementation (impl/01–03, 2026-07-06)
+
+- **FTS `tags` column** (was #1) — **RESOLVED: keep, standalone trigger-maintained table**, `tags`
+  app-maintained, rebuildable via `sqlite.RebuildFTS`. Chose standalone FTS5 over external-content
+  (the old-value bookkeeping for a non-content column was more code). See impl/01 status block.
+- **Sort-field whitelist** (part of #4) — **DONE in impl/02**: `sqlite`'s `List` maps a logical
+  sort name through a whitelist and errors on anything else (kills the ORDER BY injection). The
+  rest of the query-layer round (#4) is still open.
+- **Type-registry package naming** — **RESOLVED: `assettype`** (not `filetype`); type `Handler`
+  (not `TypeHandler`). Repo convention: "Type" = format category, "Kind" = entity variant.
+- **`InTx` isolation** — shipped with deferred BEGIN; **follow-up (non-blocking):** switch to
+  `_txlock=immediate` (modernc DSN param) if write-lock contention ever appears. Single-writer
+  design makes it moot for now.
+
 ## Blocks nothing yet, decide during ingest implementation
 
-1. **FTS `tags` column** — recommended: keep, app-maintained by `SetAssetTags` (FR P0 requires
-   tag-name search). Alternative: drop column, rely on tag_ids filter. Micro-decision; recommendation
-   is firm enough to implement unless refinement finds a problem.
+1. **`ContentFamily → domain.FileType` map** (NEW, impl/04) — the Sniff mismatch policy (impl/03
+   built `Sniff` and deferred the wiring to impl/04) needs this ~15-entry map to reclassify a
+   mislabeled file to the content's family. Build it in the pipeline with its consumer.
 2. **Sort fallback for NULL captured_at** — `COALESCE(captured_at, mtime)`? Query-layer decision;
    affects index usability (expression index if so). Decide in the query-layer round.
 3. **Delete-side merge window** — "recently minted" = same session? N minutes? Recommend: same
@@ -16,8 +30,8 @@ What a design-refinement instance should pick up. Ordered by when they block.
 
 4. **Query layer round** — consolidate the filter→SQL builder (single query authority that smart
    collections P2 will reuse); COUNT strategy for grid scrollbar (`total`) — separate COUNT vs
-   `COUNT(*) OVER()`; whitelist map for sort fields (audit found raw SQL interpolation);
-   smart-collection query JSON format (nested AND/OR/NOT groups). Small round; do before the seam.
+   `COUNT(*) OVER()`; smart-collection query JSON format (nested AND/OR/NOT groups). Small round; do
+   before the seam. (The sort-field whitelist sub-item is already DONE in impl/02 — see above.)
 5. **The seam round** — reconcile `frontend/src/api/contract.ts` against the now-designed engine:
    backend `AssetFilter` parity (scope, fileStatus, absence queries: unrated/unflagged/…),
    `ListAssetsResult.total`, `getUIState/setUIState` verbs, job envelope wiring, thumbnail URL

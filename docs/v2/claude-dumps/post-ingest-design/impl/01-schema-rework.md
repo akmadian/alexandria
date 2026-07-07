@@ -1,5 +1,25 @@
 # impl/01 — Schema Rework (Blocker 1)
 
+> **STATUS: DONE (2026-07-06).** Implemented as specified; notes capture where it refined this spec.
+>
+> - **FTS (§15) → standalone FTS5, not external-content.** Asset-resident columns are trigger-
+>   maintained (`assets_fts_ai/au/ad`; the `au` trigger is scoped `AFTER UPDATE OF` the text
+>   columns so file_status/thumbnail_at churn never reindexes), `tags` is app-maintained,
+>   rebuildable via `sqlite.RebuildFTS`. Rationale in the 0001 header: external-content's
+>   old-value bookkeeping for a non-content `tags` column is more code than trivial per-row
+>   triggers. FTS keys on `assets.rowid` → documented "no plain VACUUM" caveat (use VACUUM INTO;
+>   RebuildFTS is the escape hatch).
+> - **openCatalog:** `sqlite.Open(dir) (*Catalog, error)` — WAL, synchronous(FULL), foreign_keys,
+>   busy_timeout(5000). Instance lock via flock in `lock_unix.go` (returns
+>   `domain.CatalogLockedError`); `lock_windows.go` is a `ponytail:` no-op stub (Windows third-
+>   priority; needs LockFileEx). `:memory:` mode still available for the smoke harness.
+> - **aspect_ratio:** VIRTUAL generated column is in the schema (indexable, ready) but deliberately
+>   NOT on `domain.Asset` / the repo SELECT — nothing consumes it yet (YAGNI; promotion is free).
+> - **UUIDv7** via `domain.NewID()`; all mint sites use it. `file_type`/`color_label` CHECKs
+>   dropped; validation lives in `assettype.Classify` (renamed from `domain.Classify` in impl/03).
+> - Acceptance tests green: soft-delete→reimport-same-path, root-tag slug conflict, FTS trigger
+>   indexing, FK cascade, plus RebuildFTS and the Open instance-lock test.
+
 **Scope:** rewrite `internal/migrations/0001_initial_schema.sql` **in place**. Pre-release, zero
 real catalogs exist — do NOT stack a migration 0002. Also touch: the UUID helper, marshal helpers.
 **Blocked by:** nothing. **Blocks:** impl/02, impl/04.
@@ -9,8 +29,8 @@ real catalogs exist — do NOT stack a migration 0002. Also touch: the UUID help
 
 ### assets table
 1. DROP the CHECK on `color_label` and the CHECK on `file_type` (doomed constraints — custom labels
-   P2, new types P3; SQLite CHECKs are unalterable). Validation lives in `domain.Classify` / the
-   label registry. KEEP CHECKs on `flag`, `file_status`, `rating` range.
+   P2, new types P3; SQLite CHECKs are unalterable). Validation lives in `assettype.Classify` (the
+   type registry) / the label registry. KEEP CHECKs on `flag`, `file_status`, `rating` range.
 2. `partial_hash` → `NOT NULL` (the importer always writes it).
 3. ADD `judgment_modified_at TEXT` (nullable; bumped ONLY by the judgment writer — see impl/02).
 4. ADD `title TEXT`, `caption TEXT` (observation class; FTS targets).

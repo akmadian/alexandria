@@ -6,6 +6,39 @@
 The existing sequential importer has the right stage factoring and matrix core — this is a
 restructure around it, not a rewrite. Preserve its semantics where this spec is silent.
 
+> **Note (2026-07-06):** impl/01–03 are DONE. This spec predates them in places; the reconciled
+> view is the two sections immediately below. Where they and the older prose disagree, they win.
+
+## What impl/01–03 already built (consume, don't rebuild)
+
+The seam this pipeline plugs into now exists and is tested:
+
+- **Writer-scoped catalog interfaces** (`catalog`): the pipeline holds `AssetReader`,
+  `AssetObservationWriter` (`Create` / `ApplyFilePatch` / `UpdatePath` / `SetFileStatus` /
+  `MarkConnectivityBySource`), `AssetDerivedWriter` (`SetThumbnailAt`), and `DuplicateRepository`
+  (`Log`) — and by construction CANNOT touch judgment/sync columns. `importer.Importer` already
+  carries exactly these fields (`Reader/Obs/Derived/Dups/Thumbnail/Log`); the reimport path already
+  uses `ApplyFilePatch` (clobber-safe). Restructure around this — do not revert it.
+- **Transaction seam** (`sqlite`): `Store.InTx(ctx, func(Repos) error)` is the WRITE stage's batch
+  boundary; `Repos` bundles tx-bound Assets/Sources/Dups. (Deferred BEGIN today; `_txlock=immediate`
+  is the upgrade if write contention shows.)
+- **Type dispatch** (`assettype`, renamed from `filetype`): `Classify(ext) (Handler, bool)`,
+  `Handler{Ext,MIME,Type,Metadata,Thumb}`, `IsSidecar(ext)`, `Sniff(head) (ContentFamily, bool)`.
+  `scannedFile` already carries `handler assettype.Handler`; EXTRACT/THUMB dispatch off it.
+- **Derived rebuild:** `sqlite.RebuildFTS`. **IDs:** `domain.NewID()` (UUIDv7). **Catalog open:**
+  `sqlite.Open(dir) (*Catalog, error)` (WAL, synchronous(FULL), instance lock).
+
+## New repositories to build in this milestone (deferred from impl/02 — no consumer existed until now)
+
+- **`sidecar_files` repo** — `UpsertObservation`, `DeleteByPath`, `ListByKey(source, dir, stem)`.
+  SCAN routes `assettype.IsSidecar` files here (they HASH, then WRITE upserts the observation row).
+  Feeds grouping later; v1 only tracks them.
+- **`import_sessions` / `import_errors` repo** — `Start`, `UpdateCounts`, `Finish`, `LogError`
+  (attempts-upsert on same session+path+stage). This IS the DLQ (D13); the session row also holds
+  the per-extension `skipped_unknown_json` / `skipped_ignored_json` tallies.
+- **`SetAssetTags` FTS-tags maintenance** — the pipeline writes no tags, so this stays deferred to
+  the tags feature. Noted, not forced.
+
 ## Topology
 
 ```
@@ -33,8 +66,18 @@ skip gate (known-map: size exact + mtime within 2s) → emit. Also: count total 
 (progress upgrades indeterminate→determinate when walk completes). Records every *visited* path
 for the walk-end missing diff.
 
-**HASH**: read first 64KB, xxhash+size fingerprint, run `Sniff` on the same buffer (impl/03
-policy). Short files fine (EOF tolerated). Sidecars hash here too, then bypass to WRITE.
+**HASH**: read first 64KB, xxhash+size fingerprint, run `assettype.Sniff` on the same buffer.
+Short files fine (EOF tolerated). Sidecars hash here too, then bypass to WRITE.
+
+**Sniff mismatch policy (D7 — impl/03 built `Sniff` and deferred this wiring here):** compare the
+extension's `handler.Type` against `Sniff(head)`:
+- agree, or `Sniff` returns `ok=false` for a supported extension → proceed on the extension.
+- disagree (ext says X, content says Y) → **trust content**: reclassify via a
+  `ContentFamily → domain.FileType` map (build it here — the closed set is ~15 entries; keep Y's
+  handler/MIME where one exists), write an `extension_mismatch` marker into `extended_metadata`,
+  and log an informational `import_errors` row (reason `ext_mismatch`). The asset still indexes.
+- supported extension but `Sniff` says the bytes are not the claimed container AND nothing usable
+  (zero/garbage) → bouncer reject: `import_errors` row (`no_usable_content`), NO identity minted.
 
 **MATCH** (the matrix, precedence per `03-data-model.md` §6):
 unchanged already filtered by SCAN. Order: (1) content+name vs MISSING asset → relink ·
@@ -42,17 +85,19 @@ unchanged already filtered by SCAN. Order: (1) content+name vs MISSING asset →
 Consults the catalog AND the **in-run map** (hash→assetID minted this run) — without it,
 first-import duplicate pairs are invisible. Emits (action, asset, existing).
 
-**EXTRACT**: registry dispatch; nil capability → skip; failure → best-effort (empty metadata +
-error record, asset still proceeds — D13 self-heal doctrine). Moves skip extraction.
+**EXTRACT**: dispatch off `sf.handler.Metadata` (nil → skip); failure → best-effort (empty metadata
++ error record, asset still proceeds — D13 self-heal doctrine). Moves skip extraction.
 
-**THUMB**: registry dispatch; sizes [512] for v1 (`ponytail:` the 1024/2048 preview tiers arrive
-with the loupe). Failure → asset proceeds without thumbnail (thumbnail_at NULL, error recorded).
-Moves skip. **THUMB precedes WRITE by design**: an asset is committed only fully processed —
-no placeholder cards, ever (explicit user decision).
+**THUMB**: dispatch off `sf.handler.Thumb` via the injected `thumbnailer.Registry.Generate(gen, r,
+assetID)` (sizes come from the Registry — v1 default `[512]`, set in impl/03; a nil gen is a no-op).
+Failure → asset proceeds without thumbnail (thumbnail_at NULL, error recorded). Moves skip.
+**THUMB precedes WRITE by design**: an asset is committed only fully processed — no placeholder
+cards, ever (explicit user decision).
 
-**WRITE**: accumulate 50 items (or 500ms lull, or stream end) → one `InTx`:
-per action — mint / ApplyFilePatch / UpdatePath+SetFileStatus / mint+duplicate row; sidecar
-upserts; import_errors rows; session count update. FTS triggers fire in-txn.
+**WRITE**: accumulate 50 items (or 500ms lull, or stream end) → one `Store.InTx`. Per action, via
+the tx-bound `Repos`: mint (`Obs.Create`) / `Obs.ApplyFilePatch` / `Obs.UpdatePath`+`SetFileStatus`
+/ mint + `Dups.Log`; `Derived.SetThumbnailAt` for the thumbnail marker; sidecar `UpsertObservation`;
+`import_errors` rows; session count update. FTS triggers fire in-txn.
 **Post-commit hooks, in order:** flush dirty (dir, stem) keys → grouping recompute *stub*
 (no-op func for now — the seam exists, the engine is a later milestone) → emit JobProgress →
 emit catalog-changed (callback field, wired to Wails later) → nothing else.

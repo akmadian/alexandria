@@ -1,5 +1,25 @@
 # impl/03 — Unified Type Registry + Magic-Byte Classifier (Blocker 3)
 
+> **STATUS: DONE (2026-07-06).** Implemented, with one naming change from this spec.
+>
+> - **Package is `assettype`, not `filetype`** (Ari's call): the repo reserves "Type" for a file's
+>   format category and "Kind" for entity variants; this resolves a `FileType`, so it's a "type"
+>   package. Type `TypeHandler` → `Handler` (avoids the `assettype.TypeHandler` stutter). Files:
+>   `registry.go`, `sniff.go`, `assettype_test.go`. **Read `assettype` everywhere below.**
+> - **Three maps consolidated:** `domain/filetype.go` DELETED (the `FileType` enum stays in
+>   `domain/asset.go`); `metadata` dropped Registry/Extractor/Default, exports `ExtractImage` +
+>   `ExtractFunc`; `thumbnailer` dropped byMIME, exports `GenerateImage` + `GenFunc`,
+>   `Generate(gen, r, assetID)`, and `New` now defaults `Sizes: [512]` (per disposition).
+> - **Sniff** delivered as a tested pure function + `ContentFamily`, with source citations in
+>   `sniff.go` (WHATWG MIME Sniffing Standard, Wikipedia file signatures, ISO-BMFF/EBML/ID3 specs).
+>   **Deferred to impl/04** (needs the pipeline + DLQ): the extension-vs-content MISMATCH POLICY
+>   (badge + `ext_mismatch` / `no_usable_content` records) and the `ContentFamily → domain.FileType`
+>   mapping the reclassification needs.
+> - **Importer dispatch:** `scannedFile.handler assettype.Handler`; extract/thumbnail stages call
+>   the handler funcs; the injected `Metadata` field is gone (`Thumbnail` stays — needs output dir).
+> - Acceptance tests green: registry one-row + nil-capability graceful skip; Sniff golden headers,
+>   RIFF/ftyp disambiguation, truncated→false; content-over-name detection primitive.
+
 **Scope:** new `internal/filetype` (or evolve `internal/domain/filetype.go`), touch
 `internal/metadata`, `internal/thumbnailer`. **Blocked by:** nothing (parallel with 01/02).
 **Blocks:** impl/04. **References:** D6, D7.

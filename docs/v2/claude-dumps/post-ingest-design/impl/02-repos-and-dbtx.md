@@ -1,5 +1,27 @@
 # impl/02 — DBTX Seam + Writer-Scoped Repositories (Blocker 2)
 
+> **STATUS: DONE (2026-07-06).** Implemented as specified; notes:
+>
+> - **Writer split realized** in `catalog/interfaces.go`: `AssetReader`,
+>   `AssetObservationWriter`, `AssetJudgmentWriter`, `AssetSyncWriter`, `AssetDerivedWriter`.
+>   `AssetPatch` deleted → `FilePatch` (observation, overlay-non-nil) + `TriagePatch` (judgment,
+>   `Opt`). One `sqlite.AssetRepo` satisfies all; scoping is at injection.
+> - **DBTX seam** in `sqlite/db.go`: `DBTX`, `Store`, `Repos`, `InTx`. InTx uses the driver's
+>   default BEGIN (deferred), NOT BEGIN IMMEDIATE — `ponytail:` note to switch via a
+>   `_txlock=immediate` DSN param if write-lock contention appears (single-writer design makes
+>   it moot now; deferred is still correct).
+> - **Importer holds `Reader + Obs + Derived + Dups`** — NO judgment/sync writer (grep-verified).
+>   The "only Reader + ObservationWriter" acceptance line was read as intent ("cannot write
+>   judgment/sync"); the Derived writer is needed for the thumbnail marker and is not a judgment
+>   class.
+> - **Deferred to impl/04** (build with their consumers — no caller exists yet, so their method
+>   shapes would be guesses): `sidecar_files` repo, `import_sessions`/`import_errors` repo, and
+>   `SetAssetTags`'s FTS-tags maintenance (no tag repo yet). §3's sort-whitelist and
+>   Create-rejects-judgments ARE done.
+> - Acceptance tests green: ApplyFilePatch preserves rating + judgment_modified_at;
+>   ApplyTriagePatch bumps it while ApplyXMPInbound does not; InTx rollback; List rejects unknown
+>   sort field.
+
 **Scope:** `internal/sqlite/`, `internal/catalog/`. **Blocked by:** impl/01. **Blocks:** impl/04.
 **References:** D8, `03-data-model.md` §1.
 

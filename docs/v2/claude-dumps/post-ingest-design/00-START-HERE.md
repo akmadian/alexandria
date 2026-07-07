@@ -20,10 +20,10 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `03-data-model.md` | Data classification system, schema spec, identity/matching policy |
 | `04-open-questions.md` | Unresolved decisions, with recommendations where they exist |
 | `05-code-disposition.md` | Per-path keep/modify/delete license over the existing code — specs win every conflict |
-| `impl/01-schema-rework.md` | **Blocker 1** — rewrite migration 0001 (spec-complete, start here) |
-| `impl/02-repos-and-dbtx.md` | **Blocker 2** — transaction seam + writer-scoped repositories |
-| `impl/03-type-registry-and-classifier.md` | **Blocker 3** — consolidate type dispatch + magic-byte classifier |
-| `impl/04-ingest-pipeline.md` | **The milestone** — the six-stage pipeline, spec-complete |
+| `impl/01-schema-rework.md` | **Blocker 1 — ✅ DONE (2026-07-06)** — migration 0001 rewritten |
+| `impl/02-repos-and-dbtx.md` | **Blocker 2 — ✅ DONE (2026-07-06)** — transaction seam + writer-scoped repos |
+| `impl/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
+| `impl/04-ingest-pipeline.md` | **The milestone — NEXT** — the six-stage pipeline (spec reconciled with 01–03) |
 | `impl/05-watcher-service.md` | Next milestone after ingest (design complete, do not start early) |
 | `impl/06-xmp-sync.md` | Milestone after watcher (design complete) |
 | `impl/07-dependency-fleet.md` | External-tool supervisor (needed before deep metadata / RAW / video) |
@@ -31,34 +31,42 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 
 ## Where the project is right now
 
-**Code that exists** (all subject to modification per these docs):
+**Blockers 01–03 are implemented and green** (`go vet ./...` clean, full `go test ./...` passing,
+uncached). Current state of the tree:
 
-- `internal/domain/` — domain types, file-type table, Opt[T] patch primitive. Sound, keep.
-- `internal/migrations/` — migrator + `0001_initial_schema.sql`. Migrator is sound; **0001 gets
-  rewritten in place** (pre-release, zero real catalogs exist — edit, don't stack migrations).
-- `internal/sqlite/` — asset/source/duplicate repos. Functional but pre-date the DBTX seam and
-  writer-split; `impl/02` reworks them.
-- `internal/importer/` — a **sequential** single-threaded importer with the right stage
-  factoring (scan/hash/classify/extract/thumbnail/persist as separate funcs) and the right
-  identity matrix core. It is the seed of the real pipeline, not a throwaway.
-- `internal/metadata/`, `internal/thumbnailer/` — per-MIME registries (pure-Go raster formats
-  only). Get folded into the unified type registry (`impl/03`).
-- `internal/main.go` — an in-memory smoke test, says so in comments. Not an app.
-- `frontend/` — React shell, mock API, and `frontend/src/api/contract.ts` — the designed seam.
-  **The contract is deliberately network-shaped** (async, DTOs, events, binary-by-URL); read it
-  before touching the engine's public surface, but do not do frontend work yet.
+- `internal/domain/` — domain types + `NewID()` (UUIDv7); `Source` split into `Enabled`/
+  `Connectivity`; `Asset` gained `Title`/`Caption`/`JudgmentModifiedAt`. `filetype.go` **removed**
+  (the ext table moved to `assettype`; the `FileType` enum stays in `asset.go`). `keybindings.go`
+  removed.
+- `internal/migrations/` — `0001_initial_schema.sql` rewritten (FK delete rules, partial unique
+  indexes, sidecar_files/import_sessions/import_errors, trigger-maintained FTS5, dropped CHECKs +
+  keybindings table).
+- `internal/sqlite/` — writer-scoped repos over the `DBTX` seam (`db.go`: `Store`/`Repos`/`InTx`);
+  `Open()` (WAL + flock instance lock); `RebuildFTS`.
+- `internal/catalog/` — writer-class interfaces (`AssetReader`/`ObservationWriter`/`JudgmentWriter`/
+  `SyncWriter`/`DerivedWriter`); `FilePatch` + `TriagePatch` (the old `AssetPatch` is gone).
+- `internal/assettype/` — **NEW** unified registry (`Handler`, `Classify`, `IsSupported`,
+  `IsSidecar`) + magic-byte `Sniff`/`ContentFamily`.
+- `internal/metadata/`, `internal/thumbnailer/` — MIME maps dropped; export `ExtractImage`/
+  `ExtractFunc` and `GenerateImage`/`GenFunc`; thumbnailer `Sizes` default `[512]`.
+- `internal/importer/` — still the **sequential** importer, but rewired to the scoped writers +
+  `assettype` dispatch (reimport is clobber-safe). impl/04 restructures it into the concurrent
+  pipeline; it is the seed, not a throwaway.
+- `internal/main.go` — smoke harness (retires when `cmd/dev`/impl/08 lands).
+- `frontend/` — React shell + `frontend/src/api/contract.ts` (the designed, network-shaped seam).
+  Do not do frontend work yet.
 
-**An earlier audit of this codebase** (same session) found and the design absorbed: FTS5 created
-but never populated; ORDER BY SQL injection via raw sort field; no transactions in the write path;
-reimport clobbering user edits; missing FK delete rules; the soft-delete unique-index trap. All are
-fixed by `impl/01` + `impl/02` + `impl/04`.
+**The earlier audit's findings are now fixed** (FTS unpopulated, ORDER BY injection, no write-path
+transactions, reimport-clobber, missing FK rules, soft-delete unique trap) — the remaining
+audit item, atomic batched writes, lands with the WRITE stage in `impl/04`.
 
 ## The immediate path (blocking order)
 
-1. `impl/01` schema rework (~1 day)
-2. `impl/02` DBTX + writer-split repos (~1 day)
-3. `impl/03` type registry + classifier (~½ day)
-4. `impl/04` ingest pipeline (the milestone; includes minimal job envelope and real `openCatalog`)
+1. ✅ `impl/01` schema rework — DONE
+2. ✅ `impl/02` DBTX + writer-split repos — DONE
+3. ✅ `impl/03` type registry + classifier (`assettype`) — DONE
+4. **NEXT:** `impl/04` ingest pipeline (the milestone; builds the deferred sidecar/session repos,
+   wires the `Sniff` mismatch policy, the minimal job envelope, and `cmd/dev` per impl/08)
 
 **Explicitly NOT needed for the ingest milestone:** dependency fleet (pure-Go covers JPEG/PNG/GIF),
 grouping engine (derived state, backfillable — ingest only writes `sidecar_files`), watcher, XMP
