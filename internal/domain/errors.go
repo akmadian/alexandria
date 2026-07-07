@@ -3,7 +3,7 @@ package domain
 import "fmt"
 
 // Generic, cross-cutting errors. Domain-specific errors live with their type:
-// SourceOfflineError in source.go, ErrKeybindingConflict in keybindings.go.
+// SourceOfflineError in source.go.
 
 type NotFoundError struct {
 	Resource string

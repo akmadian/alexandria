@@ -15,7 +15,6 @@ import (
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/charmbracelet/log"
-	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
 
@@ -44,12 +43,13 @@ func main() {
 
 	now := time.Now().UTC()
 	src := &domain.Source{
-		ID:              uuid.NewString(),
+		ID:              domain.NewID(),
 		Name:            "testdata",
 		Kind:            domain.SourceKindLocal,
 		BasePath:        "../testdata",
 		ScanRecursively: true,
-		Status:          domain.SourceStatusActive,
+		Enabled:         true,
+		Connectivity:    domain.SourceOnline,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}

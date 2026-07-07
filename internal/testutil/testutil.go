@@ -37,13 +37,14 @@ func NewTestSource(t *testing.T, db *sql.DB, name string) *domain.Source {
 		Kind:            domain.SourceKindLocal,
 		BasePath:        "/tmp/test/" + name,
 		ScanRecursively: true,
-		Status:          domain.SourceStatusActive,
+		Enabled:         true,
+		Connectivity:    domain.SourceOnline,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
-	_, err := db.Exec(`INSERT INTO sources (id, name, kind, base_path, scan_recursively, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.ID, s.Name, s.Kind, s.BasePath, boolToInt(s.ScanRecursively), s.Status,
+	_, err := db.Exec(`INSERT INTO sources (id, name, kind, base_path, scan_recursively, enabled, connectivity, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.ID, s.Name, s.Kind, s.BasePath, boolToInt(s.ScanRecursively), boolToInt(s.Enabled), s.Connectivity,
 		s.CreatedAt.Format(time.RFC3339), s.UpdatedAt.Format(time.RFC3339))
 	if err != nil {
 		t.Fatalf("insert test source: %v", err)

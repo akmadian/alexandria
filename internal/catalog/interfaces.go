@@ -11,7 +11,7 @@ type SourceRepository interface {
 	Get(ctx context.Context, id string) (*domain.Source, error)
 	Create(ctx context.Context, source *domain.Source) error
 	Update(ctx context.Context, source *domain.Source) error
-	UpdateStatus(ctx context.Context, id string, status domain.SourceStatus) error
+	SetConnectivity(ctx context.Context, id string, c domain.SourceConnectivity) error
 	FindByFilesystemUUID(ctx context.Context, uuid string) (*domain.Source, error)
 	FindBySharePath(ctx context.Context, host, shareName string) (*domain.Source, error)
 }

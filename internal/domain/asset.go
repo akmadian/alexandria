@@ -74,6 +74,8 @@ type Asset struct {
 
 	Creator   *string // EXIF Artist / IPTC By-line / XMP dc:creator
 	Copyright *string // EXIF Copyright / IPTC CopyrightNotice / XMP dc:rights
+	Title     *string // IPTC/XMP dc:title (observation; FTS target)
+	Caption   *string // IPTC/XMP dc:description (observation; distinct from the user's Note)
 
 	ExtendedMetadata map[string]any
 
@@ -81,6 +83,12 @@ type Asset struct {
 	ColorLabel *ColorLabel
 	Flag       *Flag
 	Note       *string
+
+	// JudgmentModifiedAt is bumped ONLY when a judgment field (rating/label/flag/
+	// note/deletion) changes — never by observation refreshes. XMP conflict
+	// resolution reads it to answer "did the user edit since the last sync?"
+	// Enforced by the writer-split repositories (impl/02).
+	JudgmentModifiedAt *time.Time
 
 	XMPLastReadAt    *time.Time
 	XMPLastWrittenAt *time.Time

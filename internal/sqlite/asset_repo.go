@@ -23,7 +23,8 @@ const assetColumns = `id, source_id, relative_path, file_status, last_verified_a
 	aperture, shutter_speed, iso, gps_lat, gps_lon, creator, copyright,
 	extended_metadata, rating, color_label, flag, note,
 	xmp_last_read_at, xmp_last_written_at, xmp_hash,
-	thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at`
+	thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at,
+	title, caption, judgment_modified_at`
 
 func (r *AssetRepo) Get(ctx context.Context, id string) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx, "SELECT "+assetColumns+" FROM assets WHERE id = ?", id)
@@ -41,7 +42,7 @@ func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 	}
 	_, err = r.DB.ExecContext(ctx, `INSERT INTO assets
 		(`+assetColumns+`) VALUES
-		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?)`,
+		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?)`,
 		a.ID, a.SourceID, a.RelativePath, a.FileStatus, formatTimePtr(a.LastVerifiedAt),
 		a.Filename, a.Extension, a.MIMEType, a.FileType, a.SizeBytes, formatTime(a.MTime), a.PartialHash,
 		a.Width, a.Height, a.DurationSecs, a.ColorSpace, a.BitDepth,
@@ -52,7 +53,8 @@ func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 		formatTimePtr(a.XMPLastReadAt), formatTimePtr(a.XMPLastWrittenAt), a.XMPHash,
 		formatTimePtr(a.ThumbnailAt),
 		boolToInt(a.IsDeleted), formatTimePtr(a.DeletedAt),
-		formatTime(a.IngestedAt), formatTime(a.UpdatedAt))
+		formatTime(a.IngestedAt), formatTime(a.UpdatedAt),
+		a.Title, a.Caption, formatTimePtr(a.JudgmentModifiedAt))
 	return err
 }
 
@@ -68,9 +70,10 @@ func (r *AssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 		width=?, height=?, duration_secs=?, color_space=?, bit_depth=?,
 		captured_at=?, camera_make=?, camera_model=?, lens_model=?, focal_length_mm=?,
 		aperture=?, shutter_speed=?, iso=?, gps_lat=?, gps_lon=?, creator=?, copyright=?,
+		title=?, caption=?,
 		extended_metadata=?, rating=?, color_label=?, flag=?, note=?,
 		xmp_last_read_at=?, xmp_last_written_at=?, xmp_hash=?,
-		thumbnail_at=?, is_deleted=?, deleted_at=?, updated_at=?
+		thumbnail_at=?, is_deleted=?, deleted_at=?, judgment_modified_at=?, updated_at=?
 		WHERE id=?`,
 		a.SourceID, a.RelativePath, a.FileStatus, formatTimePtr(a.LastVerifiedAt),
 		a.Filename, a.Extension, a.MIMEType, a.FileType, a.SizeBytes, formatTime(a.MTime), a.PartialHash,
@@ -78,10 +81,11 @@ func (r *AssetRepo) Update(ctx context.Context, a *domain.Asset) error {
 		formatTimePtr(a.CapturedAt), a.CameraMake, a.CameraModel, a.LensModel, a.FocalLengthMM,
 		a.Aperture, a.ShutterSpeed, a.ISO, a.GPSLat, a.GPSLon,
 		a.Creator, a.Copyright,
+		a.Title, a.Caption,
 		extJSON, a.Rating, nilColorLabel(a.ColorLabel), nilFlag(a.Flag), a.Note,
 		formatTimePtr(a.XMPLastReadAt), formatTimePtr(a.XMPLastWrittenAt), a.XMPHash,
 		formatTimePtr(a.ThumbnailAt),
-		boolToInt(a.IsDeleted), formatTimePtr(a.DeletedAt), formatTime(a.UpdatedAt),
+		boolToInt(a.IsDeleted), formatTimePtr(a.DeletedAt), formatTimePtr(a.JudgmentModifiedAt), formatTime(a.UpdatedAt),
 		a.ID)
 	if err != nil {
 		return err
@@ -432,7 +436,8 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	var colorSpace, cameraMake, cameraModel, lensModel, shutterSpeed sql.NullString
 	var extMetadata, colorLabel, flag, note sql.NullString
 	var xmpHash sql.NullString
-	var creator, copyright sql.NullString
+	var creator, copyright, title, caption sql.NullString
+	var judgmentModifiedAt sql.NullString
 
 	err := sc.Scan(
 		&a.ID, &a.SourceID, &a.RelativePath, &a.FileStatus, &lastVerifiedAt,
@@ -442,7 +447,8 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 		&aperture, &shutterSpeed, &iso, &gpsLat, &gpsLon, &creator, &copyright,
 		&extMetadata, &rating, &colorLabel, &flag, &note,
 		&xmpLastReadAt, &xmpLastWrittenAt, &xmpHash,
-		&thumbnailAt, &isDeleted, &deletedAt, &ingestedAt, &updatedAt)
+		&thumbnailAt, &isDeleted, &deletedAt, &ingestedAt, &updatedAt,
+		&title, &caption, &judgmentModifiedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -466,6 +472,9 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	a.GPSLon = nullFloat64Ptr(gpsLon)
 	a.Creator = nullStringPtr(creator)
 	a.Copyright = nullStringPtr(copyright)
+	a.Title = nullStringPtr(title)
+	a.Caption = nullStringPtr(caption)
+	a.JudgmentModifiedAt = parseNullTime(judgmentModifiedAt)
 	if extMetadata.Valid && extMetadata.String != "" {
 		a.ExtendedMetadata = make(map[string]any)
 		json.Unmarshal([]byte(extMetadata.String), &a.ExtendedMetadata)

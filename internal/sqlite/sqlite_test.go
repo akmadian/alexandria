@@ -12,19 +12,20 @@ import (
 	"github.com/akmadian/alexandria/internal/testutil"
 )
 
-func TestMigration_FTS5Works(t *testing.T) {
+// FTS is populated by the assets triggers, not by direct writes: insert an asset
+// and it must become searchable by filename.
+func TestMigration_FTSTriggerIndexesAssets(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	_, err := db.Exec("INSERT INTO assets_fts (asset_id, filename, tags, note) VALUES ('a1', 'sunset.jpg', 'landscape golden-hour', 'beautiful sunset')")
-	if err != nil {
-		t.Fatalf("FTS5 insert failed: %v", err)
-	}
+	src := testutil.NewTestSource(t, db, "s")
+	testutil.NewTestAsset(t, db, src.ID, "sunset-beach.jpg")
+
 	var id string
-	err = db.QueryRow("SELECT asset_id FROM assets_fts WHERE assets_fts MATCH 'sunset'").Scan(&id)
+	err := db.QueryRow("SELECT asset_id FROM assets_fts WHERE assets_fts MATCH 'sunset'").Scan(&id)
 	if err != nil {
-		t.Fatalf("FTS5 query failed: %v", err)
+		t.Fatalf("FTS query failed: %v", err)
 	}
-	if id != "a1" {
-		t.Fatalf("got %q, want a1", id)
+	if id != "asset-sunset-beach.jpg" {
+		t.Fatalf("got %q, want asset-sunset-beach.jpg", id)
 	}
 }
 
@@ -53,7 +54,7 @@ func TestSourceRepo_CreateAndGet(t *testing.T) {
 	s := &domain.Source{
 		ID: "s1", Name: "Photos", Kind: domain.SourceKindExternalDrive,
 		BasePath: "/Volumes/Photos", FilesystemUUID: &fsUUID,
-		ScanRecursively: true, Status: domain.SourceStatusActive,
+		ScanRecursively: true, Enabled: true, Connectivity: domain.SourceOnline,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := repo.Create(ctx, s); err != nil {
@@ -69,6 +70,9 @@ func TestSourceRepo_CreateAndGet(t *testing.T) {
 	}
 	if got.FilesystemUUID == nil || *got.FilesystemUUID != "uuid-123" {
 		t.Fatalf("filesystem_uuid: got %v", got.FilesystemUUID)
+	}
+	if !got.Enabled || got.Connectivity != domain.SourceOnline {
+		t.Fatalf("enabled/connectivity: got enabled=%v connectivity=%q", got.Enabled, got.Connectivity)
 	}
 }
 
@@ -99,18 +103,22 @@ func TestSourceRepo_List(t *testing.T) {
 	}
 }
 
-func TestSourceRepo_UpdateStatus(t *testing.T) {
+func TestSourceRepo_SetConnectivity(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.SourceRepo{DB: db}
 	ctx := context.Background()
 	testutil.NewTestSource(t, db, "drive")
 
-	if err := repo.UpdateStatus(ctx, "src-drive", domain.SourceStatusOffline); err != nil {
-		t.Fatalf("update status: %v", err)
+	if err := repo.SetConnectivity(ctx, "src-drive", domain.SourceOffline); err != nil {
+		t.Fatalf("set connectivity: %v", err)
 	}
 	got, _ := repo.Get(ctx, "src-drive")
-	if got.Status != domain.SourceStatusOffline {
-		t.Fatalf("got status %q, want offline", got.Status)
+	if got.Connectivity != domain.SourceOffline {
+		t.Fatalf("got connectivity %q, want offline", got.Connectivity)
+	}
+	// Connectivity (observation) must not disturb Enabled (judgment).
+	if !got.Enabled {
+		t.Fatal("SetConnectivity clobbered Enabled")
 	}
 }
 
@@ -124,7 +132,7 @@ func TestSourceRepo_FindByFilesystemUUID(t *testing.T) {
 	repo.Create(ctx, &domain.Source{
 		ID: "s1", Name: "ext", Kind: domain.SourceKindExternalDrive,
 		BasePath: "/mnt/ext", FilesystemUUID: &fsUUID,
-		ScanRecursively: true, Status: domain.SourceStatusActive,
+		ScanRecursively: true, Enabled: true, Connectivity: domain.SourceOnline,
 		CreatedAt: now, UpdatedAt: now,
 	})
 
@@ -377,5 +385,103 @@ func TestAssetRepo_MarkOfflineOnlineBySource(t *testing.T) {
 	got, _ = repo.Get(ctx, "asset-a.jpg")
 	if got.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("got %q, want online", got.FileStatus)
+	}
+}
+
+// --- Schema constraint / trap tests (impl/01 acceptance) ---
+
+// The unique (source_id, relative_path) index is partial on is_deleted=0, so a
+// soft-deleted asset must not block re-importing a fresh asset at the same path.
+func TestSchema_SoftDeleteThenReimportSamePath(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	repo := &sqlite.AssetRepo{DB: db}
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+
+	a1 := testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
+	if err := repo.SoftDelete(ctx, a1.ID); err != nil {
+		t.Fatalf("soft delete: %v", err)
+	}
+
+	now := time.Now().UTC()
+	a2 := &domain.Asset{
+		ID: domain.NewID(), SourceID: src.ID, RelativePath: "photo.jpg",
+		FileStatus: domain.FileStatusOnline, Filename: "photo.jpg", Extension: "jpg",
+		MIMEType: "image/jpeg", FileType: domain.FileTypeImage, SizeBytes: 2048,
+		MTime: now, PartialHash: "newhash", IngestedAt: now, UpdatedAt: now,
+	}
+	if err := repo.Create(ctx, a2); err != nil {
+		t.Fatalf("re-import at same path after soft delete should succeed: %v", err)
+	}
+}
+
+// SQLite treats NULLs as distinct in a UNIQUE index; the IFNULL(parent_id,”)
+// expression index must still reject two root tags with the same slug.
+func TestSchema_RootTagSlugConflict(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Format(time.RFC3339)
+	insert := func(id string) error {
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO tags (id, name, slug, parent_id, created_at) VALUES (?, 'Travel', 'travel', NULL, ?)`,
+			id, now)
+		return err
+	}
+	if err := insert("t1"); err != nil {
+		t.Fatalf("first root tag: %v", err)
+	}
+	if err := insert("t2"); err == nil {
+		t.Fatal("expected slug conflict on second root tag, got nil")
+	}
+}
+
+func TestSchema_FKCascadeOnTagDelete(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+	a := testutil.NewTestAsset(t, db, src.ID, "x.jpg")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, created_at) VALUES ('tag1', 'Beach', 'beach', ?)`, now); err != nil {
+		t.Fatalf("tag: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 'tag1', 'user', ?)`, a.ID, now); err != nil {
+		t.Fatalf("asset_tag: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM tags WHERE id = 'tag1'`); err != nil {
+		t.Fatalf("delete tag: %v", err)
+	}
+
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM asset_tags WHERE tag_id = 'tag1'`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expected CASCADE to remove asset_tags, found %d", n)
+	}
+}
+
+// RebuildFTS composes the tags column from the asset_tags join — the one FTS
+// column triggers can't maintain. Before rebuild the tags cell is empty; after,
+// the asset is searchable by tag name.
+func TestRebuildFTS_IncludesTags(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+	a := testutil.NewTestAsset(t, db, src.ID, "img.jpg")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, created_at) VALUES ('t1', 'Landscape', 'landscape', ?)`, now)
+	db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 't1', 'user', ?)`, a.ID, now)
+
+	if err := sqlite.RebuildFTS(ctx, db); err != nil {
+		t.Fatalf("rebuild: %v", err)
+	}
+	var id string
+	if err := db.QueryRowContext(ctx, `SELECT asset_id FROM assets_fts WHERE assets_fts MATCH 'landscape'`).Scan(&id); err != nil {
+		t.Fatalf("tag search after rebuild: %v", err)
+	}
+	if id != a.ID {
+		t.Fatalf("got %q, want %q", id, a.ID)
 	}
 }

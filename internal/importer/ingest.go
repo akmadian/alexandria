@@ -6,7 +6,6 @@ import (
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
-	"github.com/google/uuid"
 )
 
 // action is the ingest decision for one hashed file.
@@ -87,7 +86,7 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scan
 		}
 		if act == actionDuplicate {
 			return asset.ID, imp.Dups.Log(ctx, &domain.Duplicate{
-				ID:               uuid.NewString(),
+				ID:               domain.NewID(),
 				OriginalAssetID:  existing.ID,
 				DuplicateAssetID: asset.ID,
 				PartialHash:      hash,
@@ -105,7 +104,7 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, sf scan
 func buildAsset(source *domain.Source, sf scannedFile, hash string, md metadata.Metadata) *domain.Asset {
 	now := time.Now().UTC()
 	a := &domain.Asset{
-		ID:           uuid.NewString(),
+		ID:           domain.NewID(),
 		SourceID:     source.ID,
 		RelativePath: sf.relPath,
 		FileStatus:   domain.FileStatusOnline,
