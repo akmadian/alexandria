@@ -293,29 +293,44 @@ runs it*. Keep them apart.
 
 ```go
 // (a) directly testable: one file in, one file out.
-func hashOne(sf ScannedFile) (HashedFile, error) {
-    h, err := hashFile(sf.AbsPath) // opens, reads the head, calls partialHash (§1)
-    return HashedFile{ScannedFile: sf, PartialHash: h}, err
+func hashFile(fsys fs.FS, scanned scannedFile) (string, error) {
+    // opens, reads the head, calls partialHash (§1)
 }
 
-// (b) plumbing: fan-out, ctx cancellation, error channel. Dull, tested once.
-func hashStage(ctx context.Context, in <-chan ScannedFile, out chan<- HashedFile, errc chan<- ImportError) {
-    for sf := range in {
-        if ctx.Err() != nil {
-            return
-        }
-        hf, err := hashOne(sf)
+// (b) plumbing: range the input, run the transform, forward. Dull, tested once.
+func (pipe *pipeline) hash(ctx context.Context, in <-chan *pipelineItem, out chan<- *pipelineItem) error {
+    for item := range in {
+        hash, _, err := hashAndHead(pipe.fsys, item.scanned)
         if err != nil {
-            errc <- ImportError{Path: sf.AbsPath, Stage: "hashing", Err: err}
-            continue
+            item.rejected = true
+            item.addError("hash", "read_failed", err.Error())
+        } else {
+            item.hash = hash
         }
-        out <- hf
+        if err := pipe.emit(ctx, out, item); err != nil { // emit handles cancellation
+            return err
+        }
     }
+    return nil
 }
 ```
 
-Test `hashOne` with a file and an assertion. Don't re-test the `for range`
-plumbing for every stage — it's the same shape each time.
+Test the transform (`hashAndHead`) with a file and an assertion. Don't re-test
+the `for range` plumbing for every stage — it's the same shape each time.
+
+### File layout for a multi-stage pipeline
+
+Files are free (§0), so give each stage its own file rather than one grab-bag.
+`internal/importer` is the reference: **one `stage_<name>.go` per step**
+(`stage_scan.go`, `stage_hash.go`, `stage_match.go`, `stage_extract.go`,
+`stage_thumb.go`, `stage_write.go`), with the channel wiring and run-level state
+in `pipeline.go` and the item that threads through them in `item.go`. This is a
+*file* split, not a *package* split: the stages share a wide mutable surface (the
+`pipeline` struct and the item), which is exactly what a single package's
+unexported state is for. Do **not** promote each stage to its own subdirectory —
+a subdir is a separate Go package, which would force exporting that shared
+surface and invite an import cycle (see §0). Reach for a sub-package only when a
+stage grows a genuinely independent, narrow-interface concern.
 
 ---
 
@@ -367,6 +382,43 @@ Go's toolchain dictates this — it's not a style choice:
 
 ---
 
+## 9. Name things in full — abbreviations are a readability tax
+
+**Spell names out. Do not abbreviate or truncate identifiers.** A name is read
+far more often than it is typed; shaving four characters off `metadata` to write
+`md` saves the author a moment and costs every future reader (human or model) a
+re-derivation. This repo treats truncated names as a defect, not a style
+preference.
+
+Concretely:
+
+- `extractedMetadata`, not `md`. `scannedFile` variables are `scanned`, not
+  `sf`. `relativePath`, not `relPath`/`fp`/`p`. `handler`, not `h`. `pattern`,
+  not `pat`. `verdict` (the matrix decision), not `act`. `pipelineItem`, not
+  `it`. `waitGroup`/`group`, not `wg`/`eg`. `importErrors`, not `errs`.
+- Loop bodies get real names too: `for _, session := range sessions`, not
+  `for _, s := range sessions`.
+- A name colliding with an imported package is not a licence to abbreviate —
+  pick a fuller, more specific name (`extractedMetadata` beside the `metadata`
+  package; `openedCatalog` beside a `catalog` variable). The collision is
+  telling you the short name was ambiguous anyway.
+
+**The only allowed short names** are genuinely universal conventions, and
+nothing else earns an exception by analogy:
+
+- Loop indices `i`, `j`, `k` — and only as bare integer indices.
+- The stdlib-idiom trio `err`, `ctx`, `ok`, plus `id`, `db`, `tx`.
+- **Method receivers**, which Go convention keeps short (`func (r *AssetRepo)`,
+  `func (imp *Importer)`). Keep them 1–4 chars and consistent per type. This is
+  the *receiver* only — a local variable of the same type is spelled in full.
+
+If you find yourself wanting a fifth exception, the answer is no: write the
+word. Struct fields, function parameters, and locals are all in scope — see
+`internal/importer/pipeline.go` and `internal/sqlite/import_repo.go` for the
+reference style.
+
+---
+
 ## Quick checklist for a new file
 
 1. Is this package named for a *feature/concern*, not a technical kind
@@ -379,6 +431,8 @@ Go's toolchain dictates this — it's not a style choice:
 7. Ignoring an `error` with `_`? Justify or return it.
 8. Does `domain` still import nothing but stdlib?
 9. One small test that fails if I break the logic?
+10. Is every name spelled in full (no `md`/`sf`/`fp`/`it`), except the sanctioned
+    short set (`i/j/k`, `err`/`ctx`/`ok`/`id`/`db`/`tx`, short method receivers)?
 
 ## Sources
 

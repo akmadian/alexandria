@@ -33,6 +33,10 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 - IDs via the shared helper (UUIDv7), never inline `uuid.NewString()`.
 - `internal/domain` imports stdlib only. No `utils`/`helpers`/`models`/`common` packages, ever.
 - Interfaces are carved at the *second* implementation — no speculative abstraction.
+- **Names are spelled in full — no abbreviations.** `extractedMetadata` not `md`, `scanned` not `sf`,
+  `relativePath` not `relPath`. Only sanctioned short names: loop indices `i/j/k`; `err`/`ctx`/`ok`/
+  `id`/`db`/`tx`; short method receivers (a *local* of the same type is still spelled out). This
+  applies to struct fields, params, and locals alike. See coding-guidelines §9.
 - Per-OS code = build-tagged files inside the owning package; no shared `platform` package.
 - Pipeline channels are created/wired/closed in ONE function; stages take directional channel params.
 - External binaries via the `dependency` package (subprocesses, never cgo); no silent downloads.
