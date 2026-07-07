@@ -4,18 +4,20 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 
 ## Design authority (read before designing or implementing anything)
 
-1. **`docs/v2/claude-dumps/post-ingest-design/00-START-HERE.md`** — the current design handoff.
+1. **`docs/v2/post-ingest-design/00-START-HERE.md`** — the current design handoff.
    Its decision log (`02-decision-log.md`) **wins every conflict** with older docs and existing code.
-2. `docs/functional-requirements.md` — feature source of truth (P0–P4).
-3. Older design docs in `docs/` are superseded — see `docs/AGENTS.md` for known conflicts.
+2. `docs/v2/functional-requirements.md` — feature source of truth (P0–P4).
+3. Older design docs in `docs/v1/` are superseded — see `docs/AGENTS.md` for known conflicts.
 4. Existing code follows the disposition table (`.../05-code-disposition.md`): specs win; you have
    explicit license to delete what it marks deleted.
+5. `internal/importer/README.md` (ingest engine, impl/04) and `docs/v2/perf/` (thumbnail/hardware
+   acceleration) are the up-to-date implementation references for the pipeline.
 
 ## Commands
 
-- Backend: `go test ./...` · `go vet ./...` (run from repo root)
+- Backend: `go test -race ./...` · `go vet ./...` (run from repo root)
 - Frontend: `bun run check` (in `frontend/` — typecheck + lint + tests; must pass before commit)
-- Dev harness (once built): `go run ./cmd/dev`
+- Dev harness: `go run ./cmd/dev import <path>` (`--catalog <dir>` to browse the DB, `--debug` for pprof)
 
 ## Hard rules — violating any of these is a bug, not a style choice
 

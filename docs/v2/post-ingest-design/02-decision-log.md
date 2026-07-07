@@ -3,12 +3,15 @@
 Numbered, ADR-lite. Each entry: decision, rationale, revisit trigger where meaningful.
 NFR references → `01-requirements-distilled.md`.
 
-> **Implementation status (2026-07-06):** D3 (SQLite/FTS), D8 (data classification → writer-scoped
+> **Implementation status (2026-07-07):** D3 (SQLite/FTS), D8 (data classification → writer-scoped
 > repos), D9 (UUIDv7 + matrix), D11 (column promotion), D16 (schema side: sources split,
 > keybindings table dropped) are realized through impl/01–02. D6 (unified registry) + D7
 > (magic-byte classifier) are realized in impl/03 — note the package shipped as **`assettype`**,
-> not `filetype` (Type = format category vs Kind = entity variant). D12–D14, D17 (jobs), D18
-> (ignore list) are impl/04+ and not yet built. Everything else is design-only so far.
+> not `filetype` (Type = format category vs Kind = entity variant). **D12 (pipeline shape),
+> D13 (DLQ = import_errors, no retry machinery), D17 (jobs: registry map + OnProgress), and
+> D18 (ignore list) are realized in impl/04.** D14 (watcher) is designed but NOT built — it's the
+> next milestone (impl/05); the standalone `Reconcile` is a transitional stand-in until then.
+> Everything else is design-only so far.
 
 ## D1 — Single-process desktop app; engine as embedded Go library behind one transport-agnostic async contract
 

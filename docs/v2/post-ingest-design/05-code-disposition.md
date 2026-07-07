@@ -6,19 +6,24 @@ table grants explicit license per path. "Fresh file" means: write the new shape 
 new/emptied file, then port named functions in — do NOT incrementally mutate the old shape toward
 the new one (that's how old patterns survive).
 
-## Applied so far (impl/01–03, 2026-07-06)
+## Applied so far (impl/01–04, 2026-07-07)
 
 The dispositions below through the sqlite/catalog/metadata/thumbnailer/importer layers have been
-executed. Notable outcomes vs the table:
+executed, and impl/04 restructured the importer into the concurrent pipeline. Notable outcomes vs
+the table:
 
 - **Deleted:** `domain/keybindings.go`, `domain/filetype.go` (+ its test), `catalog`'s fat
   `AssetRepository` and `AssetPatch`, the per-MIME maps in metadata/thumbnailer.
-- **New:** `internal/assettype/` (the type registry — the disposition's "evolve domain/filetype.go"
-  became a new package because it must import metadata/thumbnailer, which `domain` may not).
-- **`internal/main.go`:** KEPT as the smoke harness (Ari's call — retires when `cmd/dev` lands).
-- **`internal/importer/`:** rewired in place to the scoped writers + `assettype` dispatch. The
-  fresh-file `pipeline.go` restructure is impl/04, not done yet — the current importer is the
-  compiling, tested seed.
+- **New:** `internal/assettype/` (the type registry). New with impl/04: `SidecarRepo` +
+  `ImportRepo` in `sqlite`; the `importer` job envelope (`jobs.go`), ignore list (`ignore.go`),
+  and Sniff-mismatch policy (`mismatch.go`); `cmd/dev` (the engine harness); and the
+  `docs/v2/perf/` reference.
+- **`internal/main.go`:** RETIRED — `cmd/dev` replaced it (its `:memory:` smoke path lives on as
+  `dev import --catalog :memory:`).
+- **`internal/importer/`:** the fresh-file `pipeline.go` restructure (impl/04) is DONE — orchestration
+  in `pipeline.go`, one file per stage (`stage_*.go`), the item in `item.go`. Renamed the raster
+  processor: `metadata.ExtractImage`→`ExtractRaster`, `thumbnailer.GenerateImage`→`GenerateRaster`
+  (files `raster.go`). See `internal/importer/README.md`.
 - **`frontend/`:** untouched, as directed. Pending change noted for the seam round: `SourceStatus`
   → `enabled` + `connectivity` (the backend split already landed).
 

@@ -3,7 +3,7 @@
 **The design documents in this folder — everything EXCEPT `v2/` — are a previous revision,
 superseded on 2026-07-06 by the v2 design handoff:**
 
-→ **Start at `docs/v2/claude-dumps/post-ingest-design/00-START-HERE.md`**
+→ **Start at `docs/v2/post-ingest-design/00-START-HERE.md`**
 
 The v2 decision log (`02-decision-log.md`) is authoritative. Where these older documents conflict
 with it, **the decision log wins, always**. Known conflicts include (non-exhaustive): the

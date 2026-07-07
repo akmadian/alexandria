@@ -1,8 +1,16 @@
 # impl/08 — Dev Harness (`cmd/dev`)
 
-**Status:** build alongside/immediately after impl/04 — it is the manual acceptance rig for the
-pipeline. Replaces the smoke body in `internal/main.go` (which retires once this exists;
-disposition updated).
+**Status: core DONE with impl/04 (2026-07-07); observability server deferred.** Built:
+`cmd/dev` with `import` / `reconcile` / `errors` / `sessions` / `rebuild fts`; `--catalog
+<dir|:memory:>` (prints the browsable `catalog.db` path); `--debug [--debug-addr]` mounting stdlib
+**pprof + expvar** at `localhost:6060`; `--hash-workers` / `--extract-workers` / `--thumb-workers`
+(the CPU-bound pools default to `NumCPU*3/4`); debug-level logging on by default. It replaced the
+retired `internal/main.go`.
+
+Deferred (build when a real workload needs them): the richer `--debug` surface from the table below —
+**statsviz**, the custom **`/state`** JSON snapshot, and the `go:embed` HTML dashboard — plus
+`--json` output. The stdlib pprof goroutine dump already gives the live pipeline picture, which is
+what impl/04 acceptance needs.
 
 ## What it is
 

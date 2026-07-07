@@ -37,7 +37,7 @@ var resizeKernel draw.Interpolator = draw.ApproxBiLinear
 // path: a RAW file's own handler extracts its embedded JPEG preview and feeds
 // those bytes back through THIS function, so RAW thumbnailing reuses the raster
 // backend instead of duplicating resize/encode. Everything that can produce
-// decodable pixels funnels here (see docs/v2/claude-dumps/perf/).
+// decodable pixels funnels here (see docs/v2/perf/).
 func GenerateRaster(r io.ReadSeeker, sizes []int, quality int, dst func(int) string) error {
 	src, _, err := image.Decode(r)
 	if err != nil {

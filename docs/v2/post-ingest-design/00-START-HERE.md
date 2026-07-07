@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-06
 **Produced by:** a system-design working session (Ari + Claude Fable) that worked backwards from
-`docs/functional-requirements.md`, interview-style. All decisions below were made deliberately,
+`docs/v2/functional-requirements.md`, interview-style. All decisions below were made deliberately,
 with tradeoffs discussed. Nothing in the pre-existing codebase was treated as sacred.
 **Audience:** a Claude (Fable/Opus) instance doing further design refinement and/or implementation.
 
@@ -31,34 +31,40 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 
 ## Where the project is right now
 
-**Blockers 01–03 are implemented and green** (`go vet ./...` clean, full `go test ./...` passing,
-uncached). Current state of the tree:
+**Blockers 01–03 AND the impl/04 ingest milestone are implemented and green**
+(`go vet ./...` clean, full `go test -race ./...` passing). Current state of the tree:
 
 - `internal/domain/` — domain types + `NewID()` (UUIDv7); `Source` split into `Enabled`/
-  `Connectivity`; `Asset` gained `Title`/`Caption`/`JudgmentModifiedAt`. `filetype.go` **removed**
-  (the ext table moved to `assettype`; the `FileType` enum stays in `asset.go`). `keybindings.go`
-  removed.
+  `Connectivity`; `Asset` gained `Title`/`Caption`/`JudgmentModifiedAt`; added `SidecarFile` and
+  `ImportSession`/`ImportError`. `filetype.go`/`keybindings.go` removed (the `FileType` enum stays
+  in `asset.go`).
 - `internal/migrations/` — `0001_initial_schema.sql` rewritten (FK delete rules, partial unique
   indexes, sidecar_files/import_sessions/import_errors, trigger-maintained FTS5, dropped CHECKs +
   keybindings table).
 - `internal/sqlite/` — writer-scoped repos over the `DBTX` seam (`db.go`: `Store`/`Repos`/`InTx`);
-  `Open()` (WAL + flock instance lock); `RebuildFTS`.
+  `Open()` (WAL + flock instance lock); `RebuildFTS`; plus `SidecarRepo` and `ImportRepo` (sessions
+  + the DLQ), both bundled into `Repos` for the pipeline's batched writes.
 - `internal/catalog/` — writer-class interfaces (`AssetReader`/`ObservationWriter`/`JudgmentWriter`/
   `SyncWriter`/`DerivedWriter`); `FilePatch` + `TriagePatch` (the old `AssetPatch` is gone).
-- `internal/assettype/` — **NEW** unified registry (`Handler`, `Classify`, `IsSupported`,
-  `IsSidecar`) + magic-byte `Sniff`/`ContentFamily`.
-- `internal/metadata/`, `internal/thumbnailer/` — MIME maps dropped; export `ExtractImage`/
-  `ExtractFunc` and `GenerateImage`/`GenFunc`; thumbnailer `Sizes` default `[512]`.
-- `internal/importer/` — still the **sequential** importer, but rewired to the scoped writers +
-  `assettype` dispatch (reimport is clobber-safe). impl/04 restructures it into the concurrent
-  pipeline; it is the seed, not a throwaway.
-- `internal/main.go` — smoke harness (retires when `cmd/dev`/impl/08 lands).
+- `internal/assettype/` — unified registry (`Handler`, `Classify`, `IsSupported`, `IsSidecar`) +
+  magic-byte `Sniff`/`ContentFamily`.
+- `internal/metadata/`, `internal/thumbnailer/` — export `ExtractRaster`/`ExtractFunc` and
+  `GenerateRaster`/`GenFunc`. "Raster" = the stdlib-decodable formats (JPEG/PNG/GIF), the shared
+  backend every format is meant to funnel into (RAW extracts a preview and reuses it) — see
+  `docs/v2/perf/thumbnailing-and-hardware-acceleration.md`. Thumbnailer `Sizes` default `[512]`,
+  `ApproxBiLinear` resize.
+- `internal/importer/` — **the concurrent pipeline** (impl/04): `pipeline.go` (wiring + run-level
+  state) with one file per stage (`stage_scan/hash/match/extract/thumb/write.go`), plus `item.go`,
+  `jobs.go`, `ignore.go`, `mismatch.go`. `reconcile.go` is transitional (retires with impl/05).
+  **Start at `internal/importer/README.md`** for the lay of the land.
+- `cmd/dev/` — the engine harness (`import`/`reconcile`/`errors`/`sessions`/`rebuild fts`;
+  `--catalog <dir|:memory:>`, `--debug` pprof/expvar, worker-pool flags, debug logging by default).
+  Replaces the retired `internal/main.go`.
 - `frontend/` — React shell + `frontend/src/api/contract.ts` (the designed, network-shaped seam).
-  Do not do frontend work yet.
+  Do not do frontend work yet. Pending seam change: `SourceStatus` → `enabled` + `connectivity`.
 
-**The earlier audit's findings are now fixed** (FTS unpopulated, ORDER BY injection, no write-path
-transactions, reimport-clobber, missing FK rules, soft-delete unique trap) — the remaining
-audit item, atomic batched writes, lands with the WRITE stage in `impl/04`.
+**All the earlier audit findings are fixed** — including the last one, atomic batched writes, which
+landed as the WRITE stage's 50-item `Store.InTx` in impl/04.
 
 ## The immediate path (blocking order)
 
