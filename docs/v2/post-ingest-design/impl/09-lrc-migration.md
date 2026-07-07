@@ -130,7 +130,7 @@ This is the same seam discipline D1 already committed the whole engine to.
 | Collections + membership | `collections` / `collection_assets` | Read from `.lrcat` in `ParseCatalog`, materialized in `Commit`'s post-import pass | Smart collections migrate as a **static snapshot of current membership only** — the rule itself is not portable, and is never silently dropped without saying so in the report |
 | Virtual copies / stacks | `asset_groups` (`origin='manual'`) | Read from `.lrcat`, linked in `Commit`'s post-import pass | Each virtual copy must exist as an independent file before import (LrC's DNG-per-virtual-copy behavior needs empirical verification during prep-guide authoring — flag, don't assume) |
 | Rejected/deleted-in-LrC photos | *(excluded)* | User excludes them from the prep pass / export set | Simpler and safer than routing through a judgment writer during import; ingest structurally cannot write `is_deleted` (D8) |
-| Face/person keyword tags (Lr6+) | plain hierarchical `asset_tags` | Same XMP `dc:subject`/`lr:hierarchicalSubject` path as any keyword | Face-region geometry is dropped — no consumer for it (no face UI) |
+| Face/person keyword tags (Lr6+) | plain hierarchical `asset_tags` | Same XMP `dc:subject`/`lr:hierarchicalSubject` path as any keyword | Face-region geometry (the rectangles, not the person names) is dropped for now — no consumer yet. Alexandria has an opt-in, local-model face-recognition feature planned (undesigned as of this doc); when it lands, revisit whether LrC's region data is worth carrying forward rather than re-detecting from scratch |
 
 ## Trust mechanics (load-bearing, not polish)
 

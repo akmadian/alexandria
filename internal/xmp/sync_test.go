@@ -33,7 +33,7 @@ func TestSyncSidecarInbound(t *testing.T) {
 	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 	repo := &sqlite.AssetRepo{DB: db}
 
-	syncer := NewSyncer(daemon, repo, PolicyXMPWins, log.Default())
+	syncer := NewSyncer(daemon, repo, nil, PolicyXMPWins, log.Default())
 	ctx := context.Background()
 
 	action, err := syncer.SyncSidecar(ctx, asset, "testdata/lightroom.xmp")
@@ -92,7 +92,7 @@ func TestSyncSidecarClearsRemovedRating(t *testing.T) {
 	source := testutil.NewTestSource(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 	repo := &sqlite.AssetRepo{DB: db}
-	syncer := NewSyncer(daemon, repo, PolicyXMPWins, log.Default())
+	syncer := NewSyncer(daemon, repo, nil, PolicyXMPWins, log.Default())
 	ctx := context.Background()
 
 	// First sync applies rating 4 from the full sidecar.
@@ -131,11 +131,67 @@ func TestSyncSidecarClearsRemovedRating(t *testing.T) {
 	}
 }
 
+// TestSyncSidecarUnionsKeywords wires a real tag importer (impl/10) into the
+// Syncer and verifies the impl/06 keyword-union path end-to-end: the LrC fixture
+// carries flat [Travel,Japan,Tokyo] + hierarchical Travel|Japan|Tokyo, so exactly
+// the leaf Tokyo attaches (dedupe drops the flat ancestors) with source='xmp'.
+func TestSyncSidecarUnionsKeywords(t *testing.T) {
+	status := dependency.Discover(dependency.Exiftool, "")
+	if !status.Available() {
+		t.Skipf("exiftool not available (%s)", status.State)
+	}
+	daemon, err := dependency.StartExiftool(status, log.Default())
+	if err != nil {
+		t.Fatalf("start daemon: %v", err)
+	}
+	defer daemon.Close()
+
+	db := testutil.NewTestDB(t)
+	source := testutil.NewTestSource(t, db, "s")
+	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
+	store := sqlite.NewStore(db)
+	repo := &sqlite.AssetRepo{DB: db}
+
+	syncer := NewSyncer(daemon, repo, store, PolicyXMPWins, log.Default())
+	ctx := context.Background()
+
+	if _, err := syncer.SyncSidecar(ctx, asset, "testdata/lightroom.xmp"); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	// Tree Travel>Japan>Tokyo exists; only the leaf is attached.
+	var attached []string
+	rows, err := db.Query(`SELECT t.slug FROM asset_tags at JOIN tags t ON t.id = at.tag_id
+		WHERE at.asset_id = ? AND at.removed_at IS NULL`, asset.ID)
+	if err != nil {
+		t.Fatalf("query attachments: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			t.Fatal(err)
+		}
+		attached = append(attached, slug)
+	}
+	if len(attached) != 1 || attached[0] != "tokyo" {
+		t.Errorf("attached slugs = %v, want [tokyo] (leaf-only, flat ancestors deduped)", attached)
+	}
+
+	var source1 string
+	if err := db.QueryRow(`SELECT source FROM asset_tags WHERE asset_id = ?`, asset.ID).Scan(&source1); err != nil {
+		t.Fatal(err)
+	}
+	if source1 != "xmp" {
+		t.Errorf("source = %q, want xmp", source1)
+	}
+}
+
 // TestToTriagePatch checks the wholesale judgment mapping: present fields set,
 // ABSENT fields clear (sidecar wins, upholding the conflict policy), out-of-range
 // rating clears, unknown/empty label clears.
 func TestToTriagePatch(t *testing.T) {
-	syncer := NewSyncer(nil, nil, PolicyXMPWins, log.Default())
+	syncer := NewSyncer(nil, nil, nil, PolicyXMPWins, log.Default())
 	rating := func(n int) *int { return &n }
 
 	cases := []struct {

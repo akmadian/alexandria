@@ -1,6 +1,6 @@
 # impl/06 — XMP Sync
 
-**Status: inbound read + conflict decision + judgment DB application DONE (2026-07-07); tags/caption application, outbound write, and triggers pending.**
+**Status: inbound read + conflict decision + judgment DB application + keyword union DONE (2026-07-07); caption/title application, outbound write, and triggers pending.**
 **Scope:** new `internal/xmp`. **References:** D15, `03-data-model.md` §1.
 
 > **DONE increment 2 (2026-07-07) — inbound JUDGMENT application, end-to-end.** `sync.go`:
@@ -20,9 +20,14 @@
 > over an unchanged sidecar is a no-op (acceptance #1 judgment half). `WriteBackEnabled` is hard-false;
 > outbound/catalog-wins verdicts log and skip until the write path ships.
 >
-> **Still pending** (unchanged from below, minus what landed): keyword union — now **designed in
-> `impl/10` (D22)** and its immediate driver; `ImportKeywords(assetID, flat, hierarchical, "xmp")` is
-> the seam the Syncer will call (FTS⋈tags deferred within impl/10). caption/title — blocked on a
+> **DONE keyword union (2026-07-07, impl/10).** The `Syncer` holds a `catalog.KeywordImporter` and,
+> on any **sidecar change**, reads + unions keywords via `ImportKeywords(assetID, flat, hierarchical,
+> "xmp")` — regardless of the judgment policy (the tags-always-union exception). Verified end-to-end
+> against real exiftool + SQLite: the LrC fixture's `Travel|Japan|Tokyo` + flat `[Travel,Japan,Tokyo]`
+> yields the leaf `Tokyo` attached, ancestors deduped, `source='xmp'`. FTS⋈tags stays deferred within
+> impl/10.
+>
+> **Still pending** (unchanged from below, minus what landed): caption/title — blocked on a
 > sparse observation-metadata writer (`ApplyFilePatch` rewrites file-fact columns, so it can't set
 > caption/title alone); outbound sidecar write + `xmpWriteBack`/`xmpConflictResolution` settings;
 > ingest/watcher triggers + debounce; `alexandria:Flag` custom namespace.

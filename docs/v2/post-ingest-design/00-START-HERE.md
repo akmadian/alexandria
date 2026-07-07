@@ -25,11 +25,11 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
 | `impl/04-ingest-pipeline.md` | **The milestone — ✅ DONE (2026-07-06)** — the six-stage concurrent pipeline, sidecar/session repos, job envelope, Sniff mismatch wiring |
 | `impl/05-watcher-service.md` | **✅ DONE (2026-07-07)** — sensor + poll-timer connectivity; D20 detect-and-flag |
-| `impl/06-xmp-sync.md` | **🔨 IN PROGRESS (2026-07-07)** — inbound read path + conflict decision DONE; DB application, outbound write, triggers pending |
+| `impl/06-xmp-sync.md` | **🔨 IN PROGRESS (2026-07-07)** — inbound read + conflict decision + judgment application + keyword union DONE; caption/title, outbound write, triggers pending |
 | `impl/07-dependency-fleet.md` | **🔨 exiftool slice DONE (2026-07-07)** — daemon + discovery; other tools / downloads / one-shot Run deferred |
 | `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
 | `impl/09-lrc-migration.md` | **Design only, not started.** Lightroom Classic catalog migration — D21; engine-first (`internal/lrcimport` + `cmd/lrcimport`), Wails wizard wraps it later; pure-read preflight, LrC-side DNG/XMP prep instead of hand-parsing Develop settings |
-| `impl/10-tag-system.md` | **Design complete, not started.** Tag repository — D22; adjacency + materialized `path`, direct-attach junction, `color_mode` tri-state, judgment tombstones. Unblocks impl/06 keyword union and impl/09 import. FTS⋈tags deferred to an FTS deep-dive |
+| `impl/10-tag-system.md` | **🔨 consumer slice DONE (2026-07-07)** — D22; adjacency + materialized `path`, direct-attach junction, `color_mode` tri-state, judgment tombstones. `TagRepo` (EnsureTag/AddAssetTags/ImportKeywords/RebuildTagPaths) + `KeywordImporter` seam built; wired into impl/06. Tag-UI backend (Tree/Update/Delete/reparent) + FTS⋈tags deferred |
 
 ## Where the project is right now
 
@@ -79,9 +79,9 @@ landed as the WRITE stage's 50-item `Store.InTx` in impl/04.
    assets so a missing file that reappears unchanged is restored, not skipped.
 5. ✅ `impl/05` watcher service — DONE (2026-07-07; sensor + poll-timer connectivity, D20 detect-and-flag)
 6. ✅ `impl/07` dependency fleet — exiftool slice DONE (2026-07-07; daemon + discovery; rest deferred)
-7. **IN PROGRESS:** `impl/06` XMP sync — inbound read + conflict decision DONE (2026-07-07).
-   **NEXT here:** the DB-application wiring (3-writer tx via `ApplyXMPInbound` + observation +
-   `SetAssetTags`), outbound sidecar write, ingest/watcher triggers + debounce, and the
+7. **IN PROGRESS:** `impl/06` XMP sync — inbound read + conflict decision + judgment application +
+   keyword union (impl/10) DONE (2026-07-07). **NEXT here:** caption/title via a sparse observation
+   writer, outbound sidecar write, ingest/watcher triggers + debounce, and the
    `xmpWriteBack`/`xmpConflictResolution` settings.
 
 **Explicitly NOT needed for the ingest milestone:** dependency fleet (pure-Go covers JPEG/PNG/GIF),

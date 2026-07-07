@@ -1,10 +1,34 @@
 # impl/10 — Tag System
 
-**Status: design complete; not yet implemented. Unblocks impl/06 keyword union and impl/09 LrC import.**
+**Status: consumer slice BUILT (2026-07-07) — schema + domain + `TagRepo` + `KeywordImporter` seam +
+impl/06 keyword-union wiring, green under `-race`. Tag-UI backend (Tree/Get/Update/Delete/replace-
+`SetAssetTags`) and FTS⋈tags remain deferred.**
 **Scope:** new tag repository in `internal/sqlite`, a `KeywordImporter` seam in `internal/catalog`,
 and edits to `internal/migrations/0001_initial_schema.sql` (pre-release, in place).
 **References:** D8 (classification), D22, `03-data-model.md` §1, FR "Tags" / "Tag Colors" (P0/P2),
 `internal/domain/tag.go`.
+
+> **DONE (2026-07-07) — the consumer-driven slice, end-to-end.**
+> - Schema: `tags.color_mode` + `tags.path` (+ `idx_tags_path`), `asset_tags.removed_at` with the
+>   reverse index gone partial (`WHERE removed_at IS NULL`) — edited into `0001` in place.
+> - Domain: `ColorMode` tri-state, `Tag.Path`/`Tag.ColorMode`, `AssetTag.RemovedAt`.
+> - `internal/sqlite/tag_repo.go` — `TagRepo{DB DBTX}` with `Slugify` (case/whitespace only, keeps
+>   non-ASCII), `EnsureTag` (find-or-create by `(slug, parent)`, computes `path` from the parent,
+>   defaults `color_mode='inherit'`), `AddAssetTags` (union via `ON CONFLICT DO NOTHING` — never
+>   clears a tombstone), `ImportKeywords` (hierarchy-first dedupe, leaf-only attach), and
+>   `RebuildTagPaths` (derived rebuild with a cycle guard). `Repos.Tags` added; `Store.ImportKeywords`
+>   wraps a whole import in one `InTx` and is the `catalog.KeywordImporter` impl.
+> - impl/06 wiring: `Syncer` gained a `keywords catalog.KeywordImporter` (nil = skip); on any
+>   **sidecar change** it reads and unions keywords (`source='xmp'`) regardless of the judgment policy
+>   — the "tags always union" exception. `splitHierarchical` keeps the XMP `"|"` convention out of the repo.
+> - Tests: `tag_repo_test.go` covers find-or-create, dedupe+union, tombstone-respected, subtree
+>   `path GLOB` filter, and `RebuildTagPaths`; `xmp/sync_test.go` adds the end-to-end union through a
+>   real exiftool + SQLite (LrC fixture → leaf `Tokyo` only, `source='xmp'`).
+>
+> **Still deferred** (unchanged below): `Tree`/`Get`/`Update`(rename + reparent path-rewrite)/`Delete`/
+> replace-`SetAssetTags` (carve with the tag-UI caller), FTS⋈tags, `source='ai'` (P4), whole-tree live
+> counts. The reparent path-rewrite and color-`resolve` algorithms are specified below but not yet coded
+> (no caller).
 
 ## Why now
 

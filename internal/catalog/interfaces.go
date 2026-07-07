@@ -62,14 +62,12 @@ type AssetDerivedWriter interface {
 	SetThumbnailAt(ctx context.Context, id string, t time.Time) error
 }
 
+// TagRepository is the tag surface. Today it exposes only the keyword-import
+// path (the seam XMP sync and LrC migration depend on); the tag-management UI
+// methods (Tree/Get/Update/Delete/SetAssetTags) will land when that UI is the
+// caller.
 type TagRepository interface {
-	Tree(ctx context.Context) ([]*domain.Tag, error)
-	Get(ctx context.Context, id string) (*domain.Tag, error)
-	Create(ctx context.Context, tag *domain.Tag) error
-	Update(ctx context.Context, tag *domain.Tag) error
-	Delete(ctx context.Context, id string) error
-	GetByAsset(ctx context.Context, assetID string) ([]*domain.AssetTag, error)
-	SetAssetTags(ctx context.Context, assetID string, tagIDs []string, source string) error
+	ImportKeywords(ctx context.Context, assetID string, flat []string, hierarchical [][]string, source string) error
 }
 
 type CollectionRepository interface {

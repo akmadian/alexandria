@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/akmadian/alexandria/internal/catalog"
@@ -33,17 +34,18 @@ import (
 // So WriteBackEnabled is hard-wired false and outbound/catalog-wins verdicts are
 // logged and skipped. Inbound rating/label is the complete, testable slice.
 type Syncer struct {
-	daemon *dependency.ExiftoolDaemon
-	writer catalog.AssetSyncWriter
-	policy ConflictPolicy
-	logger *log.Logger
+	daemon   *dependency.ExiftoolDaemon
+	writer   catalog.AssetSyncWriter
+	keywords catalog.TagRepository // nil = skip tag union (e.g. judgment-only tests)
+	policy   ConflictPolicy
+	logger   *log.Logger
 }
 
-func NewSyncer(daemon *dependency.ExiftoolDaemon, writer catalog.AssetSyncWriter, policy ConflictPolicy, logger *log.Logger) *Syncer {
+func NewSyncer(daemon *dependency.ExiftoolDaemon, writer catalog.AssetSyncWriter, keywords catalog.TagRepository, policy ConflictPolicy, logger *log.Logger) *Syncer {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Syncer{daemon: daemon, writer: writer, policy: policy, logger: logger}
+	return &Syncer{daemon: daemon, writer: writer, keywords: keywords, policy: policy, logger: logger}
 }
 
 // SyncSidecar reconciles asset against the sidecar file at sidecarPath and returns
@@ -66,7 +68,13 @@ func (s *Syncer) SyncSidecar(ctx context.Context, asset *domain.Asset, sidecarPa
 		"action", action, "sidecarChanged", state.SidecarChanged, "catalogChanged", state.CatalogChanged)
 
 	inbound := action == ActionApplyInbound || (action == ActionConflict && s.policy.InboundWins())
-	if !inbound {
+
+	// Tags are the documented exception to the judgment policy: they always UNION,
+	// both directions, never delete on absence (impl/06). So we read + union keywords
+	// whenever the SIDECAR changed — even under catalog_wins, where the judgment
+	// verdict is outbound — as long as a keyword importer is wired.
+	unionTags := state.SidecarChanged && s.keywords != nil
+	if !inbound && !unionTags {
 		if action != ActionNoop {
 			s.logger.Info("xmp: outbound sync pending (write-back not implemented)",
 				"asset", asset.ID, "action", action)
@@ -78,18 +86,49 @@ func (s *Syncer) SyncSidecar(ctx context.Context, asset *domain.Asset, sidecarPa
 	if err != nil {
 		return action, err
 	}
-	patch := s.toTriagePatch(fields, asset.ID)
-	if err := s.writer.ApplyXMPInbound(ctx, asset.ID, patch, time.Now().UTC(), hash); err != nil {
-		return action, fmt.Errorf("xmp: apply inbound %s: %w", asset.ID, err)
-	}
-	s.logger.Info("xmp: applied inbound judgment", "asset", asset.ID, "action", action,
-		"rating", patch.Rating.Set, "label", patch.ColorLabel.Set)
 
-	if len(fields.Tags) > 0 || fields.Caption != "" || fields.Title != "" {
-		s.logger.Debug("xmp: tags/caption/title present but not yet applied (pending tag repo + observation writer)",
-			"asset", asset.ID, "tags", len(fields.Tags), "hasCaption", fields.Caption != "", "hasTitle", fields.Title != "")
+	if inbound {
+		patch := s.toTriagePatch(fields, asset.ID)
+		if err := s.writer.ApplyXMPInbound(ctx, asset.ID, patch, time.Now().UTC(), hash); err != nil {
+			return action, fmt.Errorf("xmp: apply inbound %s: %w", asset.ID, err)
+		}
+		s.logger.Info("xmp: applied inbound judgment", "asset", asset.ID, "action", action,
+			"rating", patch.Rating.Set, "label", patch.ColorLabel.Set)
+	}
+
+	if unionTags && (len(fields.Tags) > 0 || len(fields.Hierarchical) > 0) {
+		hierarchical := splitHierarchical(fields.Hierarchical)
+		if err := s.keywords.ImportKeywords(ctx, asset.ID, fields.Tags, hierarchical, "xmp"); err != nil {
+			return action, fmt.Errorf("xmp: import keywords %s: %w", asset.ID, err)
+		}
+		s.logger.Info("xmp: unioned keywords", "asset", asset.ID,
+			"flat", len(fields.Tags), "hierarchical", len(hierarchical))
+	}
+
+	if fields.Caption != "" || fields.Title != "" {
+		s.logger.Debug("xmp: caption/title present but not yet applied (pending sparse observation writer)",
+			"asset", asset.ID, "hasCaption", fields.Caption != "", "hasTitle", fields.Title != "")
 	}
 	return action, nil
+}
+
+// splitHierarchical turns lr:hierarchicalSubject strings ("Travel|Japan|Tokyo")
+// into per-node chains for ImportKeywords, dropping empty segments. Keeping the
+// "|" convention here leaves the tag repo format-agnostic.
+func splitHierarchical(paths []string) [][]string {
+	var out [][]string
+	for _, path := range paths {
+		var chain []string
+		for _, part := range strings.Split(path, "|") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				chain = append(chain, trimmed)
+			}
+		}
+		if len(chain) > 0 {
+			out = append(out, chain)
+		}
+	}
+	return out
 }
 
 // toTriagePatch maps the judgment subset of a sidecar onto a TriagePatch. Inbound
