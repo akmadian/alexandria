@@ -70,12 +70,17 @@ func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath
 	return a, err
 }
 
-// ListKnownFiles returns relative_path → (mtime, size, hash) for every live
+// ListKnownFiles returns relative_path → (mtime, size, hash) for every ONLINE
 // asset in the source, in one query. The importer loads this once per scan to
 // skip unchanged files without a per-file lookup.
+//
+// Only online assets are included on purpose: a missing/offline asset whose file
+// reappears unchanged must NOT be skipped — it has to flow through the matrix to
+// be restored (relink/reimport → online). Skipping it would leave it missing
+// forever.
 func (r *AssetRepo) ListKnownFiles(ctx context.Context, sourceID string) (map[string]domain.FileStat, error) {
 	rows, err := r.DB.QueryContext(ctx,
-		"SELECT relative_path, mtime, size_bytes, partial_hash FROM assets WHERE source_id = ? AND is_deleted = 0",
+		"SELECT relative_path, mtime, size_bytes, partial_hash FROM assets WHERE source_id = ? AND is_deleted = 0 AND file_status = 'online'",
 		sourceID)
 	if err != nil {
 		return nil, err

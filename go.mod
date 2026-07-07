@@ -8,6 +8,7 @@ require (
 	github.com/dsoprea/go-exif/v3 v3.0.1
 	github.com/google/uuid v1.6.0
 	golang.org/x/image v0.43.0
+	golang.org/x/sync v0.20.0
 	modernc.org/sqlite v1.53.0
 )
 

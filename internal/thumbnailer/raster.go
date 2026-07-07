@@ -17,9 +17,28 @@ import (
 	"golang.org/x/image/draw"
 )
 
-// GenerateImage decodes a raster image once, then writes one JPEG per size, each
-// scaled to fit that long edge. It is a thumbnailer.GenFunc.
-func GenerateImage(r io.ReadSeeker, sizes []int, quality int, dst func(int) string) error {
+// resizeKernel is the interpolation used to downscale into a thumbnail. The
+// x/image/draw interpolators, ordered fast → sharp: NearestNeighbor,
+// ApproxBiLinear, BiLinear, CatmullRom. The resize dominates thumbnail cost, and
+// for a 512px thumbnail from a multi-megapixel source ApproxBiLinear is several
+// times faster than CatmullRom at a quality difference that's negligible at
+// thumbnail scale — so it's the default here. The full quality ladder is a
+// one-word change: dial up to draw.BiLinear or draw.CatmullRom if large-downscale
+// aliasing on very textured images ever shows. The real fix for huge sources is
+// decode-downscale (DCT / subprocess), which lands with RAW support (impl/07);
+// this kernel choice is orthogonal to that.
+var resizeKernel draw.Interpolator = draw.ApproxBiLinear
+
+// GenerateRaster decodes a standard raster image once, then writes one JPEG per
+// size, each scaled to fit that long edge. It is a thumbnailer.GenFunc.
+//
+// "Raster" here means the formats a standard decoder can turn straight into
+// pixels — JPEG/PNG/GIF via Go's stdlib today. It is deliberately NOT the RAW
+// path: a RAW file's own handler extracts its embedded JPEG preview and feeds
+// those bytes back through THIS function, so RAW thumbnailing reuses the raster
+// backend instead of duplicating resize/encode. Everything that can produce
+// decodable pixels funnels here (see docs/v2/claude-dumps/perf/).
+func GenerateRaster(r io.ReadSeeker, sizes []int, quality int, dst func(int) string) error {
 	src, _, err := image.Decode(r)
 	if err != nil {
 		return fmt.Errorf("decode: %w", err)
@@ -67,7 +86,7 @@ func fit(src image.Image, long int) image.Image {
 	if tw == w && th == h {
 		draw.Draw(dst, dst.Bounds(), src, b.Min, draw.Over) // 1:1, no resample
 	} else {
-		draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
+		resizeKernel.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
 	}
 	return dst
 }

@@ -23,11 +23,11 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/01-schema-rework.md` | **Blocker 1 — ✅ DONE (2026-07-06)** — migration 0001 rewritten |
 | `impl/02-repos-and-dbtx.md` | **Blocker 2 — ✅ DONE (2026-07-06)** — transaction seam + writer-scoped repos |
 | `impl/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
-| `impl/04-ingest-pipeline.md` | **The milestone — NEXT** — the six-stage pipeline (spec reconciled with 01–03) |
-| `impl/05-watcher-service.md` | Next milestone after ingest (design complete, do not start early) |
+| `impl/04-ingest-pipeline.md` | **The milestone — ✅ DONE (2026-07-06)** — the six-stage concurrent pipeline, sidecar/session repos, job envelope, Sniff mismatch wiring |
+| `impl/05-watcher-service.md` | **NEXT** — the hint consumer (`IngestFile` seam already in place; design complete) |
 | `impl/06-xmp-sync.md` | Milestone after watcher (design complete) |
 | `impl/07-dependency-fleet.md` | External-tool supervisor (needed before deep metadata / RAW / video) |
-| `impl/08-dev-harness.md` | `cmd/dev` — runnable harness + debug server (pprof/expvar/statsviz/`/state`); build with impl/04 |
+| `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
 
 ## Where the project is right now
 
@@ -65,8 +65,11 @@ audit item, atomic batched writes, lands with the WRITE stage in `impl/04`.
 1. ✅ `impl/01` schema rework — DONE
 2. ✅ `impl/02` DBTX + writer-split repos — DONE
 3. ✅ `impl/03` type registry + classifier (`assettype`) — DONE
-4. **NEXT:** `impl/04` ingest pipeline (the milestone; builds the deferred sidecar/session repos,
-   wires the `Sniff` mismatch policy, the minimal job envelope, and `cmd/dev` per impl/08)
+4. ✅ `impl/04` ingest pipeline — DONE (concurrent 6-stage pipeline in `internal/importer/pipeline.go`;
+   `sidecar_files` + `import_sessions`/`import_errors` repos; `Jobs`/`Progress` envelope; D7 raster
+   mismatch policy; `cmd/dev` harness). One incidental fix: `ListKnownFiles` now returns only ONLINE
+   assets so a missing file that reappears unchanged is restored, not skipped.
+5. **NEXT:** `impl/05` watcher service (sensors emitting hints into the existing `IngestFile` entry)
 
 **Explicitly NOT needed for the ingest milestone:** dependency fleet (pure-Go covers JPEG/PNG/GIF),
 grouping engine (derived state, backfillable — ingest only writes `sidecar_files`), watcher, XMP

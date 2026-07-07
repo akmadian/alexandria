@@ -18,11 +18,13 @@ import (
 	exifcommon "github.com/dsoprea/go-exif/v3/common"
 )
 
-// ExtractImage reads pixel dimensions (via the stdlib image decoders) and, when
-// present, EXIF. It is a metadata.ExtractFunc. Everything is best-effort: a
-// failure in one part leaves those fields nil rather than failing the whole
-// extraction — a corrupt EXIF block must not stop the file being indexed.
-func ExtractImage(r io.ReadSeeker) (Metadata, error) {
+// ExtractRaster reads pixel dimensions (via the stdlib image decoders) and, when
+// present, EXIF. It is a metadata.ExtractFunc for the standard raster formats
+// (JPEG/PNG/GIF) — distinct from RAW, whose metadata comes from its own decoder.
+// Everything is best-effort: a failure in one part leaves those fields nil rather
+// than failing the whole extraction — a corrupt EXIF block must not stop the file
+// being indexed.
+func ExtractRaster(r io.ReadSeeker) (Metadata, error) {
 	var md Metadata
 
 	if _, err := r.Seek(0, io.SeekStart); err == nil {

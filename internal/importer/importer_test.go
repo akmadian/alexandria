@@ -27,6 +27,8 @@ func newImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.Asse
 		Obs:     assets,
 		Derived: assets,
 		Dups:    &sqlite.DuplicateRepo{DB: db},
+		Store:   sqlite.NewStore(db),
+		Imports: &sqlite.ImportRepo{DB: db},
 		Log:     log.New(io.Discard), // injected quiet logger — no test output noise
 	}
 	return imp, src, assets

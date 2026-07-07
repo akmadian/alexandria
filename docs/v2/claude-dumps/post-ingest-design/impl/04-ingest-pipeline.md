@@ -1,5 +1,14 @@
 # impl/04 — Ingest Pipeline (The Milestone)
 
+> **Status: ✅ DONE (2026-07-06).** Built in `internal/importer/{pipeline,jobs,mismatch,ignore}.go`
+> + `internal/sqlite/{sidecar_repo,import_repo}.go` + `cmd/dev`. All acceptance criteria below have
+> tests in `internal/importer/pipeline_test.go` (matrix verdicts incl. relink-outranks-reimport and
+> the in-run duplicate pair, sidecar tracking, D7 mismatch, corrupt→heal DLQ, batch visibility, the
+> full-processing cancel invariant) plus a throughput benchmark. Deferred within scope, with
+> `ponytail:` markers at each site: the `--debug` observability server (impl/08), pool-size flags
+> (machine.json era), per-item re-commit on a poisoned batch tx, and the D7 hard-reject branch
+> (unreachable with the current Sniff table — see mismatch.go).
+
 **Scope:** rework `internal/importer` into the concurrent pipeline. New: minimal job envelope.
 **Blocked by:** impl/01, impl/02, impl/03. **References:** D12, D13, `03-data-model.md` §6.
 

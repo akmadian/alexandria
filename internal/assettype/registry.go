@@ -44,10 +44,10 @@ type Handler struct {
 // dependency fleet). Add a format = add a row.
 var registry = []Handler{
 	// images
-	{"jpg", "image/jpeg", domain.FileTypeImage, metadata.ExtractImage, thumbnailer.GenerateImage},
-	{"jpeg", "image/jpeg", domain.FileTypeImage, metadata.ExtractImage, thumbnailer.GenerateImage},
-	{"png", "image/png", domain.FileTypeImage, metadata.ExtractImage, thumbnailer.GenerateImage},
-	{"gif", "image/gif", domain.FileTypeImage, metadata.ExtractImage, thumbnailer.GenerateImage},
+	{"jpg", "image/jpeg", domain.FileTypeImage, metadata.ExtractRaster, thumbnailer.GenerateRaster},
+	{"jpeg", "image/jpeg", domain.FileTypeImage, metadata.ExtractRaster, thumbnailer.GenerateRaster},
+	{"png", "image/png", domain.FileTypeImage, metadata.ExtractRaster, thumbnailer.GenerateRaster},
+	{"gif", "image/gif", domain.FileTypeImage, metadata.ExtractRaster, thumbnailer.GenerateRaster},
 	{"webp", "image/webp", domain.FileTypeImage, nil, nil},
 	{"tif", "image/tiff", domain.FileTypeImage, nil, nil},
 	{"tiff", "image/tiff", domain.FileTypeImage, nil, nil},

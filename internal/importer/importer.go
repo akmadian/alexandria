@@ -2,11 +2,11 @@ package importer
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/charmbracelet/log"
 )
@@ -15,27 +15,44 @@ import (
 // injected dependencies (no per-run state), so one Importer is safe to reuse
 // across imports.
 //
-// The catalog dependencies are the writer-scoped interfaces (docs/v2/.../03-data-
-// model.md §1): a reader, the observation writer, and the derived writer (for the
-// thumbnail marker). It is given NO judgment or sync writer — ingest cannot touch
-// ratings/flags/notes, so a reimport can never clobber user judgment. That
-// guarantee is structural (the types), not a convention.
+// The single-file and reconcile paths use the writer-scoped catalog interfaces
+// (docs/v2/.../03-data-model.md §1): a reader, the observation writer, and the
+// derived writer (for the thumbnail marker). They are given NO judgment or sync
+// writer — ingest cannot touch ratings/flags/notes, so a reimport can never
+// clobber user judgment. That guarantee is structural (the types), not a
+// convention.
 //
-// Metadata extraction has no injected dependency: each file's extractor comes
-// from its TypeHandler (resolved at scan). Thumbnailing keeps an injected
-// Thumbnailer because it needs runtime config (the output directory); the
-// per-type generator still comes from the TypeHandler.
+// The batched pipeline path (Run/RunJob) additionally holds the sqlite Store:
+// each 50-item commit is one Store.InTx, the transaction seam impl/02 built.
+// Within that one function it uses only the observation/derived/dup/sidecar/
+// import repos on Repos — the "one cook" that owns every catalog mutation.
 type Importer struct {
 	Reader    catalog.AssetReader
 	Obs       catalog.AssetObservationWriter
 	Derived   catalog.AssetDerivedWriter
 	Dups      catalog.DuplicateRepository
 	Thumbnail thumbnailer.Thumbnailer
+	Store     *sqlite.Store      // batched-write transaction boundary (pipeline WRITE)
+	Imports   *sqlite.ImportRepo // session lifecycle (Start/Finish outside the batch txns)
 	Log       *log.Logger
+
+	// Worker-pool overrides for the concurrent pipeline. Zero means "use the
+	// built-in default" (defaultPools). These are the per-machine tuning knob
+	// until machine.json lands; the dev harness exposes them as flags. HASH is
+	// I/O-bound (raise for fast SSDs), EXTRACT and THUMB are CPU-bound (raise
+	// toward NumCPU — but each in-flight THUMB holds a fully-decoded image, so
+	// more workers cost proportionally more memory).
+	HashWorkers    int
+	ExtractWorkers int
+	ThumbWorkers   int
+
+	// OnProgress, if set, fires per batch commit and at walk completion. Nil-safe.
+	OnProgress func(Progress)
 }
 
 // ImportError records one file that failed a stage. Per-file failures never
-// abort the run — they accumulate in ImportResult.Errors.
+// abort the run — they accumulate in ImportResult.Errors and, durably, as
+// import_errors DLQ rows.
 type ImportError struct {
 	Path  string
 	Stage string
@@ -44,141 +61,57 @@ type ImportError struct {
 
 // ImportResult summarizes a completed run.
 type ImportResult struct {
-	Added   int
-	Updated int
-	Moved   int
-	Skipped int
-	Dups    int
-	Errors  []ImportError
+	SessionID string
+	Added     int
+	Updated   int
+	Moved     int
+	Skipped   int
+	Dups      int
+	Missing   int // walk-end diff: known files no longer on disk (full walks only)
+	Errors    []ImportError
 }
 
 // Run scans fsys — the resolved filesystem for source — and indexes every
-// supported file into the catalog. source must already be registered; the
-// importer neither creates nor resolves sources. Only catastrophic failures
-// return an error; per-file failures land in the result and the scan continues.
+// supported file into the catalog through the concurrent pipeline. source must
+// already be registered; the importer neither creates nor resolves sources.
+// Only catastrophic failures return an error; per-file failures land in the
+// result (and the DLQ) and the scan continues.
 func (imp *Importer) Run(ctx context.Context, source *domain.Source, fsys fs.FS) (ImportResult, error) {
-	var result ImportResult
-
-	known, err := imp.Reader.ListKnownFiles(ctx, source.ID)
-	if err != nil {
-		return result, fmt.Errorf("loading known files for source %q: %w", source.ID, err)
-	}
-	imp.Log.Info("import started", "source", source.Name, "known", len(known))
-
-	err = fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, walkErr error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if walkErr != nil {
-			imp.recordError(&result.Errors, path, "scan", walkErr)
-			return nil // a single unreadable dir shouldn't abort the walk
-		}
-		if d.IsDir() {
-			return nil
-		}
-		imp.ingestOne(ctx, source, fsys, path, d, known, &result)
-		return nil
-	})
-	if err != nil {
-		imp.Log.Warn("import canceled", "source", source.Name, "err", err)
-		return result, err
-	}
-
-	imp.Log.Info("import finished", "source", source.Name,
-		"added", result.Added, "updated", result.Updated, "moved", result.Moved,
-		"skipped", result.Skipped, "dups", result.Dups, "errors", len(result.Errors))
-	return result, nil
+	return imp.RunJob(ctx, "", source, fsys)
 }
 
-// IngestFile indexes a single file (the watcher path): the same stages as Run,
-// minus the directory walk and the skip gate. A batch of one.
+// IngestFile indexes a single file (the watcher path): the same stages as the
+// pipeline, minus the walk, the skip gate, and batching. A batch of one, run
+// sequentially — the hint consumer for impl/05.
 func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error {
 	info, err := fs.Stat(fsys, name)
 	if err != nil {
 		return err
 	}
-	sf, ok := scan(name, info)
+	scanned, ok := scan(name, info)
 	if !ok {
 		imp.Log.Debug("ignored unsupported file", "path", name)
 		return nil
 	}
-	hash, err := hashFile(fsys, sf)
+	hash, err := hashFile(fsys, scanned)
 	if err != nil {
 		return err
 	}
-	act, existing, err := imp.classifyContent(ctx, source, sf, hash)
+	verdict, existing, err := imp.classify(ctx, source, scanned, hash, nil)
 	if err != nil {
 		return err
 	}
-	md := imp.metadataFor(fsys, sf, act)
-	assetID, err := imp.persist(ctx, source, sf, hash, md, act, existing)
+	extractedMetadata := imp.metadataFor(fsys, scanned, verdict)
+	assetID, err := imp.persist(ctx, source, scanned, hash, extractedMetadata, verdict, existing)
 	if err != nil {
 		return err
 	}
-	imp.thumbnail(ctx, fsys, sf, assetID, act)
+	imp.thumbnail(ctx, fsys, scanned, assetID, verdict)
 	return nil
 }
 
-func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, path string, d fs.DirEntry, known map[string]domain.FileStat, result *ImportResult) {
-	info, err := d.Info()
-	if err != nil {
-		imp.recordError(&result.Errors, path, "scan", err)
-		return
-	}
-	sf, ok := scan(path, info)
-	if !ok {
-		imp.Log.Debug("skipped unsupported file", "path", path)
-		return
-	}
-	if unchanged(sf, known) {
-		result.Skipped++
-		imp.Log.Debug("skip unchanged", "path", path, "size", sf.size)
-		return
-	}
-
-	hash, err := hashFile(fsys, sf)
-	if err != nil {
-		imp.recordError(&result.Errors, path, "hashing", err)
-		return
-	}
-	imp.Log.Debug("hashed", "path", path, "hash", hash, "size", sf.size)
-
-	act, existing, err := imp.classifyContent(ctx, source, sf, hash)
-	if err != nil {
-		imp.recordError(&result.Errors, path, "dedup", err)
-		return
-	}
-	imp.Log.Debug("classified", "path", path, "action", act, "type", sf.fileType)
-
-	md := imp.metadataFor(fsys, sf, act)
-	assetID, err := imp.persist(ctx, source, sf, hash, md, act, existing)
-	if err != nil {
-		// Write failures are the serious ones — surface loudly, not just in the list.
-		imp.Log.Error("catalog write failed", "path", path, "err", err)
-		result.Errors = append(result.Errors, ImportError{Path: path, Stage: "write", Err: err})
-		return
-	}
-	imp.thumbnail(ctx, fsys, sf, assetID, act)
-
-	switch act {
-	case actionNew:
-		result.Added++
-		imp.Log.Debug("indexed new asset", "path", path)
-	case actionReimport:
-		result.Updated++
-		imp.Log.Debug("reindexed changed asset", "path", path)
-	case actionMove:
-		result.Moved++
-		imp.Log.Info("relinked moved file", "path", path)
-	case actionDuplicate:
-		result.Added++
-		result.Dups++
-		imp.Log.Warn("duplicate content", "path", path)
-	}
-}
-
 // recordError logs a per-file failure at warn level and appends it to the given
-// error slice. Shared by Run and Reconcile.
+// error slice. Shared by the pipeline and Reconcile.
 func (imp *Importer) recordError(errs *[]ImportError, path, stage string, err error) {
 	imp.Log.Warn("file skipped after error", "path", path, "stage", stage, "err", err)
 	*errs = append(*errs, ImportError{Path: path, Stage: stage, Err: err})

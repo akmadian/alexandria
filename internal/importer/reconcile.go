@@ -9,6 +9,24 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
+// TRANSITIONAL — slated for removal in impl/05 (the watcher).
+//
+// In the target design there is no standalone reconciler: "reconcile is a
+// schedule, not a component" (D14) — it's the pipeline run in full-walk mode
+// (kind='reconcile'). impl/04 already moved the core of this file INTO the
+// pipeline: RunJob's walk-end diff (markMissing in pipeline.go) marks
+// unvisited-but-known files missing, and a reappeared file is restored by
+// flowing through the matrix. So the missing/restore logic below is now
+// duplicated by a full pipeline run.
+//
+// What still lives ONLY here, and why the file survives until impl/05: the
+// whole-source-offline flip (below) when the root is unreachable. impl/05 moves
+// that to the machine-level volume monitor (mount/unmount + EIO probe →
+// sources.connectivity, the one sanctioned observation write from the watcher),
+// at which point this method and its tests retire. Until then it is the only
+// code path that handles an unmounted source, and cmd/dev's `reconcile`
+// subcommand exercises it.
+
 // ReconcileResult summarizes a reconciliation pass.
 type ReconcileResult struct {
 	Missing  int // files gone from disk, marked missing

@@ -43,7 +43,7 @@ func dims(t *testing.T, path string) (int, int) {
 
 func TestGenerate_DownscalesPreservingAspect(t *testing.T) {
 	reg := thumbnailer.New(t.TempDir())
-	if ok, err := reg.Generate(thumbnailer.GenerateImage, pngReader(t, 1000, 800), "ab1234"); err != nil || !ok {
+	if ok, err := reg.Generate(thumbnailer.GenerateRaster, pngReader(t, 1000, 800), "ab1234"); err != nil || !ok {
 		t.Fatalf("generate: ok=%v err=%v", ok, err)
 	}
 	w, h := dims(t, reg.Path("ab1234", 512))
@@ -54,7 +54,7 @@ func TestGenerate_DownscalesPreservingAspect(t *testing.T) {
 
 func TestGenerate_DoesNotUpscale(t *testing.T) {
 	reg := thumbnailer.New(t.TempDir())
-	if ok, err := reg.Generate(thumbnailer.GenerateImage, pngReader(t, 100, 80), "cd5678"); err != nil || !ok {
+	if ok, err := reg.Generate(thumbnailer.GenerateRaster, pngReader(t, 100, 80), "cd5678"); err != nil || !ok {
 		t.Fatalf("generate: ok=%v err=%v", ok, err)
 	}
 	if w, h := dims(t, reg.Path("cd5678", 512)); w != 100 || h != 80 {

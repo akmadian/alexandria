@@ -10,10 +10,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const (
-	catalogDBFile   = "catalog.db"
-	catalogLockFile = "catalog.lock"
-)
+// CatalogDBFile is the SQLite filename inside a catalog directory. Exported so
+// tooling (the dev harness) can point a DB viewer at the exact file.
+const CatalogDBFile = "catalog.db"
+
+const catalogLockFile = "catalog.lock"
 
 // Catalog is an open on-disk catalog: the migrated SQLite handle plus the
 // single-instance lock. Close releases both.
@@ -38,7 +39,7 @@ func Open(dir string) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
-	dsn := filepath.Join(dir, catalogDBFile) +
+	dsn := filepath.Join(dir, CatalogDBFile) +
 		"?_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 	db, err := sql.Open("sqlite", dsn)
 	if err == nil {

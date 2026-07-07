@@ -24,7 +24,7 @@ func TestExtract_RealJPEG_DimensionsAndRights(t *testing.T) {
 	}
 	defer f.Close()
 
-	md, err := metadata.ExtractImage(f)
+	md, err := metadata.ExtractRaster(f)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestExtract_Graceful(t *testing.T) {
 	// Garbage bytes → best-effort, no panic, no dimensions. (Whether a type HAS an
 	// extractor is the assettype registry's concern; here we only prove the decoder
 	// degrades on junk input.)
-	md, err := metadata.ExtractImage(strings.NewReader("not a real jpeg"))
+	md, err := metadata.ExtractRaster(strings.NewReader("not a real jpeg"))
 	if err != nil {
 		t.Fatalf("garbage jpeg: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestExtract_FullEXIF(t *testing.T) {
 	}
 	defer f.Close()
 
-	md, err := metadata.ExtractImage(f)
+	md, err := metadata.ExtractRaster(f)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
