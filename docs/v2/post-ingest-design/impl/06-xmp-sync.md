@@ -1,7 +1,36 @@
 # impl/06 — XMP Sync
 
-**Status: design complete; requires impl/05 (watcher, for sidecar hints) and impl/07 (exiftool).**
+**Status: inbound read path + conflict decision DONE (2026-07-07); DB application, outbound write, and triggers pending.**
 **Scope:** new `internal/xmp`. **References:** D15, `03-data-model.md` §1.
+
+> **DONE (2026-07-07) — the self-contained, daemon-backed read core.** Built on the impl/07
+> exiftool slice; the DB-application wiring is a distinct next increment (see below).
+>
+> - `xmp.go` — `Read(ctx, daemon, path)` drives exiftool `-json` over an EXPLICIT tag set
+>   (Rating/Label/Subject/HierarchicalSubject/Description/Title), not `-XMP:all`, so foreign `crs:`
+>   develop settings never enter the read. `decodeExiftoolJSON` absorbs exiftool's loose typing
+>   (single-value lists arrive as a bare string, ratings as number-or-string, warnings inline before
+>   the JSON array). `NormalizeLabel` implements the locale field-map row: EN/DE/FR/ES/IT/JA → the
+>   canonical six, with the raw string preserved and left unmapped when unknown (never guessed).
+> - `conflict.go` — `Decide(SyncState, ConflictPolicy) → Action` is the file-level 3-way grid as a
+>   pure table. The caller owns the hash/timestamp → bool reduction (`SidecarChanged` = sidecar hash
+>   ≠ `xmp_hash`; `CatalogChanged` = `judgment_modified_at` > max(read,write cursors)), keeping this
+>   trivially testable. The tags-always-union rule stays out-of-band, per spec.
+> - Tested incl. a real exiftool-13.55 read of a hand-written LrC sidecar fixture
+>   (`testdata/lightroom.xmp`, German "Rot" + develop settings): acceptance #1 (read half) and #5.
+>
+> **Pending — the wiring increment (needs settings that don't exist yet):**
+> - **DB application** spans three writer classes in one tx: judgment via the existing
+>   `AssetSyncWriter.ApplyXMPInbound` (never bumps `judgment_modified_at` — oscillator guard, already
+>   built in impl/02), observation for caption/title, and `SetAssetTags(source='xmp')` for keywords
+>   (union). The `Fields` → `TriagePatch`/tags split lives here.
+> - **Outbound write** — merge-into-existing sidecar (only our tags touched), atomic temp+rename,
+>   `RecordXMPWritten` + the file-hash store for the echo check.
+> - **Triggers** — inbound at ingest + watcher sidecar hint (post echo-check); outbound debounced
+>   ~2s per asset on judgment change. **Loop prevention level 1** (file-level hash echo check) wires
+>   into the watcher (impl/05); level 2 is already structural.
+> - **Settings** `xmpWriteBack` + `xmpConflictResolution` (D16 catalog KV) — not yet defined.
+> - Flag `alexandria:Flag` custom namespace (best-effort, open question #8) not yet read/written.
 
 ## Scope & the documented asymmetry
 

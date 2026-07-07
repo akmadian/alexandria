@@ -24,9 +24,9 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/02-repos-and-dbtx.md` | **Blocker 2 — ✅ DONE (2026-07-06)** — transaction seam + writer-scoped repos |
 | `impl/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
 | `impl/04-ingest-pipeline.md` | **The milestone — ✅ DONE (2026-07-06)** — the six-stage concurrent pipeline, sidecar/session repos, job envelope, Sniff mismatch wiring |
-| `impl/05-watcher-service.md` | **NEXT** — the hint consumer (`IngestFile` seam already in place; design complete) |
-| `impl/06-xmp-sync.md` | Milestone after watcher (design complete) |
-| `impl/07-dependency-fleet.md` | External-tool supervisor (needed before deep metadata / RAW / video) |
+| `impl/05-watcher-service.md` | **✅ DONE (2026-07-07)** — sensor + poll-timer connectivity; D20 detect-and-flag |
+| `impl/06-xmp-sync.md` | **🔨 IN PROGRESS (2026-07-07)** — inbound read path + conflict decision DONE; DB application, outbound write, triggers pending |
+| `impl/07-dependency-fleet.md` | **🔨 exiftool slice DONE (2026-07-07)** — daemon + discovery; other tools / downloads / one-shot Run deferred |
 | `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
 
 ## Where the project is right now
@@ -75,7 +75,12 @@ landed as the WRITE stage's 50-item `Store.InTx` in impl/04.
    `sidecar_files` + `import_sessions`/`import_errors` repos; `Jobs`/`Progress` envelope; D7 raster
    mismatch policy; `cmd/dev` harness). One incidental fix: `ListKnownFiles` now returns only ONLINE
    assets so a missing file that reappears unchanged is restored, not skipped.
-5. **NEXT:** `impl/05` watcher service (sensors emitting hints into the existing `IngestFile` entry)
+5. ✅ `impl/05` watcher service — DONE (2026-07-07; sensor + poll-timer connectivity, D20 detect-and-flag)
+6. ✅ `impl/07` dependency fleet — exiftool slice DONE (2026-07-07; daemon + discovery; rest deferred)
+7. **IN PROGRESS:** `impl/06` XMP sync — inbound read + conflict decision DONE (2026-07-07).
+   **NEXT here:** the DB-application wiring (3-writer tx via `ApplyXMPInbound` + observation +
+   `SetAssetTags`), outbound sidecar write, ingest/watcher triggers + debounce, and the
+   `xmpWriteBack`/`xmpConflictResolution` settings.
 
 **Explicitly NOT needed for the ingest milestone:** dependency fleet (pure-Go covers JPEG/PNG/GIF),
 grouping engine (derived state, backfillable — ingest only writes `sidecar_files`), watcher, XMP

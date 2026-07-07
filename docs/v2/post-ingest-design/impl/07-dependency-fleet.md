@@ -1,8 +1,31 @@
 # impl/07 — Dependency Fleet (External-Tool Supervisor)
 
-**Status: design complete; needed before deep metadata (exiftool), RAW/video/PDF thumbnails
-(dcraw_emu/ffmpeg/ghostscript), and impl/06. Not needed for the ingest milestone.**
+**Status: exiftool slice DONE (2026-07-07); rest deferred until its consumers exist.**
 **Scope:** new `internal/dependency`. **References:** D4, D5.
+
+> **DONE (2026-07-07) — the exiftool-only slice, to unblock impl/06.** Ponytail cut:
+> built exactly what XMP sync consumes, not the whole fleet.
+>
+> - `dependency.go`: `ToolID`/`Descriptor` table (exiftool row only), `Discover(id, override)`
+>   → `Status{State: found|missing|wrong-version, Path, Version}` with a `MinVersion` floor.
+>   A missing tool is a `Status`, never an error (D5 graceful degradation). Override path wins,
+>   else PATH; the app-data tools-dir tier is omitted (nothing writes there until downloads exist).
+> - `exiftool.go`: `ExiftoolDaemon` over `-stay_open True -@ -`. stdout+stderr are MERGED onto one
+>   `os.Pipe` so a single `{ready<n>}` sentinel (from `-execute<n>`) delimits each response — one
+>   reader, warnings/errors inline before the marker. `Execute` serializes calls over a mutex;
+>   `Close` sends `-stay_open False`, then stdin-EOF, then `Wait`. Transport stays dumb: it returns
+>   the raw blob, and the caller (internal/xmp) interprets JSON vs. "N files updated".
+> - Tested: `Discover` degrade path (always-run) + a real-daemon round-trip against exiftool 13.55
+>   (version + JSON read), skipped when exiftool is absent.
+>
+> **Deferred (each is a data row or a second code path when its feature lands):** ffmpeg/ffprobe/
+> ghostscript/dcraw descriptors (thumbnail milestone); `Fetch`/consented-download/pinned-checksum/
+> quarantine-strip (NFR-6 — no download flow yet, degrade-when-missing suffices); the one-shot `Run`
+> + timeout=f(tool,op,size) + per-tool semaphores (the daemon serializes itself; arrives with the
+> first one-shot tool); Linux `Pdeathsig`/Windows Job Object (`ponytail:`-noted in exiftool.go —
+> stdin-EOF covers our only spawned process; add the build-tagged spawn files if a hard-kill race
+> ever leaves a stray PID). The daemon-restart-on-crash + health-check loop is likewise deferred:
+> a dead pipe surfaces as an `Execute` error today.
 
 Naming note: the package is `dependency` (user's call — same vocabulary as service dependencies
 at Amazon: external things we rely on, discover, version-check, and survive the absence of).
