@@ -60,7 +60,7 @@ One `errgroup` owns all goroutines.
 | HASH | `stage_hash.go` | Fingerprint (xxhash of first 64KB + size) | Also runs the magic-byte `Sniff` on the same buffer — see the mismatch policy below. |
 | MATCH | `stage_match.go` | Run the identity matrix, mint IDs | **Singleton** — one goroutine reads a serializable view of the catalog it's mutating. |
 | EXTRACT | `stage_extract.go` | Pull normalized metadata | Best-effort: a decode failure is a DLQ row, never a stop. |
-| THUMB | `stage_thumb.go` | Generate the thumbnail file | Precedes WRITE (idea #4). Skipped for moves and types with no generator. |
+| THUMB | `stage_thumb.go` | Generate the thumbnail file | Precedes WRITE (idea #4). Skipped for types with no generator. |
 | WRITE | `stage_write.go` | Commit a batch in one transaction | **Singleton** — SQLite has one writer, so this goroutine *is* the batching point (50 items, a 500ms lull, or stream end). Builds the asset/patch/sidecar rows. |
 
 `MATCH` and `WRITE` are single goroutines on purpose; `HASH`/`EXTRACT`/`THUMB` are
@@ -74,29 +74,31 @@ until per-machine config lands.
   is `RunJob` with no id. This is the normal path.
 - **`Importer.IngestFile`** (`importer.go`) — the same stages for a single path,
   run sequentially (a batch of one). This is the seam the watcher feeds hints into
-  (impl/05): present → ingest, gone → mark missing + delete-side merge (`markGone`),
-  the *same* per-path decision the walk makes, so a watcher-fed change heals
-  identically to a walk-detected one. It reuses the stage transforms directly.
+  (impl/05): present → ingest, gone → mark missing (`markGone`), the *same* per-path
+  decision the walk makes. Per **D20** it never auto-relinks or merges a move — a
+  gone path is simply marked missing. It reuses the stage transforms directly.
 - **Reconcile is not a component** (D14) — "reconcile is a schedule, not a
   component": it's just `Run` in full-walk mode. The walk-end diff (`markMissing`)
-  marks vanished files missing and the matrix relinks reappeared ones. The old
-  standalone `Reconcile` retired in impl/05.3; its only unique piece — the
-  whole-source-offline flip — moved to the watcher's poll monitor (`internal/watcher`,
-  the one sanctioned `sources.connectivity` write).
+  marks vanished files missing; a file that reappears at its original path is
+  restored via reimport. The old standalone `Reconcile` retired in impl/05.3; its
+  only unique piece — the whole-source-offline flip — moved to the watcher's poll
+  monitor (`internal/watcher`, the one sanctioned `sources.connectivity` write).
 
 ## The identity matrix (precedence)
 
-In `classify` (`stage_match.go`), checked top-down — the order *is* the policy:
+In `classify` (`stage_match.go`), checked top-down — the order *is* the policy.
+Per **D20** the matrix never auto-changes identity: it acts on a known *path* and
+otherwise detects-and-flags. There is **no relink/move verdict**.
 
-1. **Relink** — content+name match a **missing** asset → adopt the new path.
-   Outranks reimport: an in-place edit changes the bytes, so a hash that still
-   matches a missing asset means a lost file reappeared, not an edit.
-2. **Reimport** — path matches an existing asset, content differs → refresh
-   observations only.
-3. **Duplicate** — content matches a **present** asset (in the catalog, or minted
-   earlier this run via the in-run hash map) → mint a new identity + a
-   `duplicates` row.
-4. **New** — no match → mint.
+1. **Reimport** — path matches an existing asset → refresh observations (and
+   restore online if it was missing and reappeared at its **original** path). Path
+   identity wins for a known address.
+2. **Duplicate** — content matches another asset (present **or** missing, any
+   source) → mint a NEW identity + a `pending` `duplicates` row. A detection FLAG
+   only, never a mutation of the matched asset: a match against a *missing* asset is
+   a probable move, against a *present* one a plain duplicate; the review queue
+   derives which (DEFERRED §5).
+3. **New** — no match → mint.
 
 The in-run hash map is why a duplicate *pair* imported together (a copy that
 exists before its original is committed) is still caught — the original isn't in

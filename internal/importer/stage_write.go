@@ -117,11 +117,6 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 
 	mergeMarker(&item.extractedMetadata, item.mismatchMarker)
 	switch item.verdict {
-	case actionMove:
-		if err := repos.Assets.UpdatePath(ctx, item.assetID, pipe.source.ID, item.scanned.relPath); err != nil {
-			return err
-		}
-		return repos.Assets.SetFileStatus(ctx, item.assetID, domain.FileStatusOnline)
 	case actionReimport:
 		if err := repos.Assets.ApplyFilePatch(ctx, item.assetID, reimportFilePatch(item.scanned, item.hash, item.extractedMetadata, item.existing)); err != nil {
 			return err
@@ -157,18 +152,11 @@ func (pipe *pipeline) markThumbnail(ctx context.Context, repos sqlite.Repos, ite
 
 // persist applies the decided verdict on the single-file (watcher) path. New and
 // duplicate mint a fresh asset; reimport refreshes observation columns ONLY
-// (judgments untouched — the writer split makes touching them impossible); move
-// relinks the existing record. Duplicates also log the pair. This is the
-// unbatched sibling of writeItem.
+// (judgments untouched — the writer split makes touching them impossible, and a
+// missing file reappearing at its original path is restored online here).
+// Duplicates also log the pair. This is the unbatched sibling of writeItem.
 func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata, verdict action, existing *domain.Asset) (string, error) {
 	switch verdict {
-	case actionMove:
-		imp.Log.Debug("write.persist: relinking missing asset", "path", scanned.relPath, "assetID", existing.ID)
-		if err := imp.Obs.UpdatePath(ctx, existing.ID, source.ID, scanned.relPath); err != nil {
-			return "", err
-		}
-		return existing.ID, imp.Obs.SetFileStatus(ctx, existing.ID, domain.FileStatusOnline)
-
 	case actionReimport:
 		imp.Log.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
 		return existing.ID, imp.Obs.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing))

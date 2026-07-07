@@ -13,7 +13,7 @@ import (
 
 func (pipe *pipeline) thumb(ctx context.Context, in <-chan *pipelineItem, out chan<- *pipelineItem) error {
 	for item := range in {
-		if !item.isSidecar && !item.rejected && item.verdict != actionMove && pipe.importer.Thumbnail != nil {
+		if !item.isSidecar && !item.rejected && pipe.importer.Thumbnail != nil {
 			pipe.thumbnailOne(item)
 		}
 		if err := pipe.emit(ctx, out, item); err != nil {
@@ -44,9 +44,9 @@ func (pipe *pipeline) thumbnailOne(item *pipelineItem) {
 // thumbnail generates the thumbnail for a freshly written asset and records
 // thumbnail_at, best-effort — the single-file (watcher) path. Unlike the THUMB
 // stage, it writes thumbnail_at directly (there is no batching txn to fold it
-// into). Skipped for moves and when the type has no generator.
+// into). Skipped when the type has no generator.
 func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, scanned scannedFile, assetID string, verdict action) {
-	if imp.Thumbnail == nil || verdict == actionMove {
+	if imp.Thumbnail == nil {
 		return
 	}
 	reader, closeReader, err := openSeeker(fsys, scanned.relPath)

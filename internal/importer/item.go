@@ -13,7 +13,6 @@ type action int
 const (
 	actionNew action = iota
 	actionReimport
-	actionMove
 	actionDuplicate
 )
 
@@ -23,8 +22,6 @@ func (a action) String() string {
 		return "new"
 	case actionReimport:
 		return "reimport"
-	case actionMove:
-		return "move"
 	case actionDuplicate:
 		return "duplicate"
 	default:

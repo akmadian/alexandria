@@ -104,28 +104,27 @@ over tag names). Rebuild path: drop + re-populate from `assets` ⋈ `asset_tags`
 Identity is minted (UUIDv7) at ingest; afterwards every scan event is *matching*. Signals: path,
 content fingerprint (xxhash of first 64KB + size), filename.
 
-Precedence (order matters — this IS the policy):
+Precedence (order matters — this IS the policy). **Revised by D20 (2026-07-07):** the matrix
+never auto-changes identity — it acts on a known *path* and otherwise detects-and-flags. The old
+**Relink** rule (content+name vs a missing asset → adopt new path) and the **delete-side merge**
+are **removed**; a file that reappears at a new path is a new asset + a pending review row.
 
 1. **Unchanged**: path known + size exact + mtime within 2s tolerance → skip.
-2. **Relink**: content+name exact match vs a **missing** asset → same asset, adopt new path.
-   *Outranks path-reimport*: a true in-place edit changed content, so its hash cannot match a
-   missing asset; if it does match one, this is a lost file at an occupied address
-   (delete-and-copy reorganization), not an edit.
-3. **Reimport**: path match, content differs → same asset; refresh observations ONLY
-   (FilePatch — judgments untouched); regenerate thumbnail.
-4. **Duplicate**: content match vs a **present** asset → new identity + duplicates row.
-5. **New**: no match → mint.
+2. **Reimport**: path match → same asset; refresh observations ONLY (FilePatch — judgments
+   untouched); regenerate thumbnail; restore online if it was missing and reappeared at its
+   **original** path. Path identity wins for a known address.
+3. **Duplicate**: content match vs another asset (present **or** missing, any source) → new
+   identity + a `pending` duplicates row. A detection FLAG only, never a mutation of the matched
+   asset — the review queue derives duplicate-vs-probable-move from live status (DEFERRED §5).
+4. **New**: no match → mint.
 
-Matrix runs catalog-wide (cross-source moves fall out free). MATCH stage also consults an **in-run
-hash map** (this import's minted hashes) or first-import duplicate pairs are invisible.
+Duplicate detection runs catalog-wide (cross-source content matches surface as duplicates). MATCH
+stage also consults an **in-run hash map** (this import's minted hashes) or first-import duplicate
+pairs are invisible.
 
-Watcher-era extensions (impl/05): paired rename events waive the name-match in rule 2 (hash still
-verifies); **delete-side merge** — on transition to missing, if content+name matches a recently
-minted zero-judgment asset, absorb it (old identity adopts new path; heals copy-then-delete moves).
-
-Accepted failure modes (named, documented, all leave visible residue): move+edit simultaneously
-(→ missing + new; manual relocate heals); the swap (two files exchange paths → cross-attach; log
-loudly, accept); partial-hash dedup ambiguity (→ full-hash verify before UI claims "identical");
+Accepted failure modes (named, documented, all leave visible residue): a move → missing original +
+new asset + a pending review pair the user confirms (D20 — no auto-relink, so no cross-attach or
+swap hazard); partial-hash dedup ambiguity (→ full-hash verify before UI claims "identical");
 soft-deleted tombstones excluded from matching (removal was a judgment; revisit-cheap).
 
 Sidecars deliberately get NONE of this: matched purely by (source, dir, stem) filesystem identity.

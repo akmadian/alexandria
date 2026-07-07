@@ -1,6 +1,17 @@
 # impl/05 — Watcher Service
 
 **Status (2026-07-07): impl/05 COMPLETE. 05.1 (matrix extensions, `internal/importer`) DONE and kept; 05.2 (the `internal/watcher` sensor) and 05.3 (connectivity via poll timer + `reconcile.go` retired) rebuilt against the corrected architecture and DONE. The rebuild fixed the first cut's drift (the watcher was deciding actions and writing `file_status`); the watcher now hands over PATHS only and makes exactly one write (connectivity). Rename policy settled at close-out: an unpaired name-changing rename is recorded as a *probable move* for review, not auto-relinked (see DEFERRED §5). See "Corrected architecture" below.**
+
+> **SUPERSEDED IN PART by D20 (2026-07-07) — read this before trusting the move-detection
+> details below.** After close-out we removed **all** auto-move machinery: the relink verdict
+> (`actionMove`) and the **delete-side merge** (`healMovedAway`/`FindMoveHealCandidate`) are
+> **deleted**. Reconciliation now *detects and flags* — it never auto-mutates identity. So every
+> "gone → mark missing + delete-side merge" and "relink" description below is historical: the
+> importer's single-path entry now does **gone → mark missing** (full stop), and a file that
+> reappears at a NEW path is a new asset + a pending review row, not a relink. Same-path
+> reappearance still restores via reimport. See decision **D20** and **DEFERRED §5** for the
+> current model; the watcher *sensor* architecture (paths not verdicts, poll connectivity) is
+> unchanged.
 **Scope:** new `internal/watcher` + matrix extensions in `internal/importer`. **References:** D14, D9.
 
 > **Corrected architecture (2026-07-07) — the boundary that must not blur.** The first watcher build
@@ -180,10 +191,11 @@ lives here**: hash the sidecar; equal to the asset's `xmp_hash` (what we last wr
 ## Acceptance
 
 - Save-storm fixture (temp write + rename + double-write within 400ms) → exactly one ingest.
-- Rename fixture: a same-name move (mv a/x.jpg b/x.jpg), unjudged → auto-heals (delete-side
-  merge); a name-changing rename (mv a.jpg b.jpg) → original left missing + new path minted +
-  one pending pair (a *probable move* recorded for review, NOT auto-relinked — DEFERRED §5).
-- Copy-then-delete fixture → delete-side merge preserves judgments, no stranded missing row.
+- Move fixture (D20 — any new-path reappearance, same-name or not): original left missing + new
+  path minted as a distinct asset + one pending review pair. Never auto-relinked/merged. A file
+  reappearing at its ORIGINAL path is restored online via reimport.
+- Copy-then-delete fixture → original stays missing with judgment intact + copy is a distinct
+  asset + a pending review pair (no auto-merge — D20).
 - Kill -9 the app during watch; restart → startup reconcile converges; no duplicate identities.
 - Unmount/remount a test volume (or bind-mount simulation) → connectivity flips, catch-up
   reconcile fires, assets browsable while offline.

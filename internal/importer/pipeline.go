@@ -33,13 +33,6 @@ const (
 	writeLull      = 500 * time.Millisecond
 )
 
-// moveHealWindow bounds the delete-side merge (impl/05): only a duplicate minted
-// within this window of an asset going missing is treated as the same file having
-// "moved" (copy-then-delete by an external app), not an unrelated copy.
-// ponytail: fixed 10min heuristic; widen or key off the import session if real
-// moves ever slip past it.
-const moveHealWindow = 10 * time.Minute
-
 // poolSizes are the per-stage worker counts. Hardcoded defaults for now; the
 // machine.json config that tunes them per host arrives in a later milestone.
 type poolSizes struct{ hash, extract, thumb int }
@@ -232,8 +225,6 @@ func (pipe *pipeline) tally(item *pipelineItem) {
 		pipe.addedCount++
 	case actionReimport:
 		pipe.updatedCount++
-	case actionMove:
-		pipe.movedCount++
 	case actionDuplicate:
 		pipe.addedCount++
 		pipe.duplicateCount++
@@ -241,13 +232,11 @@ func (pipe *pipeline) tally(item *pipelineItem) {
 }
 
 // markMissing flips online→missing for known assets whose paths the walk didn't
-// visit. It re-reads status AFTER the run so a relinked asset (path updated
-// mid-run) shows its new, visited path and is correctly left alone.
-//
-// Before marking a candidate missing it tries a delete-side merge (impl/05): the
-// file may not be gone, just copy-then-deleted to a new path that this same walk
-// already ingested as a fresh duplicate. If so, that duplicate is absorbed and
-// the identity stays online — so nothing is marked missing for a plain "move".
+// visit. Per D20 the walk never auto-relinks or auto-merges a "move": a file that
+// reappeared at a NEW path was already minted as a new asset + a pending review
+// row, so here we simply mark the unvisited-but-known assets missing and leave the
+// move/duplicate resolution to the user. A file that reappears at its ORIGINAL
+// path is visited and restored via reimport, so it is never a candidate here.
 func (pipe *pipeline) markMissing(ctx context.Context) error {
 	pathStatuses, err := pipe.importer.Reader.ListPathsStatus(ctx, pipe.source.ID)
 	if err != nil {
@@ -265,40 +254,28 @@ func (pipe *pipeline) markMissing(ctx context.Context) error {
 	if len(candidateIDs) == 0 {
 		return nil
 	}
-	mintedAfter := time.Now().Add(-moveHealWindow)
-	var healed, missing int
 	err = pipe.importer.Store.InTx(ctx, func(repos sqlite.Repos) error {
-		healed, missing = 0, 0 // reset per attempt (InTx may retry)
 		for _, id := range candidateIDs {
-			ok, err := pipe.importer.healMovedAway(ctx, repos, pipe.source.ID, id, mintedAfter)
-			if err != nil {
-				return err
-			}
-			if ok {
-				healed++
-				continue
-			}
 			if err := repos.Assets.SetFileStatus(ctx, id, domain.FileStatusMissing); err != nil {
 				return err
 			}
-			missing++
 		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	pipe.missingCount += missing
-	pipe.movedCount += healed
+	pipe.missingCount += len(candidateIDs)
+	pipe.importer.Log.Info("marked assets missing (walk-end diff)", "source", pipe.source.Name, "count", len(candidateIDs))
 	return nil
 }
 
-// markGone is the single-path gone branch (impl/05 corrected model): a path the
-// watcher fed that no longer exists on disk. It performs the SAME action as the
-// walk-end diff — mark the asset at that path missing, attempting a delete-side
-// merge first (a copy-then-delete "move" absorbs the freshly-minted copy and
-// stays online). Nothing known at the path, or a row that is already not online,
-// is a no-op — so a duplicate gone-event never double-marks.
+// markGone is the single-path gone branch (the watcher-fed delete): a path that no
+// longer exists on disk. Per D20 it simply marks the asset at that path missing —
+// no delete-side merge, no move detection. If the content reappeared elsewhere it
+// was minted as a new asset + a pending review row; the user resolves the move.
+// Nothing known at the path, or a row already not online, is a no-op — so a
+// duplicate gone-event never double-marks.
 func (imp *Importer) markGone(ctx context.Context, source *domain.Source, relPath string) error {
 	existing, err := imp.Reader.FindBySourcePath(ctx, source.ID, relPath)
 	if err != nil {
@@ -308,50 +285,11 @@ func (imp *Importer) markGone(ctx context.Context, source *domain.Source, relPat
 		imp.Log.Debug("gone path is not a tracked online asset — nothing to do", "path", relPath)
 		return nil
 	}
-	mintedAfter := time.Now().Add(-moveHealWindow)
-	return imp.Store.InTx(ctx, func(repos sqlite.Repos) error {
-		healed, err := imp.healMovedAway(ctx, repos, source.ID, existing.ID, mintedAfter)
-		if err != nil || healed {
-			return err // healMovedAway logs the absorb on success
-		}
-		if err := repos.Assets.SetFileStatus(ctx, existing.ID, domain.FileStatusMissing); err != nil {
-			return err
-		}
-		imp.Log.Info("marked asset missing", "source", source.Name, "path", relPath, "asset", existing.ID)
-		return nil
-	})
-}
-
-// healMovedAway implements impl/05's delete-side merge. A going-missing asset may
-// have been copy-then-deleted to a new path an external app chose; if that copy
-// was just ingested as a fresh, still-unjudged duplicate, adopt its path onto
-// THIS identity (preserving all judgments and history) and delete the throwaway
-// duplicate row. The zero-judgment guard (in FindMoveHealCandidate) is what makes
-// this always safe — a copy the user has already rated is never absorbed. Returns
-// true if a merge happened (the identity stays online), false to fall through to
-// marking missing. Shared by the walk-end diff (markMissing) and the single-path
-// gone branch (markGone), so both heal a "move" identically.
-func (imp *Importer) healMovedAway(ctx context.Context, repos sqlite.Repos, sourceID, missingID string, mintedAfter time.Time) (bool, error) {
-	gone, err := repos.Assets.Get(ctx, missingID)
-	if err != nil {
-		return false, err
+	if err := imp.Obs.SetFileStatus(ctx, existing.ID, domain.FileStatusMissing); err != nil {
+		return err
 	}
-	young, err := repos.Assets.FindMoveHealCandidate(ctx, gone.PartialHash, gone.SizeBytes, gone.Filename, gone.ID, mintedAfter)
-	if err != nil || young == nil {
-		return false, err
-	}
-	// Delete the throwaway identity first — the (source_id, relative_path) unique
-	// index forbids two live rows at the same path, so the old identity can only
-	// adopt young's path once young's row is gone (FK cascade drops its dup rows).
-	if err := repos.Assets.DeleteByID(ctx, young.ID); err != nil {
-		return false, err
-	}
-	if err := repos.Assets.UpdatePath(ctx, gone.ID, sourceID, young.RelativePath); err != nil {
-		return false, err
-	}
-	imp.Log.Info("delete-side merge: absorbed moved copy",
-		"identity", gone.ID, "from", gone.RelativePath, "to", young.RelativePath)
-	return true, nil
+	imp.Log.Info("marked asset missing", "source", source.Name, "path", relPath, "asset", existing.ID)
+	return nil
 }
 
 func (pipe *pipeline) addRunError(relativePath, stage string, err error) {

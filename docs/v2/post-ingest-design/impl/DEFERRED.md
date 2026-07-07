@@ -57,7 +57,16 @@ kind-classification and resolution actions — which now also cover probable
 moves/renames — are specced in **§5**; a cross-source duplicate is one kind it
 holds.
 
-This gives a scoping **principle**: the matrix's *auto-mutating* verdicts — relink
+> **Dissolved by D20 (2026-07-07).** The scoping principle below was written when
+> the matrix had *auto-mutating* verdicts (relink, delete-side merge) that had to be
+> confined to `source_id`. **D20 removed those verdicts entirely** — reconciliation
+> now detects-and-flags, it never auto-mutates identity. With no mutating verdict
+> left, there is nothing that can re-home an asset across sources, so the latent bug
+> below is gone. `FindByHash` stays global *by design* now — it is only a
+> duplicate-detection flag, exactly the "global-but-flag-only" endpoint this
+> principle was aiming at. Kept below for history.
+
+This gave a scoping **principle**: the matrix's *auto-mutating* verdicts — relink
 and delete-side merge — must be **same-source** (`WHERE source_id = ?`). Today
 `FindByHash` and `FindMoveHealCandidate` are **global**, which is the latent
 re-home bug noted below; scope them. Only *duplicate detection* stays global, and
@@ -125,14 +134,14 @@ volume* missing. So loose files can NOT be modeled as "a source with a volume-wi
 attribute (smaller, reuses walk vs. per-file reconcile)? Decide with source
 management.
 
-**The bug the source-scoping fix closes (still live in code today):**
+**The bug the source-scoping fix closes — ~~still live in code today~~ DISSOLVED by D20:**
 
-- `AssetReader.FindByHash(hash, size)` and `AssetRepo.FindMoveHealCandidate` are
-  **global** (no `source_id`). Used for *auto-mutating* verdicts (relink,
-  delete-side merge), that means a "move" heal can re-home an asset onto the wrong
-  source (`healMovedAway` writes the *walking* source's ID) whenever the same
-  content exists under two roots. Scope these to `source_id` (see the principle
-  above); keep the global lookup only for the *duplicate flag*.
+- ~~`AssetReader.FindByHash(hash, size)` and `AssetRepo.FindMoveHealCandidate` are
+  **global** (no `source_id`)... a "move" heal can re-home an asset onto the wrong
+  source.~~ **Gone:** D20 deleted `FindMoveHealCandidate`, `healMovedAway`, and the
+  relink verdict — there is no auto-mutating verdict left to re-home anything.
+  `FindByHash` remains global but only feeds the *duplicate flag* (a pending row),
+  which is safe by definition.
 - Two `notify` subscriptions on one subtree → every FS event fires twice (only an
   issue if two *watched* roots overlap).
 
@@ -142,10 +151,9 @@ watcher / reconcile key off `source.ID` and `base_path` mechanically, and the
 schema is **pre-1.0 with no real user catalogs**, so a migration is at its cheapest
 and waiting does not make it harder (shipping real data would). Building 05.3 moves
 *toward* this model — its per-file reconcile IS the loose-file primitive — not into
-a corner. The **one item worth doing independently** of the model decision is the
-source-scoping fix below: it is correct whether `source` ends up meaning volume or
-tracked_root, and latent correctness bugs are best closed while fresh. Everything
-else waits for source management.
+a corner. (The source-scoping fix that was called out here as "worth doing
+independently" is now moot — **D20 dissolved it** by removing all auto-mutating
+verdicts.) Everything else waits for source management.
 
 **Why deferred:** source-management + settings (the `sync_mode` field) + browse UX
 don't exist yet. The engine already supports all three behaviors — this is a
@@ -234,28 +242,28 @@ img2.jpeg` exposed that an unpaired rename (the OS emits an independent
 remove+create; `notify` gives no portable from→to link, so pairing is deferred)
 cannot be *safely* auto-relinked, and forced the question of how it should surface.
 
-**The decision (conservative, "never auto-merge on a heuristic").** A filename
-change is only a *probable* move, so we do **not** auto-relink it. We record it and
-let the user resolve it. This keeps faith with the codebase's structural-trust
-ethos: the one thing we auto-heal by content is the *unambiguous* case; anything
-uncertain is surfaced, never silently merged. Concretely the policy line is:
+**The decision — extended to its conclusion by D20 (2026-07-07): NO auto-move at
+all.** The `mv img.jpeg img2.jpeg` case first pushed us to flag *name-changed*
+renames rather than auto-relink them. Following the same trust logic to its end, D20
+removed **every** auto-move: a moved/renamed/copied file — same-name or not, judged
+or not — is never auto-relinked or auto-merged. It becomes a `missing` original + a
+distinct new asset + a `pending` review pair, and the user resolves it. Concretely:
 
-| Trigger | Behavior |
+| Trigger | Behavior (post-D20) |
 |---|---|
-| Same basename, unjudged, copy-then-delete (`mv a/x.jpg b/x.jpg`, or an app's temp-rewrite) | **auto-heal** — the delete-side merge (`healMovedAway`, zero-judgment guarded) absorbs it. No review. |
-| Name changed (`mv a.jpg b.jpg`) | **review** — original left `missing`, new path minted as a distinct asset, pair recorded `pending`. |
-| Any *judged* file moved/renamed | **review** — the zero-judgment guard forbids auto-heal, protecting judgment. |
+| Same-path in-place edit (`a.jpg` overwritten) | **reimport** — refresh observation, keep identity + judgments. Automatic (path fidelity, not identity reshuffle). |
+| Missing file reappears at its **original** path | **reimport → online** — restored automatically, same identity. |
+| Content reappears at a **new** path (move / rename / copy) — same-name OR name-changed, judged OR not | **review** — original left `missing`, new path minted as a distinct asset, pair recorded `pending`. Never auto-linked. |
 
-Why the partial hash makes the name guard load-bearing: `partial_hash` is
+Why no auto-move even for the "obvious" same-name case: `partial_hash` is
 xxhash(first 64KB + size), a change-detection *fingerprint*, not a full-content
-hash. Waiving the name check (auto-relink any missing→present content match) was
-considered and rejected — it would let a rare fingerprint collision silently
-*merge two differently-named files into one identity* (data-loss-shaped from the
-user's view), with no cheap way to re-verify because the missing file is gone. The
-market splits exactly here: path-based DAMs (Lightroom Classic, Capture One) mark
-external renames "missing" and make the user relink; only hash-based digiKam
-auto-reconnects by content. We chose the conservative camp, with a review queue as
-the resolution surface.
+hash — and more importantly, silently reshuffling identity is exactly the
+"catalog changing underneath the user" that undermines trust in a hundreds-of-hours
+catalog (D20). The market splits here: path-based DAMs (Lightroom Classic, Capture
+One) mark external moves "missing" and make the user reconnect; only hash-based
+digiKam auto-reconnects by content. We chose the conservative camp — automation of
+identity is a *user-granted policy* later (D20's future direction), not an engine
+default.
 
 **Kind is DERIVED from live `file_status`, not stored — this is the load-bearing
 design idea.** The existing `duplicates` table already records the pair in *both*
@@ -275,12 +283,14 @@ is to remember which pairs exist and what the user *decided* (`pending`/`resolve
 `ignored`). **Keep the table and name as-is** (decided 2026-07-07) — no migration,
 ordering-proof; the projection names the kinds.
 
-**What is already built (impl/05 baseline — the entry point stands):**
-- Detection + recording: a name-changed content match to a missing asset flows to
-  `actionDuplicate`, minting the new path and logging a `pending` duplicates row
-  linking original→new. Holds in both event orderings and on both the walk and the
-  single-path (watcher) entry. Locked by `TestUnpairedRename_RecordedForReview`.
-- Nothing is auto-merged and no judgment is touched for a name change.
+**What is already built (impl/05 + D20 baseline — the entry point stands):**
+- Detection + recording: **any** content match at a new path (move / rename / copy,
+  same-name or not) flows to `actionDuplicate`, minting the new path and logging a
+  `pending` duplicates row linking original→new. Holds in both event orderings and on
+  both the walk and the single-path (watcher) entry. Locked by
+  `TestUnpairedRename_RecordedForReview`, `TestCopyThenDeleteMove_RecordedForReview`,
+  `TestWalk_FolderReorgRecordsMove`.
+- Nothing is ever auto-merged or auto-relinked; no judgment is touched (D20).
 - `DuplicateRepo.ListPending` returns the raw pending pairs.
 
 **What is deferred (build with the source-management / review-UX milestone, which
@@ -298,26 +308,28 @@ owns the consuming UI — none exists yet):**
    `ignored` and stamps `resolved_at`:
    - **move → confirm:** relink — adopt the new path onto the *missing original*
      and hard-delete the throwaway new identity, preserving the original's
-     judgments. This is exactly the existing `actionMove` + `healMovedAway`
-     machinery (`AssetRepo.UpdatePath` + `DeleteByID`, FK-cascade cleans the dup
-     row) — lift it behind a user-triggered `ConfirmMove(originalID, newID)` rather
-     than re-implementing. Handle the case where the user judged the *new* row in
-     the meantime (warn, or merge-judgments — pick with the UI).
+     judgments. D20 removed the automatic `actionMove`/`healMovedAway` that used to
+     do this, but left the **repo primitives** it was built from — `AssetRepo.UpdatePath`
+     + `DeleteByID` (FK-cascade cleans the dup row). `ConfirmMove(originalID, newID)`
+     re-composes them in the resolution service (delete new, UpdatePath original).
+     Handle the case where the user judged the *new* row in the meantime (warn, or
+     merge-judgments — pick with the UI).
    - **move → reject:** keep separate — original stays `missing`, new stays its own
      asset, row → `ignored` so it stops surfacing.
    - **duplicate → delete one / keep both:** `SoftDelete` the unwanted identity, or
      mark `ignored` to keep both. (Overlaps §1's cross-source duplicate flow —
      same table, same actions.)
-3. **Source-scoping interaction (see §1).** Once `FindByHash` /
-   `FindMoveHealCandidate` are scoped to `source_id`, a *move* is intrinsically
-   **same-source** (missing here, present here); a **cross-source** identical file
-   is always a *duplicate*, never a move. The projection's kind rule should read:
-   same-source missing→present = move; anything cross-source = duplicate. Fold this
-   in when the source-scoping fix (§1) lands so the two features ship coherent.
+3. **Source awareness in the projection (see §1).** With D20 there is no scoping
+   *fix* to make (nothing auto-mutates), but the projection's *kind* rule should
+   still be source-aware: a **same-source** missing→present pair is a *move*; a
+   **cross-source** identical file is always a *duplicate*, never a move (a file
+   can't move between two roots and keep one identity). So the derivation is:
+   same-source + original missing → move; anything cross-source, or both present →
+   duplicate.
 
 **Trigger:** the review-UX / source-management milestone (the first UI that lists
-pairs for the user), or the source-scoping fix in §1 — whichever lands first should
-pull in at least the projection so the kinds are computed in one place.
+pairs for the user) — build at least the projection then, so the kinds are computed
+in one place.
 
 ---
 

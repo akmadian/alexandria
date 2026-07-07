@@ -14,7 +14,7 @@ NFR references → `01-requirements-distilled.md`.
 > service) are being REBUILT** — the first cut drifted from the Prime Directives (the watcher was
 > deciding actions and writing `file_status`). Corrected boundary (see the "Corrected architecture"
 > note atop `impl/05`): watcher = sensor that hands the importer a *path, never a verdict*; the
-> importer's single-path entry decides + writes (present→ingest, gone→missing+merge); the watcher's
+> importer's single-path entry decides + writes (present→ingest, gone→missing — D20 removed the merge); the watcher's
 > only own write is `sources.connectivity`; batch reconcile is the importer's full walk, which the
 > watcher schedules. The per-OS event adapters collapsed to one dep (`rjeczalik/notify`), the volume
 > monitor to a poll timer (per-OS UUID monitor deferred). Building 05.2 surfaced the broader
@@ -110,6 +110,10 @@ path-primacy: **an exact content+name match against a MISSING asset outranks pat
 (kills the delete-and-copy judgment-cross-attachment bug). Accepted failure modes are documented,
 named, and all leave visible, healable residue (duplicates review, missing view, relocate flow).
 
+> **Superseded in part by D20 (2026-07-07):** the *auto-relink* action here is removed — an exact
+> content+name match against a missing asset is now *detected and flagged for review*, not
+> automatically relinked. The matched-identity model stands; its licence to auto-mutate identity does not.
+
 ## D10 — Signature ladder with an authority rule
 
 mtime+size (staleness) → partial hash 64KB+size (exact-ish identity) → full hash (verification) →
@@ -117,6 +121,10 @@ phash/P3 (perceptual). **Exact tiers may drive automatic actions; perceptual tie
 suggest.** Partial hash may *propose* duplicates; the P2 review UI must *confirm* with full hash
 before claiming "identical". phash never feeds the identity matrix — similar ≠ same, and burst
 neighbors are exactly where judgments must not cross-contaminate.
+
+> **Superseded in part by D20 (2026-07-07):** "exact tiers may drive automatic actions" now applies
+> only to path-fidelity (reimport / mark-missing / add). Exact tiers *propose* identity changes
+> (relink/merge) for user review; they no longer act on identity automatically.
 
 ## D11 — Column promotion rule (first-class vs JSON blob)
 
@@ -215,3 +223,58 @@ packages need the same OS-specific thing. Package names: short, singular, by wha
 (`dependency`, `watcher`, `exttool`-style). Channel discipline: created/wired/closed only in the
 one wiring function; stages take directional channel params. `aspect_ratio` as a VIRTUAL generated
 column (indexable, NULL-safe) — DB features over app code.
+
+## D20 — Reconciliation is detect-and-flag, not auto-mutate (supersedes the auto-move halves of D9/D10)
+
+**Decision (2026-07-07, close-out of impl/05).** The ingest matrix never auto-changes an asset's
+*identity*. It automates only what is unambiguously true about a **known path**: refresh a same-path
+edit (reimport), mark a gone path `missing`, add genuinely-new files. Content that reappears at a
+**new path** — a move, a rename, a copy — mints a new asset and logs a **pending review row** (kind
+*derived* from the matched asset's live status: `duplicate` if present, `probable-move` if missing;
+see `impl/DEFERRED.md` §5). There is **no auto-relink, no delete-side merge, no move detection**. The
+user resolves moves/duplicates in the review queue.
+
+**The bright line:** auto-act on a known *path* (fidelity — reimport / missing / add); **never**
+auto-act on *identity* (relink / merge). The test at every matrix branch is: *is identity being
+reshuffled?* If yes, it's a flag, not an action.
+
+**Rationale.**
+1. **Trust is the product.** A creative catalog is hundreds of hours of irreplaceable judgment; a
+   catalog that silently reshuffles identities underneath the user undermines the one thing that
+   matters. Predictable beats clever. This is Lightroom Classic's model — the target user is trained
+   on it and trusts it (missing files get a `?` badge and wait for a manual reconnect; nothing
+   re-homes itself).
+2. **Simplification.** Auto-identity-reshuffle was the single most edge-case-laden feature in the
+   engine — rename event orderings, cross-source re-homing, partial-hash collisions, delete-side-merge
+   judgment guards. Deleting it removes a whole class of bugs and code paths (`actionMove`,
+   `healMovedAway`, `FindMoveHealCandidate`, the relink precedence) at once.
+3. **It dissolves the DEFERRED §1 source-scoping bug** — with no mutating verdict left, there is
+   nothing that can re-home an asset onto the wrong source. `FindByHash` stays global purely as a
+   *duplicate-detection flag*, which is safe by definition.
+
+**What is preserved.** Judgments are never lost: a moved file's rating stays on its now-`missing`
+asset, and the review queue's confirm-move transfers it on the user's say-so. Duplicate *detection*
+stays (the global content flag) — it just never mutates. Reimport (same-path edit) keeps identity +
+judgments, as before.
+
+**Cost, accepted.** More review items for routine copy-then-delete "moves" (they no longer
+auto-heal); judgments sit on the missing asset until the user confirms the move; the review/reconnect
+UX becomes load-bearing (this is LrC's manual-relink flow, which some find tedious). If review burden
+proves too high in real use, revisit — most likely via the user-rules idea below rather than by
+re-baking heuristics into the engine.
+
+**Future direction — automation as user-granted policy, not engine default.** Rather than the engine
+*deciding* when to auto-act, expose the automations as **opt-in rules the user configures** (per-source
+or global): e.g. "auto-relink exact content+name moves within this source", "auto-merge same-name
+copy-then-delete". The engine stays predictable-by-default; a power user opts specific automations back
+on and owns the consequence. This inverts control — automation becomes a grant the user makes, not a
+behavior the engine assumes. Design with source management / settings; the matrix keeps emitting the
+detection facts (pending rows) that such rules would consume.
+
+**Supersedes.** The auto-*action* halves of **D9** ("exact content+name match against a MISSING asset
+outranks path reimport" — the relink) and **D10** ("exact tiers may drive automatic actions" — now:
+exact tiers *propose*; only path-fidelity *acts*). The matched-identity model and the signature
+ladder's *detection* role stand; only their licence to auto-mutate identity is revoked.
+
+**Revisit trigger:** measured review burden too high in real multi-source use → build the user-rules
+engine, or a narrow, explicitly opt-in auto-relink.

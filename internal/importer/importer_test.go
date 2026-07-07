@@ -160,53 +160,11 @@ func TestIngestFile_GonePathMarksMissing(t *testing.T) {
 	}
 }
 
-// TestIngestFile_GoneHealsCopyThenDelete proves the single-path gone branch runs
-// the SAME delete-side merge as the walk: ingest the copy, then feed the original
-// as gone → the original identity is preserved (judgment intact) and adopts the
-// copy's path, leaving no stranded missing row.
-func TestIngestFile_GoneHealsCopyThenDelete(t *testing.T) {
-	imp, src, assets := newImporter(t)
-	ctx := context.Background()
-	content := []byte("photo-moved-by-copy-then-delete")
-
-	// Original with a user rating (what must survive), then the copy is ingested.
-	if _, err := imp.Run(ctx, src, fstest.MapFS{"a/photo.jpg": {Data: content}}); err != nil {
-		t.Fatalf("import: %v", err)
-	}
-	original, _ := assets.FindBySourcePath(ctx, src.ID, "a/photo.jpg")
-	if err := assets.ApplyTriagePatch(ctx, []string{original.ID}, catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
-		t.Fatalf("rate: %v", err)
-	}
-	if err := imp.IngestFile(ctx, src, fstest.MapFS{"b/photo.jpg": {Data: content}}, "b/photo.jpg"); err != nil {
-		t.Fatalf("ingest copy: %v", err)
-	}
-
-	// The old path is now gone — fed to the single-path entry, it heals the move.
-	if err := imp.IngestFile(ctx, src, fstest.MapFS{"b/photo.jpg": {Data: content}}, "a/photo.jpg"); err != nil {
-		t.Fatalf("ingest gone original: %v", err)
-	}
-
-	all, _ := assets.List(ctx, catalog.AssetFilter{})
-	if len(all) != 1 {
-		t.Fatalf("copy must be absorbed, not left as a second identity: got %d assets, want 1", len(all))
-	}
-	survivor := all[0]
-	if survivor.ID != original.ID {
-		t.Fatalf("original identity must survive: got %s, want %s", survivor.ID, original.ID)
-	}
-	if survivor.RelativePath != "b/photo.jpg" || survivor.FileStatus != domain.FileStatusOnline {
-		t.Fatalf("survivor should be online at the new path: path=%s status=%s", survivor.RelativePath, survivor.FileStatus)
-	}
-	if survivor.Rating == nil || *survivor.Rating != 5 {
-		t.Fatalf("the user's rating must be preserved through the merge: got %v", survivor.Rating)
-	}
-}
-
 // TestWalk_MarksMissingThenRestores proves the full walk (Run) subsumes the old
 // standalone reconcile (retired in impl/05.3): an unvisited known file is marked
-// missing, and reappears online on the next walk (the matrix relinks it).
-// Whole-source-offline is no longer the importer's job — the watcher's poll
-// monitor owns it (see internal/watcher poll tests).
+// missing, and reappears online on the next walk (reimport restores it at its
+// original path — D20, no relink). Whole-source-offline is no longer the importer's
+// job — the watcher's poll monitor owns it (see internal/watcher poll tests).
 func TestWalk_MarksMissingThenRestores(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	ctx := context.Background()
@@ -231,7 +189,7 @@ func TestWalk_MarksMissingThenRestores(t *testing.T) {
 		t.Fatalf("b.jpg status = %v, want missing", b)
 	}
 
-	// b.jpg came back: the next walk relinks it online (same content+name).
+	// b.jpg came back at its original path: reimport restores it online.
 	if _, err := imp.Run(ctx, src, full); err != nil {
 		t.Fatalf("walk back: %v", err)
 	}
@@ -240,9 +198,10 @@ func TestWalk_MarksMissingThenRestores(t *testing.T) {
 	}
 }
 
-// The capstone: a walk after a folder reorg relinks a moved file instead of
-// duplicating it — the pipeline's most important protection.
-func TestMoveRelink_AfterReconcile(t *testing.T) {
+// TestWalk_FolderReorgRecordsMove proves D20 for the walk path: a file moved to a
+// new dir (folder reorg) is NOT relinked — the old path goes missing, the new path
+// is a distinct asset, and the pair is a pending review row for the user to confirm.
+func TestWalk_FolderReorgRecordsMove(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	ctx := context.Background()
 	content := []byte("the same photo bytes")
@@ -250,25 +209,20 @@ func TestMoveRelink_AfterReconcile(t *testing.T) {
 	if _, err := imp.Run(ctx, src, fstest.MapFS{"old/photo.jpg": {Data: content}}); err != nil {
 		t.Fatalf("import: %v", err)
 	}
-	// Folder reorganized while the app was closed: the old path is gone, so a walk
-	// that doesn't visit it marks it missing (the relink target).
-	if _, err := imp.Run(ctx, src, fstest.MapFS{}); err != nil {
-		t.Fatalf("walk: %v", err)
-	}
-	// Re-import finds the same file (same name + content) at a new path.
+	// Folder reorganized while the app was closed: old path gone, same file at a new path.
 	res, err := imp.Run(ctx, src, fstest.MapFS{"new/photo.jpg": {Data: content}})
 	if err != nil {
 		t.Fatalf("re-import: %v", err)
 	}
-	if res.Moved != 1 || res.Added != 0 {
-		t.Fatalf("re-import: moved=%d added=%d, want 1/0 (relink, not duplicate)", res.Moved, res.Added)
+	if res.Added != 1 || res.Missing != 1 {
+		t.Fatalf("folder reorg must mint the new path (1) + mark old missing (1), got added=%d missing=%d", res.Added, res.Missing)
 	}
-	all, _ := assets.List(ctx, catalog.AssetFilter{IncludeDeleted: true})
-	if len(all) != 1 {
-		t.Fatalf("expected 1 relinked asset, got %d (duplicated?)", len(all))
+	all, _ := assets.List(ctx, catalog.AssetFilter{})
+	if len(all) != 2 {
+		t.Fatalf("no relink: expected 2 distinct assets, got %d", len(all))
 	}
-	if all[0].RelativePath != "new/photo.jpg" || all[0].FileStatus != domain.FileStatusOnline {
-		t.Fatalf("relinked asset at %q status %q, want new/photo.jpg online",
-			all[0].RelativePath, all[0].FileStatus)
+	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
+	if len(dups) != 1 {
+		t.Fatalf("the move must be recorded as one pending review pair, got %d", len(dups))
 	}
 }

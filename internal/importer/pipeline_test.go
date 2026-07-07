@@ -118,10 +118,10 @@ func TestMatrix_InRunDuplicatePair(t *testing.T) {
 	}
 }
 
-// TestMatrix_RelinkOutranksReimport proves the precedence order: an incoming
-// file that matches BOTH a missing asset (content+name) AND an asset at its path
-// (reimport) is relinked, not reimported.
-func TestMatrix_RelinkOutranksReimport(t *testing.T) {
+// TestReimport_RestoresMissingAtOriginalPath proves the path-fidelity that replaces
+// relink (D20): a file that went missing and reappears at its ORIGINAL path is
+// restored online via reimport — same identity, no new row, no review needed.
+func TestReimport_RestoresMissingAtOriginalPath(t *testing.T) {
 	ingester, source, assets := newImporter(t) // helper from importer_test.go
 	ctx := context.Background()
 	content := []byte("the-original-bytes")
@@ -129,6 +129,7 @@ func TestMatrix_RelinkOutranksReimport(t *testing.T) {
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{"b.mp4": {Data: content}}); err != nil {
 		t.Fatal(err)
 	}
+	original, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4")
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{}); err != nil {
 		t.Fatal(err)
 	}
@@ -136,13 +137,17 @@ func TestMatrix_RelinkOutranksReimport(t *testing.T) {
 		t.Fatalf("precondition: b.mp4 should be missing, got %v", missing)
 	}
 
+	// Reappears at the same path → reimport restores it online, same identity.
 	result, err := ingester.Run(ctx, source, fstest.MapFS{"b.mp4": {Data: content}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The path matches (a reimport candidate), but relink wins the verdict.
-	if result.Moved != 1 || result.Updated != 0 {
-		t.Fatalf("relink must outrank reimport: moved=%d updated=%d, want 1/0", result.Moved, result.Updated)
+	if result.Updated != 1 || result.Added != 0 {
+		t.Fatalf("same-path reappearance must reimport, not mint: updated=%d added=%d, want 1/0", result.Updated, result.Added)
+	}
+	restored, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4")
+	if restored.ID != original.ID || restored.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("must restore the same identity online: got id=%s status=%s", restored.ID, restored.FileStatus)
 	}
 }
 
@@ -214,16 +219,17 @@ func assertProbableMove(t *testing.T, assets *sqlite.AssetRepo, sourceID, origin
 	}
 }
 
-// TestDeleteSideMerge_HealsCopyThenDelete proves impl/05's delete-side merge: an
-// external app that "moves" a file by copying it to a new path and deleting the
-// old one leaves NO stranded missing row and PRESERVES the original's judgments —
-// the freshly-minted copy is absorbed back into the original identity.
-func TestDeleteSideMerge_HealsCopyThenDelete(t *testing.T) {
+// TestCopyThenDeleteMove_RecordedForReview proves D20: even a same-NAME
+// copy-then-delete "move" (an external app writing to a new dir then deleting the
+// old) is no longer auto-merged. The original is left missing with its judgment
+// intact, the copy is a distinct new asset, and the pair is a pending review row —
+// the user confirms the move. (Under the old delete-side merge this auto-healed.)
+func TestCopyThenDeleteMove_RecordedForReview(t *testing.T) {
 	ingester, source, assets := newImporter(t)
 	ctx := context.Background()
 	content := []byte("photo-content-that-gets-moved")
 
-	// Original, then a user judgment on it (this is what must survive).
+	// Original, then a user judgment on it (this is what must survive on the missing row).
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{"a/photo.mp4": {Data: content}}); err != nil {
 		t.Fatal(err)
 	}
@@ -237,69 +243,32 @@ func TestDeleteSideMerge_HealsCopyThenDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Missing != 0 {
-		t.Fatalf("delete-side merge must leave no missing row: missing=%d, want 0", result.Missing)
+	if result.Missing != 1 || result.Added != 1 {
+		t.Fatalf("no auto-merge: want the original missing (1) + the copy minted (1), got missing=%d added=%d", result.Missing, result.Added)
 	}
 
-	all, _ := assets.List(ctx, catalog.AssetFilter{})
-	if len(all) != 1 {
-		t.Fatalf("the copy must be absorbed, not left as a second identity: got %d assets, want 1", len(all))
-	}
-	survivor := all[0]
-	if survivor.ID != original.ID {
-		t.Fatalf("the ORIGINAL identity must survive: got %s, want %s", survivor.ID, original.ID)
-	}
-	if survivor.RelativePath != "b/photo.mp4" || survivor.FileStatus != domain.FileStatusOnline {
-		t.Fatalf("survivor should be online at the new path: path=%s status=%s", survivor.RelativePath, survivor.FileStatus)
-	}
-	if survivor.Rating == nil || *survivor.Rating != 5 {
-		t.Fatalf("the user's rating must be preserved through the merge: got %v", survivor.Rating)
-	}
-	if gone, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4"); gone != nil {
-		t.Fatalf("the old path should be gone, got %v", gone)
-	}
-	// The duplicates row logged for the copy must be cleaned (FK cascade).
-	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
-	if len(dups) != 0 {
-		t.Fatalf("duplicates row should be cascade-deleted with the absorbed copy: got %d", len(dups))
-	}
-}
-
-// TestDeleteSideMerge_GuardedByJudgment proves the safety guard: if the copy has
-// already been judged, it is NOT absorbed — the original goes missing normally and
-// both identities survive. (Here the guard is exercised by rating the whole
-// content set so the young copy is non-zero-judgment.)
-func TestDeleteSideMerge_GuardedByJudgment(t *testing.T) {
-	ingester, source, assets := newImporter(t)
-	ctx := context.Background()
-	content := []byte("content-copied-and-then-judged")
-
-	if _, err := ingester.Run(ctx, source, fstest.MapFS{"a/photo.mp4": {Data: content}}); err != nil {
-		t.Fatal(err)
-	}
-	// Ingest the copy FIRST (present duplicate), judge it, THEN drop the original.
-	if _, err := ingester.Run(ctx, source, fstest.MapFS{
-		"a/photo.mp4": {Data: content},
-		"b/photo.mp4": {Data: content},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	copyAsset, _ := assets.FindBySourcePath(ctx, source.ID, "b/photo.mp4")
-	if err := assets.ApplyTriagePatch(ctx, []string{copyAsset.ID}, catalog.TriagePatch{Rating: domain.SetOpt(3)}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Original vanishes. The copy is judged → must NOT be absorbed.
-	result, err := ingester.Run(ctx, source, fstest.MapFS{"b/photo.mp4": {Data: content}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Missing != 1 {
-		t.Fatalf("a judged copy must not heal the delete: missing=%d, want 1", result.Missing)
-	}
 	all, _ := assets.List(ctx, catalog.AssetFilter{})
 	if len(all) != 2 {
-		t.Fatalf("both identities must survive when the guard trips: got %d assets, want 2", len(all))
+		t.Fatalf("both identities must survive (no merge): got %d assets, want 2", len(all))
+	}
+	stale, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4")
+	if stale == nil || stale.ID != original.ID || stale.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("original must be left MISSING with identity intact: got %v", stale)
+	}
+	if stale.Rating == nil || *stale.Rating != 5 {
+		t.Fatalf("the user's rating must stay on the missing original: got %v", stale.Rating)
+	}
+	fresh, _ := assets.FindBySourcePath(ctx, source.ID, "b/photo.mp4")
+	if fresh == nil || fresh.ID == original.ID || fresh.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("copy must be a distinct online asset: got %v", fresh)
+	}
+	// The pair is surfaced for review — original(missing) ↔ copy(online).
+	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
+	if len(dups) != 1 {
+		t.Fatalf("the move must be recorded as one pending review pair, got %d", len(dups))
+	}
+	if dups[0].OriginalAssetID != original.ID || dups[0].DuplicateAssetID != fresh.ID {
+		t.Fatalf("pending pair should link original→copy: got %+v", dups[0])
 	}
 }
 
