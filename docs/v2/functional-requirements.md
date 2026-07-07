@@ -401,6 +401,16 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - "Group by" mode: collapsible sections by file type, date (year/month/day), source, rating, color label
 - View mode, not structural change
 
+### Asset/Group Pinning
+
+*From todo.md, 2026-07-07.*
+
+- Lets certain high-demand assets surface first at the top of the grid regardless of active sort
+- Scope: collection-relative ("important in this album"), not global — pin state lives on the asset<->collection relationship, not the asset itself
+- Pinning a single asset vs. an asset group is a real UX fork worth deferring rather than resolving speculatively (does the whole group move as a unit, or does pinning one representative just surface the group without reordering members)
+- Needs its own explicit order among multiple pinned items (e.g. drag-to-reorder) — otherwise "pinned" degrades into an unordered clump and loses the point
+- Likely only meaningful in a dedicated "custom order" view mode, silently suppressed the moment a real sort criterion is picked, rather than fighting every sort mode
+
 ### Copy/Paste Metadata
 
 *From todo.md — high value for multi-camera shoots.*
@@ -408,13 +418,17 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - Copy metadata from source asset (rating, tags, color label, custom fields)
 - Paste onto target assets
 
-### Configurable "Open In" Programs
+### Configurable "Open In" Programs / External Program Registry
 
-*From todo.md.*
+*From todo.md; expanded 2026-07-07 during export-flow design.*
 
-- Per MIME type / extension, seeded from OS defaults on first run
+- Per MIME type / extension, seeded from OS defaults on first run (macOS Launch Services, `xdg-mime`/desktop files on Linux, similar-but-distinct Windows APIs)
 - User-overridable in settings, stored in machine.json
 - Right-click -> Open In -> [app list] with "Set as default"
+- **Registry extension** (same "one explicit table documents what's supported" shape as the `TypeHandler` registry): per-program row holds display name, icon, matched file types, and capability flags — batch-launch-safe (accepts multiple file args in one launch) and has-scripting-automation (AppleScript/Shortcuts available, confirmed per-program, never assumed)
+- Name/icon/default-app are OS-queryable; capabilities are not — capabilities live in a small hand-curated overlay list on top of the OS-discovered base data, safe default (single-file-only, no automation) for anything not curated
+- Design intent: generic OS-seeded "open in" is the floor for every program; a curated few (the programs people actually use most) get genuinely bespoke, deep integration on top — the hand-off should feel tight and intentional for those, not uniformly lowest-common-denominator
+- Batch dispatch: multi-select N assets -> consult registry's batch-launch-safe flag -> one process launch with all N paths if safe, otherwise fall back to opening just the first / warning the user
 
 ### Import Modal Options
 
@@ -423,6 +437,14 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - Auto-create named collection from import (pre-filled name, checked by default)
 - Skip suspected duplicates (checked by default, count shown post-import)
 - Apply saved metadata preset to all imported assets (copyright, creator, rights)
+
+### Metadata Presets
+
+*From todo.md; general feature, import modal above is one consumer of it.*
+
+- A preset is a named, saved partial set of metadata fields+values (e.g. copyright, creator, rights), applicable later to a single asset or a batch selection, not just at import time
+- Conceptually "a saved partial patch with a name" — reuses the batch metadata-edit path, no separate update machinery
+- Open design decision, needs to be made deliberately before building: conflict behavior when a target asset already has a value in a field the preset touches — overwrite unconditionally (simple, matches most other apps' default, occasionally surprising), skip fields with an existing value, or prompt on conflict
 
 ### Bulk Write Metadata to XMP
 
@@ -532,6 +554,13 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 *From todo.md.*
 
 - Count badge next to every collection, folder, and source
+
+### Bookmarks and Landing View
+
+*From todo.md.*
+
+- Bookmark collections and sources for quick access
+- Landing/home view surfacing: quick Import action, bookmarked collections
 
 ### Sort Options
 
@@ -657,6 +686,8 @@ Build after the core product is stable and well-used.
 
 ### Export Pipeline
 
+*Scope note (2026-07-07): this pipeline handles flat/already-rendered images (format conversion, resize, metadata strip) via ffmpeg/ImageMagick — it is explicitly NOT a Lightroom-Develop-module replacement. RAW development/export is a different problem entirely; see "RAW Export via External Tool Dispatch" below.*
+
 - Format selection: JPEG, PNG, TIFF, WebP
 - Resize options: fit width, fit height, exact dimensions, percentage
 - Quality slider, color space selection
@@ -664,6 +695,17 @@ Build after the core product is stable and well-used.
 - Output folder picker, metadata strip options
 - Batch export with non-blocking progress UI
 - Export ordering: maintain sequence order (LrC's multi-threaded export doesn't preserve order)
+
+### RAW Export via External Tool Dispatch
+
+*From 2026-07-07 design session; full detail in `docs/v2/ops/raw-export-dispatch.md`, summarized here.*
+
+- Non-destructive RAW edits (masks, AI denoise, adjustments) are instructions meaningful only to the engine that wrote them — Alexandria cannot build its own RAW rendering engine at parity with dedicated tools, and isn't going to try
+- `Export` becomes a third `TypeHandler` capability (alongside `Metadata`/`Thumb`): raster formats get direct ffmpeg/ImageMagick dispatch (Alexandria's own pipeline above); RAW formats resolve via a lookup into the external-program registry for whichever tool is associated with that RAW extension, gated on that tool's has-scripting-automation flag
+- No automation surface available -> graceful degradation (same principle as any nil `TypeHandler` capability): surface a clear message telling the user to export from that program directly, never a crash or silent no-op
+- Mixed batches (assets developed across multiple different tools) must group dispatch by owning tool, not treat the selection as homogeneous
+- Job modeling reuses the Jobs-registry/progress-bar UX, but deliberately does NOT reuse the `dependency` fleet's subprocess supervision (kill-on-timeout, semaphores) — a GUI app the user is actively using has a different risk profile than a headless tool Alexandria fully owns
+- Still open: exactly how "which tool rendered this asset's edits" gets tracked (distinct from the "open in" default-app mapping)
 
 ### In-App Asset Converter
 
@@ -863,6 +905,16 @@ Ideas worth preserving but with no committed timeline.
 ### Plugin / Extension System
 
 - **Permanently deferred.** Explicitly decided against. Contributors add features via code contributions or feature requests. The API surface maintenance burden is not justified.
+
+---
+
+## Open Product/Architecture Questions
+
+*Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`post-ingest-design/impl/DEFERRED.md`) and the architectural decision log (`post-ingest-design/02-decision-log.md`); these haven't reached a decision yet.*
+
+- Frontend state management: lean away from adding any if possible (state management is called out as a recurring headache) — worth revisiting only if prop-drilling/cache-coherence pain actually shows up in practice, not preemptively.
+- Map view / location search: how do we generalize raw GPS coordinates to a town or area name someone would actually search for? (Reverse geocoding via offline gazetteer is the current lead — see Map View, P3 — but the UX of "searchable place" from a lat/lng pair isn't fully worked out.)
+- Responsiveness/scaling system: desktop-only, no mobile/tablet target, but still want a system that gives grid/layout scaling without hand-rolling it — which existing tool/approach fits that constraint without the overhead of a full responsive framework aimed at screen sizes that will never be supported here?
 
 ---
 
