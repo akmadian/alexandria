@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 
 	"github.com/akmadian/alexandria/internal/catalog"
@@ -100,7 +101,14 @@ func (imp *Importer) IngestRenamed(ctx context.Context, source *domain.Source, f
 func (imp *Importer) ingestOne(ctx context.Context, source *domain.Source, fsys fs.FS, name string, renamed bool) error {
 	info, err := fs.Stat(fsys, name)
 	if err != nil {
-		return err
+		// Gone → the SAME action the walk-end diff takes: mark missing, attempting a
+		// delete-side merge first. This is what makes a watcher-fed delete heal
+		// identically to a walk-detected one (impl/05 corrected model). renamed is
+		// irrelevant on a gone path — a rename's to-path is present, not gone.
+		if errors.Is(err, fs.ErrNotExist) {
+			return imp.markGone(ctx, source, name)
+		}
+		return err // transient (perms, EIO) — leave status as-is; reconcile heals
 	}
 	scanned, ok := scan(name, info)
 	if !ok {

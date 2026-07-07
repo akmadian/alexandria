@@ -130,6 +130,78 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	}
 }
 
+// TestIngestFile_GonePathMarksMissing proves the impl/05 corrected model: a
+// watcher-fed path that no longer exists is marked missing by the IMPORTER's
+// single-path entry (the watcher hands over a path, never a verdict). This is the
+// same action the walk-end diff takes, in one place.
+func TestIngestFile_GonePathMarksMissing(t *testing.T) {
+	imp, src, assets := newImporter(t)
+	ctx := context.Background()
+	if _, err := imp.Run(ctx, src, fstest.MapFS{"a.jpg": {Data: []byte("a")}}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// The file is gone; the watcher feeds its path to the single-path entry.
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{}, "a.jpg"); err != nil {
+		t.Fatalf("ingest gone path: %v", err)
+	}
+	a, _ := assets.FindBySourcePath(ctx, src.ID, "a.jpg")
+	if a == nil || a.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("a.jpg status = %v, want missing", a)
+	}
+
+	// A second gone-event for the same (now-missing) path is a no-op, not an error.
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{}, "a.jpg"); err != nil {
+		t.Fatalf("repeat gone path: %v", err)
+	}
+	// An unknown gone path is a no-op too.
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{}, "never-seen.jpg"); err != nil {
+		t.Fatalf("unknown gone path: %v", err)
+	}
+}
+
+// TestIngestFile_GoneHealsCopyThenDelete proves the single-path gone branch runs
+// the SAME delete-side merge as the walk: ingest the copy, then feed the original
+// as gone → the original identity is preserved (judgment intact) and adopts the
+// copy's path, leaving no stranded missing row.
+func TestIngestFile_GoneHealsCopyThenDelete(t *testing.T) {
+	imp, src, assets := newImporter(t)
+	ctx := context.Background()
+	content := []byte("photo-moved-by-copy-then-delete")
+
+	// Original with a user rating (what must survive), then the copy is ingested.
+	if _, err := imp.Run(ctx, src, fstest.MapFS{"a/photo.jpg": {Data: content}}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	original, _ := assets.FindBySourcePath(ctx, src.ID, "a/photo.jpg")
+	if err := assets.ApplyTriagePatch(ctx, []string{original.ID}, catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
+		t.Fatalf("rate: %v", err)
+	}
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{"b/photo.jpg": {Data: content}}, "b/photo.jpg"); err != nil {
+		t.Fatalf("ingest copy: %v", err)
+	}
+
+	// The old path is now gone — fed to the single-path entry, it heals the move.
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{"b/photo.jpg": {Data: content}}, "a/photo.jpg"); err != nil {
+		t.Fatalf("ingest gone original: %v", err)
+	}
+
+	all, _ := assets.List(ctx, catalog.AssetFilter{})
+	if len(all) != 1 {
+		t.Fatalf("copy must be absorbed, not left as a second identity: got %d assets, want 1", len(all))
+	}
+	survivor := all[0]
+	if survivor.ID != original.ID {
+		t.Fatalf("original identity must survive: got %s, want %s", survivor.ID, original.ID)
+	}
+	if survivor.RelativePath != "b/photo.jpg" || survivor.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("survivor should be online at the new path: path=%s status=%s", survivor.RelativePath, survivor.FileStatus)
+	}
+	if survivor.Rating == nil || *survivor.Rating != 5 {
+		t.Fatalf("the user's rating must be preserved through the merge: got %v", survivor.Rating)
+	}
+}
+
 func TestReconcile_MarksMissingAndRestores(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	ctx := context.Background()

@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	_ "expvar" // registers /debug/vars on http.DefaultServeMux
 	"flag"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"github.com/akmadian/alexandria/internal/migrations"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
+	"github.com/akmadian/alexandria/internal/watcher"
 	"github.com/charmbracelet/log"
 	_ "modernc.org/sqlite"
 )
@@ -53,6 +55,8 @@ func main() {
 		err = cmdImport(args)
 	case "reconcile":
 		err = cmdReconcile(args)
+	case "watch":
+		err = cmdWatch(args)
 	case "errors":
 		err = cmdErrors(args)
 	case "sessions":
@@ -76,6 +80,7 @@ usage:
   dev import <path>   [--catalog <dir|:memory:>] [--debug [--debug-addr <addr>]]
                       [--hash-workers N] [--extract-workers N] [--thumb-workers N]
   dev reconcile <path> [--catalog <dir>]           mark missing/restored files
+  dev watch     <path> [--catalog <dir>]           live-watch a tree until Ctrl-C
   dev errors          [--catalog <dir>]            dump the latest session's DLQ
   dev sessions        [--catalog <dir>]            list recent import sessions
   dev rebuild fts     [--catalog <dir>]            rebuild the FTS index
@@ -382,6 +387,44 @@ func cmdReconcile(args []string) error {
 		return err
 	}
 	fmt.Printf("reconcile: missing=%d restored=%d errors=%d\n", result.Missing, result.Restored, len(result.Errors))
+	return nil
+}
+
+func cmdWatch(args []string) error {
+	flags := flag.NewFlagSet("watch", flag.ExitOnError)
+	catalogPath := flags.String("catalog", "", "catalog dir")
+	path, ok := parsePathAndFlags(flags, args)
+	if !ok {
+		return fmt.Errorf("usage: dev watch <path> --catalog <dir>")
+	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	catalog, err := openCatalog(*catalogPath)
+	if err != nil {
+		return err
+	}
+	defer catalog.close()
+
+	// Cancel on Ctrl-C: the watcher returns context.Canceled on a clean shutdown.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	source, err := ensureSource(ctx, catalog, absolutePath)
+	if err != nil {
+		return err
+	}
+	w := &watcher.Watcher{
+		Ingester: newIngester(catalog),
+		Source:   source,
+		Root:     absolutePath,
+		Log:      log.Default(),
+	}
+	fmt.Fprintf(os.Stderr, "watching %s — Ctrl-C to stop\n", absolutePath)
+	if err := w.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		return err
+	}
 	return nil
 }
 

@@ -270,7 +270,7 @@ func (pipe *pipeline) markMissing(ctx context.Context) error {
 	err = pipe.importer.Store.InTx(ctx, func(repos sqlite.Repos) error {
 		healed, missing = 0, 0 // reset per attempt (InTx may retry)
 		for _, id := range candidateIDs {
-			ok, err := pipe.healMovedAway(ctx, repos, id, mintedAfter)
+			ok, err := pipe.importer.healMovedAway(ctx, repos, pipe.source.ID, id, mintedAfter)
 			if err != nil {
 				return err
 			}
@@ -293,6 +293,30 @@ func (pipe *pipeline) markMissing(ctx context.Context) error {
 	return nil
 }
 
+// markGone is the single-path gone branch (impl/05 corrected model): a path the
+// watcher fed that no longer exists on disk. It performs the SAME action as the
+// walk-end diff — mark the asset at that path missing, attempting a delete-side
+// merge first (a copy-then-delete "move" absorbs the freshly-minted copy and
+// stays online). Nothing known at the path, or a row that is already not online,
+// is a no-op — so a duplicate gone-event never double-marks.
+func (imp *Importer) markGone(ctx context.Context, source *domain.Source, relPath string) error {
+	existing, err := imp.Reader.FindBySourcePath(ctx, source.ID, relPath)
+	if err != nil {
+		return err
+	}
+	if existing == nil || existing.FileStatus != domain.FileStatusOnline {
+		return nil
+	}
+	mintedAfter := time.Now().Add(-moveHealWindow)
+	return imp.Store.InTx(ctx, func(repos sqlite.Repos) error {
+		healed, err := imp.healMovedAway(ctx, repos, source.ID, existing.ID, mintedAfter)
+		if err != nil || healed {
+			return err
+		}
+		return repos.Assets.SetFileStatus(ctx, existing.ID, domain.FileStatusMissing)
+	})
+}
+
 // healMovedAway implements impl/05's delete-side merge. A going-missing asset may
 // have been copy-then-deleted to a new path an external app chose; if that copy
 // was just ingested as a fresh, still-unjudged duplicate, adopt its path onto
@@ -300,8 +324,9 @@ func (pipe *pipeline) markMissing(ctx context.Context) error {
 // duplicate row. The zero-judgment guard (in FindMoveHealCandidate) is what makes
 // this always safe — a copy the user has already rated is never absorbed. Returns
 // true if a merge happened (the identity stays online), false to fall through to
-// marking missing.
-func (pipe *pipeline) healMovedAway(ctx context.Context, repos sqlite.Repos, missingID string, mintedAfter time.Time) (bool, error) {
+// marking missing. Shared by the walk-end diff (markMissing) and the single-path
+// gone branch (markGone), so both heal a "move" identically.
+func (imp *Importer) healMovedAway(ctx context.Context, repos sqlite.Repos, sourceID, missingID string, mintedAfter time.Time) (bool, error) {
 	gone, err := repos.Assets.Get(ctx, missingID)
 	if err != nil {
 		return false, err
@@ -316,10 +341,10 @@ func (pipe *pipeline) healMovedAway(ctx context.Context, repos sqlite.Repos, mis
 	if err := repos.Assets.DeleteByID(ctx, young.ID); err != nil {
 		return false, err
 	}
-	if err := repos.Assets.UpdatePath(ctx, gone.ID, pipe.source.ID, young.RelativePath); err != nil {
+	if err := repos.Assets.UpdatePath(ctx, gone.ID, sourceID, young.RelativePath); err != nil {
 		return false, err
 	}
-	pipe.importer.Log.Info("delete-side merge: absorbed moved copy",
+	imp.Log.Info("delete-side merge: absorbed moved copy",
 		"identity", gone.ID, "from", gone.RelativePath, "to", young.RelativePath)
 	return true, nil
 }
