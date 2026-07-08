@@ -17,7 +17,7 @@ the table:
 - **New:** `internal/assettype/` (the type registry). New with impl/04: `SidecarRepo` +
   `ImportRepo` in `sqlite`; the `importer` job envelope (`jobs.go`), ignore list (`ignore.go`),
   and Sniff-mismatch policy (`mismatch.go`); `cmd/dev` (the engine harness); and the
-  `docs/perf/` reference.
+  `_project-tracking/perf/` reference.
 - **`internal/main.go`:** RETIRED — `cmd/dev` replaced it (its `:memory:` smoke path lives on as
   `dev import --catalog :memory:`).
 - **`internal/importer/`:** the fresh-file `pipeline.go` restructure (impl/04) is DONE — orchestration

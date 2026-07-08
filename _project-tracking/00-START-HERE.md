@@ -5,7 +5,17 @@ human or Claude: it answers *what's next, right now*, and links down. Area track
 and why*. **Maintenance contract:** whoever completes (or reprioritizes) a frontier item updates
 this file in the same change — a stale head is worse than no head.
 
-**Last updated:** 2026-07-07.
+**Last updated:** 2026-07-08.
+
+**Layout:** `backend/` · `seam/` · `frontend/` (area trackers + specs) ·
+[`functional-requirements.md`](functional-requirements.md) (the backlog, P0–P4) · `design/`
+(designs written ahead of their milestone — CI/hygiene, release, telemetry, local AI, RAW export
+dispatch, testing strategy, CONTRIBUTING outline) · `ops/` + `perf/` (repo-setup and performance
+working references) · `_scratch/` (raw notes). Durable contributor-facing reference lives in
+`docs/` instead — deliberately lean pre-release. **Graduation rule:** when an area stabilizes,
+its durable artifacts move to `docs/` — named candidates: the backend decision log, the data
+model, `CONSTANTS.md` (graduate with v1), and each `design/` doc once built (it then describes
+what *is*).
 
 ## Cold-start reading order
 
@@ -22,7 +32,7 @@ this file in the same change — a stale head is worse than no head.
 |---|---|---|---|
 | **A** | **impl/06 XMP sync — the wiring increment**: DB application across the three writers in one tx, outbound sidecar write (merge + atomic rename), ingest/watcher triggers + per-asset outbound debounce, `xmpWriteBack`/`xmpConflictResolution` settings consumers, watcher-side echo check | Backend | In progress — read path, conflict grid, judgment apply, keyword union all DONE |
 | **B** | **Query-layer round**: the AST→SQL compile authority (the one query builder `QueryAssets`, smart collections, and Review projections reuse). Grammar and token contract already designed | Backend→Seam | Unblocked now — spec in [`seam/01-queries-and-commands.md`](seam/01-queries-and-commands.md); residual decisions in [`backend/04-open-questions.md`](backend/04-open-questions.md) #4 |
-| **C** | **CI wiring** per `docs/ops/ci.md` (+ the `format`/`format:check` script gap in `docs/ops/frontend.md`) | Ops | Unblocked, parallel to anything |
+| **C** | **CI wiring** per [`design/ci.md`](design/ci.md) + [`design/repo-hygiene-backend.md`](design/repo-hygiene-backend.md) (+ the `format`/`format:check` script gap in [`design/repo-hygiene-frontend.md`](design/repo-hygiene-frontend.md)) | Ops | Unblocked, parallel to anything |
 
 A and B are independent; do in either order or interleave. C is background-sized.
 
@@ -51,4 +61,4 @@ per milestone).
 | Backend | impl/01–05 + 11 done; impl/06 in progress; impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
 | Seam | Design pre-shaped; awaits query-layer round | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
 | Frontend | Design complete (2026-07-07, Wails v2 locked); implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
-| Ops / Perf / Testing | Reference docs only (`../ops/`, `../perf/`, `../test/`); no milestone tracking yet | — |
+| Ops / Testing | Specs waiting in [`design/`](design/) (CI, release, telemetry, testing strategy); no milestone tracking yet | — |

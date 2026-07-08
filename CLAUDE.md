@@ -4,17 +4,17 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 
 ## Design authority (read before designing or implementing anything)
 
-1. **`docs/project-tracking/CONSTANTS.md`** — cross-cutting load-bearing invariants (C1–C14:
+1. **`_project-tracking/CONSTANTS.md`** — cross-cutting load-bearing invariants (C1–C14:
    vocabulary, state equation, seam rules, registry rules). Applies to every area.
-2. **`docs/project-tracking/00-START-HERE.md`** — the master head of the implementation task
+2. **`_project-tracking/00-START-HERE.md`** — the master head of the implementation task
    tree: what's next right now, and links to the per-area trackers (`backend/`, `seam/`,
    `frontend/` — each has its own `00-START-HERE.md`). The backend decision log
    (`backend/02-decision-log.md`) **wins every conflict** with older docs and existing code.
-3. `docs/functional-requirements.md` — feature source of truth (P0–P4).
+3. `_project-tracking/functional-requirements.md` — feature source of truth (P0–P4).
 4. Existing code follows the disposition tables (backend `.../05-code-disposition.md`, frontend
    `.../frontend/07-code-disposition.md`): specs win; you have explicit license to delete what
    they mark deleted.
-5. `internal/importer/README.md` (ingest engine, impl/04) and `docs/perf/` (thumbnail/hardware
+5. `internal/importer/README.md` (ingest engine, impl/04) and `_project-tracking/perf/` (thumbnail/hardware
    acceleration) are the up-to-date implementation references for the pipeline.
 
 ## Commands

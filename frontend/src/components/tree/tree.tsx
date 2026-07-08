@@ -1,4 +1,4 @@
-// The flagship reusable (docs/project-tracking/frontend/01-flows-and-views.md): one Tree serves
+// The flagship reusable (_project-tracking/frontend/01-flows-and-views.md): one Tree serves
 // folders-in-sources, collections, and tags. Generic over the node payload —
 // Tree never looks inside `data`; features adapt their domain to TreeNode<T>
 // in pure functions and interpret it back in onSelect/renderDecoration.

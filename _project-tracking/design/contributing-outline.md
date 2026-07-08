@@ -39,9 +39,9 @@ duplicating them.
    - **Feature backlog / roadmap** → `functional-requirements.md` (P0–P4
      prioritized, single source of truth as of 2026-07-07 — `todo.md` is a
      deprecated historical breadcrumb, do not add to it)
-   - **Architectural decisions** → `project-tracking/backend/02-decision-log.md`
+   - **Architectural decisions** → `_project-tracking/backend/02-decision-log.md`
      (ADR-lite — decision + rationale + revisit trigger)
-   - **Implementation-phase deferrals** → `project-tracking/backend/impl/DEFERRED.md`
+   - **Implementation-phase deferrals** → `_project-tracking/backend/impl/DEFERRED.md`
      (things deliberately deferred *during* building, each with a stated
      trigger for revisiting — different from a "someday" feature idea)
 

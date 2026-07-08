@@ -10,7 +10,7 @@
 // optimistic updates. Those are consumer concerns (TanStack Query + a thumbnail
 // loader) and live one layer up. This module stays a thin, honest transport.
 //
-// Design conventions this surface obeys (docs/project-tracking/seam/ — adopted as standing conventions):
+// Design conventions this surface obeys (_project-tracking/seam/ — adopted as standing conventions):
 //   1. Resource-oriented verbs; surface grows with ENTITIES, not features.
 //   2. Envelopes absorb field growth — never add per-field bindings.
 //   3. One job envelope for every long-running op.

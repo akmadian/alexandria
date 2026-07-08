@@ -4,19 +4,19 @@ React 19 + TypeScript + Vite desktop UI for the Alexandria DAM. Talks to a Go ba
 typed seam (Wails v2, locked 2026-07-07); runs against an in-memory mock until the backend binds.
 
 > **Status (2026-07): frontend implementation is DEFERRED** until the backend query-layer round
-> and the seam round complete — sequencing in `../docs/project-tracking/seam/00-START-HERE.md`.
+> and the seam round complete — sequencing in `../_project-tracking/seam/00-START-HERE.md`.
 > `src/api/contract.ts` remains design-authoritative and deliberately network-shaped; its known
 > deltas against the locked design are the reconciliation ledger in
-> `../docs/project-tracking/seam/01-queries-and-commands.md` — apply them there-first, not ad hoc.
+> `../_project-tracking/seam/01-queries-and-commands.md` — apply them there-first, not ad hoc.
 
 **Read these first** — they are the source of truth, not this file:
-- `../docs/project-tracking/CONSTANTS.md` — the load-bearing invariants (C1–C14). Never
+- `../_project-tracking/CONSTANTS.md` — the load-bearing invariants (C1–C14). Never
   contradict them casually.
-- `../docs/project-tracking/frontend/00-START-HERE.md` — the design handoff index: flows/views,
+- `../_project-tracking/frontend/00-START-HERE.md` — the design handoff index: flows/views,
   state model, search UX, keyboard/palette, culling, Review.
-- `../docs/project-tracking/frontend/07-code-disposition.md` — per-path verdicts over `src/`
+- `../_project-tracking/frontend/07-code-disposition.md` — per-path verdicts over `src/`
   (what stands, what evolves, what retires). Grounded in the code; specs win conflicts.
-- `../docs/project-tracking/seam/` — the query AST, workhorse methods, events/jobs envelopes.
+- `../_project-tracking/seam/` — the query AST, workhorse methods, events/jobs envelopes.
 
 ## Commands
 ```bash

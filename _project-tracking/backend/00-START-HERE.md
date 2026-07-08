@@ -4,7 +4,7 @@
 
 **Date:** 2026-07-06
 **Produced by:** a system-design working session (Ari + Claude Fable) that worked backwards from
-`docs/functional-requirements.md`, interview-style. All decisions below were made deliberately,
+`_project-tracking/functional-requirements.md`, interview-style. All decisions below were made deliberately,
 with tradeoffs discussed. Nothing in the pre-existing codebase was treated as sacred.
 **Audience:** a Claude (Fable/Opus) instance doing further design refinement and/or implementation.
 
@@ -57,7 +57,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 - `internal/metadata/`, `internal/thumbnailer/` — export `ExtractRaster`/`ExtractFunc` and
   `GenerateRaster`/`GenFunc`. "Raster" = the stdlib-decodable formats (JPEG/PNG/GIF), the shared
   backend every format is meant to funnel into (RAW extracts a preview and reuses it) — see
-  `docs/perf/thumbnailing-and-hardware-acceleration.md`. Thumbnailer `Sizes` default `[512]`,
+  `_project-tracking/perf/thumbnailing-and-hardware-acceleration.md`. Thumbnailer `Sizes` default `[512]`,
   `ApproxBiLinear` resize.
 - `internal/importer/` — **the concurrent pipeline** (impl/04): `pipeline.go` (wiring + run-level
   state) with one file per stage (`stage_scan/hash/match/extract/thumb/write.go`), plus `item.go`,

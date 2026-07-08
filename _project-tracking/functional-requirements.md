@@ -625,7 +625,7 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 
 *Pulled forward (2026-07-07 frontend design round): ships WITH the P1 keyboard system, not after
 it — the palette is a thin view over the action registry P1 builds anyway, and it teaches the
-keybindings. Spec: `project-tracking/frontend/04-keyboard-and-actions.md`.*
+keybindings. Spec: `_project-tracking/frontend/04-keyboard-and-actions.md`.*
 
 - Searchable list of all actions with current key combos
 - Bound to Cmd+K / Ctrl+K
@@ -702,7 +702,7 @@ Build after the core product is stable and well-used.
 
 ### RAW Export via External Tool Dispatch
 
-*From 2026-07-07 design session; full detail in `docs/ops/raw-export-dispatch.md`, summarized here.*
+*From 2026-07-07 design session; full detail in `_project-tracking/design/raw-export-dispatch.md`, summarized here.*
 
 - Non-destructive RAW edits (masks, AI denoise, adjustments) are instructions meaningful only to the engine that wrote them — Alexandria cannot build its own RAW rendering engine at parity with dedicated tools, and isn't going to try
 - `Export` becomes a third `TypeHandler` capability (alongside `Metadata`/`Thumb`): raster formats get direct ffmpeg/ImageMagick dispatch (Alexandria's own pipeline above); RAW formats resolve via a lookup into the external-program registry for whichever tool is associated with that RAW extension, gated on that tool's has-scripting-automation flag
@@ -914,12 +914,12 @@ Ideas worth preserving but with no committed timeline.
 
 ## Open Product/Architecture Questions
 
-*Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`project-tracking/backend/impl/DEFERRED.md`) and the architectural decision log (`project-tracking/backend/02-decision-log.md`); these haven't reached a decision yet.*
+*Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`_project-tracking/backend/impl/DEFERRED.md`) and the architectural decision log (`_project-tracking/backend/02-decision-log.md`); these haven't reached a decision yet.*
 
 - ~~Frontend state management~~ — **RESOLVED (2026-07-07 frontend design round):** no state
   library; one reducer holding the state equation (`view state = viewMode(query + arrangement,
   selection + cursor)`, CONSTANTS C2), server state in TanStack Query, everything else derived.
-  See `project-tracking/frontend/02-state-model.md`.
+  See `_project-tracking/frontend/02-state-model.md`.
 - Map view / location search: how do we generalize raw GPS coordinates to a town or area name someone would actually search for? (Reverse geocoding via offline gazetteer is the current lead — see Map View, P3 — but the UX of "searchable place" from a lat/lng pair isn't fully worked out.)
 - Responsiveness/scaling system: desktop-only, no mobile/tablet target, but still want a system that gives grid/layout scaling without hand-rolling it — which existing tool/approach fits that constraint without the overhead of a full responsive framework aimed at screen sizes that will never be supported here?
 

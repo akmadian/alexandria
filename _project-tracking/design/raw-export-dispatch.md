@@ -2,8 +2,8 @@
 
 Not a priority right now — no code, no timeline. Written so the design
 exists before it's needed. Extends decisions already made rather than
-inventing new architecture; see `docs/project-tracking/backend/02-decision-log.md`
-(D4, D5, D6) and `docs/functional-requirements.md` (the "Configurable
+inventing new architecture; see `_project-tracking/backend/02-decision-log.md`
+(D4, D5, D6) and `_project-tracking/functional-requirements.md` (the "Configurable
 'Open In' Programs / External Program Registry" entry this builds on).
 
 ## The core realization this design rests on

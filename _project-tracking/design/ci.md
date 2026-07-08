@@ -1,7 +1,7 @@
 # CI orchestration
 
-How `scripts/check.sh` (backend, see [backend.md](backend.md)) and the
-frontend's `bun run check`/`format:check` (see [frontend.md](frontend.md))
+How `scripts/check.sh` (backend, see [repo-hygiene-backend.md](repo-hygiene-backend.md)) and the
+frontend's `bun run check`/`format:check` (see [repo-hygiene-frontend.md](repo-hygiene-frontend.md))
 actually get wired into GitHub Actions — specifically, only running the
 stack whose files actually changed. Separated from those two docs because
 the whole point of this pattern is that backend and frontend are no longer

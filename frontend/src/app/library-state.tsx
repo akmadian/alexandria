@@ -1,4 +1,4 @@
-// The one piece of shared client state (docs/project-tracking/frontend/02-state-model.md):
+// The one piece of shared client state (_project-tracking/frontend/02-state-model.md):
 // browse target, filter bar, view mode, selection. Server state lives in
 // TanStack Query; machine prefs live in localStorage; everything else derives.
 //

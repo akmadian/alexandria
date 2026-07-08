@@ -464,8 +464,8 @@ a signal column. Predicates are query-AST nodes, not methods.
 - Same discipline on writes: metadata changes go through the one
   `UpdateAssets(ids, patch)` patch struct, not per-field setters.
 
-Rationale and the full seam design: `project-tracking/CONSTANTS.md` (C7) and
-`project-tracking/seam/01-queries-and-commands.md`. The failure mode this
+Rationale and the full seam design: `_project-tracking/CONSTANTS.md` (C7) and
+`_project-tracking/seam/01-queries-and-commands.md`. The failure mode this
 prevents is 200 narrow methods each supporting some permutation of filters.
 
 ---

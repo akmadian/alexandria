@@ -2,7 +2,7 @@
 // triage edit controls. Reads server state via useAsset; writes via the
 // optimistic usePatchAssets / useSetAssetTags. Metadata sections are dumb
 // subcomponents taking Asset slices. Multi-select mixed-value editing is
-// designed-not-built (see docs/project-tracking/frontend/07-code-disposition.md) — today it inspects the last selection.
+// designed-not-built (see _project-tracking/frontend/07-code-disposition.md) — today it inspects the last selection.
 
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/button/button";

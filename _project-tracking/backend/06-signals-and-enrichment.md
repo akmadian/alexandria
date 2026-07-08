@@ -29,7 +29,7 @@ on one machine.
 
 ## Tier 2 — heavy signals are background enrichment jobs
 
-Blink/eyes-closed, face count/quality, embeddings (MobileCLIP2 per `docs/ops/local-ai.md`):
+Blink/eyes-closed, face count/quality, embeddings (MobileCLIP2 per `_project-tracking/design/local-ai.md`):
 **jobs, never pipeline stages.**
 
 - Reports through the one Job envelope (C9, `../seam/02-events-jobs-and-binary.md`) — new `kind`,

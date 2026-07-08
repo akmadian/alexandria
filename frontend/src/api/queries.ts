@@ -1,4 +1,4 @@
-// The query layer (docs/project-tracking/seam/01-queries-and-commands.md). Everything the UI needs from
+// The query layer (_project-tracking/seam/01-queries-and-commands.md). Everything the UI needs from
 // the backend flows through these hooks — components never call `api` directly.
 //
 // TanStack Query provides the machinery the doc used to hand-roll: single-flight

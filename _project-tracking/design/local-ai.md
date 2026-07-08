@@ -7,9 +7,9 @@ no cloud inference, ever, for this feature — personal photo libraries are
 sensitive data, and this mirrors the opt-in/local-only stance already taken
 on telemetry.
 
-References: `docs/perf/thumbnailing-and-hardware-acceleration.md` (D4,
+References: `_project-tracking/perf/thumbnailing-and-hardware-acceleration.md` (D4,
 D5 — cited heavily below, this feature extends the same reasoning rather
-than inventing new architecture), `docs/project-tracking/backend/impl/07-*`
+than inventing new architecture), `_project-tracking/backend/impl/07-*`
 (the dependency fleet this would plug into).
 
 ## What it is

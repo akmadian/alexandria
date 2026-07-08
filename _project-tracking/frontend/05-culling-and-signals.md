@@ -36,7 +36,7 @@ driving hidden behavior.
 | phash (near-dup cluster) | cheap | already planned (P3) |
 | Blink / eyes-closed probability | heavy | small on-device model |
 | Face count / face quality | heavy | on-device |
-| Embeddings (semantic) | heavy | MobileCLIP2 per `docs/ops/local-ai.md` (P4) |
+| Embeddings (semantic) | heavy | MobileCLIP2 per `_project-tracking/design/local-ai.md` (P4) |
 
 Cheap signals ride ingest (the ENRICH stage), so **the signals that make culling fast are simply
 there when the user sits down** — culling starts after import completes. Heavy signals trickle in

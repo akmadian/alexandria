@@ -4,7 +4,7 @@
 
 **Date:** 2026-07-07
 **Produced by:** a ground-up frontend/UX design session (Ari + Claude Fable) that worked forward
-from `docs/functional-requirements.md` and the conventions of LrC, Eagle, Photo Mechanic, and
+from `_project-tracking/functional-requirements.md` and the conventions of LrC, Eagle, Photo Mechanic, and
 Capture One, followed by a same-day docs reconciliation pass that split the material by concern.
 **Audience:** a Claude instance (or Ari) doing further design refinement and/or implementation.
 

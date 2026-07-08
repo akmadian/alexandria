@@ -23,15 +23,18 @@ Active development, pre-release. **Not currently accepting external contribution
 
 ## Documentation
 
-Alexandria's design rationale lives in `docs/`, not in code comments — start here:
+Design rationale lives in documents, not code comments. Two trees, split by durability:
 
-- [`docs/project-tracking/backend/00-START-HERE.md`](docs/project-tracking/backend/00-START-HERE.md) — the current design handoff and decision log (the "why" behind the architecture)
-- [`docs/functional-requirements.md`](docs/functional-requirements.md) — the feature backlog and roadmap, prioritized
-- [`docs/coding-guidelines.md`](docs/coding-guidelines.md) — Go conventions used throughout the codebase
+- [`_project-tracking/`](_project-tracking/00-START-HERE.md) — **everything in motion**: the master
+  task-tree head (start there), the feature backlog, design handoffs and decision logs per area
+  (`backend/`, `seam/`, `frontend/`), designs awaiting their milestone (`design/`), repo/perf
+  working references (`ops/`, `perf/`), and scratch (`_scratch/`).
+- [`docs/`](docs/) — **durable reference** for someone new to the repo. Deliberately lean while
+  pre-release: coding guidelines today; tracking docs graduate here as areas stabilize.
 
 ## Tech stack
 
 - **Backend:** Go, SQLite (WAL mode)
 - **Frontend:** React, TypeScript, Vite (package management via Bun)
-- **Desktop runtime:** not yet finalized — an open decision, not a commitment
+- **Desktop runtime:** Wails v2
 - **License:** GPL v3

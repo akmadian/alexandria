@@ -1,6 +1,6 @@
 # Frontend hygiene & CI
 
-Mirrors [backend.md](backend.md)'s treatment — same "local == CI" principle,
+Mirrors [repo-hygiene-backend.md](repo-hygiene-backend.md)'s treatment — same "local == CI" principle,
 same fail-fast ordering — but built on the tooling already in `frontend/`
 (Vite, Vitest, ESLint flat config, Prettier + import-sort plugin) rather than
 introducing anything new.
