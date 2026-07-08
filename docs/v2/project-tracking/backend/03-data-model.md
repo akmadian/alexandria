@@ -23,7 +23,8 @@ Class assignments by column group:
   `thumbnail_at`, `aspect_ratio`, `phash`(P3) = derived
 - `sources`: name/base_path/scan-config/`enabled` = judgment · fs UUID/serial/label/`connectivity` = observation ·
   `last_scanned_at` = sync-state
-- `tags`, `collections`, `collection_assets`, `settings` = judgment
+- `tags`, `collections`, `collection_assets` = judgment. `settings`/`keybindings` are no longer
+  tables (impl/11 — plain JSON files instead), so they carry no column-class here.
 - `asset_tags` = judgment or observation per-row (`source`: user|xmp|lr); `removed_at` (judgment
   tombstone — user deletion of an imported tag, respected over sync, D22/impl/10)
 - `asset_groups` = judgment or derived per-row (`origin`: manual|auto). Recompute may freely
@@ -66,10 +67,13 @@ Special cases resolved by the classification:
 | `asset_groups` / `_members` | uuid / (group_id, asset_id) | CASCADE | asset_id reverse · groups carry `origin` |
 | `duplicates` | uuid | asset ids (CASCADE) | status · UNIQUE(original, duplicate) |
 | `import_sessions` / `import_errors` | uuid | session_id (CASCADE) | started_at |
-| `settings` | key TEXT | — | JSON values; holds `ui.*` namespace and `ui.keybindings` |
 | `assets_fts` | — | external-content on `assets` | trigger-maintained |
 
-Dropped vs the old schema: `keybindings` table (→ settings KV). Dropped constraints: CHECKs on
+**No `settings` or `keybindings` table** (impl/11, supersedes D16's storage mechanism). Both are
+plain JSON files instead — `<catalog-dir>/settings.json` (catalog-scoped: `ui.*`, ignore list D18,
+`xmpWriteBack`/`xmpConflictResolution`) and `<app-config-dir>/keybindings.json` (user-scoped
+overrides, outside any catalog). The `settings` table that migration 0001 originally shipped gets
+dropped in place when impl/11 lands (pre-1.0, edited-not-stacked). Dropped constraints: CHECKs on
 `color_label` and `file_type` (guaranteed to change: custom labels P2, new file types P3; SQLite
 CHECKs can't be altered without a 500k-row table rebuild — validation moves to `assettype.Classify`, the type registry — realized in impl/03).
 CHECKs KEPT on stable enums: flag, file_status, sort_dir, sources.kind, asset_tags.source,

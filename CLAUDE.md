@@ -4,7 +4,7 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 
 ## Design authority (read before designing or implementing anything)
 
-1. **`docs/v2/post-ingest-design/00-START-HERE.md`** — the current design handoff.
+1. **`docs/v2/project-tracking/backend/00-START-HERE.md`** — the current design handoff.
    Its decision log (`02-decision-log.md`) **wins every conflict** with older docs and existing code.
 2. `docs/v2/functional-requirements.md` — feature source of truth (P0–P4).
 3. Older design docs in `docs/v1/` are superseded — see `docs/AGENTS.md` for known conflicts.

@@ -17,6 +17,6 @@ here, add them to `functional-requirements.md` instead.
 Two other trackers remain intentionally separate (different kind of content,
 not backlog — see the convention note in
 [ops/contributing-outline.md](ops/contributing-outline.md)):
-- `post-ingest-design/02-decision-log.md` — architectural decisions (ADR-lite)
-- `post-ingest-design/impl/DEFERRED.md` — implementation-phase deferrals with
+- `project-tracking/backend/02-decision-log.md` — architectural decisions (ADR-lite)
+- `project-tracking/backend/impl/DEFERRED.md` — implementation-phase deferrals with
   stated triggers

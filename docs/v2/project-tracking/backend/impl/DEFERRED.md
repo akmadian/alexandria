@@ -344,7 +344,7 @@ self-contained tuning knob, so they live as inline comments (harvest anytime wit
 - Volume-monitor precision — **impl/05.3 shipped the lazy poll-stat form**; the
   filesystem-UUID monitor (detects an unmount that leaves an empty mountpoint) and
   re-subscribing live events after a remount remain deferred (`watcher/watcher.go`).
-- Ignore-list editable in settings KV — **settings service / D16** (`importer/ignore.go`).
+- Ignore-list editable in `settings.json` — **settings service, impl/11** (`importer/ignore.go`).
 - Thumbnail size tiers (one 512 for v1) — thumbnail feature (`thumbnailer/thumbnailer.go`).
 - tx `BEGIN` deferred→`IMMEDIATE`, per-item re-commit on poisoned batch, 10-min
   move-heal window, transparent-thumb fill, notify overflow signal, benign

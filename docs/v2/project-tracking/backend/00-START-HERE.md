@@ -20,16 +20,17 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `03-data-model.md` | Data classification system, schema spec, identity/matching policy |
 | `04-open-questions.md` | Unresolved decisions, with recommendations where they exist |
 | `05-code-disposition.md` | Per-path keep/modify/delete license over the existing code — specs win every conflict |
-| `impl/01-schema-rework.md` | **Blocker 1 — ✅ DONE (2026-07-06)** — migration 0001 rewritten |
-| `impl/02-repos-and-dbtx.md` | **Blocker 2 — ✅ DONE (2026-07-06)** — transaction seam + writer-scoped repos |
-| `impl/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
-| `impl/04-ingest-pipeline.md` | **The milestone — ✅ DONE (2026-07-06)** — the six-stage concurrent pipeline, sidecar/session repos, job envelope, Sniff mismatch wiring |
-| `impl/05-watcher-service.md` | **✅ DONE (2026-07-07)** — sensor + poll-timer connectivity; D20 detect-and-flag |
+| `impl/done/01-schema-rework.md` | **Blocker 1 — ✅ DONE (2026-07-06)** — migration 0001 rewritten |
+| `impl/done/02-repos-and-dbtx.md` | **Blocker 2 — ✅ DONE (2026-07-06)** — transaction seam + writer-scoped repos |
+| `impl/done/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
+| `impl/done/04-ingest-pipeline.md` | **The milestone — ✅ DONE (2026-07-06)** — the six-stage concurrent pipeline, sidecar/session repos, job envelope, Sniff mismatch wiring |
+| `impl/done/05-watcher-service.md` | **✅ DONE (2026-07-07)** — sensor + poll-timer connectivity; D20 detect-and-flag |
 | `impl/06-xmp-sync.md` | **🔨 IN PROGRESS (2026-07-07)** — inbound read + conflict decision + judgment application + keyword union DONE; caption/title, outbound write, triggers pending |
 | `impl/07-dependency-fleet.md` | **🔨 exiftool slice DONE (2026-07-07)** — daemon + discovery; other tools / downloads / one-shot Run deferred |
 | `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
 | `impl/09-lrc-migration.md` | **Design only, not started.** Lightroom Classic catalog migration — D21; engine-first (`internal/lrcimport` + `cmd/lrcimport`), Wails wizard wraps it later; pure-read preflight, LrC-side DNG/XMP prep instead of hand-parsing Develop settings |
 | `impl/10-tag-system.md` | **🔨 consumer slice DONE (2026-07-07)** — D22; adjacency + materialized `path`, direct-attach junction, `color_mode` tri-state, judgment tombstones. `TagRepo` (EnsureTag/AddAssetTags/ImportKeywords/RebuildTagPaths) + `KeywordImporter` seam built; wired into impl/06. Tag-UI backend (Tree/Update/Delete/reparent) + FTS⋈tags deferred |
+| `impl/11-settings-service.md` | **Spec ready, not started.** `settings.json`/`machine.json`/`keybindings.json` — no DB table, supersedes D16's storage mechanism; live mid-run worker-pool resize for the ingest pipeline; debounced hot-reload for external hand-edits while running; unblocks impl/06's `xmpWriteBack`/`xmpConflictResolution` and D18's ignore-list |
 
 ## Where the project is right now
 

@@ -910,7 +910,7 @@ Ideas worth preserving but with no committed timeline.
 
 ## Open Product/Architecture Questions
 
-*Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`post-ingest-design/impl/DEFERRED.md`) and the architectural decision log (`post-ingest-design/02-decision-log.md`); these haven't reached a decision yet.*
+*Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`project-tracking/backend/impl/DEFERRED.md`) and the architectural decision log (`project-tracking/backend/02-decision-log.md`); these haven't reached a decision yet.*
 
 - Frontend state management: lean away from adding any if possible (state management is called out as a recurring headache) — worth revisiting only if prop-drilling/cache-coherence pain actually shows up in practice, not preemptively.
 - Map view / location search: how do we generalize raw GPS coordinates to a town or area name someone would actually search for? (Reverse geocoding via offline gazetteer is the current lead — see Map View, P3 — but the UX of "searchable place" from a lat/lng pair isn't fully worked out.)

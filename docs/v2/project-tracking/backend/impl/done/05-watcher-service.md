@@ -38,7 +38,7 @@
 > **One instance per source; orchestration is a higher layer** (the app-host supervisor — DEFERRED §2),
 > not the watcher's concern.
 
-> **Cross-cutting design that surfaced building 05.2 lives in [`DEFERRED.md`](DEFERRED.md), not here.**
+> **Cross-cutting design that surfaced building 05.2 lives in [`DEFERRED.md`](../DEFERRED.md), not here.**
 > The watcher forced the question "when may the catalog change on its own?" — which opened the import/
 > tracking model (one-shot import vs. watched folders; `sync_mode` = Manual/Scheduled/Watched;
 > loose-files vs. directories; cross-source duplicates → user action; source-scoping the auto-mutating

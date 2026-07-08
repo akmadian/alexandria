@@ -25,7 +25,7 @@ Active development, pre-release. **Not currently accepting external contribution
 
 Alexandria's design rationale lives in `docs/`, not in code comments — start here:
 
-- [`docs/v2/post-ingest-design/00-START-HERE.md`](docs/v2/post-ingest-design/00-START-HERE.md) — the current design handoff and decision log (the "why" behind the architecture)
+- [`docs/v2/project-tracking/backend/00-START-HERE.md`](docs/v2/project-tracking/backend/00-START-HERE.md) — the current design handoff and decision log (the "why" behind the architecture)
 - [`docs/v2/functional-requirements.md`](docs/v2/functional-requirements.md) — the feature backlog and roadmap, prioritized
 - [`docs/coding-guidelines.md`](docs/coding-guidelines.md) — Go conventions used throughout the codebase
 

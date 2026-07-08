@@ -9,7 +9,7 @@ on telemetry.
 
 References: `docs/v2/perf/thumbnailing-and-hardware-acceleration.md` (D4,
 D5 — cited heavily below, this feature extends the same reasoning rather
-than inventing new architecture), `docs/v2/post-ingest-design/impl/07-*`
+than inventing new architecture), `docs/v2/project-tracking/backend/impl/07-*`
 (the dependency fleet this would plug into).
 
 ## What it is

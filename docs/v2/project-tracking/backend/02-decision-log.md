@@ -199,6 +199,16 @@ telemetry consent) — a small JSON file read before any catalog opens. Contract
 envelope (backend-consumed config). The `keybindings` DB table is DROPPED (one `ui.keybindings` KV
 value; frontend owns the action vocabulary, defaults in code, DB stores overrides only).
 
+> **Superseded by `impl/11` (2026-07-07, two rounds).** The *scoping* here (localStorage /
+> catalog-scope / machine-scope) still holds, but the *storage mechanism* for the catalog-scope
+> tier changes: no `settings` DB table at all — `<catalog-dir>/settings.json`, a plain file
+> alongside the DB (this catalog-directory-as-bundle model was already implicit in D9's "DB +
+> thumbnails + settings" phrasing). Keybindings move out of catalog scope entirely — a keybinding
+> preference is a fact about the person, not the catalog, so it doesn't belong in a per-catalog
+> store in any form — to `<app-config-dir>/keybindings.json`, sitting beside `machine.json`.
+> Frontend-owns-the-vocabulary, defaults-in-code, file-stores-overrides-only is unchanged from the
+> intent here, just relocated and re-formatted.
+
 ## D17 — Jobs: registry map now, River later, catalog-as-queue for backfills
 
 No workflow engines (Airflow-class = wrong altitude by 1000×; idempotent re-entry + durable state
