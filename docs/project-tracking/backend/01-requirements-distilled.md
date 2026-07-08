@@ -1,6 +1,6 @@
 # Requirements, Distilled
 
-Source of truth for features: `docs/v2/functional-requirements.md` (P0–P4). This doc is the
+Source of truth for features: `docs/functional-requirements.md` (P0–P4). This doc is the
 *compression* — the constraints that actually drive architecture. Downstream docs cite NFRs by number.
 
 ## Problem statement

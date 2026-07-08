@@ -4,7 +4,7 @@ Handoff notes, not a finished spec — the goal is a comprehensive testing
 strategy built from this starting point, not a prescription to follow
 literally. Context: this repo already uses table-driven tests extensively
 and has real binary fixtures in `testdata/` (`.jpg`, `.ORF`, etc.) used for
-parsing tests. See also [docs/coding-guidelines.md](../../../coding-guidelines.md)
+parsing tests. See also [docs/coding-guidelines.md](../coding-guidelines.md)
 (the "accept `io.Reader`, return a struct" rule directly shapes what's unit-
 testable here) and [ops/backend.md](../ops/backend.md) (CI/coverage/vulncheck
 scripts this testing work plugs into).

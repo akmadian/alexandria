@@ -6,9 +6,9 @@ knows, extracts metadata, generates thumbnails, and writes everything the
 catalog needs — durably, concurrently, and idempotently.
 
 If you read one thing first, read
-[`impl/done/04-ingest-pipeline.md`](../../docs/v2/project-tracking/backend/impl/done/04-ingest-pipeline.md)
+[`impl/done/04-ingest-pipeline.md`](../../docs/project-tracking/backend/impl/done/04-ingest-pipeline.md)
 — this package is its implementation. The `D<n>` references below point at
-[`02-decision-log.md`](../../docs/v2/project-tracking/backend/02-decision-log.md).
+[`02-decision-log.md`](../../docs/project-tracking/backend/02-decision-log.md).
 
 ## The five ideas that explain everything else
 

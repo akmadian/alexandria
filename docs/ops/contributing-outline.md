@@ -31,7 +31,7 @@ duplicating them.
 
 7. **Where things live** — one-paragraph map: `internal/` (Go backend,
    package-per-concern per coding-guidelines), `frontend/` (React/Vite),
-   `docs/v2/` (design docs + ops notes), `testdata/` (fixtures).
+   `docs/` (design docs + ops notes), `testdata/` (fixtures).
 
    **Where tracking lives specifically** (worth being explicit about, since
    it's split by *kind* of content, not accidentally scattered — see

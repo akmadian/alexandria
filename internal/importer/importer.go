@@ -18,7 +18,7 @@ import (
 // across imports.
 //
 // The single-file and reconcile paths use the writer-scoped catalog interfaces
-// (docs/v2/.../03-data-model.md §1): a reader, the observation writer, and the
+// (docs/.../03-data-model.md §1): a reader, the observation writer, and the
 // derived writer (for the thumbnail marker). They are given NO judgment or sync
 // writer — ingest cannot touch ratings/flags/notes, so a reimport can never
 // clobber user judgment. That guarantee is structural (the types), not a

@@ -698,7 +698,7 @@ Build after the core product is stable and well-used.
 
 ### RAW Export via External Tool Dispatch
 
-*From 2026-07-07 design session; full detail in `docs/v2/ops/raw-export-dispatch.md`, summarized here.*
+*From 2026-07-07 design session; full detail in `docs/ops/raw-export-dispatch.md`, summarized here.*
 
 - Non-destructive RAW edits (masks, AI denoise, adjustments) are instructions meaningful only to the engine that wrote them — Alexandria cannot build its own RAW rendering engine at parity with dedicated tools, and isn't going to try
 - `Export` becomes a third `TypeHandler` capability (alongside `Metadata`/`Thumb`): raster formats get direct ffmpeg/ImageMagick dispatch (Alexandria's own pipeline above); RAW formats resolve via a lookup into the external-program registry for whichever tool is associated with that RAW extension, gated on that tool's has-scripting-automation flag
