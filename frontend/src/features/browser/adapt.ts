@@ -9,7 +9,7 @@ import type { Collection, Source, Tag } from "@/api/contract";
 export const sourcesToNodes = (sources: Source[]): TreeNode<Source>[] =>
     sources.map((s) => ({ id: `source:${s.id}`, label: s.name, data: s }));
 // TODO(folder tree): children come from useFolderTree(sourceId) on first expand —
-// scope {kind:"folder"} browsing is designed (seam doc §3), not yet wired.
+// scope {kind:"folder"} browsing is designed (docs/project-tracking/frontend/02-state-model.md), not yet wired.
 
 export const collectionsToNodes = (collections: Collection[]): TreeNode<Collection>[] =>
     collections.map((c) => ({ id: `collection:${c.id}`, label: c.name, data: c }));

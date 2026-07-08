@@ -16,7 +16,7 @@ One first-class surface collecting everything the engine *noticed but refused to
 | Missing files | file_status = missing (with relocate flow) |
 | XMP conflicts | sync-state, per impl/06 conflict grid |
 | Import errors | import_errors DLQ |
-| Suggested rejects / proposed groups | signals (`06`), when built |
+| Suggested rejects / proposed groups | signals (`05`), when built |
 
 Nothing is ever silently mutated; everything noticed is *presented*. This is the positioning
 ("never acts behind your back") made visible in chrome — LrC scatters these across grayed
@@ -25,7 +25,7 @@ folders, ?-badges, and modal dialogs; nobody in the space does this well.
 ## Presentation
 
 - **Sidebar item with count badge** — ambient awareness, always visible, never modal. In-grid
-  corner ticks on affected assets (`02`).
+  corner ticks on affected assets (`01`).
 - **Opening it is a task view** (C3): enter, process, leave. Full-window because processing the
   queue is task-shaped — evaluate, decide, done.
 - **Inbox grammar without the inbox name**: a categorized list processed top-to-bottom,
@@ -54,5 +54,5 @@ Two decisions reserved now so the door stays open:
 
 1. **Automation is a user grant, never an engine default** (D20's future-direction note) — rules
    are opt-in, per-source or global, visible and revocable in one place.
-2. **Rule conditions reuse the query token vocabulary** (`04`) — a rule is "when an event
-   matching *this filter* arrives, do *this action*." No second condition language.
+2. **Rule conditions reuse the query token vocabulary** (`../seam/01`) — a rule is "when an
+   event matching *this filter* arrives, do *this action*." No second condition language.

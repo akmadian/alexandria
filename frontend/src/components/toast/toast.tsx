@@ -1,6 +1,6 @@
 // Toast store + outlet. Module-level store (useSyncExternalStore) so any code —
 // mutations, the event bridge, non-React modules — can call toast() without
-// threading context. Error-surface rules live in the seam doc §9: only
+// threading context. Error-surface rules live in the seam error shape (docs/project-tracking/seam/02-events-jobs-and-binary.md): only
 // "unexpected" failures earn a toast; degraded states get inline treatment.
 
 import { X } from "lucide-react";

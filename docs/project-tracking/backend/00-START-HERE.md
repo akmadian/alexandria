@@ -1,4 +1,6 @@
-# Alexandria v2 Design Handoff — START HERE
+# Alexandria v2 Design Handoff — START HERE (backend area)
+
+*Task-tree head: [`../00-START-HERE.md`](../00-START-HERE.md) — check it first for what's next.*
 
 **Date:** 2026-07-06
 **Produced by:** a system-design working session (Ari + Claude Fable) that worked backwards from
@@ -20,6 +22,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `03-data-model.md` | Data classification system, schema spec, identity/matching policy |
 | `04-open-questions.md` | Unresolved decisions, with recommendations where they exist |
 | `05-code-disposition.md` | Per-path keep/modify/delete license over the existing code — specs win every conflict |
+| `06-signals-and-enrichment.md` | Engine side of AI-assisted culling (2026-07-07 frontend round): ENRICH pipeline stage (cheap signals on the thumbnail) + heavy signals as attention-prioritized enrichment jobs. Design-only; build with the signals milestone |
 | `impl/done/01-schema-rework.md` | **Blocker 1 — ✅ DONE (2026-07-06)** — migration 0001 rewritten |
 | `impl/done/02-repos-and-dbtx.md` | **Blocker 2 — ✅ DONE (2026-07-06)** — transaction seam + writer-scoped repos |
 | `impl/done/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
@@ -93,8 +96,9 @@ sync, machine.json (hardcode default pool sizes), all frontend work, River/job p
 
 Watcher service (`impl/05`) → XMP sync (`impl/06`) → dependency fleet (`impl/07`) as formats demand.
 In parallel or after: the two design rounds never held — **query layer** and **the seam** — see
-`04-open-questions.md`. UI runtime selection (Wails v2/v3 vs Tauri vs Electron) is unresolved and
-blocks only frontend work.
+`04-open-questions.md`; both are now heavily pre-shaped by the 2026-07-07 frontend round
+(`../seam/`, `../frontend/`, `../CONSTANTS.md`). UI runtime is RESOLVED: Wails v2 (Ari,
+2026-07-07).
 
 ## House rules that govern all implementation
 
@@ -109,7 +113,7 @@ blocks only frontend work.
    from the filesystem via the identity matrix.
 5. **Derived state must carry a rebuild path**: anything computed (FTS, thumbnails, auto-groups)
    is deletable + recomputable via a registered rebuild function.
-6. Go engine, React UI, SQLite catalog are fixed. Wails is *not yet* fixed.
+6. Go engine, React UI, SQLite catalog are fixed. Wails v2 is fixed (2026-07-07).
 7. Go conventions: per-OS build-tagged files inside the owning package (no shared `platform`
    package); explicit central registry tables (no `init()` self-registration); interfaces for
    varying behavior, generics for varying data.

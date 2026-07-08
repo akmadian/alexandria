@@ -1,16 +1,9 @@
-# Project Tracking — index
+# Project Tracking
 
-One subdir per area. Each area owns its own tracking doc (a `00-START-HERE.md` or
-equivalent) with the real status table and "what's next" — this file just points
-to them, it does not duplicate their content.
+**Start at [`00-START-HERE.md`](00-START-HERE.md)** — the master head of the implementation task
+tree: what's next right now, the dependency tree below it, and status at a glance.
 
-| Area | Status | Tracker |
-|---|---|---|
-| Backend | Active — impl/06 (XMP sync) in progress | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
-| Frontend | Design complete (2026-07-07; Wails v2 locked) — implementation pending the backend seam/query round | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
-| Ops | No active milestone tracking yet (see `../ops/` for reference docs) | — |
-| Perf | No active milestone tracking yet (see `../perf/` for reference docs) | — |
-| Testing | No active milestone tracking yet (see `../test/` for reference docs) | — |
-
-Add an area's subdir (with its own tracker) when it actually starts accumulating
-milestones — don't pre-create empty ones.
+Layout: [`CONSTANTS.md`](CONSTANTS.md) holds the cross-cutting invariants; one subdir per area
+(`backend/`, `seam/`, `frontend/`), each owning its own `00-START-HERE.md` tracker with the real
+status and rationale. Add an area's subdir when it actually starts accumulating milestones —
+don't pre-create empty ones.

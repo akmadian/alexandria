@@ -3,7 +3,7 @@
 // handlers — mouse and keys dispatch the same LibraryProvider actions.
 //
 // ponytail: rows arrive whole from the shell (mock catalog is small). The
-// sparse-window upgrade (seam doc §5 — pages on demand keyed by visible range)
+// sparse-window upgrade (QueryAssets paging, docs/project-tracking/seam/01-queries-and-commands.md — pages on demand keyed by visible range)
 // replaces `rows` with a windowed fetch INSIDE this component and touches
 // nothing outside it. That's the designed next step, not a redesign.
 

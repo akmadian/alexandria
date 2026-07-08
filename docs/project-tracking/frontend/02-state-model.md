@@ -17,8 +17,8 @@ throughout. Nothing to learn for beginners (Grid forever is fine); fluency is em
 
 ## Query = scope + filter
 
-Mechanically both are predicates and share one WHERE-clause machinery (`04`). The distinction is
-UI grammar, kept for three reasons:
+Mechanically both are predicates and share one WHERE-clause machinery (`../seam/01`). The
+distinction is UI grammar, kept for three reasons:
 
 1. **Extensional vs intensional.** A folder or manual collection is a *membership list* (these
    assets, because I said so) — not expressible as an attribute predicate. A filter is a
@@ -67,7 +67,7 @@ timestamp when filenames roll IMG_9999→IMG_0001) is an arrangement concern.
 | **Grid** | G | Virtualized tile grid | The default and the foundation. Density control; configurable card overlays. |
 | **Loupe** | E / Enter | Cursor asset large + filmstrip | Per-type body via the type registry: zoomable image, video player, waveform, font specimen, PDF pages. |
 | **Compare** | C | 2–4 selected at equal size | Triage controls available without leaving. |
-| **Cull** | D | Fullscreen Loupe variant tuned for speed | Lights-out chrome, auto-advance, key-feedback overlay — `06-culling-and-signals.md`. |
+| **Cull** | D | Fullscreen Loupe variant tuned for speed | Lights-out chrome, auto-advance, key-feedback overlay — `05-culling-and-signals.md`. |
 
 - Switches are single keys, instant (<100ms), stateless — no navigation stack, no lens-on-lens.
 - **Escape always steps down toward Grid.** Grid is home.

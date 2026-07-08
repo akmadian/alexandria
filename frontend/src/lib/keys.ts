@@ -1,4 +1,4 @@
-// Keybindings (docs/frontend-ui-architecture.md §9).
+// Keybindings (docs/project-tracking/frontend/04-keyboard-and-actions.md).
 //
 // Ownership: the FRONTEND defines the action vocabulary, default combos, and
 // contexts; the backend is persistence for user overrides only. Overrides live

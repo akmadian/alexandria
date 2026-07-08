@@ -1,4 +1,4 @@
-// Job progress is ephemeral chrome, NOT query-cache state (seam doc §7). This
+// Job progress is ephemeral chrome, NOT query-cache state (docs/project-tracking/seam/02-events-jobs-and-binary.md). This
 // hook subscribes to the push events and holds the in-flight jobs in local
 // state. StatusBar consumes it; the import summary modal will too.
 

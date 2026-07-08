@@ -623,6 +623,10 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 
 ### Command Palette
 
+*Pulled forward (2026-07-07 frontend design round): ships WITH the P1 keyboard system, not after
+it — the palette is a thin view over the action registry P1 builds anyway, and it teaches the
+keybindings. Spec: `project-tracking/frontend/04-keyboard-and-actions.md`.*
+
 - Searchable list of all actions with current key combos
 - Bound to Cmd+K / Ctrl+K
 - Built on top of the action registry from the keyboard system
@@ -912,7 +916,10 @@ Ideas worth preserving but with no committed timeline.
 
 *Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`project-tracking/backend/impl/DEFERRED.md`) and the architectural decision log (`project-tracking/backend/02-decision-log.md`); these haven't reached a decision yet.*
 
-- Frontend state management: lean away from adding any if possible (state management is called out as a recurring headache) — worth revisiting only if prop-drilling/cache-coherence pain actually shows up in practice, not preemptively.
+- ~~Frontend state management~~ — **RESOLVED (2026-07-07 frontend design round):** no state
+  library; one reducer holding the state equation (`view state = viewMode(query + arrangement,
+  selection + cursor)`, CONSTANTS C2), server state in TanStack Query, everything else derived.
+  See `project-tracking/frontend/02-state-model.md`.
 - Map view / location search: how do we generalize raw GPS coordinates to a town or area name someone would actually search for? (Reverse geocoding via offline gazetteer is the current lead — see Map View, P3 — but the UX of "searchable place" from a lat/lng pair isn't fully worked out.)
 - Responsiveness/scaling system: desktop-only, no mobile/tablet target, but still want a system that gives grid/layout scaling without hand-rolling it — which existing tool/approach fits that constraint without the overhead of a full responsive framework aimed at screen sizes that will never be supported here?
 

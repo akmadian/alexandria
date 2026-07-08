@@ -1,4 +1,4 @@
-// The one piece of shared client state (docs/frontend-ui-architecture.md §4):
+// The one piece of shared client state (docs/project-tracking/frontend/02-state-model.md):
 // browse target, filter bar, view mode, selection. Server state lives in
 // TanStack Query; machine prefs live in localStorage; everything else derives.
 //
@@ -89,7 +89,7 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
     }
 }
 
-/** target + filters → the ListQuery (seam doc §3: collections are scopes;
+/** target + filters → the ListQuery (state-model doc: collections are scopes;
  *  sources/tags are filter fields). Pure; memoized at the call site. */
 export function deriveListQuery(state: LibraryState): ListQuery {
     const { target, filters } = state;

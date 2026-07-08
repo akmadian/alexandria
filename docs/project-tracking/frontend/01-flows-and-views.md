@@ -7,8 +7,8 @@
 Pro tools live and die by muscle memory; every serious DAM converges on the same skeleton and
 users want it that way. **Fresh comes from a few signature concepts on a boring skeleton**, not
 from layout invention (the Linear lesson: same lists as Jira; identity came from palette +
-keyboard + speed). Alexandria's signature concepts: the query model (`04`), cull speed (`06`),
-the Review surface (`07`), transparency-as-chrome (below).
+keyboard + speed). Alexandria's signature concepts: the query model (`../seam/01`, UX in `03`),
+cull speed (`05`), the Review surface (`06`), transparency-as-chrome (below).
 
 ## The four flows
 
@@ -39,12 +39,12 @@ over-segmentation and the LrC-module "where am I" tax.
 
 | View | Kind | Notes |
 |---|---|---|
-| **Catalog** | the one space | Shell below; view modes Grid / Loupe / Compare / Cull (`03`). |
+| **Catalog** | the one space | Shell below; view modes Grid / Loupe / Compare / Cull (`02`). |
 | **Import** | task view | Bespoke flow: source pick, options (dupe-skip, collection-from-import, metadata preset), live pipeline progress, completion summary. |
-| **Review** | task view | `07-review.md`. |
+| **Review** | task view | `06-review.md`. |
 | **Settings** | task view | Spawned from the command palette (no chrome real estate spent on a gear icon). |
 | **Home** | optional landing | Minimal: recently used collections, saved queries, calls to action (import, find), Review count. Not a dashboard, no greeting. User-disableable — Alexandria works *for them*. |
-| **First run** | task view | Empty state with prominent Add Source; keybinding preset picker (`05`). |
+| **First run** | task view | Empty state with prominent Add Source; keybinding preset picker (`04`). |
 
 Task views never touch catalog view state (C3).
 

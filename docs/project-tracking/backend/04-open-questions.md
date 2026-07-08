@@ -28,21 +28,22 @@ What a design-refinement instance should pick up. Ordered by when they block.
 
 ## Design rounds that were never held (deliberately deferred)
 
-4. **Query layer round** — consolidate the filter→SQL builder (single query authority that smart
-   collections P2 will reuse); COUNT strategy for grid scrollbar (`total`) — separate COUNT vs
-   `COUNT(*) OVER()`; smart-collection query JSON format (nested AND/OR/NOT groups). Small round; do
-   before the seam. (The sort-field whitelist sub-item is already DONE in impl/02 — see above.)
-5. **The seam round** — reconcile `frontend/src/api/contract.ts` against the now-designed engine:
-   backend `AssetFilter` parity (scope, fileStatus, absence queries: unrated/unflagged/…),
-   `ListAssetsResult.total`, `getUIState/setUIState` verbs, job envelope wiring, thumbnail URL
-   cache-busting (URL must include `thumbnail_at` or content token — thumbnails regenerate in place
-   at P2 auto-refresh). The contract's conventions doc-comment is good; hold the round with both
-   contract and engine in view.
-6. **UI runtime selection** — Wails v2 (current, v2-maintenance-mode risk) vs Wails v3 (alpha
-   status?) vs Tauri + Go sidecar (splits the process model — evaluate against D1's single-process
-   decision) vs Electron + Go child. Blocks ONLY frontend milestone. Evaluate: seam mechanics
-   (bindings vs HTTP/WS), binary-URL channel support, packaging/notarization, maturity. Note the
-   engine is runtime-agnostic by construction (D1), so this decision cannot invalidate backend work.
+4. **Query layer round** — **heavily pre-shaped by the 2026-07-07 frontend round**: the AST
+   grammar (nested AND/OR/NOT, versioned, typed structs) and token-registry contract are now
+   DESIGNED in `../seam/01-queries-and-commands.md`; this round makes it *compile* — the one
+   filter→SQL authority that `QueryAssets`, smart collections, and Review projections reuse.
+   Still open here: COUNT strategy for grid scrollbar (`total`) — separate COUNT vs
+   `COUNT(*) OVER()`; NULL `captured_at` sort fallback (#2 above); splitting
+   `catalog.AssetFilter`'s conflated predicate+sort+paging into query/arrangement/page (seam
+   ledger #1). Do before the seam round. (Sort-field whitelist already DONE in impl/02.)
+5. **The seam round** — reconcile `frontend/src/api/contract.ts` against the engine. The work
+   list now lives as the **reconciliation ledger** in `../seam/01-queries-and-commands.md`
+   (10 numbered deltas: AST filter, tag scope, arrangement, stale Settings/SourceStatus,
+   file-based keybindings, job envelope, generated models, smart-collection CRUD, thumbnail URL
+   cache-busting). The contract's conventions doc-comment is adopted as standing seam convention.
+6. **UI runtime selection** — **RESOLVED (Ari, 2026-07-07): Wails v2 LOCKED.** The engine stays
+   runtime-agnostic by construction (D1), so the residual v2-staleness risk (see standing risks)
+   is a packaging concern, not an architecture one.
 7. **Grouping engine deep dive** — user explicitly parked it to focus singularly later. Settled
    already: derived/recomputable per (dir, stem) key, per-batch incremental recompute, anchor-declared
    directional companions (no cycles by construction), origin auto|manual, CoverRank min-wins with

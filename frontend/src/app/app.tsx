@@ -11,7 +11,7 @@ installGlobalCapture();
 
 // Query defaults tuned for a local desktop app: cheap to re-fetch (sub-10ms IPC),
 // pointless on window focus; small gcTime keeps the list cache a browsing window,
-// not a DB mirror. Reads auto-retry once (seam doc §9); writes never.
+// not a DB mirror. Reads auto-retry once (seam error shape: docs/project-tracking/seam/02-events-jobs-and-binary.md); writes never.
 function makeClient() {
     return new QueryClient({
         defaultOptions: {

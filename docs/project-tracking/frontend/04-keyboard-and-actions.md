@@ -51,7 +51,7 @@ Implementation (deliberately boring):
   targets win) over titles + aliases, filtered by context predicate.
 - **Frecency ranking** (recent + frequent floats up) — also the requirements' "recently used
   prioritized" applied here.
-- **Prefix modes** (Sublime convention): bare text = search (parses via `04`'s tiers, emits
+- **Prefix modes** (Sublime convention): bare text = search (parses via `03`'s tiers, emits
   pills), `>` = actions, `#` = go-to (collection/tag/source navigation).
 - **Cmd+K** opens in action mode; **Cmd+F** (or `/`) opens the same palette in search mode — the
   global retrieval entry point.
