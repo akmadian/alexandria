@@ -56,7 +56,7 @@ One `errgroup` owns all goroutines.
 
 | Stage | File | Job | Notes |
 |-------|------|-----|-------|
-| SCAN | `stage_scan.go` | Walk the tree, emit a candidate per file | The bouncer: drops hidden files, ignore-list hits (`ignore.go`), unknown extensions, empty files, and unchanged files (the skip gate). Routes sidecars. Records visited paths for the missing-diff. |
+| SCAN | `stage_scan.go` | Walk the tree, emit a candidate per file | The bouncer: drops hidden files, ignore-list hits (`Importer.Settings.MatchIgnore` — the D18 list and matching are owned by `internal/settings`), unknown extensions, empty files, and unchanged files (the skip gate). Routes sidecars. Records visited paths for the missing-diff. |
 | HASH | `stage_hash.go` | Fingerprint (xxhash of first 64KB + size) | Also runs the magic-byte `Sniff` on the same buffer — see the mismatch policy below. |
 | MATCH | `stage_match.go` | Run the identity matrix, mint IDs | **Singleton** — one goroutine reads a serializable view of the catalog it's mutating. |
 | EXTRACT | `stage_extract.go` | Pull normalized metadata | Best-effort: a decode failure is a DLQ row, never a stop. |

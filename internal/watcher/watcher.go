@@ -24,6 +24,7 @@ import (
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
+	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/charmbracelet/log"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,6 +72,17 @@ type Watcher struct {
 	Log          *log.Logger
 	Debounce     time.Duration // 0 → defaultDebounce
 	PollInterval time.Duration // 0 → defaultPoll (connectivity probe / poll-driven reconcile)
+
+	// Settings is the catalog's settings snapshot, injected by the composition root.
+	// The intake uses Settings.Ignored as the D18 chokepoint — drop an event before it
+	// arms the debouncer, so a .tmp save-storm never enters the dirty set. Settings owns
+	// the list and matching; the watcher holds no ignore logic. Zero value ignores
+	// nothing.
+	//
+	// ponytail: snapshot at construction — a hot-edit to ignorePatterns during a long
+	// watch won't apply until restart. Wire svc.Settings.OnChange to refresh it if that
+	// latency ever matters; the dev-session watch doesn't need it.
+	Settings settings.Settings
 
 	// offline gates the event loop while the volume is gone: the poll monitor sets
 	// it on unmount so graduate stops feeding paths (a vanished path during an
@@ -182,7 +194,7 @@ func (w *Watcher) loop(ctx context.Context, fsys fs.FS, events <-chan Event) err
 				}
 				continue
 			}
-			if importer.Ignored(path.Base(event.Path)) {
+			if w.Settings.Ignored(path.Base(event.Path)) {
 				w.Log.Debug("watcher: event ignored", "path", event.Path)
 				continue // ignore-list at intake: a .tmp storm never enters the set
 			}

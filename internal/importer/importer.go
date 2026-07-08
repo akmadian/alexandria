@@ -7,6 +7,7 @@ import (
 
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/charmbracelet/log"
@@ -37,15 +38,19 @@ type Importer struct {
 	Imports   *sqlite.ImportRepo // session lifecycle (Start/Finish outside the batch txns)
 	Log       *log.Logger
 
-	// Worker-pool overrides for the concurrent pipeline. Zero means "use the
-	// built-in default" (defaultPools). These are the per-machine tuning knob
-	// until machine.json lands; the dev harness exposes them as flags. HASH is
-	// I/O-bound (raise for fast SSDs), EXTRACT and THUMB are CPU-bound (raise
-	// toward NumCPU — but each in-flight THUMB holds a fully-decoded image, so
-	// more workers cost proportionally more memory).
-	HashWorkers    int
-	ExtractWorkers int
-	ThumbWorkers   int
+	// Settings is the catalog's settings snapshot, injected by the composition root.
+	// SCAN consults it for the D18 ignore list (Settings.MatchIgnore) and the WRITE
+	// batch size (Settings.ImportBatchSize) — settings owns those, so the importer
+	// holds no copy. The zero value is safe: empty patterns match nothing and a
+	// zero batch size falls back to defaultBatchSize (a bare Importer{} still runs).
+	Settings settings.Settings
+
+	// Machine is the machine-scoped config snapshot (worker-pool sizes), injected by
+	// the composition root. resolvePools reads Machine.Workers.Ingest; a zero count
+	// falls back to defaultPools. HASH is I/O-bound (raise for fast SSDs), EXTRACT and
+	// THUMB are CPU-bound (raise toward NumCPU — but each in-flight THUMB holds a
+	// fully-decoded image, so more workers cost proportionally more memory).
+	Machine settings.Machine
 
 	// OnProgress, if set, fires per batch commit and at walk completion. Nil-safe.
 	OnProgress func(Progress)
@@ -121,5 +126,3 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 	fileLogger.Info("ingested file", "source", source.Name, "path", scanned.relPath, "verdict", verdict, "assetID", assetID)
 	return nil
 }
-
-

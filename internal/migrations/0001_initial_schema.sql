@@ -279,8 +279,7 @@ CREATE TABLE IF NOT EXISTS import_errors (
 
 CREATE INDEX IF NOT EXISTS idx_import_errors_session ON import_errors(session_id);
 
-CREATE TABLE IF NOT EXISTS settings (
-    key         TEXT PRIMARY KEY,       -- incl. the ui.* namespace and ui.keybindings
-    value       TEXT NOT NULL,          -- JSON
-    updated_at  TEXT NOT NULL
-);
+-- Settings are NOT stored in the catalog DB. They live as plain JSON files
+-- (settings.json in the catalog dir, machine.json/keybindings.json in the app
+-- config dir) — see internal/settings and impl/11. The old `settings` KV table
+-- was dropped here per this repo's pre-1.0 edit-in-place migration convention.

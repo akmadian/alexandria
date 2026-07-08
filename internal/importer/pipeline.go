@@ -29,30 +29,43 @@ import (
 // point.
 
 const (
-	writeBatchSize = 50
-	writeLull      = 500 * time.Millisecond
+	// defaultBatchSize is the fallback rows-per-WRITE-transaction when Settings
+	// carries none (a bare Importer{}); the live value is Settings.ImportBatchSize.
+	defaultBatchSize = 50
+	writeLull        = 500 * time.Millisecond
 )
 
-// poolSizes are the per-stage worker counts. Hardcoded defaults for now; the
-// machine.json config that tunes them per host arrives in a later milestone.
+// poolSizes are the per-stage worker counts.
 type poolSizes struct{ hash, extract, thumb int }
 
+// defaultPools is the fallback per-stage worker count when Machine carries none
+// (a zero count for a stage); the live source is Machine.Workers.Ingest.
 var defaultPools = poolSizes{hash: 4, extract: 2, thumb: 2}
 
-// resolvePools applies the Importer's per-field overrides on top of the defaults
-// (a zero override keeps the default).
+// resolvePools reads the machine-scoped worker counts (settings-owned), falling
+// back to defaultPools for any stage left at zero.
 func resolvePools(imp *Importer) poolSizes {
 	pools := defaultPools
-	if imp.HashWorkers > 0 {
-		pools.hash = imp.HashWorkers
+	ingest := imp.Machine.Workers.Ingest
+	if ingest.Hash > 0 {
+		pools.hash = ingest.Hash
 	}
-	if imp.ExtractWorkers > 0 {
-		pools.extract = imp.ExtractWorkers
+	if ingest.Extract > 0 {
+		pools.extract = ingest.Extract
 	}
-	if imp.ThumbWorkers > 0 {
-		pools.thumb = imp.ThumbWorkers
+	if ingest.Thumb > 0 {
+		pools.thumb = ingest.Thumb
 	}
 	return pools
+}
+
+// resolveBatchSize reads the settings-owned WRITE batch size, falling back to
+// defaultBatchSize when unset.
+func resolveBatchSize(imp *Importer) int {
+	if imp.Settings.ImportBatchSize > 0 {
+		return imp.Settings.ImportBatchSize
+	}
+	return defaultBatchSize
 }
 
 // pipeline is the per-run state. Field ownership is by goroutine, which is what
@@ -67,6 +80,7 @@ type pipeline struct {
 	sessionID string
 	jobID     string
 	pools     poolSizes
+	batchSize int
 
 	// SCAN-owned (read after the run drains).
 	visited      map[string]struct{}
@@ -96,6 +110,7 @@ func newPipeline(importer *Importer, source *domain.Source, fsys fs.FS, known ma
 		sessionID:    sessionID,
 		jobID:        jobID,
 		pools:        resolvePools(importer),
+		batchSize:    resolveBatchSize(importer),
 		visited:      make(map[string]struct{}, len(known)),
 		unknownTally: map[string]int{},
 		ignoredTally: map[string]int{},

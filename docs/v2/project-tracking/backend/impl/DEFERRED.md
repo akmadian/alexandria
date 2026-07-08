@@ -333,6 +333,38 @@ in one place.
 
 ---
 
+## 6. Live mid-run worker-pool resize — machine.json applies next-run only
+
+**Surfaced:** impl/11 (2026-07-07) — wiring the ingest worker counts to
+`machine.json` (`Machine.Workers.Ingest`, read by `resolvePools` at
+`newPipeline`).
+
+Worker counts are now settings-owned and hot-reloadable *as config* — an edit to
+`machine.json` is picked up live by the settings watch and the **next** import run
+reads it. What is **not** built is impl/11 §5: changing the pool size *during* a
+running import (drain the current generation of stage goroutines, relaunch at the
+new count on the same channels). A user watching a large ingest can't dial workers
+up/down mid-run; they change the config and it applies to the next run.
+
+§5 specs the mechanism (a per-stage `stagePool` with cancel→`WaitGroup.Wait()`→
+relaunch) but also flags an **unresolved run-teardown race** as a correctness
+requirement: a hot-reload `OnChange`→`Resize` and the run's own end-of-run
+channel-close are two independent triggers on the same pool, and must transition
+under the *same* lock so a `Resize` either lands cleanly or observes "already
+finished" — never a partial handoff. Building the `stagePool` now would be a resize
+engine with no live caller (the `Machine.OnChange → run.Resize` hook lives in the
+composition root, and the app host / `<app-config-dir>` don't exist yet) — YAGNI.
+
+**Current leaning:** do it with the app-host milestone, when there's a real live
+run to resize and a place to wire the `OnChange` hook. Extract the shared
+`stagePool` primitive only if the export pipeline needs the identical shape too
+(two consumers, not one).
+
+**Trigger:** the app host lands (something to wire `OnChange`→`Resize` to), or a
+user concretely asks to retune workers without restarting an in-flight import.
+
+---
+
 ## Not promoted (tracked elsewhere — left as inline `ponytail:` markers)
 
 These are real deferrals too, but each is either owned by a named milestone or is a
@@ -344,7 +376,10 @@ self-contained tuning knob, so they live as inline comments (harvest anytime wit
 - Volume-monitor precision — **impl/05.3 shipped the lazy poll-stat form**; the
   filesystem-UUID monitor (detects an unmount that leaves an empty mountpoint) and
   re-subscribing live events after a remount remain deferred (`watcher/watcher.go`).
-- Ignore-list editable in `settings.json` — **settings service, impl/11** (`importer/ignore.go`).
+- ~~Ignore-list editable in `settings.json`~~ — **DONE, impl/11 (2026-07-07):** the
+  list and matching are owned by `internal/settings` (`Settings.MatchIgnore`/`Ignored`);
+  importer SCAN and the watcher hold a `settings.Settings` value and call it. Seeded
+  with defaults on first run, hand-editable, hot-reloaded.
 - Thumbnail size tiers (one 512 for v1) — thumbnail feature (`thumbnailer/thumbnailer.go`).
 - tx `BEGIN` deferred→`IMMEDIATE`, per-item re-commit on poisoned batch, 10-min
   move-heal window, transparent-thumb fill, notify overflow signal, benign

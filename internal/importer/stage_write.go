@@ -14,13 +14,13 @@ import (
 )
 
 // WRITE is the single-writer stage: SQLite takes one writer, so this goroutine IS
-// the batching point. It accumulates up to writeBatchSize items (or flushes on a
+// the batching point. It accumulates up to pipe.batchSize items (or flushes on a
 // lull, or at stream end) and commits each batch in one transaction via
 // Store.InTx. Cancellation commits the current batch and exits — completed work
 // is never rolled back.
 
 func (pipe *pipeline) write(ctx context.Context, in <-chan *pipelineItem) error {
-	batch := make([]*pipelineItem, 0, writeBatchSize)
+	batch := make([]*pipelineItem, 0, pipe.batchSize)
 	timer := time.NewTimer(writeLull)
 	timer.Stop()
 	defer timer.Stop()
@@ -45,7 +45,7 @@ func (pipe *pipeline) write(ctx context.Context, in <-chan *pipelineItem) error 
 				timer.Reset(writeLull)
 			}
 			batch = append(batch, item)
-			if len(batch) >= writeBatchSize {
+			if len(batch) >= pipe.batchSize {
 				timer.Stop()
 				if err := flush(); err != nil {
 					return err

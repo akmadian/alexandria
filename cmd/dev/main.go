@@ -27,6 +27,7 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/akmadian/alexandria/internal/migrations"
+	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/akmadian/alexandria/internal/watcher"
@@ -128,10 +129,12 @@ func parsePathAndFlags(flags *flag.FlagSet, args []string) (string, bool) {
 // func, a thumbnails dir, and the on-disk DB path (empty for :memory:, so tools
 // can tell the user exactly what file to open in a viewer).
 type openedCatalog struct {
-	store    *sqlite.Store
-	thumbDir string
-	dbPath   string
-	close    func() error
+	store       *sqlite.Store
+	thumbDir    string
+	dbPath      string
+	settings    *settings.Service // nil for :memory: (no dir to colocate config in)
+	settingsDir string            // empty for :memory:
+	close       func() error
 }
 
 // openCatalog opens the catalog named by --catalog. ":memory:" (the default) is
@@ -159,26 +162,64 @@ func openCatalog(catalogPath string) (*openedCatalog, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Settings live in a "settings" subdir beside catalog.db, created with defaults
+	// on open (same as the DB). Uses log.Default() — main set it to the debug logger.
+	settingsDir := filepath.Join(catalogPath, "settings")
+	settingsService, err := settings.Open(settingsDir, log.Default())
+	if err != nil {
+		catalog.Close()
+		return nil, err
+	}
 	return &openedCatalog{
-		store:    sqlite.NewStore(catalog.DB),
-		thumbDir: filepath.Join(catalogPath, "thumbnails"),
-		dbPath:   filepath.Join(catalogPath, sqlite.CatalogDBFile),
-		close:    catalog.Close,
+		store:       sqlite.NewStore(catalog.DB),
+		thumbDir:    filepath.Join(catalogPath, "thumbnails"),
+		dbPath:      filepath.Join(catalogPath, sqlite.CatalogDBFile),
+		settings:    settingsService,
+		settingsDir: settingsDir,
+		close: func() error {
+			settingsService.Close()
+			return catalog.Close()
+		},
 	}, nil
 }
 
 func newIngester(catalog *openedCatalog) *importer.Importer {
 	assets := &sqlite.AssetRepo{DB: catalog.store.DB}
+	set := catalog.currentSettings()
+	thumb := thumbnailer.New(catalog.thumbDir)
+	if set.ThumbnailQuality > 0 {
+		thumb.Quality = set.ThumbnailQuality // settings owns JPEG quality
+	}
 	return &importer.Importer{
 		Reader:    assets,
 		Obs:       assets,
 		Derived:   assets,
 		Dups:      &sqlite.DuplicateRepo{DB: catalog.store.DB},
-		Thumbnail: thumbnailer.New(catalog.thumbDir),
+		Thumbnail: thumb,
 		Store:     catalog.store,
 		Imports:   &sqlite.ImportRepo{DB: catalog.store.DB},
-		Log:       log.Default(), // debug-level; configured in main
+		Settings:  set,                      // D18 ignore list + WRITE batch size, owned by settings
+		Machine:   catalog.currentMachine(), // worker-pool sizes, owned by settings (machine.json)
+		Log:       log.Default(),            // debug-level; configured in main
 	}
+}
+
+// currentSettings is the settings snapshot the composition root injects into the
+// ingester/watcher — the live value when a catalog is open, the built-in defaults
+// for :memory: (no settings service) so a throwaway import still skips .DS_Store etc.
+func (catalog *openedCatalog) currentSettings() settings.Settings {
+	if catalog.settings != nil {
+		return catalog.settings.Settings.Get()
+	}
+	return settings.DefaultSettings()
+}
+
+// currentMachine is the machine-config snapshot (worker-pool sizes), same fallback.
+func (catalog *openedCatalog) currentMachine() settings.Machine {
+	if catalog.settings != nil {
+		return catalog.settings.Machine.Get()
+	}
+	return settings.DefaultMachine()
 }
 
 // cpuBoundWorkers is the default pool size for the CPU-bound stages (EXTRACT,
@@ -269,9 +310,17 @@ func cmdImport(args []string) error {
 		return err
 	}
 	ingester := newIngester(catalog)
-	ingester.HashWorkers = *hashWorkers
-	ingester.ExtractWorkers = *extractWorkers
-	ingester.ThumbWorkers = *thumbWorkers
+	// Worker counts come from machine.json (via newIngester); the dev flags override
+	// per stage when >0 (extract/thumb default to cpuBoundWorkers for fast local imports).
+	if *hashWorkers > 0 {
+		ingester.Machine.Workers.Ingest.Hash = *hashWorkers
+	}
+	if *extractWorkers > 0 {
+		ingester.Machine.Workers.Ingest.Extract = *extractWorkers
+	}
+	if *thumbWorkers > 0 {
+		ingester.Machine.Workers.Ingest.Thumb = *thumbWorkers
+	}
 
 	startedAt := time.Now()
 	ingester.OnProgress = func(progress importer.Progress) {
@@ -316,6 +365,7 @@ func cmdImport(args []string) error {
 	}
 	if catalog.dbPath != "" {
 		fmt.Printf("  catalog db: %s  (open in a SQLite viewer to browse)\n", catalog.dbPath)
+		fmt.Printf("  settings:   %s  (settings.json, machine.json, keybindings.json — created with defaults)\n", catalog.settingsDir)
 	} else {
 		fmt.Println("  catalog db: in-memory (nothing to browse — use --catalog <dir> for a real file)")
 	}
@@ -424,6 +474,7 @@ func cmdWatch(args []string) error {
 		Obs:      &sqlite.AssetRepo{DB: catalog.store.DB}, // the one sanctioned write: connectivity
 		Source:   source,
 		Root:     absolutePath,
+		Settings: catalog.currentSettings(), // D18 intake filter is Settings.Ignored
 		Log:      log.Default(),
 	}
 	fmt.Fprintf(os.Stderr, "watching %s — Ctrl-C to stop\n", absolutePath)

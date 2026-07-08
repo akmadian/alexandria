@@ -1,6 +1,42 @@
 # impl/11 — Settings Service (User Settings + Keybindings + Machine Config)
 
-**Status: not started — spec ready.**
+**Status: settings service DONE (§1–4, §6, §7). Live pipeline resize (§5) DEFERRED —
+see note below.** Shipped `internal/settings` (generic `configFile[T]`, tolerant
+cold-load with quarantine, live reload keeping last-known-good, per-field clamps,
+atomic save, debounced parent-dir hot-reload watch) with tests covering every
+Acceptance bullet except the two resize tests. Dropped the `settings` table from
+`0001_initial_schema.sql`. `internal/settings` is a strict leaf (imports no other internal
+package); importer and watcher now import *it* for the D18 ignore list (§6, §8) — a deliberate,
+acyclic dependency, not the original "consumers never import settings" rule.
+>
+> **Two deliberate deviations from §1/§3 as written, per Ari (2026-07-07):** (1)
+> files are **created with defaults on first run** — same strategy as the catalog
+> DB (`sqlite.Open`) — not left absent until the first `Save`. The malformed-file
+> path still does NOT auto-rewrite (quarantine + inspect intent preserved); only the
+> *missing* case materializes defaults. (2) The catalog-scoped `settings.json` lives
+> in a **`settings/` subdir** of the catalog dir (`<catalog-dir>/settings/settings.json`),
+> not at `<catalog-dir>/settings.json`. The dev harness wires `settings.Open` there
+> alongside the catalog and colocates `machine.json`/`keybindings.json` in the same
+> dir provisionally (they move to `<app-config-dir>` when the app host lands).
+>
+> **YAGNI checkpoint + wiring (Ari, 2026-07-07).** Only fields with a live consumer
+> survive; the §2 shapes below are aspirational, the shipped structs are trimmed.
+> **Wired:** `Machine.Workers.Ingest.{Hash,Extract,Thumb}` → `resolvePools`,
+> `Settings.ImportBatchSize` → the WRITE batch size, `Settings.ThumbnailQuality` →
+> the thumbnailer (importer holds `settings.Settings` + `settings.Machine`; harness
+> injects from `Get()`). **Dropped** (no consumer — re-add with the feature that
+> needs them): `xmpConflictResolution`/`xmpWriteBack` (impl/06), `catalogBackupCount`,
+> `undoStackSize`, `updateCheckEnabled`, `defaultSortField`/`Dir` (no query layer yet),
+> `Machine.memoryLimitMB`, `telemetryConsent`. Also deleted a dead `domain.Settings`
+> stub. Live mid-run worker resize (§5) stays deferred → DEFERRED §6.
+
+> **§5 live resize deferred, on purpose.** It needs invasive surgery on the working
+> pipeline (`fanStage` spins fresh goroutines per run; a resizable `stagePool` replaces
+> that) AND the spec itself flags an unresolved run-teardown race as a correctness
+> requirement. It also can't be wired yet: the `svc.Machine.OnChange → run.Resize` hook
+> lives in the composition root, and `<app-config-dir>`/the app host don't exist yet.
+> Building the `stagePool` primitive now would be a resize engine with no live caller
+> (YAGNI). Do it alongside the app-host milestone, when there's something to wire it to.
 **Scope:** new `internal/settings`; touches `internal/migrations` (DROPS the `settings` table —
 edited in place, per this repo's pre-1.0 convention), `internal/importer` (live pool resize),
 `cmd/dev`/future app host (composition root wiring). **Blocked by:** nothing. **Blocks:** impl/06
@@ -300,18 +336,25 @@ lock that `resize` takes, so a `Resize` call either lands cleanly before teardow
 "already finished" and no-ops — never a partial handoff. Whoever implements this should treat that as
 a correctness requirement, not a nice-to-have.
 
-## 6. Interaction with other packages — settings is a leaf, and purer for it
+## 6. Interaction with other packages — settings is a leaf; consumers may depend on it
 
-`internal/settings` imports only `internal/domain` (if anything) — no DB, no `internal/catalog`, no
-`internal/sqlite`. `internal/importer`, `internal/watcher`, `internal/xmp` never import
-`internal/settings`; they keep taking plain config via constructor fields (`Importer.HashWorkers`,
-already true today) or explicit method calls (`run.Resize(...)`). The composition root (`cmd/dev`
-today, the future app host) is the only thing importing `settings`, and it's the one that bridges
-`svc.Machine.OnChange` to `run.Resize` — `internal/importer` exports `Resize` but never calls into
-`settings` to get there.
+`internal/settings` is a strict leaf: it imports **no** other internal package — no `domain`, no DB,
+no `catalog`, no `importer`. That one-directional rule is the load-bearing one (it's what keeps the
+dependency graph acyclic).
 
-This keeps `internal/importer` testable with a literal `Importer{HashWorkers: 4}`, no fake settings
-service required — unchanged from today.
+**Revised (Ari, 2026-07-07):** the original plan had importer/watcher/xmp *never* import settings —
+config would only ever reach them as plain constructor fields wired by the composition root. That
+held until the D18 ignore list: settings owns the list *and* the matching (`Settings.MatchIgnore` /
+`.Ignored`, §8), and the earlier "wire a `func(name)` seam" indirection just scattered nil-guards
+and re-implemented, consumer-side, a method that already lives in `settings`. So `internal/importer`
+and `internal/watcher` now **import settings and hold a `settings.Settings` value**, calling its
+ignore methods directly. This is a deliberate reversal of the leaf-*consumer* rule for those two
+packages; settings importing nothing back means no cycle, so the graph stays clean. `internal/xmp`
+still doesn't import settings.
+
+The zero `Settings` is the null object (empty patterns → matches nothing), so `Importer{}` /
+`Watcher{}` remain valid literals in tests with no fake service required — the testability property
+survives the reversal.
 
 ## 7. External edits while the app is running (hot-reload)
 
@@ -360,7 +403,14 @@ trigger was internal or external — §6's leaf-package property is unchanged.
 
 - **impl/06:** `xmpWriteBack`/`xmpConflictResolution` are real `Settings` fields (§2).
 - **D18:** `Settings.IgnorePatterns` is a plain JSON array now — editing it in the UI is exactly
-  editing an array, no key-prefix scheme needed.
+  editing an array, no key-prefix scheme needed. **Ownership moved here in full (Ari, 2026-07-07):**
+  settings owns the list *and* all the matching (`Settings.MatchIgnore`/`Ignored` in
+  `internal/settings/ignore.go`), seeded from defaults on first run. The old
+  `internal/importer/ignore.go` baked list is gone; SCAN calls
+  `Importer.Settings.MatchIgnore(name)` and the watcher `Watcher.Settings.Ignored(name)` — both hold
+  a `settings.Settings` value (§6). This resolves the smell that importer's *exported* `Ignored` was
+  only ever consumed by the watcher: there is now exactly one owner, and neither consumer carries any
+  ignore logic of its own (no scattered nil-guards, no re-implemented matcher).
 - **Keybinding editor / machine-config UI:** concrete files + typed structs to read/write.
 
 ## Acceptance
@@ -385,5 +435,7 @@ trigger was internal or external — §6's leaf-package property is unchanged.
 - Concurrent-resize test: resize HASH and EXTRACT at (near) the same instant mid-run — asserts no
   deadlock (finishes within a timeout) and the same exactly-once-processing guarantee, exercising the
   DAG argument above under -race.
-- Compile-time check: `go list -deps ./internal/importer/... ./internal/watcher/... ./internal/xmp/...`
-  contains no `internal/settings`.
+- Compile-time check: `internal/settings` imports no other internal package (it's a strict leaf, so
+  the graph stays acyclic even though importer/watcher now import *it*): `go list -deps
+  ./internal/settings/...` contains no other `internal/*`. (`internal/xmp` also still contains no
+  `internal/settings`; importer and watcher intentionally do — §6.)

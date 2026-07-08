@@ -28,7 +28,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 		}
 		name := entry.Name()
 		if entry.IsDir() {
-			if relativePath != "." && (isHidden(name) || matchIgnore(name) != "") {
+			if relativePath != "." && (isHidden(name) || pipe.importer.Settings.Ignored(name)) {
 				return fs.SkipDir
 			}
 			return nil
@@ -39,7 +39,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 		if isHidden(name) {
 			return nil
 		}
-		if pattern := matchIgnore(name); pattern != "" {
+		if pattern := pipe.importer.Settings.MatchIgnore(name); pattern != "" {
 			pipe.ignoredTally[pattern]++
 			return nil
 		}

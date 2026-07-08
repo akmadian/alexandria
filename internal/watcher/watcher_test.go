@@ -14,6 +14,7 @@ import (
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
+	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/charmbracelet/log"
 )
 
@@ -92,6 +93,7 @@ func startWatcher(t *testing.T) (string, chan Event, *spyIngester) {
 		Root:     root,
 		Log:      log.New(io.Discard),
 		Debounce: 30 * time.Millisecond,
+		Settings: settings.DefaultSettings(), // D18 intake filter is Settings.Ignored
 		events:   func(context.Context, string) (<-chan Event, error) { return events, nil },
 	}
 	ctx, cancel := context.WithCancel(context.Background())
