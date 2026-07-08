@@ -7,7 +7,7 @@ to them, it does not duplicate their content.
 | Area | Status | Tracker |
 |---|---|---|
 | Backend | Active — impl/06 (XMP sync) in progress | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
-| Frontend | Not started (blocked on Wails/Tauri/Electron decision) | — |
+| Frontend | Design complete (2026-07-07; Wails v2 locked) — implementation pending the backend seam/query round | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
 | Ops | No active milestone tracking yet (see `../ops/` for reference docs) | — |
 | Perf | No active milestone tracking yet (see `../perf/` for reference docs) | — |
 | Testing | No active milestone tracking yet (see `../test/` for reference docs) | — |
