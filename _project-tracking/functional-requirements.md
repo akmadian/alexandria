@@ -1,6 +1,6 @@
 # Functional Requirements
 
-Consolidated from all design docs, the original PRD, and todo.md. Prioritized by both technical build order (what must exist first) and user value (what makes the app worth using). Video-specific features are P2+ per project decision.
+**The single source of truth for the feature roadmap: what will be built, and when.** Consolidated from the original PRD, the retired todo.md, the backend design round (2026-07-06), and the frontend/UX design round (2026-07-07) — where an older source disagrees with the 2026-07-07 design round, the design round wins and this file reflects it. Prioritized by both technical build order (what must exist first) and user value (what makes the app worth using). Video-specific features are P2+ per project decision.
 
 **Priority definitions:**
 
@@ -41,13 +41,13 @@ These are the foundation. Everything else depends on them.
 
 ### Ingest Pipeline
 
-- Six-stage pipeline: Scanner -> Hasher -> Dedup/Move Checker -> Metadata Extractor -> Thumbnailer -> Catalog Writer
+- Six-stage pipeline: SCAN -> HASH -> MATCH -> EXTRACT -> THUMB -> WRITE (ENRICH joins between THUMB and WRITE with the signals milestone, P3)
 - Stages connected by buffered Go channels, decoupled
 - Scanner skip check: files with unchanged mtime + size are skipped (idempotency gate). 2-second mtime comparison tolerance for FAT/exFAT/SMB
 - xxHash of first 64KB + file size for fast change detection and dedup
-- Dedup/move checker: hash match against missing asset = move (relink, preserve all metadata); hash match against present asset = duplicate (ingest both, log to `duplicates` table)
-- Move detection requires hash + size + filename match for automatic relinking
+- MATCH per D20 (detect-and-flag, never auto-mutate): any content match at a new path — move, rename, or copy — mints the new path as a distinct asset and records a pending pair in the `duplicates` ledger for Review; nothing is ever auto-relinked or auto-merged
 - Per-file error handling — individual file failures do not abort the pipeline
+- Mid-scan source disconnect (drive unplugged, share dropped) must never mass-mark unvisited assets missing — the walk-completeness guard is an open design task (`backend/04-open-questions.md` #15)
 - Cancellable at any point via context
 - Batched catalog writes (default 50 per transaction) for performance
 - Import is idempotent — re-running on unchanged source is essentially free
@@ -77,6 +77,16 @@ These are the foundation. Everything else depends on them.
   - PDF: first page preview via Ghostscript CLI
   - Markdown: text-preview thumbnail
 - External tools invoked as subprocesses, never cgo bindings — subprocess crash kills the subprocess, not Alexandria
+- Extension floor (from `_scratch/file-types-to-support.md`), beyond the list above: HEIC (raster path via platform decoder or libheif), plain text/CSS (text-preview like Markdown), fonts (woff/woff2/ttf — specimen-render thumbnail; full viewer is P3), zip (classify + generic card, no preview). Adding a type = one registry row per side (backend `assettype`, frontend presentation registry)
+
+### External Tool Acquisition
+
+*The subprocess fleet (exiftool, ffmpeg, dcraw_emu, ImageMagick, Ghostscript) gates RAW/video/PSD/PDF thumbnails and metadata — the acquisition UX is part of making P0 formats work. From `_scratch/sysde.md`.*
+
+- Auto-detect tools on PATH at startup, plus common install locations
+- In-app UX offering to fetch/download missing tools where licensing permits; otherwise clear guidance to install
+- Downloaded binaries are a security boundary: HTTPS only, checksum verification, signature verification where the upstream provides one
+- Missing tool degrades gracefully per the registry's nil-capability rule (generic card, no crash) — the app is fully usable with zero external tools, just with fewer formats enriched
 
 ### Metadata Extraction
 
@@ -139,11 +149,20 @@ These are the foundation. Everything else depends on them.
 - "Contained in" section: folder path and every collection the asset belongs to (clickable)
 - Collection membership management (add/remove from collections directly)
 
+### View Mode System
+
+*Locked 2026-07-07 (CONSTANTS C2): `view state = viewMode(query + arrangement, selection + cursor)`. A view mode is a pure renderer over shared catalog state — all modes present the same working set, arrangement, selection, and cursor; only rendering and input mapping change. Full spec: `frontend/02-state-model.md`.*
+
+- Four modes: **Grid** (G, P0), **Loupe** (E/Enter, P0), **Compare** (C, P2), **Cull** (D, P1)
+- Switches are single keys, instant (<100ms), stateless — no navigation stack; Escape always steps down toward Grid
+- Space in Grid = quick preview (Finder Quick Look convention) — a peek, not a mode change
+- Per-type presentation lives inside modes via the frontend type registry (zoomable image, video player, waveform, font specimen, PDF pages)
+
 ### Loupe / Detail View
 
-- Full-size render of selected asset
-- Navigate next/previous within current filtered result set
-- Toggle from grid via Space or view mode switch
+- Cursor asset rendered large + filmstrip (LrC-style horizontal thumbnail strip — navigate without returning to grid)
+- Navigate next/previous within current working set
+- Per-type body via the type registry
 - Close/return to grid via Escape
 
 ### Open in External App
@@ -211,14 +230,34 @@ Without these, the app isn't competitive with existing tools for the target user
 
 *Core value proposition for creative professional triage. Depends on: basic organization, grid view.*
 
-- All triage operations keyboard-accessible: ratings (1-5, 0 to clear), color labels (6-9, - to clear), flags (P pick, X reject, U clear), navigation (arrows), fullscreen preview (Space), open in app
+- Action registry: every user-invokable operation is an entry `{id, title, aliases, context predicate, handler, default binding}`; grows incrementally as features land (spec: `frontend/04-keyboard-and-actions.md`)
+- Verb grammar (locked 2026-07-07): **universal verbs** identical everywhere — navigate (arrows/J/K), rate (1–5, 0 clears), label (6–9, − clears), flag (P/X/U), view modes (G/E/C/D), Escape steps down, open-in (O), quick preview (Space in Grid); **media verbs** type-interpreted via the type registry — Space = "engage the asset" (photo: 100% zoom; video/audio: play/pause). Asset type is never a dispatch dimension
 - All keybindings user-configurable
-- Context-scoped: global, grid, detail, import — same key can mean different things in different contexts
+- Context-scoped dispatch `(context, key) → action`: global, grid, loupe, compare, cull, import, review, palette
 - Platform-normalized modifier: `primary` = Cmd on Mac, Ctrl on Win/Linux
-- Default bindings follow platform conventions
+- **Keybinding preset sets**: named defaults in code — Alexandria (= LrC grammar), darktable, (Capture One candidate); first-run picker; user overrides layer on top of the chosen preset
 - Conflict detection when reassigning keys
 - Reset to defaults (per-binding or all)
-- Defaults live in code, DB stores only user overrides — new actions auto-appear on update
+- Defaults live in code as data; user overrides in `keybindings.json` (impl/11) — new actions auto-appear on update
+
+### Command Palette
+
+*Pulled forward from P2 (2026-07-07 design round): ships WITH the keyboard system because it is the action registry's face — every entry shows its current binding, so it teaches the keys. It also absorbs chrome: rare actions (Open Settings, Export Logs, Rebuild Thumbnails) live here instead of toolbar real estate. Spec: `frontend/04-keyboard-and-actions.md`.*
+
+- Fuzzy subsequence matcher (VS Code/fzf scoring) over titles + aliases, filtered by context predicate; frecency ranking
+- Prefix modes: bare text = search (parses via the search tiers, emits pills), `>` = actions, `#` = go-to (collection/tag/source)
+- **Cmd+K** opens in action mode; **Cmd+F** (or `/`) opens the same palette in search mode — the global retrieval entry point
+- Healthy-palette test: everything reachable in the palette has a home elsewhere too (except deliberately-buried rare actions)
+
+### Cull View Mode
+
+*The ingest-day weapon; benchmark is Photo Mechanic speed. Absorbs the former standalone Lights Out Mode, Fullscreen View, and Auto-Advance items. Spec: `frontend/05-culling-and-signals.md`.*
+
+- Fullscreen, lights-out chrome by default; filmstrip; inherits the current query/arrangement/cursor (a view mode, not a separate place)
+- Auto-advance on P/X/rating (toggleable, default off)
+- Key-feedback overlay: big transient confirmation ("★3", "REJECT") — one of the few sanctioned color/motion moments
+- Mixed-type sessions respect the current arrangement; type-batched order is one group-by away; per-type engagement via media verbs
+- Signal-driven force multipliers (threshold filters, suggested rejects, burst collapse) arrive with the signals milestone (P3)
 
 ### Undo/Redo
 
@@ -238,9 +277,9 @@ Without these, the app isn't competitive with existing tools for the target user
 - Local sources: OS filesystem events (FSEvents on macOS — not kqueue; inotify on Linux with per-directory watches; ReadDirectoryChangesW on Windows)
 - Network sources: configurable polling interval (60s-1800s)
 - Volume monitoring: detect external drive mount/unmount, auto-reconnect known drives by filesystem UUID
-- Event routing: created/modified -> ingest pipeline; deleted -> mark asset missing (never auto-remove); renamed -> update path in place
+- Event routing (post-D20): created/modified -> ingest pipeline; deleted -> mark asset missing (never auto-remove); renamed/moved -> pending Review pair, never relinked in place. Same-path in-place edits and a missing file reappearing at its original path are the only automatic restorations
 - 500ms debounce for creative app save patterns (write temp, rename)
-- Cross-source moves detected via hash+size+filename match against missing assets
+- Cross-source content matches are always duplicates, never moves (a file cannot move between roots and keep one identity) — flagged for Review
 - Graceful degradation: watcher failure is non-fatal, source degrades to polling or manual import
 - Background reconciliation scan on app startup (after 2s delay) to catch changes while app was closed
 
@@ -249,26 +288,45 @@ Without these, the app isn't competitive with existing tools for the target user
 *Depends on: watcher service, ingest pipeline.*
 
 - Assets marked "missing" remain fully browsable (thumbnails and metadata are catalog-resident) but badged (LrC-style "?")
-- "Missing files" view collects all missing assets
+- Missing files surface as a Review category (see Review, above), alongside the probable-move pairs the matcher records
 - Relocate flow: user points to new folder, Alexandria matches by hash+size+filename, relinks in bulk
-- Automatic move detection via dedup/move checker handles most cases before the user sees them
+- Per D20 (2026-07-07): moves are never auto-relinked — a content match at a new path becomes a pending Review pair (original stays missing, new path minted) and the user confirms the relink
 
-### Filter Bar
+### Filter Bar and Query Pills
 
-*Depends on: asset queries, grid view.*
+*Depends on: the query layer (AST→SQL). Locked 2026-07-07 (C6/C12): the query AST is the spine; a pill is the rendered form of one AST leaf. Spec: `frontend/03-search-and-filter-ux.md` + `seam/01-queries-and-commands.md`.*
 
-- Filter by: file type, rating (minimum), color label, flag, date range, source
-- Search text field (triggers FTS5)
-- Sort by: capture date, ingest date, filename, rating, file type, file size
-- Sort direction toggle (asc/desc)
+- Pill row = the query, visibly (one thing on screen = one AST node); click to edit operator/value, × to remove; flat row = implicit AND
+- Filterable: file type, rating (minimum), color label, flag, date range, source, dimensions, camera — any registered token type
+- Advanced path: recursive AND/OR/NOT group editor, shared with the smart collection editor
+- Save as Smart Collection = one click from any query state
+- Arrangement controls: sort by capture date, ingest date, filename, rating, file type, file size; direction toggle; grouping is a sibling of sort (C4: arrangement never changes membership)
+- **Search tiers** (every tier's output is visible pills — a misparse is correctable, never a mystery):
+  1. Deterministic parser (always on, zero latency): closed vocabulary — token names/aliases, date grammar, small phrase table, the user's own tag/collection/place names
+  2. Local LLM fallback — P3, off by default (see P3 entry)
+  3. FTS fallback (always): unresolved words become full-text terms — NL-off degrades to baseline search, never a different system
 
-### Status Bar
+### Status Bar and Transparency Chrome
 
-*Part of the base UI shell.*
+*Part of the base UI shell. "Showing the work" is the positioning made visible — layers from ambient to nerdy, per `frontend/01-flows-and-views.md`.*
 
-- Left zone: current context — collection/folder name + total asset count
+- Left zone: the current query narrated in plain words ("Sources ▸ 2024 ▸ Iceland · RAW · ★≥3 · 412 assets") — the app never shows a mystery subset
 - Center zone: selection scope — count, total file size, total duration if video selected. Hidden when nothing selected.
-- Right zone: background worker status — compact indicator for import, backup, integrity check, watcher. Expands to full progress panel on click.
+- Right zone: compact live job/health indicator — glyph-based telegraphy in the mono face (`▁▃▆`, `◐`, watcher heartbeat dot), character-swap animation, no SVG weight
+- **Activity drawer** (right zone expands): the Jobs envelope stream rendered generically — per-job progress, plain-language history ("Relinked 34 moved files · 2m ago"), detail lines
+- **Dev corner** (deepest drawer tab; discoverable, not advertised): live queue depths, watcher event feed, per-stage pipeline timings — the `_scratch/sysde.md` observability wishlist
+- In-grid corner ticks on assets with pending Review items
+
+### Review
+
+*New first-class surface from the 2026-07-07 design round — the frontend face of backend D20 (detect-and-flag, never auto-mutate). Unifies what was scattered: the Missing Files view (this tier), the Duplicate Resolution UI (formerly P2), XMP conflicts, import errors. Spec: `frontend/06-review.md`; backend projection specced in `backend/impl/DEFERRED.md` §5.*
+
+- One task view collecting everything the engine noticed but refused to decide: probable moves/renames, duplicates, missing files, XMP conflicts, import errors, suggested rejects (when signals land)
+- Sidebar item with count badge — ambient, never modal; opening it is a full-window task view (C3)
+- Categorized list processed top-to-bottom, keyboard-forward, zero-when-done; bulk resolution is the norm ("confirm all 34 relinks")
+- Per-category row UX: moves show old path → new path with confirm-relink; duplicates get side-by-side metadata comparison (keep both / remove one / link as group); missing files get the relocate flow; XMP conflicts show both sides + the policy that would apply
+- Resolution actions are the user-granted versions of what D20 removed from the engine; catalog-editing resolutions ride the command pattern (undoable) where possible
+- **Deferred: automation rules** ("always relink moves when hash+size+name match") — wait for Review v1 usage to show which repetitions hurt. Reserved now: automation is a user grant, never an engine default; rule conditions reuse the query token vocabulary
 
 ### "Previous Import" Collection
 
@@ -279,7 +337,7 @@ Without these, the app isn't competitive with existing tools for the target user
 
 ### Catalog Backup
 
-*Depends on: catalog infrastructure.*
+*Depends on: catalog infrastructure. The backup-before-migration floor is owned by the app-host milestone (`backend/impl/12-app-host.md`); the backup system proper is an unscheduled design task (`backend/04-open-questions.md` #16).*
 
 - Must use SQLite backup API or `VACUUM INTO`, never raw file copy (raw copy of open SQLite = corruption)
 - Automatic backup before every migration
@@ -337,11 +395,11 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 
 *Enables powerful filtering workflows. Schema is ready.*
 
-- Stored query, membership computed dynamically
+- Stored query (the versioned AST, C6), membership computed dynamically — a saved query promoted into the scope tree, the deliberate bridge between filter and scope
 - Fully nested boolean conditionals (AND/OR/NOT groups) — significantly more powerful than LrC's flat match-all/match-any
-- Criteria support: string/numeric comparisons, contains, starts with, is empty, date ranges, etc.
-- Built-in system smart collections: Untagged, Unrated, Not in any collection, Import errors
-- Recursive condition group editor UI
+- Criteria support: string/numeric comparisons, contains, starts with, is empty, date ranges, etc. — any registered token type
+- Save as Smart Collection = one click from any filter-bar query state; the recursive condition group editor (shared with the filter bar's advanced path) is for refinement
+- Built-in system smart collections: Untagged, Unrated, Not in any collection, Import errors (later: Suggested rejects, from signals)
 
 ### Custom Color Labels
 
@@ -372,19 +430,12 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - User chooses which fields/badges appear on grid cards: rating stars, color label, file type, GPS indicator, clip duration, filename, capture date
 - Stored in settings per view
 
-### Side-by-Side Comparison Mode
+### Compare View Mode
 
-*From todo.md.*
+*Formerly "Side-by-Side Comparison Mode"; now the C view mode per the state equation (see View Mode System, P0). The filmstrip item that used to sit here was absorbed into Loupe's P0 definition.*
 
 - Select 2-4 assets, view at equal size
 - Ratings, labels, flags accessible without leaving the view
-
-### Filmstrip in Loupe View
-
-*From todo.md — essential for keyboard-driven triage.*
-
-- Horizontal strip of thumbnails at bottom of loupe view (LrC-style)
-- Navigate current selection without returning to grid
 
 ### Collection Identity
 
@@ -430,9 +481,9 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - Design intent: generic OS-seeded "open in" is the floor for every program; a curated few (the programs people actually use most) get genuinely bespoke, deep integration on top — the hand-off should feel tight and intentional for those, not uniformly lowest-common-denominator
 - Batch dispatch: multi-select N assets -> consult registry's batch-launch-safe flag -> one process launch with all N paths if safe, otherwise fall back to opening just the first / warning the user
 
-### Import Modal Options
+### Import Task View Options
 
-*From todo.md.*
+*From todo.md; reframed 2026-07-07 — Import is a full-window task view (source pick, options, live pipeline progress, completion summary), not a modal. Task views never touch catalog view state (C3).*
 
 - Auto-create named collection from import (pre-filled name, checked by default)
 - Skip suspected duplicates (checked by default, count shown post-import)
@@ -469,12 +520,6 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - Glob patterns and/or extensions to skip during import (.DS_Store, Thumbs.db, .tmp, *.lrprev)
 - Global defaults ship with sensible exclusions, user can add/remove
 - Checked at scanner level before any processing
-
-### Auto-Advance in Loupe
-
-*From todo.md.*
-
-- Toggleable (default off): pressing P/X/rating key auto-advances to next asset
 
 ### Drag and Drop
 
@@ -535,14 +580,6 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - Two presets: "performance" and "lightweight" plus manual sliders
 - Stored in machine.json
 
-### Quick Preview
-
-*From todo.md.*
-
-- Space over any asset in grid for full-screen quick-look preview
-- Dismiss with Space
-- No click, no mode change
-
 ### Recently Used Prioritized
 
 *From todo.md.*
@@ -555,12 +592,13 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 
 - Count badge next to every collection, folder, and source
 
-### Bookmarks and Landing View
+### Home View and Bookmarks
 
-*From todo.md.*
+*From todo.md; shaped 2026-07-07 as the optional landing view.*
 
 - Bookmark collections and sources for quick access
-- Landing/home view surfacing: quick Import action, bookmarked collections
+- Home view: minimal — recently used collections, saved queries, calls to action (import, find), Review count. Not a dashboard, no greeting
+- User-disableable — Alexandria works for them, not the other way around
 
 ### Sort Options
 
@@ -583,25 +621,6 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - Custom background image/color
 - Custom glassmorphism opacity
 
-### Lights Out Mode
-
-*From todo.md — LrC style.*
-
-- `L` key dims all UI except images and previews
-
-### Fullscreen View
-
-*From todo.md.*
-
-- `F` with assets selected enters fullscreen view
-
-### Duplicate Resolution UI
-
-*Backend detection already exists from P0. This is just the review screen.*
-
-- Side-by-side comparison with metadata comparison
-- Options: keep both, remove one, link as group
-
 ### Clipboard Support
 
 - Copy selected asset(s) to system clipboard as file reference (file URL, not rasterized preview)
@@ -621,27 +640,37 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - One-shot only — no ongoing sync against live .lrcat
 - Import wizard: select file, preview what will be imported, confirm
 
-### Command Palette
-
-*Pulled forward (2026-07-07 frontend design round): ships WITH the P1 keyboard system, not after
-it — the palette is a thin view over the action registry P1 builds anyway, and it teaches the
-keybindings. Spec: `_project-tracking/frontend/04-keyboard-and-actions.md`.*
-
-- Searchable list of all actions with current key combos
-- Bound to Cmd+K / Ctrl+K
-- Built on top of the action registry from the keyboard system
-
 ---
 
 ## P3 — Post-Stabilization
 
 Build after the core product is stable and well-used.
 
-### Perceptual Hash / Similar Image Detection
+### Signals Milestone (ENRICH Stage + Enrichment Jobs)
 
-- phash stored per image at ingest (fast, pure Go, no subprocess)
-- Duplicate and near-duplicate detection via hamming distance
-- "Similar images" cluster view for culling burst shots
+*Architecture locked 2026-07-07 (C11: models propose as data, the user disposes via the query). Every signal is a metadata column exposed as a query token type — no verdicts, no opaque scores driving hidden behavior. Engine spec: `backend/06-signals-and-enrichment.md`; UX: `frontend/05-culling-and-signals.md`. Subsumes the former standalone "Perceptual Hash" and "Technical Quality Scoring" entries.*
+
+- **Cheap signals ride ingest** (the ENRICH pipeline stage, on the in-memory thumbnail): sharpness (Laplacian variance), highlight/shadow clipping % (histogram), phash — there when the user sits down to cull, no waiting
+- **Heavy signals are background enrichment jobs**, never pipeline stages: blink/eyes-closed probability, face count/quality, embeddings (P4). Priority is work-follows-attention: opening a working set bumps its pending enrichment; within a set, sharpest first
+- Every signal column is deletable + recomputable via a registered rebuild (derived-state rule); shipping a new signal or model upgrade = backfill job over the existing catalog
+- Filtering on a still-computing signal annotates the pill honestly ("sharpness > 0.5 · 214 not yet scored"), results streaming in
+- phash: duplicate and near-duplicate detection via hamming distance
+
+### Cull Force Multipliers (built on signals)
+
+- **Burst/stack collapse** — phash clusters render as stacks, pre-sorted within by sharpness + eyes-open, best frame as cover; cull representatives, expand only when contested. Rides the asset-group machinery (P2)
+- **Suggested rejects — never auto-rejects**: below-threshold frames get a suggested state (dimmed in filmstrip, collected in a "Suggested rejects" system smart collection), confirmed in bulk. The model drafts; the user signs
+- **Threshold filters**: "when culling, only show sharpness > 0.5" is a pill on the cull session's query; saveable
+- Auto-grouping opt-out: ask once, respect forever
+
+### Natural-Language Query Fallback (local LLM)
+
+*Tier 2 of the search system (`frontend/03-search-and-filter-ux.md`); the deterministic parser (tier 1) ships with the query layer and covers most real input. Off by default until built; parked until the deterministic parser has usage.*
+
+- Only for the unresolved remainder: paraphrase/synonyms, fuzzy time ("a couple summers ago")
+- Schema-constrained to emit only valid AST against the token vocabulary; candidate tag/place names injected as a shortlist
+- Latency budget 0.5–2s — NL is a deliberate act, never the hot path; typed pills stay instant and model-free
+- Output is visible pills (C12); disabling NL degrades to FTS baseline, not a different system
 
 ### Dominant Color / Palette Extraction
 
@@ -746,13 +775,6 @@ Build after the core product is stable and well-used.
 - Auto-detect HDR brackets, focus stacks, panorama sequences, burst sequences from EXIF patterns
 - Confidence scoring, only auto-group above threshold
 - UI for reviewing detected groups before confirming
-
-### Technical Quality Scoring
-
-- Sharpness/focus score per image via Laplacian variance (no AI, pure signal processing)
-- Operates on thumbnail (fast)
-- Sort by sharpness, filter above/below threshold
-- Within burst groups: surface highest-scoring frame
 
 ### On-Device Whisper Transcript Search
 
@@ -947,17 +969,19 @@ Within each priority tier, features should be built roughly in this order based 
 
 ### P1 Build Order
 1. Undo/redo (command pattern) — enables safe editing
-2. Keyboard system (action registry, dispatcher, configurable bindings)
-3. XMP sync (read first, write second, conflict resolution third)
-4. Watcher service (local watching first, then volume monitoring, then network polling)
-5. Missing file detection and relocate flow
-6. Status bar and import progress UI
-7. Logging infrastructure (backend + frontend bridge)
-8. i18n mechanism
-9. Catalog backup system
-10. Error boundaries
-11. Previous Import collection
-12. Layout persistence
+2. Keyboard system + command palette (action registry, dispatcher, configurable bindings, preset sets — the palette is the registry's face, same increment)
+3. Filter bar + query pills (rides the backend query layer; deterministic parser tier)
+4. XMP sync (read first, write second, conflict resolution third)
+5. Watcher service (local watching first, then volume monitoring, then network polling)
+6. Review v1 + missing-file/relocate flow (the projection + resolution actions per DEFERRED §5)
+7. Cull view mode (fullscreen triage; signal force-multipliers arrive later with P3 signals)
+8. Status bar and import progress UI (transparency chrome layers)
+9. Logging infrastructure (backend + frontend bridge)
+10. i18n mechanism
+11. Catalog backup system
+12. Error boundaries
+13. Previous Import collection
+14. Layout persistence
 
 ### P2 Build Order
 1. Asset grouping — highest standalone value, unblocks several P3 features
@@ -966,9 +990,8 @@ Within each priority tier, features should be built roughly in this order based 
 4. Thumbnail auto-refresh — builds on watcher, high annoyance-removal value
 5. Metadata editing — builds on exiftool write path, needed for several later features
 6. Import modal options, configurable ignore list — small but high-value workflow improvements
-7. Grid overlays, filmstrip, side-by-side, adaptive inspector — UI polish that compounds
+7. Grid overlays, Compare view mode, adaptive inspector — UI polish that compounds
 8. Clipboard, drag-and-drop, copy/paste metadata — interaction refinements
-9. Duplicate resolution UI, duplicate source detection — leverage existing detection
+9. Duplicate source detection — leverages existing detection; resolution rides Review (P1)
 10. Catalog backup improvements — reliability
 11. LrC catalog bootstrap — migration onramp for new users
-12. Command palette — leverages existing action registry

@@ -36,6 +36,19 @@ What a design-refinement instance should pick up. Ordered by when they block.
    `COUNT(*) OVER()`; NULL `captured_at` sort fallback (#2 above); splitting
    `catalog.AssetFilter`'s conflated predicate+sort+paging into query/arrangement/page (seam
    ledger #1). Do before the seam round. (Sort-field whitelist already DONE in impl/02.)
+   **Scope folded in by the 2026-07-08 audit** (all discovered ownerless, all natural residents
+   of this round):
+   - **Collections CRUD** — `catalog.CollectionRepository` is declared with zero implementations
+     and no owning milestone; manual-collection CRUD is the trivial sibling of the smart-collection
+     evaluation this round builds anyway.
+   - **Prior-state bulk read for undo** — `ApplyTriagePatch` returns nothing and `AssetReader`
+     has no get-by-IDs; the P1 undo design captures per-asset prior state, so the read must be
+     shaped alongside the query/command surface (don't design `UpdateAssets` without it).
+   - **FTS⋈tags slice** — the `TODO(fts)` at `sqlite/tag_repo.go`: recompose `assets_fts.tags`
+     on keyword import / `SetAssetTags`, backfill via `RebuildFTS`. Owned by impl/10 historically,
+     but the FTS query tier this round builds is its first real consumer — land it here so search
+     includes keywords the day search ships. Tag-UI backend (Tree/Update/Delete/reparent) stays
+     with impl/10.
 5. **The seam round** — reconcile `frontend/src/api/contract.ts` against the engine. The work
    list now lives as the **reconciliation ledger** in `../seam/01-queries-and-commands.md`
    (10 numbered deltas: AST filter, tag scope, arrangement, stale Settings/SourceStatus,
@@ -50,6 +63,30 @@ What a design-refinement instance should pick up. Ordered by when they block.
    deterministic tiebreak. Open: CompanionPattern stem-matching modes (`IMG_1234.CR3.xmp` vs
    `IMG_1234.xmp`, `-Edit` suffix families), LrC-exported-vs-camera-JPEG cover heuristics, anchor
    priority table, group kind vocabulary.
+
+## Surfaced by the 2026-07-08 backend audit (design tasks, not yet scheduled)
+
+15. **Mid-scan volume disconnect — the walk-completeness problem.** `stage_scan` tolerates
+    per-entry errors and never aborts (correct for one unreadable file), so a drive/share that
+    disconnects mid-walk yields a "completed" walk with a partial visited set — and the walk-end
+    missing diff (`pipeline.go markMissing`) then flips every unvisited asset to `missing`.
+    Self-heals on the next reconcile (same-path reappearance restores identity automatically),
+    but a wall of "?" badges after a cable wiggle is exactly the "catalog shifting underneath
+    me" event D20 exists to prevent. **This is a design task, not a quick guard** — the fix has
+    UX and trust ramifications: When is a walk trustworthy enough to diff against? (Root-stat
+    check? Directory-level error count? Unvisited-fraction threshold?) What does the user see
+    when the diff is withheld ("volume disappeared mid-scan" — where, how loud)? Does the
+    session record partial-walk status? How does it interact with source `connectivity` and the
+    volume monitor? Do it before the frontend renders missing badges / Review missing-file
+    categories at scale. (Scenario originally flagged in `_scratch/sysde.md` failure modes.)
+
+16. **Catalog backup design round.** No backup code exists anywhere: no `VACUUM INTO` / backup-API
+    path, no backup-before-migration (a P0 requirement), and the P1/P2 FR features (rolling
+    backups, smart retention, multiple destinations, graceful skip) are undesigned. The
+    *startup floor* (backup-before-migration + startup integrity check) is owned by the app-host
+    milestone (impl/12); the *backup feature proper* — scheduling, retention policy, destinations,
+    restore UX, health-dashboard integration — is its own design round. Becomes urgent the moment
+    migrations stack on real user catalogs (= first release).
 
 ## Empirical tests needed (cheap, do during relevant milestone)
 
@@ -77,6 +114,8 @@ What a design-refinement instance should pick up. Ordered by when they block.
 - **Windows** is third priority and untested by design so far — Job Objects path in `dependency`,
   ReadDirectoryChangesW in watcher, volume GUIDs. Budget a Windows pass per milestone, late is fine.
 - **exiftool daemon protocol** quirks under concurrent load (single daemon vs small pool) — impl/07.
-- The FR itself has one stale line the session overrode: it files "current view" persistence under
-  localStorage; D16 routes it to catalog KV (multi-catalog correctness). The FR should eventually
-  be updated to match the decision log where they conflict.
+- ~~The FR files "current view" persistence under localStorage; D16 routed it to catalog KV.~~
+  **Resolved by the 2026-07-07 frontend round + impl/11:** `frontend/02-state-model.md` locks
+  layout/theme/density/current view mode → localStorage (lose-and-shrug chrome), saved queries →
+  catalog, keybindings → `keybindings.json`. D16's scope-routing principle stands; its storage
+  mechanism was superseded. The FR matches the newer decision.

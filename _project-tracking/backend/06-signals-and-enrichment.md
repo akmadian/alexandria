@@ -27,6 +27,12 @@ never abort the run, cancel commits the current batch. **No workflow engines** �
 channels remain enough; those tools solve distributed durable execution and this is one process
 on one machine.
 
+**Data-flow prerequisite (2026-07-08 audit):** today `pipelineItem` drops the decoded thumbnail
+after THUMB — only `thumbnailedAt` survives to WRITE (`importer/item.go`). ENRICH's "operate on
+the in-memory thumbnail" therefore needs the item to carry the resized image (or encoded bytes)
+across the THUMB→ENRICH hop, released after ENRICH the same way `head` is released after HASH.
+One field on the item; do it when this stage lands, no pre-work.
+
 ## Tier 2 — heavy signals are background enrichment jobs
 
 Blink/eyes-closed, face count/quality, embeddings (MobileCLIP2 per `_project-tracking/design/local-ai.md`):

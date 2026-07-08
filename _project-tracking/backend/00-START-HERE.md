@@ -33,7 +33,8 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
 | `impl/09-lrc-migration.md` | **Design only, not started.** Lightroom Classic catalog migration — D21; engine-first (`internal/lrcimport` + `cmd/lrcimport`), Wails wizard wraps it later; pure-read preflight, LrC-side DNG/XMP prep instead of hand-parsing Develop settings |
 | `impl/10-tag-system.md` | **🔨 consumer slice DONE (2026-07-07)** — D22; adjacency + materialized `path`, direct-attach junction, `color_mode` tri-state, judgment tombstones. `TagRepo` (EnsureTag/AddAssetTags/ImportKeywords/RebuildTagPaths) + `KeywordImporter` seam built; wired into impl/06. Tag-UI backend (Tree/Update/Delete/reparent) + FTS⋈tags deferred |
-| `impl/11-settings-service.md` | **Spec ready, not started.** `settings.json`/`machine.json`/`keybindings.json` — no DB table, supersedes D16's storage mechanism; live mid-run worker-pool resize for the ingest pipeline; debounced hot-reload for external hand-edits while running; unblocks impl/06's `xmpWriteBack`/`xmpConflictResolution` and D18's ignore-list |
+| `impl/11-settings-service.md` | **✅ DONE (2026-07-07)** — `internal/settings`: three JSON files (`settings.json`/`machine.json`/`keybindings.json`), no DB table; generic `configFile[T]` with quarantine + hot-reload; ignore-list + worker counts wired. §5 live mid-run pool resize DEFERRED to impl/12 (DEFERRED §6) |
+| `impl/12-app-host.md` | **Stub, not started (created 2026-07-08).** The Wails composition root + everything that needs a long-running process: startup sequence (integrity check, backup-before-migration floor), watcher supervision (DEFERRED §2), live pool resize (DEFERRED §6). Trigger: seam round completes |
 
 ## Where the project is right now
 

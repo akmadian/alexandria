@@ -31,7 +31,7 @@ what *is*).
 | Pick | What | Area | State |
 |---|---|---|---|
 | **A** | **impl/06 XMP sync — the wiring increment**: DB application across the three writers in one tx, outbound sidecar write (merge + atomic rename), ingest/watcher triggers + per-asset outbound debounce, `xmpWriteBack`/`xmpConflictResolution` settings consumers, watcher-side echo check | Backend | In progress — read path, conflict grid, judgment apply, keyword union all DONE |
-| **B** | **Query-layer round**: the AST→SQL compile authority (the one query builder `QueryAssets`, smart collections, and Review projections reuse). Grammar and token contract already designed | Backend→Seam | Unblocked now — spec in [`seam/01-queries-and-commands.md`](seam/01-queries-and-commands.md); residual decisions in [`backend/04-open-questions.md`](backend/04-open-questions.md) #4 |
+| **B** | **Query-layer round**: the AST→SQL compile authority (the one query builder `QueryAssets`, smart collections, and Review projections reuse). Grammar and token contract already designed. Scope folded in by the 2026-07-08 audit: collections CRUD (`CollectionRepository` has no implementation and no other owner), the prior-state bulk read undo needs, and the FTS⋈tags slice | Backend→Seam | Unblocked now — spec in [`seam/01-queries-and-commands.md`](seam/01-queries-and-commands.md); residual decisions + folded scope in [`backend/04-open-questions.md`](backend/04-open-questions.md) #4 |
 | **C** | **CI wiring** per [`design/ci.md`](design/ci.md) + [`design/repo-hygiene-backend.md`](design/repo-hygiene-backend.md) (+ the `format`/`format:check` script gap in [`design/repo-hygiene-frontend.md`](design/repo-hygiene-frontend.md)) | Ops | Unblocked, parallel to anything |
 
 A and B are independent; do in either order or interleave. C is background-sized.
@@ -47,7 +47,15 @@ query-layer round ───┘   (reconcile contract.ts per the ledger in seam/0
 frontend implementation → view modes → palette/keyboard → task views → Review v1
 signals milestone (ENRICH stage + enrichment jobs, backend/06) → cull force multipliers
 grouping deep-dive (open question #7) → burst/stack collapse
+
+seam round → impl/12 app host (Wails wiring, startup sequence, watcher supervision,
+                               live pool resize — backend/impl/12-app-host.md)
 ```
+
+Unscheduled design tasks (2026-07-08 audit — each needs its own design session, pick up
+deliberately): **mid-scan volume disconnect / walk-completeness** (open question #15 — do before
+the frontend renders missing badges at scale) and **catalog backup system** (open question #16 —
+urgent at first release; the backup-before-migration floor is owned by impl/12).
 
 Deliberately parked (with triggers, don't pick up early): Review automation rules (after Review
 v1 usage), NL→AST local-LLM tier (after deterministic parser), impl/09 LrC migration build
