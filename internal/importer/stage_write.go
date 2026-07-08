@@ -10,6 +10,7 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/sqlite"
+	"github.com/charmbracelet/log"
 )
 
 // WRITE is the single-writer stage: SQLite takes one writer, so this goroutine IS
@@ -81,7 +82,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		// starts losing whole batches to one bad row.
 		pipe.importer.Log.Error("batch commit failed", "items", len(batch), "err", err)
 		for _, item := range batch {
-			pipe.addRunError(item.scanned.relPath, "write", err)
+			pipe.addItemError(item, "write", err)
 		}
 		pipe.errorCount += len(batch)
 		return nil
@@ -155,20 +156,20 @@ func (pipe *pipeline) markThumbnail(ctx context.Context, repos sqlite.Repos, ite
 // (judgments untouched — the writer split makes touching them impossible, and a
 // missing file reappearing at its original path is restored online here).
 // Duplicates also log the pair. This is the unbatched sibling of writeItem.
-func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata, verdict action, existing *domain.Asset) (string, error) {
+func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
 	switch verdict {
 	case actionReimport:
-		imp.Log.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
+		logger.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
 		return existing.ID, imp.Obs.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing))
 
 	default: // actionNew, actionDuplicate
-		imp.Log.Debug("write.persist: new asset detected - minting!", "path", scanned.relPath)
+		logger.Debug("write.persist: new asset detected - minting!", "path", scanned.relPath)
 		asset := buildAsset(domain.NewID(), source, scanned, hash, extractedMetadata)
 		if err := imp.Obs.Create(ctx, asset); err != nil {
 			return "", err
 		}
 		if verdict == actionDuplicate {
-			imp.Log.Debug("write.persist: duplicate detected", "path", scanned.relPath, "assetID", asset.ID)
+			logger.Debug("write.persist: duplicate detected", "path", scanned.relPath, "assetID", asset.ID)
 			return asset.ID, imp.Dups.Log(ctx, &domain.Duplicate{
 				ID:               domain.NewID(),
 				OriginalAssetID:  existing.ID,

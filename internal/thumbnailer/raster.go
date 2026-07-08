@@ -13,7 +13,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
-	"github.com/charmbracelet/log"
 	"golang.org/x/image/draw"
 )
 
@@ -44,7 +43,6 @@ func GenerateRaster(r io.ReadSeeker, sizes []int, quality int, dst func(int) str
 		return fmt.Errorf("decode: %w", err)
 	}
 	for _, size := range sizes {
-		log.Debug("generating thumbnail", "size", size)
 		if err := encodeJPEG(dst(size), fit(src, size), quality); err != nil {
 			return err
 		}

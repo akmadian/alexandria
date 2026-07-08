@@ -183,6 +183,9 @@ func fanStage(group *errgroup.Group, workerCount int, out chan<- *pipelineItem, 
 // emit sends downstream, unblocking on cancellation so no stage wedges on a full
 // channel after the run is torn down.
 func (pipe *pipeline) emit(ctx context.Context, out chan<- *pipelineItem, item *pipelineItem) error {
+	if item.logger == nil {
+		item.logger = pipe.importer.Log.With("asset", item.scanned.filename)
+	}
 	select {
 	case out <- item:
 		return nil
@@ -296,6 +299,13 @@ func (pipe *pipeline) addRunError(relativePath, stage string, err error) {
 	pipe.importer.Log.Warn("file skipped after error", "path", relativePath, "stage", stage, "err", err)
 	pipe.errorsMu.Lock()
 	pipe.runErrors = append(pipe.runErrors, ImportError{Path: relativePath, Stage: stage, Err: err})
+	pipe.errorsMu.Unlock()
+}
+
+func (pipe *pipeline) addItemError(item *pipelineItem, stage string, err error) {
+	item.logger.Warn("file skipped after error", "path", item.scanned.relPath, "stage", stage, "err", err)
+	pipe.errorsMu.Lock()
+	pipe.runErrors = append(pipe.runErrors, ImportError{Path: item.scanned.relPath, Stage: stage, Err: err})
 	pipe.errorsMu.Unlock()
 }
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"io/fs"
 	"time"
+
+	"github.com/charmbracelet/log"
 )
 
 // THUMB generates the thumbnail file (moves and sidecars skip it; a type with no
@@ -26,18 +28,21 @@ func (pipe *pipeline) thumb(ctx context.Context, in <-chan *pipelineItem, out ch
 func (pipe *pipeline) thumbnailOne(item *pipelineItem) {
 	reader, closeReader, err := openSeeker(pipe.fsys, item.scanned.relPath)
 	if err != nil {
+		item.logger.Warn("thumbnail: open failed", "path", item.scanned.relPath, "err", err)
 		item.addError("thumb", "read_failed", err.Error())
 		return
 	}
 	defer closeReader()
 	generated, err := pipe.importer.Thumbnail.Generate(item.scanned.handler.Thumb, reader, item.assetID)
 	if err != nil {
+		item.logger.Warn("thumbnail generation failed", "path", item.scanned.relPath, "err", err)
 		item.addError("thumb", "decode_failed", err.Error())
 		return
 	}
 	if generated {
 		now := time.Now().UTC()
 		item.thumbnailedAt = &now
+		item.logger.Debug("thumbnailed", "path", item.scanned.relPath, "assetID", item.assetID)
 	}
 }
 
@@ -45,20 +50,20 @@ func (pipe *pipeline) thumbnailOne(item *pipelineItem) {
 // thumbnail_at, best-effort — the single-file (watcher) path. Unlike the THUMB
 // stage, it writes thumbnail_at directly (there is no batching txn to fold it
 // into). Skipped when the type has no generator.
-func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, scanned scannedFile, assetID string, verdict action) {
+func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, scanned scannedFile, assetID string, verdict action, logger *log.Logger) {
 	if imp.Thumbnail == nil {
 		return
 	}
 	reader, closeReader, err := openSeeker(fsys, scanned.relPath)
 	if err != nil {
-		imp.Log.Warn("thumbnail: open failed", "path", scanned.relPath, "err", err)
+		logger.Warn("thumbnail: open failed", "path", scanned.relPath, "err", err)
 		return
 	}
 	defer closeReader()
 
 	generated, err := imp.Thumbnail.Generate(scanned.handler.Thumb, reader, assetID)
 	if err != nil {
-		imp.Log.Warn("thumbnail generation failed", "path", scanned.relPath, "err", err)
+		logger.Warn("thumbnail generation failed", "path", scanned.relPath, "err", err)
 		return
 	}
 	if !generated {
@@ -67,8 +72,8 @@ func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, scanned scannedF
 
 	now := time.Now().UTC()
 	if err := imp.Derived.SetThumbnailAt(ctx, assetID, now); err != nil {
-		imp.Log.Warn("thumbnail: recording failed", "path", scanned.relPath, "err", err)
+		logger.Warn("thumbnail: recording failed", "path", scanned.relPath, "err", err)
 		return
 	}
-	imp.Log.Debug("thumbnailed", "path", scanned.relPath, "asset", assetID)
+	logger.Debug("thumbnailed", "path", scanned.relPath, "assetID", assetID)
 }

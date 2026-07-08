@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/charmbracelet/log"
 )
 
 // MATCH is the identity matrix (03-data-model.md §6), run on a single goroutine
@@ -21,7 +22,7 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 			}
 			continue
 		}
-		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, item.scanned, item.hash, inRunHashes)
+		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, item.scanned, item.hash, inRunHashes, item.logger)
 		if err != nil {
 			item.rejected = true
 			item.addError("match", "match_failed", err.Error())
@@ -64,7 +65,7 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 //     asset is a probable move; against a *present* one, a plain duplicate; the
 //     review queue derives which from live status (DEFERRED §5).
 //  3. New: no match → mint.
-func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, inRunHashes map[string]string) (action, *domain.Asset, error) {
+func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, inRunHashes map[string]string, logger *log.Logger) (action, *domain.Asset, error) {
 	// (1) Reimport — something already indexed at this exact path (an in-place edit,
 	// or a missing file reappearing at its ORIGINAL path → reimport restores online).
 	atPath, err := imp.Reader.FindBySourcePath(ctx, source.ID, scanned.relPath)
@@ -72,7 +73,7 @@ func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanne
 		return actionNew, nil, err
 	}
 	if atPath != nil {
-		imp.Log.Debug("reimporting existing asset", "path", scanned.relPath, "assetID", atPath.ID)
+		logger.Debug("reimporting existing asset", "path", scanned.relPath, "assetID", atPath.ID)
 		return actionReimport, atPath, nil
 	}
 
@@ -83,17 +84,15 @@ func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanne
 		return actionNew, nil, err
 	}
 	if contentMatch != nil {
-		imp.Log.Debug("content match — flagging duplicate/probable-move for review", "path", scanned.relPath, "assetID", contentMatch.ID)
+		logger.Debug("content match — flagging duplicate/probable-move for review", "path", scanned.relPath, "assetID", contentMatch.ID)
 		return actionDuplicate, contentMatch, nil
 	}
 	if inRunAssetID, ok := inRunHashes[hash]; ok {
-		// The original was minted this run and isn't committed yet, so FindByHash
-		// can't see it; the in-run map can. Only the ID is needed to log the pair.
-		imp.Log.Debug("in-run content match — flagging duplicate for review", "path", scanned.relPath, "assetID", inRunAssetID)
+		logger.Debug("in-run content match — flagging duplicate for review", "path", scanned.relPath, "assetID", inRunAssetID)
 		return actionDuplicate, &domain.Asset{ID: inRunAssetID}, nil
 	}
 
 	// (3) New.
-	imp.Log.Debug("new asset detected", "path", scanned.relPath)
+	logger.Debug("new asset detected", "path", scanned.relPath)
 	return actionNew, nil, nil
 }

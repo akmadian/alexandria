@@ -103,28 +103,23 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 		imp.Log.Debug("ignored unsupported file", "path", name)
 		return nil
 	}
+	fileLogger := imp.Log.With("asset", scanned.filename)
 	hash, err := hashFile(fsys, scanned)
 	if err != nil {
 		return err
 	}
-	verdict, existing, err := imp.classify(ctx, source, scanned, hash, nil)
+	verdict, existing, err := imp.classify(ctx, source, scanned, hash, nil, fileLogger)
 	if err != nil {
 		return err
 	}
-	extractedMetadata := imp.metadataFor(fsys, scanned, verdict)
-	assetID, err := imp.persist(ctx, source, scanned, hash, extractedMetadata, verdict, existing)
+	extractedMetadata := imp.metadataFor(fsys, scanned, verdict, fileLogger)
+	assetID, err := imp.persist(ctx, source, scanned, hash, extractedMetadata, verdict, existing, fileLogger)
 	if err != nil {
 		return err
 	}
-	imp.thumbnail(ctx, fsys, scanned, assetID, verdict)
-	// The single-path result — the watcher's analog of RunJob's "import finished".
-	imp.Log.Info("ingested file", "source", source.Name, "path", scanned.relPath, "verdict", verdict, "asset", assetID)
+	imp.thumbnail(ctx, fsys, scanned, assetID, verdict, fileLogger)
+	fileLogger.Info("ingested file", "source", source.Name, "path", scanned.relPath, "verdict", verdict, "assetID", assetID)
 	return nil
 }
 
-// recordError logs a per-file failure at warn level and appends it to the given
-// error slice. Shared by the pipeline stages.
-func (imp *Importer) recordError(errs *[]ImportError, path, stage string, err error) {
-	imp.Log.Warn("file skipped after error", "path", path, "stage", stage, "err", err)
-	*errs = append(*errs, ImportError{Path: path, Stage: stage, Err: err})
-}
+
