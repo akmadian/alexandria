@@ -118,10 +118,10 @@ func TestMatrix_InRunDuplicatePair(t *testing.T) {
 	}
 }
 
-// TestMatrix_RelinkOutranksReimport proves the precedence order: an incoming
-// file that matches BOTH a missing asset (content+name) AND an asset at its path
-// (reimport) is relinked, not reimported.
-func TestMatrix_RelinkOutranksReimport(t *testing.T) {
+// TestReimport_RestoresMissingAtOriginalPath proves the path-fidelity that replaces
+// relink (D20): a file that went missing and reappears at its ORIGINAL path is
+// restored online via reimport — same identity, no new row, no review needed.
+func TestReimport_RestoresMissingAtOriginalPath(t *testing.T) {
 	ingester, source, assets := newImporter(t) // helper from importer_test.go
 	ctx := context.Background()
 	content := []byte("the-original-bytes")
@@ -129,20 +129,146 @@ func TestMatrix_RelinkOutranksReimport(t *testing.T) {
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{"b.mp4": {Data: content}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ingester.Reconcile(ctx, source, fstest.MapFS{}); err != nil {
+	original, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4")
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{}); err != nil {
 		t.Fatal(err)
 	}
 	if missing, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4"); missing == nil || missing.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("precondition: b.mp4 should be missing, got %v", missing)
 	}
 
+	// Reappears at the same path → reimport restores it online, same identity.
 	result, err := ingester.Run(ctx, source, fstest.MapFS{"b.mp4": {Data: content}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The path matches (a reimport candidate), but relink wins the verdict.
-	if result.Moved != 1 || result.Updated != 0 {
-		t.Fatalf("relink must outrank reimport: moved=%d updated=%d, want 1/0", result.Moved, result.Updated)
+	if result.Updated != 1 || result.Added != 0 {
+		t.Fatalf("same-path reappearance must reimport, not mint: updated=%d added=%d, want 1/0", result.Updated, result.Added)
+	}
+	restored, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4")
+	if restored.ID != original.ID || restored.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("must restore the same identity online: got id=%s status=%s", restored.ID, restored.FileStatus)
+	}
+}
+
+// TestUnpairedRename_RecordedForReview proves the conservative policy for
+// `mv a.mp4 b.mp4` fed as two independent hints (delete + create, no OS rename
+// pairing): a name change is NOT auto-relinked. Instead the original is left
+// missing and the new path is minted as a distinct asset, LINKED by a pending
+// duplicates row — the "probable move" the review queue surfaces (a duplicate
+// whose original is missing). No judgment is touched. Holds in BOTH orderings.
+func TestUnpairedRename_RecordedForReview(t *testing.T) {
+	content := []byte("bytes-that-get-renamed")
+
+	// Ordering A — the delete graduates first (old already missing when new lands).
+	t.Run("delete-then-create", func(t *testing.T) {
+		ingester, source, assets := newImporter(t)
+		ctx := context.Background()
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"new.mp4": {Data: content}}, "new.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		assertProbableMove(t, assets, source.ID, original.ID)
+	})
+
+	// Ordering B — the create graduates first (both paths exist, then old vanishes).
+	t.Run("create-then-delete", func(t *testing.T) {
+		ingester, source, assets := newImporter(t)
+		ctx := context.Background()
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
+		both := fstest.MapFS{"old.mp4": {Data: content}, "new.mp4": {Data: content}}
+		if err := ingester.IngestFile(ctx, source, both, "new.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"new.mp4": {Data: content}}, "old.mp4"); err != nil {
+			t.Fatal(err)
+		}
+		assertProbableMove(t, assets, source.ID, original.ID)
+	})
+}
+
+// assertProbableMove checks B's end state: two distinct assets (original missing,
+// new online) and a pending duplicates row linking them — the review-queue signal
+// for "probable move", with nothing auto-merged.
+func assertProbableMove(t *testing.T, assets *sqlite.AssetRepo, sourceID, originalID string) {
+	t.Helper()
+	ctx := context.Background()
+	old, _ := assets.FindBySourcePath(ctx, sourceID, "old.mp4")
+	if old == nil || old.ID != originalID || old.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("original must be left MISSING, not merged: got %v", old)
+	}
+	fresh, _ := assets.FindBySourcePath(ctx, sourceID, "new.mp4")
+	if fresh == nil || fresh.ID == originalID || fresh.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("new path must be a distinct online asset: got %v", fresh)
+	}
+	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
+	if len(dups) != 1 {
+		t.Fatalf("a probable move must be recorded as one pending pair, got %d", len(dups))
+	}
+	if dups[0].OriginalAssetID != originalID || dups[0].DuplicateAssetID != fresh.ID {
+		t.Fatalf("pending pair should link original→new: got %+v", dups[0])
+	}
+}
+
+// TestCopyThenDeleteMove_RecordedForReview proves D20: even a same-NAME
+// copy-then-delete "move" (an external app writing to a new dir then deleting the
+// old) is no longer auto-merged. The original is left missing with its judgment
+// intact, the copy is a distinct new asset, and the pair is a pending review row —
+// the user confirms the move. (Under the old delete-side merge this auto-healed.)
+func TestCopyThenDeleteMove_RecordedForReview(t *testing.T) {
+	ingester, source, assets := newImporter(t)
+	ctx := context.Background()
+	content := []byte("photo-content-that-gets-moved")
+
+	// Original, then a user judgment on it (this is what must survive on the missing row).
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{"a/photo.mp4": {Data: content}}); err != nil {
+		t.Fatal(err)
+	}
+	original, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4")
+	if err := assets.ApplyTriagePatch(ctx, []string{original.ID}, catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Copy-then-delete "move": same filename, new dir; old path is gone.
+	result, err := ingester.Run(ctx, source, fstest.MapFS{"b/photo.mp4": {Data: content}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Missing != 1 || result.Added != 1 {
+		t.Fatalf("no auto-merge: want the original missing (1) + the copy minted (1), got missing=%d added=%d", result.Missing, result.Added)
+	}
+
+	all, _ := assets.List(ctx, catalog.AssetFilter{})
+	if len(all) != 2 {
+		t.Fatalf("both identities must survive (no merge): got %d assets, want 2", len(all))
+	}
+	stale, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4")
+	if stale == nil || stale.ID != original.ID || stale.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("original must be left MISSING with identity intact: got %v", stale)
+	}
+	if stale.Rating == nil || *stale.Rating != 5 {
+		t.Fatalf("the user's rating must stay on the missing original: got %v", stale.Rating)
+	}
+	fresh, _ := assets.FindBySourcePath(ctx, source.ID, "b/photo.mp4")
+	if fresh == nil || fresh.ID == original.ID || fresh.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("copy must be a distinct online asset: got %v", fresh)
+	}
+	// The pair is surfaced for review — original(missing) ↔ copy(online).
+	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
+	if len(dups) != 1 {
+		t.Fatalf("the move must be recorded as one pending review pair, got %d", len(dups))
+	}
+	if dups[0].OriginalAssetID != original.ID || dups[0].DuplicateAssetID != fresh.ID {
+		t.Fatalf("pending pair should link original→copy: got %+v", dups[0])
 	}
 }
 

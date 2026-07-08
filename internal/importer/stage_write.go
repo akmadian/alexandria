@@ -10,16 +10,17 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/sqlite"
+	"github.com/charmbracelet/log"
 )
 
 // WRITE is the single-writer stage: SQLite takes one writer, so this goroutine IS
-// the batching point. It accumulates up to writeBatchSize items (or flushes on a
+// the batching point. It accumulates up to pipe.batchSize items (or flushes on a
 // lull, or at stream end) and commits each batch in one transaction via
 // Store.InTx. Cancellation commits the current batch and exits — completed work
 // is never rolled back.
 
 func (pipe *pipeline) write(ctx context.Context, in <-chan *pipelineItem) error {
-	batch := make([]*pipelineItem, 0, writeBatchSize)
+	batch := make([]*pipelineItem, 0, pipe.batchSize)
 	timer := time.NewTimer(writeLull)
 	timer.Stop()
 	defer timer.Stop()
@@ -44,7 +45,7 @@ func (pipe *pipeline) write(ctx context.Context, in <-chan *pipelineItem) error 
 				timer.Reset(writeLull)
 			}
 			batch = append(batch, item)
-			if len(batch) >= writeBatchSize {
+			if len(batch) >= pipe.batchSize {
 				timer.Stop()
 				if err := flush(); err != nil {
 					return err
@@ -81,7 +82,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		// starts losing whole batches to one bad row.
 		pipe.importer.Log.Error("batch commit failed", "items", len(batch), "err", err)
 		for _, item := range batch {
-			pipe.addRunError(item.scanned.relPath, "write", err)
+			pipe.addItemError(item, "write", err)
 		}
 		pipe.errorCount += len(batch)
 		return nil
@@ -117,11 +118,6 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 
 	mergeMarker(&item.extractedMetadata, item.mismatchMarker)
 	switch item.verdict {
-	case actionMove:
-		if err := repos.Assets.UpdatePath(ctx, item.assetID, pipe.source.ID, item.scanned.relPath); err != nil {
-			return err
-		}
-		return repos.Assets.SetFileStatus(ctx, item.assetID, domain.FileStatusOnline)
 	case actionReimport:
 		if err := repos.Assets.ApplyFilePatch(ctx, item.assetID, reimportFilePatch(item.scanned, item.hash, item.extractedMetadata, item.existing)); err != nil {
 			return err
@@ -157,26 +153,23 @@ func (pipe *pipeline) markThumbnail(ctx context.Context, repos sqlite.Repos, ite
 
 // persist applies the decided verdict on the single-file (watcher) path. New and
 // duplicate mint a fresh asset; reimport refreshes observation columns ONLY
-// (judgments untouched — the writer split makes touching them impossible); move
-// relinks the existing record. Duplicates also log the pair. This is the
-// unbatched sibling of writeItem.
-func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata, verdict action, existing *domain.Asset) (string, error) {
+// (judgments untouched — the writer split makes touching them impossible, and a
+// missing file reappearing at its original path is restored online here).
+// Duplicates also log the pair. This is the unbatched sibling of writeItem.
+func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
 	switch verdict {
-	case actionMove:
-		if err := imp.Obs.UpdatePath(ctx, existing.ID, source.ID, scanned.relPath); err != nil {
-			return "", err
-		}
-		return existing.ID, imp.Obs.SetFileStatus(ctx, existing.ID, domain.FileStatusOnline)
-
 	case actionReimport:
+		logger.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
 		return existing.ID, imp.Obs.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing))
 
 	default: // actionNew, actionDuplicate
+		logger.Debug("write.persist: new asset detected - minting!", "path", scanned.relPath)
 		asset := buildAsset(domain.NewID(), source, scanned, hash, extractedMetadata)
 		if err := imp.Obs.Create(ctx, asset); err != nil {
 			return "", err
 		}
 		if verdict == actionDuplicate {
+			logger.Debug("write.persist: duplicate detected", "path", scanned.relPath, "assetID", asset.ID)
 			return asset.ID, imp.Dups.Log(ctx, &domain.Duplicate{
 				ID:               domain.NewID(),
 				OriginalAssetID:  existing.ID,

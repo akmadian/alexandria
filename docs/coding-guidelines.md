@@ -233,16 +233,46 @@ the same shape as stdlib `slog`):
 - We use charm *directly*, not as an `slog` handler, because routing through
   `slog` misattributes `ReportCaller` (extra call frames).
 
-**Keep output readable — logs here are for a human watching a terminal, not a
-wall of text:**
+**Log comprehensively — a running system must narrate itself.** This is an
+expectation, not a nicety: when you add a flow, you add its logging in the same
+change. Under-logging a new path (a silent ingest, an untraced state change) is a
+review defect, the same as a missing test. The system runs headless behind a UI,
+so the log is often the only window into what the engine did and why. What MUST be
+logged, by level:
 
-- One line per event, short imperative message.
-- Attach only the few key/values that matter (`"path", p, "err", err`). Never
-  dump whole structs or the `ExtendedMetadata` map into a log line.
-- Use levels so a clean run is quiet: `Debug` for skipped/expected, `Info` for
-  milestones, `Warn` for per-file recoverable failures, `Error` for the rare
-  serious ones (§6 pipeline error policy).
-- `ReportCaller` + timestamps are the ceiling of decoration. Resist adding more.
+- **`Info` — milestones, results, and state transitions. A clean run still tells
+  its story at this level.** Every one of these earns a line:
+  - *Lifecycle boundaries:* a service/watcher/loop starting and stopping, a source
+    subscribed, a run beginning.
+  - *Workflow results:* the outcome of a unit of work, carrying its verdict/counts/
+    ids — `import finished … added=N updated=N missing=N`, a single-file
+    `ingested file … verdict=move asset=…`, `marked asset missing …`, a relink/
+    merge. If work completed and nothing was logged, that's the defect.
+  - *Significant state transitions:* connectivity online↔offline, mode
+    events↔polling, degrade-to-polling, overflow→reconcile.
+- **`Debug` — the per-item / per-event play-by-play.** Each event received, each
+  path armed/rearmed/graduated, each skip (ignored/unsupported), each probe tick.
+  Verbose by design; the dev harness runs at this level to watch the engine work.
+- **`Warn` — expected, recoverable per-item failures** (a file skipped after a
+  stage error → still a DLQ row; §6 error policy).
+- **`Error` — the rare serious failures** (a whole reconcile failed, a sanctioned
+  write failed).
+
+**Keep each line readable — comprehensive is about coverage, not verbosity per
+line:**
+
+- One line per event, short imperative message; put the detail in key/values.
+- Attach only the few key/values that matter (`"path", p, "verdict", v, "asset",
+  id`, `"err", err`). Never dump whole structs or the `ExtendedMetadata` map.
+- Prefer a subsystem prefix on the message so a mixed stream is greppable
+  (`"watcher: source offline"`, `"write.persist: …"`).
+- `ReportCaller` + timestamps are the ceiling of *decoration*. Resist adding more
+  formatting — spend the effort on coverage and good key/values instead.
+
+The balance to strike: `Info` should read like a coherent narrative of what
+happened (milestones + results), `Debug` fills in every step for when that
+narrative isn't enough. Choosing silence over a milestone line is the mistake this
+section exists to prevent.
 
 ---
 
@@ -419,6 +449,27 @@ reference style.
 
 ---
 
+## 10. Seam methods: a new method needs a new result *shape*, never a new *predicate*
+
+`QueryAssets(query, arrangement, page)` absorbs every predicate over assets —
+filter by tag, browse a folder, smart collection contents, search, threshold on
+a signal column. Predicates are query-AST nodes, not methods.
+
+- **Smell: a method name containing a predicate** — `GetSharpAssets`,
+  `GetAssetsByTagSortedByDate`. That's an AST node trying to escape into the
+  seam. Add a token type to the query vocabulary instead.
+- A new seam/binding method is justified only by a new **result shape**: a tree
+  with counts, duplicate cluster pairs, a job envelope — something
+  `[]domain.Asset` can't carry.
+- Same discipline on writes: metadata changes go through the one
+  `UpdateAssets(ids, patch)` patch struct, not per-field setters.
+
+Rationale and the full seam design: `project-tracking/frontend/01-constants.md`
+(C7) and `project-tracking/frontend/04-query-system.md`. The failure mode this
+prevents is 200 narrow methods each supporting some permutation of filters.
+
+---
+
 ## Quick checklist for a new file
 
 1. Is this package named for a *feature/concern*, not a technical kind
@@ -433,6 +484,8 @@ reference style.
 9. One small test that fails if I break the logic?
 10. Is every name spelled in full (no `md`/`sf`/`fp`/`it`), except the sanctioned
     short set (`i/j/k`, `err`/`ctx`/`ok`/`id`/`db`/`tx`, short method receivers)?
+11. Adding a seam/query method? Does it return a genuinely new result shape, or
+    is it a predicate in disguise (§10)?
 
 ## Sources
 

@@ -1,0 +1,207 @@
+package xmp
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/akmadian/alexandria/internal/catalog"
+	"github.com/akmadian/alexandria/internal/dependency"
+	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/cespare/xxhash/v2"
+	"github.com/charmbracelet/log"
+)
+
+// Syncer reconciles one asset against its sidecar. This increment implements the
+// INBOUND JUDGMENT application only — rating and color label via the sync writer
+// (AssetSyncWriter.ApplyXMPInbound, which by construction never bumps
+// judgment_modified_at, so applying a sidecar can never masquerade as a user edit
+// and trigger an outbound write: the D15 loop-prevention level 2).
+//
+// Deliberately NOT here yet, each blocked on infrastructure that does not exist:
+//   - Keyword union (dc:subject/lr:hierarchicalSubject → asset_tags source='xmp')
+//     needs the whole tag repository (find-or-create, hierarchy nodes, FTS tags
+//     maintenance) — deferred from impl/04, not built. NOTE when it lands: tags are
+//     the documented exception to the wholesale/clear-on-absence rule below — they
+//     always UNION, never delete on absence (impl/06 "Tags exception").
+//   - Caption/title (dc:description/dc:title → observation columns) needs a sparse
+//     observation-metadata writer; ApplyFilePatch always rewrites the file-fact
+//     columns, so it would clobber them with zeros here.
+//   - Outbound writes (write-back) — a separate increment with its own settings.
+//
+// So WriteBackEnabled is hard-wired false and outbound/catalog-wins verdicts are
+// logged and skipped. Inbound rating/label is the complete, testable slice.
+type Syncer struct {
+	daemon   *dependency.ExiftoolDaemon
+	writer   catalog.AssetSyncWriter
+	keywords catalog.TagRepository // nil = skip tag union (e.g. judgment-only tests)
+	policy   ConflictPolicy
+	logger   *log.Logger
+}
+
+func NewSyncer(daemon *dependency.ExiftoolDaemon, writer catalog.AssetSyncWriter, keywords catalog.TagRepository, policy ConflictPolicy, logger *log.Logger) *Syncer {
+	if logger == nil {
+		logger = log.Default()
+	}
+	return &Syncer{daemon: daemon, writer: writer, keywords: keywords, policy: policy, logger: logger}
+}
+
+// SyncSidecar reconciles asset against the sidecar file at sidecarPath and returns
+// the action taken. The asset carries the sync-state cursors the conflict decision
+// reads; the caller (ingest / watcher hint) supplies the freshly-loaded asset.
+func (s *Syncer) SyncSidecar(ctx context.Context, asset *domain.Asset, sidecarPath string) (Action, error) {
+	content, err := os.ReadFile(sidecarPath)
+	if err != nil {
+		return "", fmt.Errorf("xmp: read sidecar %s: %w", sidecarPath, err)
+	}
+	hash := HashSidecar(content)
+
+	state := SyncState{
+		SidecarChanged:   asset.XMPHash == nil || *asset.XMPHash != hash,
+		CatalogChanged:   catalogChanged(asset),
+		WriteBackEnabled: false, // outbound write-back is a later increment
+	}
+	action := Decide(state, s.policy)
+	s.logger.Debug("xmp: sync decision", "asset", asset.ID, "sidecar", sidecarPath,
+		"action", action, "sidecarChanged", state.SidecarChanged, "catalogChanged", state.CatalogChanged)
+
+	inbound := action == ActionApplyInbound || (action == ActionConflict && s.policy.InboundWins())
+
+	// Tags are the documented exception to the judgment policy: they always UNION,
+	// both directions, never delete on absence (impl/06). So we read + union keywords
+	// whenever the SIDECAR changed — even under catalog_wins, where the judgment
+	// verdict is outbound — as long as a keyword importer is wired.
+	unionTags := state.SidecarChanged && s.keywords != nil
+	if !inbound && !unionTags {
+		if action != ActionNoop {
+			s.logger.Info("xmp: outbound sync pending (write-back not implemented)",
+				"asset", asset.ID, "action", action)
+		}
+		return action, nil
+	}
+
+	fields, err := Read(ctx, s.daemon, sidecarPath)
+	if err != nil {
+		return action, err
+	}
+
+	if inbound {
+		patch := s.toTriagePatch(fields, asset.ID)
+		if err := s.writer.ApplyXMPInbound(ctx, asset.ID, patch, time.Now().UTC(), hash); err != nil {
+			return action, fmt.Errorf("xmp: apply inbound %s: %w", asset.ID, err)
+		}
+		s.logger.Info("xmp: applied inbound judgment", "asset", asset.ID, "action", action,
+			"rating", patch.Rating.Set, "label", patch.ColorLabel.Set)
+	}
+
+	if unionTags && (len(fields.Tags) > 0 || len(fields.Hierarchical) > 0) {
+		hierarchical := splitHierarchical(fields.Hierarchical)
+		if err := s.keywords.ImportKeywords(ctx, asset.ID, fields.Tags, hierarchical, "xmp"); err != nil {
+			return action, fmt.Errorf("xmp: import keywords %s: %w", asset.ID, err)
+		}
+		s.logger.Info("xmp: unioned keywords", "asset", asset.ID,
+			"flat", len(fields.Tags), "hierarchical", len(hierarchical))
+	}
+
+	if fields.Caption != "" || fields.Title != "" {
+		s.logger.Debug("xmp: caption/title present but not yet applied (pending sparse observation writer)",
+			"asset", asset.ID, "hasCaption", fields.Caption != "", "hasTitle", fields.Title != "")
+	}
+	return action, nil
+}
+
+// splitHierarchical turns lr:hierarchicalSubject strings ("Travel|Japan|Tokyo")
+// into per-node chains for ImportKeywords, dropping empty segments. Keeping the
+// "|" convention here leaves the tag repo format-agnostic.
+func splitHierarchical(paths []string) [][]string {
+	var out [][]string
+	for _, path := range paths {
+		var chain []string
+		for _, part := range strings.Split(path, "|") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				chain = append(chain, trimmed)
+			}
+		}
+		if len(chain) > 0 {
+			out = append(out, chain)
+		}
+	}
+	return out
+}
+
+// toTriagePatch maps the judgment subset of a sidecar onto a TriagePatch. Inbound
+// apply is WHOLESALE, not an overlay: the sidecar is authoritative, so a field it
+// omits CLEARS the catalog value. This is what upholds the conflict policy — under
+// xmp_wins the sidecar wins including its removals (matching LrC "Read Metadata");
+// under catalog_wins we never reach here (that verdict writes outbound instead), so
+// the catalog is upheld either way. Clearing is safe because the 3-way merge already
+// routed any user judgment newer than the last sync to a conflict — a plain
+// apply-inbound only clears state that was already in sync, i.e. a genuine sidecar
+// removal. Note is never synced (Alexandria-private); flag lives in a custom
+// namespace we don't read yet (best-effort, open question #8) so it stays untouched.
+func (s *Syncer) toTriagePatch(fields Fields, assetID string) catalog.TriagePatch {
+	var patch catalog.TriagePatch
+
+	switch {
+	case fields.Rating == nil:
+		patch.Rating = domain.ClearOpt[int]()
+	case *fields.Rating >= 0 && *fields.Rating <= 5:
+		patch.Rating = domain.SetOpt(*fields.Rating)
+	default:
+		// XMP ratings range -1..5 (-1 = "rejected"); our schema's CHECK allows only
+		// 0..5. An unrepresentable value clears rather than leaving a stale rating —
+		// still upholding "sidecar wins". Never mapped onto flag (lossy, opt-in P3, D15).
+		patch.Rating = domain.ClearOpt[int]()
+		s.logger.Warn("xmp: rating out of range, cleared", "asset", assetID, "rating", *fields.Rating)
+	}
+
+	if label, ok := NormalizeLabel(fields.Label); ok {
+		patch.ColorLabel = domain.SetOpt(label)
+	} else {
+		// Empty or unrecognized: the field map leaves color_label unset (the raw
+		// string is preserved for round-trip by the outbound write, once it exists).
+		patch.ColorLabel = domain.ClearOpt[domain.ColorLabel]()
+		if fields.Label != "" {
+			s.logger.Warn("xmp: unrecognized color label, left unset", "asset", assetID, "label", fields.Label)
+		}
+	}
+	return patch
+}
+
+// catalogChanged reports whether a user judgment postdates the last sync in either
+// direction — the "catalog changed?" input to the 3-way merge. A never-judged asset
+// has not changed; a judged-but-never-synced asset has.
+func catalogChanged(asset *domain.Asset) bool {
+	if asset.JudgmentModifiedAt == nil {
+		return false
+	}
+	lastSync := laterTime(asset.XMPLastReadAt, asset.XMPLastWrittenAt)
+	if lastSync == nil {
+		return true
+	}
+	return asset.JudgmentModifiedAt.After(*lastSync)
+}
+
+func laterTime(a, b *time.Time) *time.Time {
+	switch {
+	case a == nil:
+		return b
+	case b == nil:
+		return a
+	case b.After(*a):
+		return b
+	default:
+		return a
+	}
+}
+
+// HashSidecar is the sync-state fingerprint of a sidecar's raw bytes. It is
+// xmp-sync's OWN cursor (stored in assets.xmp_hash and compared only against
+// itself), so the algorithm is free — it just has to be stable and shared with the
+// watcher's file-level echo check (D15 loop-prevention level 1), which compares an
+// on-disk sidecar to xmp_hash to drop our own write-back echoes.
+func HashSidecar(content []byte) string {
+	return fmt.Sprintf("%x", xxhash.Sum64(content))
+}

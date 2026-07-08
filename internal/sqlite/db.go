@@ -30,6 +30,7 @@ type Repos struct {
 	Dups     *DuplicateRepo
 	Sidecars *SidecarRepo
 	Imports  *ImportRepo
+	Tags     *TagRepo
 }
 
 func reposFor(q DBTX) Repos {
@@ -39,6 +40,7 @@ func reposFor(q DBTX) Repos {
 		Dups:     &DuplicateRepo{DB: q},
 		Sidecars: &SidecarRepo{DB: q},
 		Imports:  &ImportRepo{DB: q},
+		Tags:     &TagRepo{DB: q},
 	}
 }
 
@@ -69,4 +71,13 @@ func (s *Store) InTx(ctx context.Context, fn func(Repos) error) (err error) {
 		return err
 	}
 	return tx.Commit()
+}
+
+// ImportKeywords runs a whole keyword import in one transaction so the EnsureTag
+// calls building a hierarchy share it (a half-built chain never commits). This is
+// the seam the XMP Syncer / LrC migration hold as catalog.TagRepository.
+func (s *Store) ImportKeywords(ctx context.Context, assetID string, flat []string, hierarchical [][]string, source string) error {
+	return s.InTx(ctx, func(r Repos) error {
+		return r.Tags.ImportKeywords(ctx, assetID, flat, hierarchical, source)
+	})
 }

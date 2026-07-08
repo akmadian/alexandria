@@ -5,6 +5,7 @@ import (
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
+	"github.com/charmbracelet/log"
 )
 
 // action is the identity-matrix verdict for one hashed file (03-data-model.md §6).
@@ -13,7 +14,6 @@ type action int
 const (
 	actionNew action = iota
 	actionReimport
-	actionMove
 	actionDuplicate
 )
 
@@ -23,8 +23,6 @@ func (a action) String() string {
 		return "new"
 	case actionReimport:
 		return "reimport"
-	case actionMove:
-		return "move"
 	case actionDuplicate:
 		return "duplicate"
 	default:
@@ -36,6 +34,7 @@ func (a action) String() string {
 // fields. It is the shared state the six stage files (stage_*.go) read and write
 // as it flows SCAN → HASH → MATCH → EXTRACT → THUMB → WRITE.
 type pipelineItem struct {
+	logger            *log.Logger // child logger with "asset" key baked in
 	scanned           scannedFile
 	isSidecar         bool
 	head              []byte // first ≤64KB, held only across HASH (for Sniff), then released

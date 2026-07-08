@@ -7,8 +7,9 @@ require (
 	github.com/charmbracelet/log v1.0.0
 	github.com/dsoprea/go-exif/v3 v3.0.1
 	github.com/google/uuid v1.6.0
+	github.com/rjeczalik/notify v0.9.3
 	golang.org/x/image v0.43.0
-	golang.org/x/sync v0.20.0
+	golang.org/x/sync v0.21.0
 	modernc.org/sqlite v1.53.0
 )
 

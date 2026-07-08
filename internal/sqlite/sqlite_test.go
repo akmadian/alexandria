@@ -432,8 +432,8 @@ func TestSchema_RootTagSlugConflict(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	insert := func(id string) error {
 		_, err := db.ExecContext(ctx,
-			`INSERT INTO tags (id, name, slug, parent_id, created_at) VALUES (?, 'Travel', 'travel', NULL, ?)`,
-			id, now)
+			`INSERT INTO tags (id, name, slug, parent_id, path, created_at) VALUES (?, 'Travel', 'travel', NULL, '/'||?||'/', ?)`,
+			id, id, now)
 		return err
 	}
 	if err := insert("t1"); err != nil {
@@ -451,7 +451,7 @@ func TestSchema_FKCascadeOnTagDelete(t *testing.T) {
 	a := testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, created_at) VALUES ('tag1', 'Beach', 'beach', ?)`, now); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('tag1', 'Beach', 'beach', '/tag1/', ?)`, now); err != nil {
 		t.Fatalf("tag: %v", err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 'tag1', 'user', ?)`, a.ID, now); err != nil {
@@ -480,7 +480,7 @@ func TestRebuildFTS_IncludesTags(t *testing.T) {
 	a := testutil.NewTestAsset(t, db, src.ID, "img.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, created_at) VALUES ('t1', 'Landscape', 'landscape', ?)`, now)
+	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Landscape', 'landscape', '/t1/', ?)`, now)
 	db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 't1', 'user', ?)`, a.ID, now)
 
 	if err := sqlite.RebuildFTS(ctx, db); err != nil {

@@ -19,30 +19,19 @@ It is designed for solo creative professionals: photographers, designers, videog
 
 ## Status
 
-Pre-implementation. Architecture and requirements fully defined. See `/docs` for comprehensive design documentation.
+Active development, pre-release. **Not currently accepting external contributions.**
 
 ## Documentation
 
-| Document | Contents |
-|---|---|
-| [Vision & Requirements](docs/01-vision-and-requirements.md) | What we're building, target user, competitive landscape |
-| [Architecture Overview](docs/02-architecture.md) | Core architectural decisions and rationale |
-| [Database Schema](docs/03-schema.md) | Full SQLite schema with field-level documentation |
-| [Domain Model & Interfaces](docs/04-domain-model.md) | Go package structure, domain types, platform interfaces |
-| [Ingest Pipeline](docs/05-ingest-pipeline.md) | Import flow, pipeline stages, idempotency, error handling |
-| [Watcher Service](docs/06-watcher-service.md) | File watching, network polling, volume monitoring |
-| [XMP Sync](docs/07-xmp-sync.md) | Lightroom interop, XMP read/write, conflict resolution |
-| [State & Commands](docs/08-state-and-commands.md) | Undo/redo, command pattern, backend state management |
-| [Startup Sequence](docs/09-startup-sequence.md) | App initialisation order, migration, graceful degradation |
-| [Error Handling](docs/10-error-handling.md) | Error tiers, typed errors, logging strategy |
-| [Testing Strategy](docs/11-testing-strategy.md) | Test philosophy, table-driven tests, testutil patterns |
-| [Schema Migrations](docs/12-migrations.md) | Migration system, schema evolution principles |
-| [Keybindings](docs/13-keybindings.md) | Platform-aware shortcuts, conflict detection, configurability |
-| [Deferred Features](docs/14-deferred.md) | P1 and future features with rationale for deferral |
+Alexandria's design rationale lives in `docs/`, not in code comments — start here:
+
+- [`docs/project-tracking/backend/00-START-HERE.md`](docs/project-tracking/backend/00-START-HERE.md) — the current design handoff and decision log (the "why" behind the architecture)
+- [`docs/functional-requirements.md`](docs/functional-requirements.md) — the feature backlog and roadmap, prioritized
+- [`docs/coding-guidelines.md`](docs/coding-guidelines.md) — Go conventions used throughout the codebase
 
 ## Tech stack
 
-- **Language:** Go
-- **Desktop framework:** Wails v2
-- **Database:** SQLite (via WAL mode)
+- **Backend:** Go, SQLite (WAL mode)
+- **Frontend:** React, TypeScript, Vite (package management via Bun)
+- **Desktop runtime:** not yet finalized — an open decision, not a commitment
 - **License:** GPL v3

@@ -130,7 +130,42 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	}
 }
 
-func TestReconcile_MarksMissingAndRestores(t *testing.T) {
+// TestIngestFile_GonePathMarksMissing proves the impl/05 corrected model: a
+// watcher-fed path that no longer exists is marked missing by the IMPORTER's
+// single-path entry (the watcher hands over a path, never a verdict). This is the
+// same action the walk-end diff takes, in one place.
+func TestIngestFile_GonePathMarksMissing(t *testing.T) {
+	imp, src, assets := newImporter(t)
+	ctx := context.Background()
+	if _, err := imp.Run(ctx, src, fstest.MapFS{"a.jpg": {Data: []byte("a")}}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// The file is gone; the watcher feeds its path to the single-path entry.
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{}, "a.jpg"); err != nil {
+		t.Fatalf("ingest gone path: %v", err)
+	}
+	a, _ := assets.FindBySourcePath(ctx, src.ID, "a.jpg")
+	if a == nil || a.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("a.jpg status = %v, want missing", a)
+	}
+
+	// A second gone-event for the same (now-missing) path is a no-op, not an error.
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{}, "a.jpg"); err != nil {
+		t.Fatalf("repeat gone path: %v", err)
+	}
+	// An unknown gone path is a no-op too.
+	if err := imp.IngestFile(ctx, src, fstest.MapFS{}, "never-seen.jpg"); err != nil {
+		t.Fatalf("unknown gone path: %v", err)
+	}
+}
+
+// TestWalk_MarksMissingThenRestores proves the full walk (Run) subsumes the old
+// standalone reconcile (retired in impl/05.3): an unvisited known file is marked
+// missing, and reappears online on the next walk (reimport restores it at its
+// original path — D20, no relink). Whole-source-offline is no longer the importer's
+// job — the watcher's poll monitor owns it (see internal/watcher poll tests).
+func TestWalk_MarksMissingThenRestores(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	ctx := context.Background()
 	full := fstest.MapFS{
@@ -141,55 +176,32 @@ func TestReconcile_MarksMissingAndRestores(t *testing.T) {
 		t.Fatalf("import: %v", err)
 	}
 
-	// b.jpg vanished from disk.
-	res, err := imp.Reconcile(ctx, src, fstest.MapFS{"a.jpg": full["a.jpg"]})
+	// b.jpg vanished: a walk that doesn't visit it marks it missing.
+	res, err := imp.Run(ctx, src, fstest.MapFS{"a.jpg": full["a.jpg"]})
 	if err != nil {
-		t.Fatalf("reconcile: %v", err)
+		t.Fatalf("walk: %v", err)
 	}
-	if res.Missing != 1 || res.Restored != 0 {
-		t.Fatalf("reconcile: missing=%d restored=%d, want 1/0", res.Missing, res.Restored)
+	if res.Missing != 1 {
+		t.Fatalf("walk: missing=%d, want 1", res.Missing)
 	}
 	b, _ := assets.FindBySourcePath(ctx, src.ID, "b.jpg")
 	if b == nil || b.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("b.jpg status = %v, want missing", b)
 	}
 
-	// b.jpg came back.
-	res, err = imp.Reconcile(ctx, src, full)
-	if err != nil {
-		t.Fatalf("reconcile back: %v", err)
-	}
-	if res.Restored != 1 {
-		t.Fatalf("reconcile: restored=%d, want 1", res.Restored)
+	// b.jpg came back at its original path: reimport restores it online.
+	if _, err := imp.Run(ctx, src, full); err != nil {
+		t.Fatalf("walk back: %v", err)
 	}
 	if b, _ = assets.FindBySourcePath(ctx, src.ID, "b.jpg"); b.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("b.jpg status = %q, want online", b.FileStatus)
 	}
 }
 
-func TestReconcile_SourceOfflineMarksAllOffline(t *testing.T) {
-	imp, src, assets := newImporter(t)
-	ctx := context.Background()
-	if _, err := imp.Run(ctx, src, fstest.MapFS{"a.jpg": {Data: []byte("a")}}); err != nil {
-		t.Fatalf("import: %v", err)
-	}
-	// Unreachable filesystem: a nonexistent directory.
-	res, err := imp.Reconcile(ctx, src, os.DirFS(filepath.Join(t.TempDir(), "gone")))
-	if err != nil {
-		t.Fatalf("reconcile: %v", err)
-	}
-	if res.Missing != 0 {
-		t.Fatalf("offline source must not mark files missing, got missing=%d", res.Missing)
-	}
-	a, _ := assets.FindBySourcePath(ctx, src.ID, "a.jpg")
-	if a.FileStatus != domain.FileStatusOffline {
-		t.Fatalf("a.jpg status = %q, want offline", a.FileStatus)
-	}
-}
-
-// The capstone: reconcile + import together relink a moved file instead of
-// duplicating it — the pipeline's most important protection, now active.
-func TestMoveRelink_AfterReconcile(t *testing.T) {
+// TestWalk_FolderReorgRecordsMove proves D20 for the walk path: a file moved to a
+// new dir (folder reorg) is NOT relinked — the old path goes missing, the new path
+// is a distinct asset, and the pair is a pending review row for the user to confirm.
+func TestWalk_FolderReorgRecordsMove(t *testing.T) {
 	imp, src, assets := newImporter(t)
 	ctx := context.Background()
 	content := []byte("the same photo bytes")
@@ -197,24 +209,20 @@ func TestMoveRelink_AfterReconcile(t *testing.T) {
 	if _, err := imp.Run(ctx, src, fstest.MapFS{"old/photo.jpg": {Data: content}}); err != nil {
 		t.Fatalf("import: %v", err)
 	}
-	// Folder reorganized while the app was closed: the old path is gone.
-	if _, err := imp.Reconcile(ctx, src, fstest.MapFS{}); err != nil {
-		t.Fatalf("reconcile: %v", err)
-	}
-	// Re-import finds the same file (same name + content) at a new path.
+	// Folder reorganized while the app was closed: old path gone, same file at a new path.
 	res, err := imp.Run(ctx, src, fstest.MapFS{"new/photo.jpg": {Data: content}})
 	if err != nil {
 		t.Fatalf("re-import: %v", err)
 	}
-	if res.Moved != 1 || res.Added != 0 {
-		t.Fatalf("re-import: moved=%d added=%d, want 1/0 (relink, not duplicate)", res.Moved, res.Added)
+	if res.Added != 1 || res.Missing != 1 {
+		t.Fatalf("folder reorg must mint the new path (1) + mark old missing (1), got added=%d missing=%d", res.Added, res.Missing)
 	}
-	all, _ := assets.List(ctx, catalog.AssetFilter{IncludeDeleted: true})
-	if len(all) != 1 {
-		t.Fatalf("expected 1 relinked asset, got %d (duplicated?)", len(all))
+	all, _ := assets.List(ctx, catalog.AssetFilter{})
+	if len(all) != 2 {
+		t.Fatalf("no relink: expected 2 distinct assets, got %d", len(all))
 	}
-	if all[0].RelativePath != "new/photo.jpg" || all[0].FileStatus != domain.FileStatusOnline {
-		t.Fatalf("relinked asset at %q status %q, want new/photo.jpg online",
-			all[0].RelativePath, all[0].FileStatus)
+	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
+	if len(dups) != 1 {
+		t.Fatalf("the move must be recorded as one pending review pair, got %d", len(dups))
 	}
 }

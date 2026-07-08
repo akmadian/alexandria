@@ -29,30 +29,43 @@ import (
 // point.
 
 const (
-	writeBatchSize = 50
-	writeLull      = 500 * time.Millisecond
+	// defaultBatchSize is the fallback rows-per-WRITE-transaction when Settings
+	// carries none (a bare Importer{}); the live value is Settings.ImportBatchSize.
+	defaultBatchSize = 50
+	writeLull        = 500 * time.Millisecond
 )
 
-// poolSizes are the per-stage worker counts. Hardcoded defaults for now; the
-// machine.json config that tunes them per host arrives in a later milestone.
+// poolSizes are the per-stage worker counts.
 type poolSizes struct{ hash, extract, thumb int }
 
+// defaultPools is the fallback per-stage worker count when Machine carries none
+// (a zero count for a stage); the live source is Machine.Workers.Ingest.
 var defaultPools = poolSizes{hash: 4, extract: 2, thumb: 2}
 
-// resolvePools applies the Importer's per-field overrides on top of the defaults
-// (a zero override keeps the default).
+// resolvePools reads the machine-scoped worker counts (settings-owned), falling
+// back to defaultPools for any stage left at zero.
 func resolvePools(imp *Importer) poolSizes {
 	pools := defaultPools
-	if imp.HashWorkers > 0 {
-		pools.hash = imp.HashWorkers
+	ingest := imp.Machine.Workers.Ingest
+	if ingest.Hash > 0 {
+		pools.hash = ingest.Hash
 	}
-	if imp.ExtractWorkers > 0 {
-		pools.extract = imp.ExtractWorkers
+	if ingest.Extract > 0 {
+		pools.extract = ingest.Extract
 	}
-	if imp.ThumbWorkers > 0 {
-		pools.thumb = imp.ThumbWorkers
+	if ingest.Thumb > 0 {
+		pools.thumb = ingest.Thumb
 	}
 	return pools
+}
+
+// resolveBatchSize reads the settings-owned WRITE batch size, falling back to
+// defaultBatchSize when unset.
+func resolveBatchSize(imp *Importer) int {
+	if imp.Settings.ImportBatchSize > 0 {
+		return imp.Settings.ImportBatchSize
+	}
+	return defaultBatchSize
 }
 
 // pipeline is the per-run state. Field ownership is by goroutine, which is what
@@ -67,6 +80,7 @@ type pipeline struct {
 	sessionID string
 	jobID     string
 	pools     poolSizes
+	batchSize int
 
 	// SCAN-owned (read after the run drains).
 	visited      map[string]struct{}
@@ -96,6 +110,7 @@ func newPipeline(importer *Importer, source *domain.Source, fsys fs.FS, known ma
 		sessionID:    sessionID,
 		jobID:        jobID,
 		pools:        resolvePools(importer),
+		batchSize:    resolveBatchSize(importer),
 		visited:      make(map[string]struct{}, len(known)),
 		unknownTally: map[string]int{},
 		ignoredTally: map[string]int{},
@@ -183,6 +198,9 @@ func fanStage(group *errgroup.Group, workerCount int, out chan<- *pipelineItem, 
 // emit sends downstream, unblocking on cancellation so no stage wedges on a full
 // channel after the run is torn down.
 func (pipe *pipeline) emit(ctx context.Context, out chan<- *pipelineItem, item *pipelineItem) error {
+	if item.logger == nil {
+		item.logger = pipe.importer.Log.With("asset", item.scanned.filename)
+	}
 	select {
 	case out <- item:
 		return nil
@@ -225,8 +243,6 @@ func (pipe *pipeline) tally(item *pipelineItem) {
 		pipe.addedCount++
 	case actionReimport:
 		pipe.updatedCount++
-	case actionMove:
-		pipe.movedCount++
 	case actionDuplicate:
 		pipe.addedCount++
 		pipe.duplicateCount++
@@ -234,43 +250,77 @@ func (pipe *pipeline) tally(item *pipelineItem) {
 }
 
 // markMissing flips online→missing for known assets whose paths the walk didn't
-// visit. It re-reads status AFTER the run so a relinked asset (path updated
-// mid-run) shows its new, visited path and is correctly left alone.
+// visit. Per D20 the walk never auto-relinks or auto-merges a "move": a file that
+// reappeared at a NEW path was already minted as a new asset + a pending review
+// row, so here we simply mark the unvisited-but-known assets missing and leave the
+// move/duplicate resolution to the user. A file that reappears at its ORIGINAL
+// path is visited and restored via reimport, so it is never a candidate here.
 func (pipe *pipeline) markMissing(ctx context.Context) error {
 	pathStatuses, err := pipe.importer.Reader.ListPathsStatus(ctx, pipe.source.ID)
 	if err != nil {
 		return err
 	}
-	var missingIDs []string
+	var candidateIDs []string
 	for _, pathStatus := range pathStatuses {
 		if pathStatus.FileStatus != domain.FileStatusOnline {
 			continue
 		}
 		if _, seen := pipe.visited[pathStatus.RelativePath]; !seen {
-			missingIDs = append(missingIDs, pathStatus.ID)
+			candidateIDs = append(candidateIDs, pathStatus.ID)
 		}
 	}
-	if len(missingIDs) == 0 {
+	if len(candidateIDs) == 0 {
 		return nil
 	}
 	err = pipe.importer.Store.InTx(ctx, func(repos sqlite.Repos) error {
-		for _, id := range missingIDs {
+		for _, id := range candidateIDs {
 			if err := repos.Assets.SetFileStatus(ctx, id, domain.FileStatusMissing); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	if err == nil {
-		pipe.missingCount = len(missingIDs)
+	if err != nil {
+		return err
 	}
-	return err
+	pipe.missingCount += len(candidateIDs)
+	pipe.importer.Log.Info("marked assets missing (walk-end diff)", "source", pipe.source.Name, "count", len(candidateIDs))
+	return nil
+}
+
+// markGone is the single-path gone branch (the watcher-fed delete): a path that no
+// longer exists on disk. Per D20 it simply marks the asset at that path missing —
+// no delete-side merge, no move detection. If the content reappeared elsewhere it
+// was minted as a new asset + a pending review row; the user resolves the move.
+// Nothing known at the path, or a row already not online, is a no-op — so a
+// duplicate gone-event never double-marks.
+func (imp *Importer) markGone(ctx context.Context, source *domain.Source, relPath string) error {
+	existing, err := imp.Reader.FindBySourcePath(ctx, source.ID, relPath)
+	if err != nil {
+		return err
+	}
+	if existing == nil || existing.FileStatus != domain.FileStatusOnline {
+		imp.Log.Debug("gone path is not a tracked online asset — nothing to do", "path", relPath)
+		return nil
+	}
+	if err := imp.Obs.SetFileStatus(ctx, existing.ID, domain.FileStatusMissing); err != nil {
+		return err
+	}
+	imp.Log.Info("marked asset missing", "source", source.Name, "path", relPath, "asset", existing.ID)
+	return nil
 }
 
 func (pipe *pipeline) addRunError(relativePath, stage string, err error) {
 	pipe.importer.Log.Warn("file skipped after error", "path", relativePath, "stage", stage, "err", err)
 	pipe.errorsMu.Lock()
 	pipe.runErrors = append(pipe.runErrors, ImportError{Path: relativePath, Stage: stage, Err: err})
+	pipe.errorsMu.Unlock()
+}
+
+func (pipe *pipeline) addItemError(item *pipelineItem, stage string, err error) {
+	item.logger.Warn("file skipped after error", "path", item.scanned.relPath, "stage", stage, "err", err)
+	pipe.errorsMu.Lock()
+	pipe.runErrors = append(pipe.runErrors, ImportError{Path: item.scanned.relPath, Stage: stage, Err: err})
 	pipe.errorsMu.Unlock()
 }
 

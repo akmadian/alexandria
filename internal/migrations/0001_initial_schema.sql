@@ -1,6 +1,6 @@
 -- Alexandria catalog schema, v1 (pre-release; edited in place, not stacked).
 --
--- Column classes (see docs/v2/.../03-data-model.md §1) are annotated per column:
+-- Column classes (see docs/.../03-data-model.md §1) are annotated per column:
 --   [obs]  observation  — copied from the filesystem; ingest/watcher write it, world wins
 --   [jdg]  judgment     — user-declared; only the user-action path writes it, DB wins
 --   [syn]  sync-state   — a reconciler's own cursor; only its owner writes it
@@ -176,10 +176,13 @@ CREATE INDEX IF NOT EXISTS idx_duplicates_status ON duplicates(status);
 
 CREATE TABLE IF NOT EXISTS tags (
     id          TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    slug        TEXT NOT NULL,
-    parent_id   TEXT REFERENCES tags(id) ON DELETE CASCADE,
-    color       TEXT,
+    name        TEXT NOT NULL,                             -- display form; first-seen wins
+    slug        TEXT NOT NULL,                             -- normalized match key
+    parent_id   TEXT REFERENCES tags(id) ON DELETE CASCADE,-- adjacency: structural truth
+    color       TEXT,                                      -- [jdg] hex; meaningful only when color_mode='custom'
+    color_mode  TEXT NOT NULL DEFAULT 'inherit'            -- [jdg] tri-state a bare nullable color can't express
+                    CHECK(color_mode IN ('inherit', 'custom', 'none')),
+    path        TEXT NOT NULL,                             -- [der] materialized ancestry '/rootId/…/selfId/'
     created_at  TEXT NOT NULL
 );
 
@@ -187,16 +190,21 @@ CREATE INDEX IF NOT EXISTS idx_tags_parent ON tags(parent_id);
 -- SQLite treats NULLs as distinct in a UNIQUE index, so UNIQUE(slug, parent_id) would
 -- admit two root tags with the same slug. Collapse NULL parents to '' to constrain them.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_slug_parent ON tags(slug, IFNULL(parent_id, ''));
+-- Subtree queries are an indexed prefix scan: `path GLOB parent.path || '*'`. GLOB (not
+-- LIKE) so SQLite uses this index; tag IDs are UUIDs with no GLOB metacharacters.
+CREATE INDEX IF NOT EXISTS idx_tags_path ON tags(path);
 
 CREATE TABLE IF NOT EXISTS asset_tags (
     asset_id    TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
     tag_id      TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     source      TEXT NOT NULL DEFAULT 'user' CHECK(source IN ('user', 'xmp', 'lr')),  -- [jdg|obs] per-row class
+    removed_at  TEXT,                                     -- [jdg] tombstone: user-suppressed an imported tag; null = active
     created_at  TEXT NOT NULL,
     PRIMARY KEY (asset_id, tag_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag_id);
+-- Reverse (tag → assets) hot path, tombstone-aware so suppressed rows never bloat it.
+CREATE INDEX IF NOT EXISTS idx_asset_tags_tag ON asset_tags(tag_id) WHERE removed_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS collections (
     id              TEXT PRIMARY KEY,
@@ -271,8 +279,7 @@ CREATE TABLE IF NOT EXISTS import_errors (
 
 CREATE INDEX IF NOT EXISTS idx_import_errors_session ON import_errors(session_id);
 
-CREATE TABLE IF NOT EXISTS settings (
-    key         TEXT PRIMARY KEY,       -- incl. the ui.* namespace and ui.keybindings
-    value       TEXT NOT NULL,          -- JSON
-    updated_at  TEXT NOT NULL
-);
+-- Settings are NOT stored in the catalog DB. They live as plain JSON files
+-- (settings.json in the catalog dir, machine.json/keybindings.json in the app
+-- config dir) — see internal/settings and impl/11. The old `settings` KV table
+-- was dropped here per this repo's pre-1.0 edit-in-place migration convention.

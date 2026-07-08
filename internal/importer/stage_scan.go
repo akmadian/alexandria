@@ -28,7 +28,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 		}
 		name := entry.Name()
 		if entry.IsDir() {
-			if relativePath != "." && (isHidden(name) || matchIgnore(name) != "") {
+			if relativePath != "." && (isHidden(name) || pipe.importer.Settings.Ignored(name)) {
 				return fs.SkipDir
 			}
 			return nil
@@ -39,7 +39,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 		if isHidden(name) {
 			return nil
 		}
-		if pattern := matchIgnore(name); pattern != "" {
+		if pattern := pipe.importer.Settings.MatchIgnore(name); pattern != "" {
 			pipe.ignoredTally[pattern]++
 			return nil
 		}
@@ -49,10 +49,12 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 			return nil
 		}
 		if info.Size() == 0 {
+			pipe.importer.Log.Debug("empty file skipped", "path", relativePath, "asset", name)
 			return nil // empty file is not an asset; self-heals when it gains content
 		}
 		extension := ext(name)
 		if assettype.IsSidecar(extension) {
+			pipe.importer.Log.Debug("sidecar detected", "path", relativePath, "ext", extension)
 			return pipe.emit(ctx, out, &pipelineItem{scanned: sidecarScan(relativePath, name, extension, info), isSidecar: true})
 		}
 		handler, ok := assettype.Classify(extension)

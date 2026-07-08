@@ -4,18 +4,19 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 
 ## Design authority (read before designing or implementing anything)
 
-1. **`docs/v2/claude-dumps/post-ingest-design/00-START-HERE.md`** — the current design handoff.
+1. **`docs/project-tracking/backend/00-START-HERE.md`** — the current design handoff.
    Its decision log (`02-decision-log.md`) **wins every conflict** with older docs and existing code.
 2. `docs/functional-requirements.md` — feature source of truth (P0–P4).
-3. Older design docs in `docs/` are superseded — see `docs/AGENTS.md` for known conflicts.
-4. Existing code follows the disposition table (`.../05-code-disposition.md`): specs win; you have
+3. Existing code follows the disposition table (`.../05-code-disposition.md`): specs win; you have
    explicit license to delete what it marks deleted.
+4. `internal/importer/README.md` (ingest engine, impl/04) and `docs/perf/` (thumbnail/hardware
+   acceleration) are the up-to-date implementation references for the pipeline.
 
 ## Commands
 
-- Backend: `go test ./...` · `go vet ./...` (run from repo root)
+- Backend: `go test -race ./...` · `go vet ./...` (run from repo root)
 - Frontend: `bun run check` (in `frontend/` — typecheck + lint + tests; must pass before commit)
-- Dev harness (once built): `go run ./cmd/dev`
+- Dev harness: `go run ./cmd/dev import <path>` (`--catalog <dir>` to browse the DB, `--debug` for pprof)
 
 ## Hard rules — violating any of these is a bug, not a style choice
 
@@ -41,6 +42,13 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 - Pipeline channels are created/wired/closed in ONE function; stages take directional channel params.
 - External binaries via the `dependency` package (subprocesses, never cgo); no silent downloads.
 - No new third-party dependency where stdlib or an existing dep works.
+
+- **Log comprehensively — add logging with the flow, not after.** A running system must narrate
+  itself: lifecycle boundaries, workflow *results* (verdict/counts/ids), and state transitions at
+  `Info`; per-event/per-item play-by-play at `Debug`; recoverable per-file failures at `Warn`;
+  serious ones at `Error`. A flow that completes work while logging nothing is a defect, same as a
+  missing test. Don't optimize for a quiet clean run — optimize for a readable narrative. See
+  coding-guidelines §4 for the level rubric.
 
 ## Detailed standards
 

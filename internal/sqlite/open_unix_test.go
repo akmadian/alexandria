@@ -19,8 +19,8 @@ func TestOpen_MigratesAndLocks(t *testing.T) {
 	}
 	defer cat.Close()
 
-	// Schema present: writing a known table proves migrations ran.
-	if _, err := cat.DB.Exec(`INSERT INTO settings (key, value, updated_at) VALUES ('k', '1', '2026-01-01T00:00:00Z')`); err != nil {
+	// Schema present: querying a known table proves migrations ran.
+	if _, err := cat.DB.Exec(`SELECT count(*) FROM assets`); err != nil {
 		t.Fatalf("schema not migrated: %v", err)
 	}
 

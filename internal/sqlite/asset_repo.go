@@ -70,6 +70,21 @@ func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath
 	return a, err
 }
 
+// DeleteByID hard-deletes an asset row. Unlike SoftDelete (a user judgment), this
+// physically removes an identity. FK cascades clean its duplicates rows; the FTS
+// delete trigger clears its index entry.
+//
+// Currently uncalled by ingest (D20 removed the delete-side merge that used it);
+// retained as the primitive the review queue's user-triggered "confirm move"
+// resolution needs (DEFERRED §5): confirming a move deletes the throwaway new
+// identity and adopts its path onto the original.
+// ponytail: leaves the deleted row's thumbnail file orphaned on disk (DEFERRED §4);
+// a thumbnail GC sweeps it if orphans ever accumulate.
+func (r *AssetRepo) DeleteByID(ctx context.Context, id string) error {
+	_, err := r.DB.ExecContext(ctx, "DELETE FROM assets WHERE id = ?", id)
+	return err
+}
+
 // ListKnownFiles returns relative_path → (mtime, size, hash) for every ONLINE
 // asset in the source, in one query. The importer loads this once per scan to
 // skip unchanged files without a per-file lookup.
