@@ -35,6 +35,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/10-tag-system.md` | **🔨 consumer slice DONE (2026-07-07)** — D22; adjacency + materialized `path`, direct-attach junction, `color_mode` tri-state, judgment tombstones. `TagRepo` (EnsureTag/AddAssetTags/ImportKeywords/RebuildTagPaths) + `KeywordImporter` seam built; wired into impl/06. Tag-UI backend (Tree/Update/Delete/reparent) + FTS⋈tags deferred |
 | `impl/11-settings-service.md` | **✅ DONE (2026-07-07)** — `internal/settings`: three JSON files (`settings.json`/`machine.json`/`keybindings.json`), no DB table; generic `configFile[T]` with quarantine + hot-reload; ignore-list + worker counts wired. §5 live mid-run pool resize DEFERRED to impl/12 (DEFERRED §6) |
 | `impl/12-app-host.md` | **Stub, not started (created 2026-07-08).** The Wails composition root + everything that needs a long-running process: startup sequence (integrity check, backup-before-migration floor), watcher supervision (DEFERRED §2), live pool resize (DEFERRED §6). Trigger: seam round completes |
+| `impl/13-query-layer.md` | **Designed 2026-07-08, not started.** The query-layer round made concrete: new `internal/ast` (grammar + vocabulary + validation + JSON + `CompileToSQL` — the whole query authority, one pure package); `QueryAssets`/`AssetIDSlice`/`IndexOfAsset`/`DistinctValues`/`ReadTriageStates`/`ApplyTriagePatchByQuery` surface; collections CRUD; FTS⋈tags slice. `AssetFilter` dies. Unblocked NOW; gates the seam round |
 
 ## Where the project is right now
 

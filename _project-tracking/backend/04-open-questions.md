@@ -28,7 +28,11 @@ What a design-refinement instance should pick up. Ordered by when they block.
 
 ## Design rounds that were never held (deliberately deferred)
 
-4. **Query layer round** — **heavily pre-shaped by the 2026-07-07 frontend round**: the AST
+4. **Query layer round** — **now fully specified: implementation doc `impl/13-query-layer.md`**
+   (2026-07-08 design session — `internal/ast` package holding grammar AND compiler, sealed node
+   union, vocabulary discipline, the full method surface; the residual decisions below are
+   restated there in §9 with recommendations). Everything below stands as the round's history.
+   **Heavily pre-shaped by the 2026-07-07 frontend round**: the AST
    grammar (nested AND/OR/NOT, versioned, typed structs) and token-registry contract are now
    DESIGNED in `../seam/01-queries-and-commands.md`; this round makes it *compile* — the one
    filter→SQL authority that `QueryAssets`, smart collections, and Review projections reuse.
