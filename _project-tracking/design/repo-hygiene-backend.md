@@ -1,22 +1,27 @@
 # Go backend — repo hygiene & CI strategy
 
-Spec for implementation. Target: a `scripts/check.sh` where running it is
-exactly what CI runs — nothing should fail in the pipeline that
-`scripts/check.sh` wouldn't have already caught locally. No git hooks
-(deliberately skipped — annoying, script discipline covers it).
+**Status: IMPLEMENTED (2026-07-08).** Makefiles at repo root, `internal/`,
+and `frontend/`. `make check` (repo root) is exactly what CI runs — nothing
+should fail in the pipeline that `make check` wouldn't have already caught
+locally. No git hooks (deliberately skipped — annoying, make discipline
+covers it).
 
-Plain bash over Make/`just`: every check here is a one-off command, not a
-real file-dependency graph (nothing in this repo needs Make's actual
-differentiator, timestamp-based incremental rebuilds), so a directory of
-`.sh` files avoids introducing a new dependency for no real gain. Every dev
-machine and CI runner already has bash.
+Went with Makefiles over the originally-spec'd bash scripts: `make` is the
+dominant Go-community convention (Kubernetes, Prometheus, Hugo), is
+zero-install on every dev machine and CI runner, and the recursive
+`$(MAKE) -C <dir>` pattern gives us per-area Makefiles that compose cleanly.
 
 ## Principle
 
 Every check has two properties: **why it exists** (what class of bug/drift it
-catches that the others don't) and **speed tier** (so `scripts/check.sh` fails
+catches that the others don't) and **speed tier** (so `make check` fails
 fast on cheap mistakes before burning time on slow ones). Order: cheap →
 expensive.
+
+> **Note:** The sections below were originally spec'd as `scripts/*.sh`. The
+> implementation uses Makefiles instead — see `Makefile`, `internal/Makefile`,
+> `frontend/Makefile`, and `.github/workflows/ci.yml` for the as-built versions.
+> The *rationale* for each check still applies; only the invocation changed.
 
 ## Tool pinning
 

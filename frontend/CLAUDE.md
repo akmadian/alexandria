@@ -23,8 +23,10 @@ typed seam (Wails v2, locked 2026-07-07); runs against an in-memory mock until t
 ## Commands
 
 ```bash
+make check      # typecheck + lint + tests — must pass before committing
+make lint       # eslint only
+make test       # vitest only
 bun run dev     # vite dev server (mock catalog)
-bun run check   # typecheck + lint + tests — must pass before committing
 bun run test:watch
 ```
 

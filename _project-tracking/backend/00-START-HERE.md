@@ -40,7 +40,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 ## Where the project is right now
 
 **Blockers 01–03 AND the impl/04 ingest milestone are implemented and green**
-(`go vet ./...` clean, full `go test -race ./...` passing). Current state of the tree:
+(`make check-backend` passing — lint + test + coverage). Current state of the tree:
 
 - `internal/domain/` — domain types + `NewID()` (UUIDv7); `Source` split into `Enabled`/
   `Connectivity`; `Asset` gained `Title`/`Caption`/`JudgmentModifiedAt`; added `SidecarFile` and

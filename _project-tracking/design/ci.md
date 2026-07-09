@@ -1,12 +1,14 @@
 # CI orchestration
 
-How `scripts/check.sh` (backend, see [repo-hygiene-backend.md](repo-hygiene-backend.md)) and the
-frontend's `bun run check`/`format:check` (see [repo-hygiene-frontend.md](repo-hygiene-frontend.md))
-actually get wired into GitHub Actions — specifically, only running the
-stack whose files actually changed. Separated from those two docs because
-the whole point of this pattern is that backend and frontend are no longer
-two independently-triggered things; the trigger/orchestration layer is
-genuinely shared.
+**Status: IMPLEMENTED (2026-07-08).** `.github/workflows/ci.yml` runs
+`make check-backend`. Recursive Makefiles at repo root / `internal/` /
+`frontend/` ensure local `make check` runs the identical checks.
+See [repo-hygiene-backend.md](repo-hygiene-backend.md) for the shift from
+scripts to Makefiles.
+
+> **Note:** The workflow YAML below is the original spec. The as-built version
+> uses `make check-backend` instead of individual script steps — see
+> `.github/workflows/ci.yml` for the current implementation.
 
 ## Why path-filter, and which kind
 

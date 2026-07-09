@@ -52,19 +52,13 @@ dependabot.yml`, `npm` ecosystem pointed at `/frontend`) already surfaces
 known CVEs as PRs. Adding a second, redundant audit step in CI buys nothing
 Dependabot doesn't already cover.
 
-## Root scripts integration
+## Root Makefile integration
 
 Package manager is Bun (decided — `bun.lock` is the sole lockfile,
-`package-lock.json` removed). Frontend already owns its own task
-definitions in `frontend/package.json`'s `scripts` block — no parallel
-`scripts/*.sh` directory needed on this side. `scripts/check.sh` (backend's,
-at repo root since that's where `go.mod` lives) just adds two lines at the
-end to call into it — not worth a separate wrapper file for two commands:
-
-```bash
-# tail of scripts/check.sh
-(cd frontend && bun run format:check && bun run check)
-```
+`package-lock.json` removed). Frontend has its own `frontend/Makefile` that
+delegates to `bun run` scripts. The repo-root `Makefile` composes both sides
+via `$(MAKE) -C frontend check`. `make check` at repo root runs backend +
+frontend; `make check-frontend` runs frontend only.
 
 ### Enforcing a minimum Bun version
 

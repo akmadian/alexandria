@@ -11,16 +11,14 @@ duplicating them.
    install` (or whatever the frontend uses). One command block, copy-pasteable.
 
 3. **Day-to-day commands**
-   - Backend: `scripts/check.sh`, plus the individual `scripts/*.sh` steps
-     (`test.sh`, `cover-html.sh`, `fmt.sh`) — link to [backend.md](backend.md)
-     instead of re-explaining each one.
-   - Frontend: `bun run check`, `bun run format`, etc. — link to
-     [frontend.md](frontend.md).
+   - `make check` (repo root) — runs backend + frontend checks, same as CI.
+   - `make check-backend` / `make check-frontend` — run one side only.
+   - Subdirectory Makefiles: `make -C internal lint`, `make -C frontend test`.
+   - Link to [repo-hygiene-backend.md](repo-hygiene-backend.md) for details.
 
-4. **Before opening a PR** — "run `scripts/check.sh` and make sure it
-   passes (it already covers the frontend too — see [ci.md](ci.md))." This
-   is the one paragraph that actually prevents CI churn — say it plainly,
-   once.
+4. **Before opening a PR** — "run `make check` and make sure it passes
+   (it covers both backend and frontend — see [ci.md](ci.md))." This is the
+   one paragraph that actually prevents CI churn — say it plainly, once.
 
 5. **Code style / architecture pointers** — don't restate the rules, link to
    `docs/coding-guidelines.md` and `CLAUDE.md`.

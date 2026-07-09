@@ -38,3 +38,16 @@ Design rationale lives in documents, not code comments. Two trees, split by dura
 - **Frontend:** React, TypeScript, Vite (package management via Bun)
 - **Desktop runtime:** Wails v2
 - **License:** GPL v3
+
+
+## Setup
+
+Dev dependencies:
+```
+brew install go golangci-lint
+```
+
+Run all checks (same as CI):
+```
+make check
+```

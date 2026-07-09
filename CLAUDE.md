@@ -20,8 +20,9 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 
 ## Commands
 
-- Backend: `go test -race ./...` · `go vet ./...` (run from repo root)
-- Frontend: `bun run check` (in `frontend/` — typecheck + lint + tests; must pass before commit)
+- **`make check`** (repo root) — runs all backend + frontend checks. Must pass before commit.
+- **`make check-backend`** / **`make check-frontend`** — run one side only.
+- Subdirectory Makefiles work standalone: `make -C internal lint`, `make -C frontend test`.
 - Dev harness: `go run ./cmd/dev import <path>` (`--catalog <dir>` to browse the DB, `--debug`
   for pprof; also `watch`, `errors`, `sessions`, `rebuild fts`)
 
@@ -71,3 +72,10 @@ flagging because violations are treated as review defects, not style nits:
   play-by-play at `Debug`. A flow that completes work while logging nothing is a defect.
 
 Frontend rules: `frontend/CLAUDE.md`.
+
+## Acceptance criteria
+
+**`make check` must pass before any commit.** This is not optional — a failing check run is a
+blocking defect, same as a broken test. CI runs the same Makefiles, so local and remote are
+identical. If a lint finding or test failure exists in the diff, fix it before presenting work
+for review.
