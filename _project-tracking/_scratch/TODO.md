@@ -1,0 +1,1 @@
+- Prune project tracking docs - consolidate key past decisions that impact future decisions, otherwise just drop docs. Keep important things, pare down the rest. It's nice to have lots of info, but it clutters the context window from the very start of getting up to speed on the repo.

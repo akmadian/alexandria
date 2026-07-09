@@ -75,10 +75,8 @@ linters:
       forbid:
         - pattern: "fmt\\.Print(ln|f)?"
           msg: "use charmbracelet/log, not fmt.Print — see coding-guidelines §4"
-          exclude-godoc-examples: true
         - pattern: "os\\.Exit"
           msg: "os.Exit only in main — return errors instead"
-          exclude-godoc-examples: true
 
     gocritic:
       enabled-tags:
