@@ -1,5 +1,10 @@
 # Frontend Code Disposition
 
+> **AMENDED 2026-07-08:** superseded by the ground-up redesign round
+> (`09-ground-up-redesign-notes.md`). All of `frontend/src/` is disposable — the per-path
+> verdicts below no longer bind. Kept for reference: the *patterns* worth re-deriving
+> (contract/mock swap, reducer store, virtualized grid) are re-ratified on their merits in `09`.
+
 **Date:** 2026-07-07 (docs reconciliation pass, grounded by reading the actual code — not
 assumptions). Verdict format mirrors `../backend/05-code-disposition.md`: specs win every
 conflict; this table is the license for what happens to `frontend/src/` when implementation

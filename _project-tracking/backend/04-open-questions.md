@@ -49,6 +49,13 @@ What a design-refinement instance should pick up. Ordered by when they block.
      but the FTS query tier this round builds is its first real consumer — land it here so search
      includes keywords the day search ships. Tag-UI backend (Tree/Update/Delete/reparent) stays
      with impl/10.
+   - **Seam requirements from the 2026-07-08 frontend ground-up redesign round** (full list +
+     rationale in `../frontend/09-ground-up-redesign-notes.md` §Seam requirements): ids-only
+     window `AssetIDSlice(query, arrangement, from, to)`; `IndexOfAsset(query, arrangement, id)`;
+     `exceptIds` on the `UpdateAssets` target (single-statement apply, never id-materialized
+     loops); ORDER BY always appends a unique tiebreaker (`…, id`); distinct-values lookup for
+     suggestable fields; bulk-undo acceptance test (300k triage patch, undo, redo — no stall) +
+     undo history byte budget + the undo-vs-external-write decision (undo notes in the same doc).
 5. **The seam round** — reconcile `frontend/src/api/contract.ts` against the engine. The work
    list now lives as the **reconciliation ledger** in `../seam/01-queries-and-commands.md`
    (10 numbered deltas: AST filter, tag scope, arrangement, stale Settings/SourceStatus,

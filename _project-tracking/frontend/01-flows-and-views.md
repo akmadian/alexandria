@@ -69,8 +69,10 @@ Unchanged from the P0 spec, confirmed by this round:
 - Browser trees are one reusable hierarchical component across Sources/Collections/Tags modes;
   selecting a node sets the **scope**.
 - Inspector adapts per asset type via the type registry (no empty camera-EXIF panels on audio).
-- Desktop only; three themes (graphite default / dark / light); chrome is hue-free — hue means
-  data (labels, tags, health). CSS Modules + semantic tokens; mono for data values, sans for UI.
+- Desktop only; three themes; chrome is hue-free — hue means data (labels, tags, health).
+  CSS Modules + semantic tokens; mono for data values, sans for UI. *Visual specifics amended
+  2026-07-08 by `08-design-language.md` (middle-grey canvas default replaces graphite-dark; no
+  accent; filter bar scoped inside the center pane) — that doc is the visual authority.*
 
 ## Transparency as chrome
 

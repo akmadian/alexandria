@@ -38,4 +38,6 @@ round; see backend open questions #4/#5):
 2. **Seam round:** reconcile `contract.ts` per the ledger, wire Wails bindings + TS generation,
    land the event/job envelopes.
 
-Frontend implementation unblocks after these.
+Frontend implementation unblocks after these — and now means the **ground-up rebuild** per
+`../frontend/09-ground-up-redesign-notes.md` (architecture locked 2026-07-08); its seam-method
+requirements are listed in `01-queries-and-commands.md` §Additions.

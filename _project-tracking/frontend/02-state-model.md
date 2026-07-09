@@ -9,8 +9,11 @@ constants table.
 view state = viewMode(query + arrangement, selection + cursor)
 ```
 
-Everything on screen derives from five things. One store holds them (the existing
-`LibraryProvider` reducer is the right home); view modes are pure renderers and never own copies.
+Everything on screen derives from five things. One store holds them — per the 2026-07-08
+redesign round: a Zustand-mounted external store with a single reducer-style dispatch, living
+outside React, consumed only through curated selector hooks (shape, action vocabulary, and
+invariants locked in `09-ground-up-redesign-notes.md` §The store; the pre-redesign
+`LibraryProvider` note is superseded); view modes are pure renderers and never own copies.
 Consequence: view-mode switches are instant, stateless, and workflows *flow* — scan in Grid → E
 on a suspect frame → C to compare neighbors → X the loser → G back out, selection intact
 throughout. Nothing to learn for beginners (Grid forever is fine); fluency is emergent.
@@ -44,6 +47,12 @@ subset.
 **Command targeting rule (C5):** verbs act on the selection if non-empty, else the cursor.
 Batch operations always name their target ("Export 12 selected" / "Export all 412 results") so
 the tiers are visible, never guessed.
+
+> **Amended 2026-07-08 (`09`):** selection and cursor are **id-anchored; indices are derived
+> hints** — ranges are a gesture, materialized to ids at commit time (never stored as index
+> ranges). Selection survives arrangement changes and resets on query changes; the cursor keeps
+> its asset across query changes when still present (`IndexOfAsset`), else reseeds to 0.
+> Selection is `{ids} | {all, except}` — "select all" never enumerates.
 
 ## Arrangement
 

@@ -69,6 +69,31 @@ typed methods** through P2 is healthy; the number that matters is shape stabilit
 `AssetRow` stays the slim grid-card projection (~15 fields); full `Asset` is `getAsset` only.
 It gains a `kind` discriminator when asset groups land (already anticipated in contract.ts).
 
+## Additions from the 2026-07-08 frontend redesign round
+
+Requirements the query/seam rounds must absorb (rationale in
+`../frontend/09-ground-up-redesign-notes.md`; also flagged in `../backend/04-open-questions.md`
+#4):
+
+- **`AssetIDSlice(query, arrangement, fromIndex, toIndex) → []id`** — ids-only window over the
+  compiled ordering (range-selection materialization).
+- **`IndexOfAsset(query, arrangement, id) → index | null`** — cursor keep-if-present across
+  query changes; cursor index remap across arrangement changes.
+- **`UpdateAssets` target grows `exceptIds`**: `{ids} | {scope, where, exceptIds}` — compiled to
+  ONE statement (`… AND id NOT IN (…)`), never an id-materialized loop.
+- **Deterministic total order**: the compiler always appends a unique tiebreaker (`…, id`) to
+  ORDER BY — index slices are meaningless without it.
+- **Distinct-values lookup** for suggestable fields (camera make/model, …) — powers parser and
+  editor suggestions.
+- **Operator vocabulary includes negated forms** (`neq`, `notEmpty`, tag `lacks`/`not-under`):
+  negation over a single leaf is an operator concern; tree `not` survives only over groups (the
+  frontend assembler normalizes, so the compiler sees one canonical form per meaning).
+- **Date values are `{anchor: date | "now", duration}`**, half-open intervals `[min, max)`;
+  `"now"` resolves at **compile time** (rolling smart collections re-evaluate every open).
+  Calendar-unit durations + timezone semantics for capture dates are query-round decisions.
+- **Bulk-undo acceptance test**: triage patch on 300k assets, undone, redone — no perceptible
+  stall (single-statement apply; batched-transaction restore; history byte budget).
+
 ## Reconciliation ledger — contract.ts ↔ this design ↔ the engine
 
 Grounded 2026-07-07. The contract's bones are **good** — its header conventions (surface grows

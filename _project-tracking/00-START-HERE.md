@@ -68,5 +68,5 @@ per milestone).
 |---|---|---|
 | Backend | impl/01–05 + 11 done; impl/06 in progress; impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
 | Seam | Design pre-shaped; awaits query-layer round | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
-| Frontend | Design complete (2026-07-07, Wails v2 locked); implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
+| Frontend | Design complete (2026-07-07, Wails v2 locked); **architecture locked by the ground-up redesign round (2026-07-08, `frontend/09`)** — `frontend/src/` is disposable, rebuild fresh; implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
 | Ops / Testing | Specs waiting in [`design/`](design/) (CI, release, telemetry, testing strategy); no milestone tracking yet | — |

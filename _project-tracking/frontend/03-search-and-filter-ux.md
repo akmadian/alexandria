@@ -3,6 +3,13 @@
 **Status:** design locked 2026-07-07 (C6/C12). This is the *presentation* of the query system;
 the AST, token registry contract, and seam methods live in `../seam/01-queries-and-commands.md`.
 
+> **Amended 2026-07-08 (redesign round):** the frontend token/AST contract is now concrete in
+> `09-ground-up-redesign-notes.md` §Token & AST drill-in — the token/leaf/pill triad, value
+> kinds (7 shared editors, ONE date grammar), negated operators + assembler normalization,
+> anchor+duration date values with rolling `"now"`, wire typing (generated
+> `TokenField`/`TokenOperator` unions, strict constructors, persistence-boundary validation),
+> and the AST versioning policy.
+
 ## The filter bar
 
 - **A pill is the rendered form of one AST leaf** (macOS Finder search tokens, Gmail chips):

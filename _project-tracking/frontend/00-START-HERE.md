@@ -2,7 +2,7 @@
 
 *Task-tree head: [`../00-START-HERE.md`](../00-START-HERE.md) — check it first for what's next.*
 
-**Date:** 2026-07-07
+**Date:** 2026-07-07 · architecture superseded by the ground-up redesign round 2026-07-08 (`09`)
 **Produced by:** a ground-up frontend/UX design session (Ari + Claude Fable) that worked forward
 from `_project-tracking/functional-requirements.md` and the conventions of LrC, Eagle, Photo Mechanic, and
 Capture One, followed by a same-day docs reconciliation pass that split the material by concern.
@@ -23,6 +23,9 @@ This set **supersedes** the deleted `frontend-architecture.md` / `frontend-ui-ar
 - **Boring skeleton, signature concepts.** The shell is the conventional DAM layout; the novelty
   budget is spent on the query model, cull speed, Review, and transparency-as-chrome.
 - **The state equation** (C2): `view state = viewMode(query + arrangement, selection + cursor)`.
+- **Ground-up rebuild (Ari, 2026-07-08):** all of `frontend/src/` is disposable; the rebuild's
+  architecture is re-derived from the requirements, CONSTANTS, the seam design, and `08` — the
+  locked record is `09-ground-up-redesign-notes.md`.
 
 ## The doc set
 
@@ -35,13 +38,17 @@ This set **supersedes** the deleted `frontend-architecture.md` / `frontend-ui-ar
 | `05-culling-and-signals.md` | Cull view mode UX; signals-as-columns (C11); burst collapse; suggested rejects. Engine side in `../backend/06-signals-and-enrichment.md`. |
 | `06-review.md` | The Review task view: categories, review grammar, resolution actions; automation rules (deferred, vocabulary reserved). |
 | `07-code-disposition.md` | Per-path verdict over the existing `frontend/src/` — what stands, what evolves, what rebuilds. Grounded in the actual code, not assumptions. |
+| `08-design-language.md` | Visual language (2026-07-08 round): no-accent neutral color rules, middle-grey canvas + darker panels, flat + transient blur, dot-matrix glyph system, motion, font candidates, layout amendments. Supersedes the `src/styles/` visual decisions; feeds the Claude Design handoff. |
+| `09-ground-up-redesign-notes.md` | **The frontend architecture record (LOCKED 2026-07-08)**: state planes + the store (shape, action vocabulary, invariants), seam integration, module structure, fetch/perf/retry policy, token/AST frontend contract (triad, value kinds, negation, dates, versioning), optimistic-mutation × undo discipline, and the seam requirements fed to the backend query round. Supersedes `07`'s verdicts; where it conflicts with 01–08 it wins for architecture. |
 
 ## Where the project is right now
 
-**Design complete for the surfaces above; implementation not started.** Sequencing (see
-`../seam/00-START-HERE.md`): backend query-layer round → seam round (contract reconciliation +
-bindings) → frontend implementation. The existing `frontend/src/` skeleton is *better* than
-expected — see `07-code-disposition.md`; "nuke and rebuild" is warranted almost nowhere.
+**Design complete for the surfaces above; architecture locked (2026-07-08, `09`);
+implementation not started.** Sequencing unchanged (see `../seam/00-START-HERE.md`): backend
+query-layer round → seam round (contract reconciliation + bindings) → frontend implementation —
+which now means the **ground-up rebuild**: `frontend/src/` is disposable (2026-07-08 decision,
+superseding `07`'s EVOLVE verdicts); the patterns worth keeping were re-ratified on their merits
+in `09`, not preserved as code.
 
 ### What this round deliberately deferred
 
