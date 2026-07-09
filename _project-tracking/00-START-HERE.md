@@ -5,7 +5,7 @@ human or Claude: it answers *what's next, right now*, and links down. Area track
 and why*. **Maintenance contract:** whoever completes (or reprioritizes) a frontier item updates
 this file in the same change — a stale head is worse than no head.
 
-**Last updated:** 2026-07-08.
+**Last updated:** 2026-07-09.
 
 **Layout:** `backend/` · `seam/` · `frontend/` (area trackers + specs) ·
 [`functional-requirements.md`](functional-requirements.md) (the backlog, P0–P4) · `design/`
@@ -34,7 +34,12 @@ what *is*).
 | ~~B~~ | ~~Query-layer round~~ | Backend | **✅ DONE (2026-07-08)** — `internal/ast` + full surface + collections + FTS⋈tags. Old `AssetFilter`/`List` deleted. **Seam round is now unblocked.** |
 | ~~C~~ | ~~CI wiring~~ | Ops | **✅ DONE (2026-07-09)** — root `Makefile` (`make check-backend`) + `.github/workflows/ci.yml` (native path filter) + `.golangci.yml` (invariants mechanized via depguard/forbidigo) + govulncheck + 70% coverage gate. Frontend job + `format:check` gap deferred until frontend rebuild. |
 
-With B and C done, the **seam round** is the next backend frontier (query layer landed; reconcile `contract.ts` per the ledger in [`seam/01-queries-and-commands.md`](seam/01-queries-and-commands.md)). A (impl/06 remainder) is independent and small.
+With B and C done, the **seam round** is the frontier — and it is now fully specced
+(2026-07-09) as three build docs: [`seam/impl/14-bindings-and-generation.md`](seam/impl/14-bindings-and-generation.md)
+**first** (Wails composition root + TS generation — the root it creates is the impl/12 app-host
+seed), then [`seam/impl/15-method-surface.md`](seam/impl/15-method-surface.md) ∥
+[`seam/impl/16-events-and-jobs.md`](seam/impl/16-events-and-jobs.md). A (impl/06 remainder) is
+independent and small.
 
 ## The tree below the frontier (dependency order)
 
@@ -67,6 +72,6 @@ per milestone).
 | Area | Status | Tracker |
 |---|---|---|
 | Backend | impl/01–06 + 11 + 13 done (06 core — caption/title + flag pending); impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
-| Seam | Design pre-shaped; **unblocked now** (query-layer round done) | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
+| Seam | **Build-ready**: impl/14/15/16 specs written 2026-07-09; structure locked (root Wails scaffolding, `internal/seam`, committed generated TS + CI freshness) | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
 | Frontend | Design complete (2026-07-07, Wails v2 locked); **architecture locked by the ground-up redesign round (2026-07-08, `frontend/09`)** — `frontend/src/` is disposable, rebuild fresh; implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
 | Ops / Testing | CI + backend hygiene BUILT (2026-07-09, `Makefile` + `ci.yml`); release, telemetry, testing-strategy specs still waiting in [`design/`](design/) | — |

@@ -12,9 +12,11 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
    (`backend/02-decision-log.md`) **wins every conflict** with older docs and existing code.
 3. `_project-tracking/functional-requirements.md` — the single source of truth for the
    feature roadmap (P0–P4): what will be built, and when.
-4. Existing code follows the disposition tables (backend `.../05-code-disposition.md`, frontend
-   `.../frontend/07-code-disposition.md`): specs win; you have explicit license to delete what
-   they mark deleted.
+4. Existing backend code follows the disposition table (`backend/05-code-disposition.md`):
+   specs win; you have explicit license to delete what it marks deleted. `frontend/src/` is
+   **disposable in its entirety** — the ground-up redesign round
+   (`frontend/09-ground-up-redesign-notes.md`, 2026-07-08) voided the older frontend/07
+   verdicts; don't invest in the current frontend source.
 5. `internal/importer/README.md` (ingest engine, impl/04) and `_project-tracking/perf/`
    (thumbnail/hardware acceleration) are the up-to-date implementation references for the pipeline.
 
@@ -23,7 +25,8 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 - **`make check`** (repo root) — runs all backend + frontend checks. Must pass before commit.
 - **`make check-backend`** / **`make check-frontend`** — run one side only.
 - Individual backend steps (all from the root Makefile — there are no subdirectory Makefiles):
-  `make tidy-check` / `build` / `lint` / `vulncheck` / `test` / `cover` (coverage gate).
+  `make tidy-check-backend` / `build-backend` / `lint-backend` / `vulncheck-backend` /
+  `test-backend` / `cover-backend` (coverage gate).
 - Dev harness: `go run ./cmd/dev import <path>` (`--catalog <dir>` to browse the DB, `--debug`
   for pprof; also `watch`, `errors`, `sessions`, `rebuild fts`)
 
@@ -41,6 +44,11 @@ rationale lives in `_project-tracking/backend/02-decision-log.md` and `03-data-m
 - **Detect-and-flag (D20):** reconciliation never auto-mutates identity. Same-path fidelity is
   automatic; a file at a new path is a new asset + a pending review row. Never auto-relink or
   auto-merge.
+- **One query authority (impl/13):** every predicate over assets compiles through
+  `internal/ast` (`ast.Query` → the `Compile*` family). Never hand-write asset WHERE/ORDER BY
+  fragments in repos; a new filterable capability is a new vocabulary field + compiler entry,
+  never a new query method (C7). `ast` stays pure — no I/O, `now` is a parameter, and it
+  imports `domain` only for enum membership (validate/compile only).
 - **Events are hints, not facts:** a file event means "go re-examine this path"; truth is
   re-derived from the filesystem via the identity matrix.
 - **Derived state carries a rebuild path:** anything computed (FTS, thumbnails, auto-groups,

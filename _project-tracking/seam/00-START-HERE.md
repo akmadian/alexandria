@@ -24,19 +24,21 @@ jointly, belonging to neither.)
 |---|---|
 | `01-queries-and-commands.md` | The query AST (C6), token registry, workhorse methods (C7), structural methods, and the contract.ts reconciliation ledger. |
 | `02-events-jobs-and-binary.md` | Event envelope + topic catalog (C8), the Job envelope (C9), the binary URL channel, the error shape. |
+| `impl/14-bindings-and-generation.md` | BUILD SPEC: Wails composition root, `internal/seam` skeleton, TS generation (Wails + hand-rolled vocabulary generator), Makefile/CI modularity. First. |
+| `impl/15-method-surface.md` | BUILD SPEC: bound services, ApiError mapping, ledger rows #1–6/#8–10, §Additions exposure. After 14, parallel with 16. |
+| `impl/16-events-and-jobs.md` | BUILD SPEC: event envelope + catalogs, job envelope over `importer.Progress`, engine→seam bridge, ledger row #7. After 14, parallel with 15. |
 
 Cross-cutting rules live in `../CONSTANTS.md` (C6–C9, C13 are the seam's).
 
 ## Sequencing
 
-Two pending design/implementation rounds, in order (both pre-shaped by the 2026-07-07 frontend
-round; see backend open questions #4/#5):
-
-1. **Query-layer round (backend):** the AST grammar in Go + the SQL compiler — the single query
-   authority that `QueryAssets`, smart collections, and Review projections all reuse. The AST
-   *shape* is designed (`01-queries-and-commands.md`); this round makes it compile.
-2. **Seam round:** reconcile `contract.ts` per the ledger, wire Wails bindings + TS generation,
-   land the event/job envelopes.
+1. **Query-layer round (backend):** ✅ DONE (impl/13, 2026-07-08) — `internal/ast` is the
+   single query authority; the catalog surface consumes it.
+2. **Seam round:** SPECCED (2026-07-09) into three build docs under `impl/` — **14**
+   (bindings & generation harness; also creates the Wails composition root that
+   `../backend/impl/12-app-host.md` later grows) first, then **15** (method surface) ∥ **16**
+   (events & jobs). Structure locked: root `main.go`/`app.go`/`wails.json`/`build/`, bound
+   services in `internal/seam`, generated TS committed with a CI freshness gate.
 
 Frontend implementation unblocks after these — and now means the **ground-up rebuild** per
 `../frontend/09-ground-up-redesign-notes.md` (architecture locked 2026-07-08); its seam-method
