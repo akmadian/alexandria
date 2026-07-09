@@ -22,7 +22,8 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 
 - **`make check`** (repo root) — runs all backend + frontend checks. Must pass before commit.
 - **`make check-backend`** / **`make check-frontend`** — run one side only.
-- Subdirectory Makefiles work standalone: `make -C internal lint`, `make -C frontend test`.
+- Individual backend steps (all from the root Makefile — there are no subdirectory Makefiles):
+  `make tidy-check` / `build` / `lint` / `vulncheck` / `test` / `cover` (coverage gate).
 - Dev harness: `go run ./cmd/dev import <path>` (`--catalog <dir>` to browse the DB, `--debug`
   for pprof; also `watch`, `errors`, `sessions`, `rebuild fts`)
 

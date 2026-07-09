@@ -1,5 +1,9 @@
 name: CI
 
+# Native path filters (not dorny/paths-filter): fine while main is deliberately
+# unprotected for solo velocity. When branch protection + required checks arrive
+# (the contribution-readiness round), revisit — a required check that never runs
+# because a PR didn't touch its paths blocks merge. See _project-tracking/design/ci.md.
 on:
   push:
     branches: [main, dev]
@@ -9,7 +13,7 @@ on:
       - "go.sum"
       - ".golangci.yml"
       - "Makefile"
-      - "internal/Makefile"
+      - "testdata/**"
       - ".github/workflows/ci.yml"
   pull_request:
     paths:
@@ -18,7 +22,7 @@ on:
       - "go.sum"
       - ".golangci.yml"
       - "Makefile"
-      - "internal/Makefile"
+      - "testdata/**"
       - ".github/workflows/ci.yml"
 
 permissions:
@@ -32,8 +36,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Version must match the local Homebrew install — findings differ across
+      # linter majors, and "local and CI are identical" is the whole contract.
       - uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.1.6
+          version: v2.12.2
           install-only: true
+      # exiftool is a required test dependency: without it the entire xmp sync
+      # suite (oscillator guard, echo check, conflict resolution, sidecar merge)
+      # and the dependency daemon round-trip self-skip, hiding regressions.
+      - run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
       - run: make check-backend

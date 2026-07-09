@@ -1,277 +1,83 @@
 # Go backend — repo hygiene & CI strategy
 
-**Status: IMPLEMENTED (2026-07-08).** Makefiles at repo root, `internal/`,
-and `frontend/`. `make check` (repo root) is exactly what CI runs — nothing
-should fail in the pipeline that `make check` wouldn't have already caught
-locally. No git hooks (deliberately skipped — annoying, make discipline
-covers it).
+**Status: BUILT (2026-07-08, revised 2026-07-09).** This doc describes what is; the root
+`Makefile` is the implementation. Running `make check-backend` locally is exactly what CI
+runs — nothing should fail in the pipeline that it wouldn't have already caught. No git hooks
+(deliberately skipped — annoying, make discipline covers it).
 
-Went with Makefiles over the originally-spec'd bash scripts: `make` is the
-dominant Go-community convention (Kubernetes, Prometheus, Hugo), is
-zero-install on every dev machine and CI runner, and the recursive
-`$(MAKE) -C <dir>` pattern gives us per-area Makefiles that compose cleanly.
+## Mechanism: one root Makefile
+
+Went with Make over the originally-spec'd bash scripts: `make` is the dominant Go-community
+convention (Kubernetes, Prometheus, Hugo) and is zero-install on every dev machine and CI
+runner. One constraint added 2026-07-09 (Ari): **everything lives in the single root
+`Makefile`** — Go only operates at the module root, so the first cut's per-directory Makefiles
+(`internal/Makefile` doing `cd .. && go …`) were a fiction and were removed. `make check` runs
+backend + frontend; `make check-backend` is the CI entry point; individual targets
+(`tidy-check`/`build`/`lint`/`vulncheck`/`test`/`cover`) run standalone.
 
 ## Principle
 
-Every check has two properties: **why it exists** (what class of bug/drift it
-catches that the others don't) and **speed tier** (so `make check` fails
-fast on cheap mistakes before burning time on slow ones). Order: cheap →
-expensive.
+Every check has two properties: **why it exists** (what class of bug/drift it catches that the
+others don't) and **speed tier** (fail fast on cheap mistakes before burning time on slow
+ones). `check-backend` runs cheap → expensive.
 
-> **Note:** The sections below were originally spec'd as `scripts/*.sh`. The
-> implementation uses Makefiles instead — see `Makefile`, `internal/Makefile`,
-> `frontend/Makefile`, and `.github/workflows/ci.yml` for the as-built versions.
-> The *rationale* for each check still applies; only the invocation changed.
+## Targets
 
-## Tool pinning
-
-Use Go 1.24+'s native `tool` directive in `go.mod` instead of a hand-rolled
-`go install @version` step:
-
-```
-go get -tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.x.x
-go get -tool github.com/vladopajic/go-test-coverage/v2@v2.x.x
-go get -tool golang.org/x/vuln/cmd/govulncheck@latest
-```
-
-This records the tool + version in `go.mod`/`go.sum`, so `go mod tidy` keeps
-it honest and CI/local always run the identical binary — no separate
-version-pinning scheme to forget to update. Invoke via `go tool golangci-lint`
-/ `go tool go-test-coverage` (no `$GOBIN`/PATH management needed).
-
-## Steps
-
-Each step below is `scripts/<name>.sh` (e.g. `mod-tidy-check` →
-`scripts/mod-tidy-check.sh`).
-
-### Fast tier
-
-**`mod-tidy-check`** — `go mod tidy -diff`
-Catches: `go.mod`/`go.sum` drift (import added, tidy not run). Fails on a
-clean CI checkout with zero tolerance for drift. Cheapest check, always first.
-
-**`fmt`** — `gofmt -w . && goimports -w .`
-Dev-only convenience target: fixes formatting in place. Not run in CI.
-
-**`fmt-check`** — `gofmt -l . goimports -l .`, nonzero exit if any output.
-Catches: unformatted code. Split from `fmt` because CI must fail loudly, never
-silently rewrite files.
-
-**`vet`** — `go vet ./...`
-Catches: real semantic bugs (bad Printf verbs, Mutex copies, unreachable
-code). stdlib-only, no external binary, ~1s. Kept separate from `lint` so
-this fast signal doesn't wait on the slower golangci-lint run.
-
-### Medium tier
+**`tidy-check`** — `go mod tidy -diff`
+Catches `go.mod`/`go.sum` drift (import added, tidy not run). Cheapest check, always first.
 
 **`build`** — `go build ./...`
-Catches: compile errors in packages `go test` wouldn't touch (main packages,
-build-tag-gated files, untested packages).
+Catches compile errors in packages `go test` wouldn't touch (main packages, build-tag-gated
+files, untested packages).
 
-**`lint`** — `go tool golangci-lint run`
-Catches: everything vet doesn't — staticcheck, errcheck, gosec, unused,
-bodyclose, goconst, gocritic. Superset of vet, slower, run after the cheaper
-checks.
+**`lint`** — `golangci-lint run ./...`
+Everything vet doesn't catch, plus formatting (the v2 `formatters` section runs `gofmt` +
+`goimports` as lint findings — no separate fmt-check step). The config (`.golangci.yml`) also
+**mechanizes repo invariants**: `depguard` enforces domain-imports-stdlib-only, the
+junk-drawer-package ban, and `internal/ast` purity; `forbidigo` bans `fmt.Print*` per
+coding-guidelines §4. Version pinning: CI installs the exact version of the local Homebrew
+install via `golangci-lint-action`'s `version:` field — findings differ across linter majors,
+so the two must move together. Do NOT lower the module's `go` directive to satisfy an old
+linter binary; bump the linter instead (learned 2026-07-09).
 
-### Slow tier
+**`vulncheck`** — `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`
+Known CVEs that the code's call graph actually reaches, not every vuln in the module tree.
+`@latest` on purpose: a vuln scanner wants the freshest database, not a pin. Proved itself the
+day it was added — flagged GO-2026-5856 (crypto/tls, reachable via the pprof debug server and
+the EXIF fetch path) and forced the go1.26.5 patch bump.
 
-**`test`** — `go test -race ./...`
-Race detector always on, not optional — this repo has SQLite + concurrent
-import/watch paths where races are invisible in a quick dev run but appear
-under CI's different scheduling.
+**`test`** — `go test -race -coverprofile=coverage.out ./...`
+Race detector always on — SQLite + concurrent import/watch paths have races invisible in a
+quick dev run that appear under CI's different scheduling.
 
-**`cover`** — `go test -race -coverprofile=coverage.out ./...` then
-`go tool cover -func=coverage.out`
-Produces the `coverage.out` artifact consumed by `cover-html` (human) and
-`cover-check` (gate). Kept separate from `cover-check` so a coverage-gate
-failure can be debugged against visible numbers instead of a bare pass/fail.
+**`cover`** — depends on `test`, so the suite runs ONCE (the coverprofile run *is* the test
+run; no separate test step in CI). Prints the filtered total and gates it: ≥ `COVERAGE_MIN`
+(70 at creation, measured 74.0% — **ratchet up as areas gain tests, never down**). Excludes
+`cmd/dev` and `internal/testutil` (wiring and test support by design). `internal/migrations`
+is deliberately NOT excluded — its 0% is a real gap that should stay visible.
 
-**`cover-html`** — `go tool cover -html=coverage.out -o coverage.html`
-Local-only convenience, opens in a browser with uncovered lines highlighted.
-Never part of CI.
+**`check-backend`** — `tidy-check build lint vulncheck cover`, with a pass/fail banner.
 
-**`cover-check`** — `go tool go-test-coverage --config .testcoverage.yml`
-Threshold gate (~75-80% overall, per-package overrides as needed). Depends on
-`cover` having produced `coverage.out`.
+## Test dependencies
 
-**`vulncheck`** — `go tool govulncheck ./...`
-Official Go tool (`golang.org/x/vuln/cmd/govulncheck`), pinned via the same
-`tool` directive mechanism as the linter. Catches known CVEs in dependencies
-— but specifically only the ones your code's call graph actually reaches,
-not every vuln that exists anywhere in the module tree, so it doesn't cry
-wolf over unused code paths. Cheap enough to run alongside `lint`.
+The `xmp` and `dependency` suites `t.Skip` without exiftool. CI installs
+`libimage-exiftool-perl` so those suites actually run — a green CI that silently skipped the
+active milestone's tests would be worse than a red one. Any future tool-gated suite gets the
+same treatment (install in CI, skip gracefully locally).
 
-### Aggregate
+Fixture hygiene: camera-original fixtures (`testdata/exif-original.JPG`) get their serial
+numbers stripped (`exiftool -SerialNumber= -LensSerialNumber= -InternalSerialNumber=
+-overwrite_original`) before commit — the tests need EXIF structure, not device identifiers,
+and the repo is public.
 
-**`check`** — runs, in order:
-`mod-tidy-check fmt-check vet build lint vulncheck test cover-check`
-The one command devs run before pushing and CI runs as its only step.
+## CI
 
-**`clean`** — removes `coverage.out`, `coverage.html`.
-
-## Scripts (draft)
-
-All scripts live in `scripts/`, start with `set -euo pipefail`, and are run
-from the repo root. `check.sh` just calls the others in order and stops at
-the first failure (bash's `set -e` + a plain sequence of commands gives this
-for free — no need for a task-runner's dependency graph).
-
-```bash
-#!/usr/bin/env bash
-# scripts/mod-tidy-check.sh
-set -euo pipefail
-go mod tidy -diff
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/fmt.sh — dev-only, fixes in place
-set -euo pipefail
-gofmt -w .
-go tool goimports -w .
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/fmt-check.sh — CI: fail loudly, never rewrite
-set -euo pipefail
-unformatted=$(gofmt -l .; go tool goimports -l .)
-if [ -n "$unformatted" ]; then
-  echo "$unformatted"
-  exit 1
-fi
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/vet.sh
-set -euo pipefail
-go vet ./...
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/build.sh
-set -euo pipefail
-go build ./...
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/lint.sh
-set -euo pipefail
-go tool golangci-lint run
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/vulncheck.sh
-set -euo pipefail
-go tool govulncheck ./...
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/test.sh
-set -euo pipefail
-go test -race ./...
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/cover.sh — produces coverage.out, consumed by cover-html/cover-check
-set -euo pipefail
-go test -race -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/cover-html.sh — local-only, never run in CI
-set -euo pipefail
-./scripts/cover.sh
-go tool cover -html=coverage.out -o coverage.html
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/cover-check.sh
-set -euo pipefail
-./scripts/cover.sh
-go tool go-test-coverage --config .testcoverage.yml
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/clean.sh
-set -euo pipefail
-rm -f coverage.out coverage.html
-```
-
-```bash
-#!/usr/bin/env bash
-# scripts/check.sh — the one command devs run before pushing, and what CI calls
-set -euo pipefail
-./scripts/mod-tidy-check.sh
-./scripts/fmt-check.sh
-./scripts/vet.sh
-./scripts/build.sh
-./scripts/lint.sh
-./scripts/vulncheck.sh
-./scripts/test.sh
-./scripts/cover-check.sh
-(cd frontend && bun run format:check && bun run check)
-```
-
-`chmod +x scripts/*.sh` once at creation time; invoke as `./scripts/check.sh`.
-
-Note: `goimports` needs adding as a `tool` directive too
-(`golang.org/x/tools/cmd/goimports`) alongside golangci-lint and
-go-test-coverage.
-
-## `.golangci.yml` (v2 schema)
-
-```yaml
-version: "2"
-linters:
-  default: standard
-  enable:
-    - errcheck
-    - gosec
-    - bodyclose
-    - goconst
-    - gocritic
-```
-
-`default: standard` is the baseline (govet, unused, staticcheck, ineffassign,
-etc.); the explicit list adds error-checking, security, and a few
-diagnostic-only extras. Avoid `default: all` — it needs constant
-exclusion-tuning to stay usable.
-
-## `.testcoverage.yml` (go-test-coverage config)
-
-```yaml
-threshold:
-  total: 75
-exclude:
-  paths:
-    - internal/main.go
-```
-
-Adjust the exclude list as generated/wiring-only files appear.
-
-## CI (GitHub Actions)
-
-See [ci.md](ci.md) for the actual workflow — it covers both backend and
-frontend triggering together (path-filtered, only runs the stack that
-changed), which is why it's no longer split per-doc here.
+See [ci.md](ci.md) — trigger/orchestration is shared with the frontend and lives there.
 
 ## Explicitly out of scope
 
-- **Git hooks** — skipped by request. Revisit only if `check.sh` drift
-  (people pushing without running it) becomes an actual recurring problem.
-- **Codecov/external coverage services** — go-test-coverage's GitHub Action
-  reads the local `coverage.out` and needs no external account/token; add an
-  external service only if trend dashboards across time become a real need.
-- **Complexity linters** (`cyclop` etc.) — add only when a specific PR shows
-  a concrete need; tuning thresholds blind is wasted effort.
+- **Git hooks** — skipped by request. Revisit only if `make check` drift (pushing without
+  running it) becomes an actual recurring problem.
+- **Codecov/external coverage services** — the Makefile gate needs no account/token; add an
+  external service only if trend dashboards become a real need.
+- **Complexity linters** (`cyclop` etc.) — add only when a specific PR shows a concrete need.

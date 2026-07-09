@@ -1,123 +1,66 @@
 # CI orchestration
 
-**Status: IMPLEMENTED (2026-07-08).** `.github/workflows/ci.yml` runs
-`make check-backend`. Recursive Makefiles at repo root / `internal/` /
-`frontend/` ensure local `make check` runs the identical checks.
-See [repo-hygiene-backend.md](repo-hygiene-backend.md) for the shift from
-scripts to Makefiles.
+**Status: BUILT (2026-07-08, revised 2026-07-09).** `.github/workflows/ci.yml` runs
+`make check-backend` — the same target a dev runs locally from the single root Makefile
+(see [repo-hygiene-backend.md](repo-hygiene-backend.md) for the targets and the shift from
+scripts to Make). This doc covers the trigger/orchestration layer.
 
-> **Note:** The workflow YAML below is the original spec. The as-built version
-> uses `make check-backend` instead of individual script steps — see
-> `.github/workflows/ci.yml` for the current implementation.
+## Path filtering: native `on.paths`, with a recorded caveat
 
-## Why path-filter, and which kind
+A pure-backend change shouldn't pay for a backend run's cost, and vice versa. Two ways to
+filter; the original spec chose [`dorny/paths-filter`](https://github.com/dorny/paths-filter),
+the implementation went with **native `on.push.paths`/`on.pull_request.paths`** — simpler, no
+third-party action, and correct for the current phase.
 
-A pure-backend change shouldn't pay for a frontend build, and vice versa —
-precedented, common pattern, not unusual. Two ways to do it:
+**The caveat, so it isn't rediscovered the hard way:** with native path filtering, a workflow
+that doesn't trigger reports *no* status check. Once branch protection marks `backend` as a
+required check, a PR that touches no backend paths has a required check that never runs — and
+GitHub blocks the merge instead of treating it as "not applicable." dorny/paths-filter avoids
+this by always running one workflow that internally skips work.
 
-- **Native `on.push.paths`/`on.pull_request.paths`** — the workflow doesn't
-  start at all if nothing in the listed paths changed. Simple, but has a
-  real gotcha once branch protection is enabled (see
-  [manual-setup.md](manual-setup.md), currently deferred): a required status
-  check that never runs because a PR didn't touch its paths can block merge
-  instead of being treated as "not applicable."
-- **[`dorny/paths-filter`](https://github.com/dorny/paths-filter) inside one
-  workflow** — the workflow always runs and always reports exactly one PR
-  status check; a first job computes `backend-changed`/`frontend-changed`
-  booleans, later jobs are gated with `if:` on those. No "check never ran"
-  gotcha, since there's always exactly one check, it just skips work.
+**Decision (Ari, 2026-07-09):** main is deliberately unprotected right now for solo velocity.
+Branch protection, required checks, and everything contribution-facing arrive together in a
+dedicated **contribution-readiness round** before opening the repo — revisit this filter choice
+there (switch to dorny, or list the workflow as non-required). Until then, native paths stand.
 
-Going with the second specifically **because** branch protection is a
-planned future step, not because it's needed today — better to build the
-habit now than hit the surprise later when protection actually turns on.
+## What triggers the backend job
 
-## `.github/workflows/ci.yml`
+`**.go`, `go.mod`, `go.sum`, `.golangci.yml`, `Makefile`, `testdata/**`, and the workflow file
+itself. Rationale for the non-obvious ones:
 
-```yaml
-name: ci
-on: [push, pull_request]
+- `go.mod`/`go.sum` — a dependency bump can break the build with zero `.go` edits.
+- `.golangci.yml` / `Makefile` — a check-config change must re-run the checks it configures.
+- `testdata/**` — a fixture change can flip test outcomes without touching source.
 
-jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - '**/*.go'
-              - 'go.mod'
-              - 'go.sum'
-            frontend:
-              - 'frontend/**'
+Push triggers are scoped to `main`/`dev`; PRs from any branch still run.
 
-  backend-check:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - run: ./scripts/mod-tidy-check.sh
-      - run: ./scripts/fmt-check.sh
-      - run: ./scripts/vet.sh
-      - run: ./scripts/build.sh
-      - run: ./scripts/lint.sh
-      - run: ./scripts/vulncheck.sh
-      - run: ./scripts/test.sh
-      - run: ./scripts/cover-check.sh
+## The backend job
 
-  frontend-check:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - run: cd frontend && bun install
-      - run: cd frontend && bun run format:check
-      - run: cd frontend && bun run check
-```
+checkout → setup-go (`go-version-file: go.mod`) → install golangci-lint (pinned to the local
+Homebrew version — see repo-hygiene-backend.md on why the pin must track local) → install
+exiftool (`libimage-exiftool-perl`; without it the xmp + dependency suites self-skip and hide
+regressions) → `make check-backend`.
 
-Note this **inlines** `scripts/check.sh`'s steps rather than calling the
-script wholesale, specifically so `backend-check` doesn't also try to `cd
-frontend` (which `check.sh` does at its tail for the *local dev* one-command
-case). Two entry points, same underlying scripts, slightly different
-composition — not a duplication problem since the actual check logic still
-lives in one place per step.
+## Frontend job: deferred
 
-`go.mod`/`go.sum` changes always trigger `backend-check` even with zero
-`.go` file edits — a dependency version bump can break the build without
-touching a single line of Go source.
+Deliberately absent (Ari, 2026-07-09) until frontend implementation progresses — the current
+`frontend/src` is pre-rebuild and gating on it buys nothing. When it lands: setup-bun,
+`bun install`, `make check-frontend`, triggered on `frontend/**`; the `format:check` script gap
+([repo-hygiene-frontend.md](repo-hygiene-frontend.md)) should be closed in the same change.
 
 ## What's deliberately excluded right now
 
-Solo, heavy-development phase, not expecting or wanting outside
-contributions yet — so this workflow is scoped to **fast feedback for one
-person**, not contribution-gating:
+Solo, heavy-development phase — this workflow is scoped to **fast feedback for one person**,
+not contribution-gating:
 
-- No required-review / branch-protection enforcement — tracked as a future
-  step in [manual-setup.md](manual-setup.md), not wired to this workflow.
-- No CODEOWNERS, no PR templates — nothing here assumes another contributor
-  exists yet.
-- Triggers on every push to every branch (not just `dev`/`main`) — the
-  point right now is fast per-push signal, not gating merges.
+- No required-review / branch-protection enforcement — bundled into the future
+  contribution-readiness round ([manual-setup.md](../ops/manual-setup.md)), not this workflow.
+- No CODEOWNERS, no PR templates — nothing here assumes another contributor exists yet.
 
 ## Separate, already covered elsewhere
 
-- **CodeQL** (`.github/workflows/codeql.yml`) — its own workflow, own
-  triggers (push/PR/weekly cron), not path-filtered — security scanning is
-  cheap enough and valuable enough to just always run.
+- **CodeQL** (`.github/workflows/codeql.yml`) — own workflow, own triggers (push/PR/weekly
+  cron), not path-filtered — security scanning is cheap and valuable enough to always run.
 - **Dependabot + auto-merge** (`.github/dependabot.yml`,
-  `.github/workflows/dependabot-automerge.yml`) — unrelated trigger (PR
-  opened by Dependabot specifically), not part of this path-filter logic.
-- **Release** ([release.md](release.md)) — tag-push triggered, entirely
-  separate from this push/PR-triggered `ci.yml`.
+  `.github/workflows/dependabot-automerge.yml`) — unrelated trigger (Dependabot PRs only).
+- **Release** ([release.md](release.md)) — tag-push triggered, entirely separate.

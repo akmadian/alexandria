@@ -32,9 +32,9 @@ what *is*).
 |---|---|---|---|
 | **A** | **impl/06 XMP sync**: bidirectional sidecar sync — inbound read, conflict grid, judgment apply, keyword union, outbound merge-write, settings consumers, ingest/watcher triggers, per-asset debounce | Backend | Core DONE (2026-07-08). **Remaining:** caption/title inbound (blocked on sparse observation writer), `alexandria:Flag` custom namespace (OQ #8) |
 | ~~B~~ | ~~Query-layer round~~ | Backend | **✅ DONE (2026-07-08)** — `internal/ast` + full surface + collections + FTS⋈tags. Old `AssetFilter`/`List` deleted. **Seam round is now unblocked.** |
-| **C** | **CI wiring** per [`design/ci.md`](design/ci.md) + [`design/repo-hygiene-backend.md`](design/repo-hygiene-backend.md) (+ the `format`/`format:check` script gap in [`design/repo-hygiene-frontend.md`](design/repo-hygiene-frontend.md)) | Ops | Unblocked, parallel to anything |
+| ~~C~~ | ~~CI wiring~~ | Ops | **✅ DONE (2026-07-09)** — root `Makefile` (`make check-backend`) + `.github/workflows/ci.yml` (native path filter) + `.golangci.yml` (invariants mechanized via depguard/forbidigo) + govulncheck + 70% coverage gate. Frontend job + `format:check` gap deferred until frontend rebuild. |
 
-A and B are independent; do in either order or interleave. C is background-sized.
+With B and C done, the **seam round** is the next backend frontier (query layer landed; reconcile `contract.ts` per the ledger in [`seam/01-queries-and-commands.md`](seam/01-queries-and-commands.md)). A (impl/06 remainder) is independent and small.
 
 ## The tree below the frontier (dependency order)
 
@@ -69,4 +69,4 @@ per milestone).
 | Backend | impl/01–06 + 11 + 13 done (06 core — caption/title + flag pending); impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
 | Seam | Design pre-shaped; **unblocked now** (query-layer round done) | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
 | Frontend | Design complete (2026-07-07, Wails v2 locked); **architecture locked by the ground-up redesign round (2026-07-08, `frontend/09`)** — `frontend/src/` is disposable, rebuild fresh; implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
-| Ops / Testing | Specs waiting in [`design/`](design/) (CI, release, telemetry, testing strategy); no milestone tracking yet | — |
+| Ops / Testing | CI + backend hygiene BUILT (2026-07-09, `Makefile` + `ci.yml`); release, telemetry, testing-strategy specs still waiting in [`design/`](design/) | — |
