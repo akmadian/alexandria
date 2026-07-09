@@ -42,6 +42,10 @@ func main() {
 		OnStartup:   host.onStartup,
 		OnShutdown:  host.onShutdown,
 		Bind:        host.boundServices(),
+		// No EnumBind: Wails would emit TS `enum`s, but frontend/09 mandates
+		// string-literal unions. Domain enums flow through the hand-rolled
+		// generator (make generate-seam) into frontend/src/_generated-types
+		// instead, in the shape the frontend actually consumes (seam impl/14 §5).
 	})
 	if err != nil {
 		log.Fatalf("alexandria: run: %v", err)

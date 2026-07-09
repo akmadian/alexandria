@@ -1,8 +1,9 @@
 # impl/14 — Seam Bindings & Generation Harness
 
-**Status: spec ready (2026-07-09), not started.** First of the three seam-round docs
-(14 → then 15 ∥ 16). Numbering continues the project-wide impl sequence (backend owns 01–13);
-these live in `seam/impl/` because the seam is its own area.
+**Status: ✅ DONE (2026-07-09).** First of the three seam-round docs (14 → then 15 ∥ 16).
+Numbering continues the project-wide impl sequence (backend owns 01–13); these live in
+`seam/impl/` because the seam is its own area. **What shipped and the two deviations from the
+locked decisions are recorded in §7 (bottom); read that before 15/16.**
 
 **Scope:** the machinery every other seam doc depends on — the Wails v2 composition root at the
 repo root, the `internal/seam` package skeleton, the TS generation pipeline (Wails bindings +
@@ -50,12 +51,17 @@ doc builds the generator and the host; 15 and 16 fill in the surface.
      path-filtered CI job.
 5. **TS generation is split in two, both outputs committed:**
    - **Wails generates** method bindings + struct models (`frontend/wailsjs/`) at
-     `wails dev`/`build` time — its native mechanism, plus `EnumBind` for domain enums.
+     `wails dev`/`build` time — its native mechanism. ~~plus `EnumBind` for domain enums.~~
+     **DEVIATION (2026-07-09): no EnumBind** — see §7.①. Wails `EnumBind` emits a TS `enum`,
+     but frontend/09 mandates string-literal unions; and its `{Value, TSName}` manifest leaked a
+     Wails shape into `internal/domain`. Domain enums moved to the hand-rolled generator.
    - **A hand-rolled generator** (no tygo — rejected: we'd post-process its conventions
-     anyway) emits what Wails can't shape: `TokenField`/`TokenOperator` literal unions, the
-     per-field grammar table (field → operators → value kind), and — for impl/16 — the event
-     topic/type unions. It is a small Go program that **imports `internal/ast`** and prints TS,
-     so it compiles against the source of truth and cannot drift.
+     anyway) emits what Wails can't shape: `TokenField`/`TokenOperator`/`ValueKind` literal
+     unions + the per-field grammar table from `internal/ast`, **and the domain-enum unions**
+     (`FileType`, `ColorLabel`, …) — the members **discovered by type-checking `internal/domain`
+     via `go/packages`**, so domain stays pure `type`+`const` with no list to drift (§7.①). It
+     is a small Go program that compiles against the Go source of truth and cannot drift; impl/16
+     extends it with the event topic/type unions.
 6. **The generator is NOT hooked into `wails build`.** It runs via `go:generate` /
    `make generate-seam`; output is committed; CI enforces freshness (regenerate +
    `git diff --exit-code`). Rationale: regeneration is only needed when the Go vocabulary
@@ -75,15 +81,19 @@ doc builds the generator and the host; 15 and 16 fill in the surface.
    `ListSources` — real repo, trivial shape): Go method → wails binding → generated TS →
    called from a scratch frontend page under `wails dev`. Proves the whole pipe before 15/16
    invest in it.
-3. `EnumBind` wiring for the domain enums the contract re-exports (FileType, ColorLabel, Flag,
-   FileStatus, …).
-4. The vocabulary generator: emits to `frontend/src/_generated-types/` (the module slot
-   frontend/09 reserved). Deterministic output (sorted, header comment naming the source
-   package and forbidding hand edits).
-5. Makefile: `generate-seam`, `check-app` (build root w/ tag + freshness gate); scope existing
-   backend targets to `./internal/... ./cmd/...`. CI: new path-filtered `app` job
-   (`main.go`, `app.go`, `wails.json`, `internal/seam/**`, `internal/ast/**`,
-   `frontend/wailsjs/**`, `frontend/src/_generated-types/**`).
+3. ~~`EnumBind` wiring for the domain enums~~ → **the generator emits the domain-enum unions**
+   (FileType, ColorLabel, Flag, FileStatus, SourceKind, SourceConnectivity), members discovered
+   by type-checking `internal/domain` (§7.①).
+4. The generator: emits to `frontend/src/_generated-types/` (the module slot frontend/09
+   reserved) — `vocabulary.ts` (from `internal/ast`) + `enums.ts` (from `internal/domain`).
+   Deterministic output (sorted, DO-NOT-EDIT header naming the source package).
+5. Makefile: `generate-seam`, `check-generated` (freshness gate), `check-app` (build root w/
+   tag); scope existing backend targets to `./internal/... ./cmd/...`. CI: path-filtered
+   `frontend` + `app` jobs. **REFINEMENTS (2026-07-09), see §7.②:** the freshness gate lives in
+   **`check-backend`**, not `check-app` — it is webkit-free and the drift is caused by Go edits,
+   so it must run on the fast path. And CI is **three workflow files** (backend/frontend/app),
+   with the webkit apt deps moved *off* the backend job so its green-without-them proves the
+   isolation §5 demands.
 
 ## 4. Decisions to make DURING implementation (pre-scoped, none blocking)
 
@@ -92,7 +102,7 @@ doc builds the generator and the host; 15 and 16 fill in the surface.
 | Generator home | `internal/seam/generate/` as a `go run`-able main, invoked by a `//go:generate` directive in `internal/seam` — keeps it beside its subject; `cmd/` stays user-facing. |
 | Wails `ts_generation.outputType` | `interfaces` — frontend/09 wants plain data shapes, not classes. |
 | Union naming map | `ast.Field`/`ast.Operator` values → TS literal members verbatim (they're already camelCase strings); only the *type names* map (`Field`→`TokenField`, `Operator`→`TokenOperator`). |
-| wailsjs regeneration in `check-app` | Run `wails generate module` (or a dev-mode build) and diff, if invocation proves cheap; otherwise freshness covers only the hand-rolled generator and wailsjs drift is caught at the next `wails dev`. |
+| wailsjs regeneration in `check-app` | **RESOLVED: freshness covers only the hand-rolled generator.** `wails generate module` runs the app's `OnStartup` (it opened the catalog + wrote a log during a trial), so it is neither cheap nor side-effect-free — unsafe as a CI gate. `wailsjs/` drift is caught at the next `wails dev`/`build`. |
 
 ## 5. Acceptance
 
@@ -108,10 +118,49 @@ doc builds the generator and the host; 15 and 16 fill in the surface.
   gtk/webkit headers; `make check-frontend` passes without a Go toolchain.
 - CI green across backend / frontend-freshness / app jobs, each triggered only by its paths.
 
-## 6. Doc maintenance on landing (same change)
+## 6. Doc maintenance on landing (same change) — ✅ DONE 2026-07-09
 
-- Master head: frontier row → impl/15 + impl/16 unblocked (parallel picks).
-- `../00-START-HERE.md`: sequencing section updated (bindings live, generation live).
-- `../../backend/impl/12-app-host.md`: note the host now exists; startup-sequence design round
-  is next trigger.
-- This file: status block → what shipped + deviations.
+- [x] Master head: frontier → impl/14 DONE, impl/15 ∥ impl/16 the picks; CI-round row (C) note
+  updated (frontend + app jobs now exist).
+- [x] `../00-START-HERE.md`: sequencing section updated (impl/14 DONE, 15∥16 frontier).
+- [x] `../../backend/impl/12-app-host.md`: §1 marks the host built by impl/14; trigger → the
+  startup-sequence design round.
+- [x] This file: status block + §7 (shipped + deviations).
+
+## 7. What shipped + deviations (2026-07-09)
+
+Built to spec: Wails composition root (`main.go`/`app.go`/`wails.json`/`build/`), `internal/seam`
+with `ListSources` bound end to end, generated `wailsjs/` (committed, linguist-generated), the
+hand-rolled generator at `internal/seam/generate` → `frontend/src/_generated-types/`,
+`internal/app` (one-dir app home `~/.alexandria` + per-run timestamped logging, macOS
+Console.app symlink), `internal/logging` shared constructor, and the Makefile scoping. Two
+deviations from the §2 locked decisions, both raised by Ari during review:
+
+**① No EnumBind; domain enums flow through the hand-rolled generator, members *discovered*.**
+`EnumBind` (§2-5, §3-3) is out. Reasons, in order of force: (a) it emits a TS `enum`, which
+frontend/09 explicitly forbids (literal unions only); (b) its `{Value, TSName}` slice is a Wails
+shape, and putting it in `internal/domain` is scope leak; (c) any hand-authored member list is a
+second sync surface — the recurring smell. Resolution: the generator loads `internal/domain` with
+`go/packages` and enumerates the string constants of each named enum type, so the **consts are the
+single source of truth** — `internal/domain` is byte-for-byte unchanged (pure `type`+`const`),
+adding a const auto-surfaces, and a renamed/removed type fails the generator loudly. The generator
+holds only a manifest of *which type names* to publish, not their members. Cost: `golang.org/x/tools`
+promoted from transitive to a direct dep (generator-only; not in the app binary). `Source.Kind`
+stays `string` at the wire, which is what frontend/09 locked ("loose at the wire, strict at the
+constructor"). C13 holds — TS still generated from Go, just via our generator not Wails for enums.
+
+**② Freshness gate on the backend path + CI as three workflow files.** §2-4 put the freshness
+gate in `check-app`; it moved to **`check-backend`** (target `check-generated`) because it is
+webkit-free and the drift is caused by editing `internal/ast`/`internal/domain` — gating that
+behind the app toolchain means the person who breaks it never runs it. `check-app` re-runs it too
+(so an app-path trigger also verifies it). CI is `ci.yml` (backend) + `ci-frontend.yml` +
+`ci-app.yml`, each natively path-filtered; the gtk/webkit apt deps moved from the backend job to
+the app job, so the backend job's green-without-them *is* the isolation proof (§5). The app job
+stubs `frontend/dist` for the `//go:embed` (compile check, not asset bundling — that is
+`wails build`), keeping it Go+webkit only, no bun.
+
+**Enforcement summary (how drift is caught):** generator unit tests (determinism, no-`enum`-leak,
+sorted) + the `go/packages` fatal-on-empty guard + the `check-generated` freshness gate (Go→TS) +
+the frontend `satisfies Record<TokenField, FieldGrammar>` compile gate (C10) + `check-app`
+compiling the root. Hand-edits to the generated files are caught from the app side; Go vocabulary
+edits from the backend side.

@@ -34,11 +34,18 @@ Cross-cutting rules live in `../CONSTANTS.md` (C6–C9, C13 are the seam's).
 
 1. **Query-layer round (backend):** ✅ DONE (impl/13, 2026-07-08) — `internal/ast` is the
    single query authority; the catalog surface consumes it.
-2. **Seam round:** SPECCED (2026-07-09) into three build docs under `impl/` — **14**
-   (bindings & generation harness; also creates the Wails composition root that
-   `../backend/impl/12-app-host.md` later grows) first, then **15** (method surface) ∥ **16**
-   (events & jobs). Structure locked: root `main.go`/`app.go`/`wails.json`/`build/`, bound
-   services in `internal/seam`, generated TS committed with a CI freshness gate.
+2. **Seam round:** three build docs under `impl/` — **14** (bindings & generation harness) then
+   **15** (method surface) ∥ **16** (events & jobs).
+   - **impl/14: ✅ DONE (2026-07-09).** Wails composition root at the repo root
+     (`main.go`/`app.go`/`wails.json`/`build/`); `internal/seam` walking skeleton (`ListSources`)
+     bound end to end; TS generation live — Wails reflects struct models, and a hand-rolled
+     generator (`internal/seam/generate`) emits the grammar unions from `internal/ast` + the
+     domain-enum unions discovered by type-checking `internal/domain` (no EnumBind). Committed
+     generated TS is freshness-gated on the backend path; three path-filtered CI jobs
+     (backend/frontend/app) enforce it and the toolchain isolation. The composition root is the
+     `../backend/impl/12-app-host.md` seed.
+   - **impl/15 ∥ impl/16: the frontier now** (parallel). They add bound methods/events on the
+     same host + generator; no new seam plumbing.
 
 Frontend implementation unblocks after these — and now means the **ground-up rebuild** per
 `../frontend/09-ground-up-redesign-notes.md` (architecture locked 2026-07-08); its seam-method

@@ -32,14 +32,20 @@ what *is*).
 |---|---|---|---|
 | **A** | **impl/06 XMP sync**: bidirectional sidecar sync — inbound read, conflict grid, judgment apply, keyword union, outbound merge-write, settings consumers, ingest/watcher triggers, per-asset debounce | Backend | Core DONE (2026-07-08). **Remaining:** caption/title inbound (blocked on sparse observation writer), `alexandria:Flag` custom namespace (OQ #8) |
 | ~~B~~ | ~~Query-layer round~~ | Backend | **✅ DONE (2026-07-08)** — `internal/ast` + full surface + collections + FTS⋈tags. Old `AssetFilter`/`List` deleted. **Seam round is now unblocked.** |
-| ~~C~~ | ~~CI wiring~~ | Ops | **✅ DONE (2026-07-09)** — root `Makefile` (`make check-backend`) + `.github/workflows/ci.yml` (native path filter) + `.golangci.yml` (invariants mechanized via depguard/forbidigo) + govulncheck + 70% coverage gate. Frontend job + `format:check` gap deferred until frontend rebuild. |
+| ~~C~~ | ~~CI wiring~~ | Ops | **✅ DONE (2026-07-09)** — root `Makefile` (`make check-backend`) + `.github/workflows/ci.yml` (native path filter) + `.golangci.yml` (invariants mechanized via depguard/forbidigo) + govulncheck + 70% coverage gate. Frontend + app CI jobs added by impl/14 (`ci-frontend.yml`, `ci-app.yml`); `format:check` gap still deferred until frontend rebuild. |
 
-With B and C done, the **seam round** is the frontier — and it is now fully specced
-(2026-07-09) as three build docs: [`seam/impl/14-bindings-and-generation.md`](seam/impl/14-bindings-and-generation.md)
-**first** (Wails composition root + TS generation — the root it creates is the impl/12 app-host
-seed), then [`seam/impl/15-method-surface.md`](seam/impl/15-method-surface.md) ∥
-[`seam/impl/16-events-and-jobs.md`](seam/impl/16-events-and-jobs.md). A (impl/06 remainder) is
-independent and small.
+With B and C done, the **seam round** is the frontier.
+[`seam/impl/14-bindings-and-generation.md`](seam/impl/14-bindings-and-generation.md) is now
+**✅ DONE (2026-07-09)** — Wails composition root at the repo root, `internal/seam` walking
+skeleton (`ListSources`) bound end to end, and the TS generation harness: Wails reflects struct
+models; a hand-rolled generator (`internal/seam/generate`) emits the `TokenField`/`TokenOperator`/
+`ValueKind` unions from `internal/ast` and the domain-enum unions *discovered by type-checking
+`internal/domain`* (no EnumBind, no hand-maintained lists — see the impl/14 status block for the
+two deviations). Enforced by a freshness gate on the backend path + three path-filtered CI jobs
+(backend / frontend / app), which also now prove the toolchain isolation. The composition root is
+the impl/12 app-host seed. **Frontier picks now:** [`seam/impl/15-method-surface.md`](seam/impl/15-method-surface.md)
+∥ [`seam/impl/16-events-and-jobs.md`](seam/impl/16-events-and-jobs.md) (parallel). A (impl/06
+remainder) is independent and small.
 
 ## The tree below the frontier (dependency order)
 

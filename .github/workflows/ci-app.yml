@@ -1,0 +1,61 @@
+name: CI — app
+
+# App check surface (impl/14 §2, decision 4): compile the root Wails package the
+# backend job excludes, so a break in the composition root, the bound seam
+# services, or the generated bindings is caught. This is the ONE job that needs
+# the gtk/webkit toolchain — kept isolated here so the backend job proves it does
+# not. Triggers on the root, the seam, the enum/vocabulary sources it generates
+# from, and the committed generated outputs (so a hand-edit to those is caught by
+# the freshness gate check-app re-runs). ubuntu-latest (24.04) ships
+# webkit2gtk-4.1 only → the Makefile builds with -tags webkit2_41.
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "main.go"
+      - "app.go"
+      - "wails.json"
+      - "build/**"
+      - "internal/seam/**"
+      - "internal/ast/**"
+      - "internal/domain/**"
+      - "frontend/wailsjs/**"
+      - "frontend/src/_generated-types/**"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - ".github/workflows/ci-app.yml"
+  pull_request:
+    paths:
+      - "main.go"
+      - "app.go"
+      - "wails.json"
+      - "build/**"
+      - "internal/seam/**"
+      - "internal/ast/**"
+      - "internal/domain/**"
+      - "frontend/wailsjs/**"
+      - "frontend/src/_generated-types/**"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - ".github/workflows/ci-app.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install webkit build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      # check-app stubs frontend/dist for the //go:embed, runs the freshness gate,
+      # and compiles the root with -tags webkit2_41. No bun: this is a compile
+      # check, not an asset-bundling check (that is `wails build`, a release step).
+      - name: Run make check-app
+        run: make check-app

@@ -1,9 +1,12 @@
-name: CI
+name: CI — backend
 
-# Native path filters (not dorny/paths-filter): fine while main is deliberately
-# unprotected for solo velocity. When branch protection + required checks arrive
-# (the contribution-readiness round), revisit — a required check that never runs
-# because a PR didn't touch its paths blocks merge. See _project-tracking/design/ci.md.
+# One workflow per check surface (backend / frontend / app), each path-filtered
+# to its own trigger so a change only spins up the jobs it can affect — the
+# separation impl/14 §2 (decision 4) locks. Native path filters (not
+# dorny/paths-filter): fine while main is deliberately unprotected for solo
+# velocity. When branch protection + required checks arrive (the contribution-
+# readiness round), revisit — a required check that never runs because a PR
+# didn't touch its paths blocks merge. See _project-tracking/design/ci.md.
 on:
   push:
     branches: [main, dev]
@@ -45,11 +48,12 @@ jobs:
       # exiftool is a required test dependency: without it the entire xmp sync
       # suite (oscillator guard, echo check, conflict resolution, sidecar merge)
       # and the dependency daemon round-trip self-skip, hiding regressions.
-      # gtk/webkit are build dependencies for the Wails v2 composition root at
-      # the repo root (seam round, impl/14). ubuntu-latest (24.04) ships
-      # webkit2gtk-4.1 only, so when the wails dependency lands the root package
-      # builds with `-tags webkit2_41` (Makefile's concern; noted in impl/12).
+      # No gtk/webkit on purpose: check-backend excludes the root Wails package,
+      # and this job passing without those headers IS the toolchain-isolation
+      # guarantee (impl/14 §5). The webkit-coupled root build lives in ci-app.yml.
       - name: Install external dependencies needed for tests
-        run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl libgtk-3-dev libwebkit2gtk-4.1-dev
+        run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
+      # check-backend also runs the generated-TS freshness gate (webkit-free):
+      # a vocabulary/enum edit here that forgot `make generate-seam` fails.
       - name: Run make check-backend
         run: make check-backend

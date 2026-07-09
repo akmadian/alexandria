@@ -8,3 +8,6 @@ coverage.out
 /build/bin
 /frontend/dist
 /frontend/package.json.md5
+
+# Root binary from a bare `go build .` (wails build outputs to build/bin)
+/alexandria

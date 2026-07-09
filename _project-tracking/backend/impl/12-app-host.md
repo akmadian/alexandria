@@ -10,11 +10,13 @@ process *stays up*: the startup sequence, service supervision, live settings rea
 
 ## Owned work (collected from existing triggers)
 
-1. **Wails v2 wiring / composition root** — *split 2026-07-09:* the seam round (impl/14) now
-   CREATES the composition root (Wails v2 requires the main package at the repo root, so there
-   is exactly one place it can live — no throwaway skeleton, see §Pre-design notes). Bound
-   methods, generated TS models, and the event bridge are seam-round work. This milestone
-   *grows the same host in place* with everything below.
+1. **Wails v2 wiring / composition root** — *split 2026-07-09; **built by impl/14 (DONE
+   2026-07-09)**.* The composition root exists: `main.go` (thin entrypoint) + `app.go` (the
+   `host` struct: resolve catalog → `sqlite.Open` → construct seam services → `Bind`) +
+   `wails.json` + `build/`, with the walking-skeleton `ListSources` bound end to end. Bound
+   methods and the event bridge continue in impl/15 ∥ impl/16. This milestone *grows the same
+   host in place* with everything below — `newHost`/`onStartup`/`onShutdown` are the seams to
+   grow into (their doc comments point back here).
 2. **Startup sequence** (FR P0): resolve catalog dir → instance lock → open SQLite → migrations →
    integrity check (background) → wire dependencies → seed defaults → start watcher → update check
    → `app:ready` → background catch-up scan. Two hard exits (can't open DB, can't migrate);
@@ -84,5 +86,7 @@ macOS only) buys back Console.app's Log Reports browsability. Thumbnails-in-cata
 - Windows instance-lock hardening (`DEFERRED.md` §3) — Windows QA pass trigger, unchanged.
 - Frontend implementation — its own area (`../../frontend/`).
 
-**Trigger to start:** the seam round completes (there is a contract to host). Design the startup
-sequence first; it's the piece with no existing spec beyond the FR bullet list.
+**Trigger to start:** ~~the seam round completes~~ — impl/14 has landed the host (2026-07-09) and
+impl/15 ∥ impl/16 are filling in the contract in parallel. The next trigger for *this* milestone
+is the **startup-sequence design round**: design it first; it's the piece with no existing spec
+beyond the FR bullet list, and it grows the impl/14 host in place.

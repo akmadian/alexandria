@@ -14,6 +14,13 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
+// The vocabulary generator (./generate) emits the frontend's TokenField /
+// TokenOperator / ValueKind unions + grammar table from internal/ast. Output is
+// committed and freshness-gated, not built into wails — prefer `make
+// generate-seam`; this keeps `go generate ./...` working too. Paths are relative
+// to this package dir (go:generate's cwd).
+//go:generate go run ./generate -out ../../frontend/src/_generated-types
+
 // sourceLister is the slice of the source repository the seam needs. Kept as a
 // local interface so the service is unit-testable without a database and depends
 // on a capability, not a concrete repo.

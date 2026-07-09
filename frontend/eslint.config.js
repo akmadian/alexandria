@@ -7,7 +7,10 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
     // mock-api.check.ts is Ari's settled, framework-free node check script — not
     // app code, superseded by the vitest setup; left untouched, out of lint.
-    { ignores: ["dist", "node_modules", "coverage", "src/api/mock-api.check.ts"] },
+    // _generated-types is Go-generated (internal/seam/generate); tsc still
+    // typechecks it (the completeness gate), but it is not hand-authored so it
+    // is out of style lint.
+    { ignores: ["dist", "node_modules", "coverage", "src/api/mock-api.check.ts", "src/_generated-types"] },
     js.configs.recommended,
     ...tseslint.configs.recommended,
     jsxA11y.flatConfigs.recommended,

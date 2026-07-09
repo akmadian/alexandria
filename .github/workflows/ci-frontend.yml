@@ -1,0 +1,34 @@
+name: CI — frontend
+
+# Frontend check surface: bun only, no Go toolchain — that this passes without Go
+# is the other half of the toolchain-isolation guarantee (impl/14 §5). Typechecks
+# against the *committed* generated types (frontend/src/_generated-types), so the
+# `satisfies Record<TokenField, …>` completeness gate (C10) runs here.
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "frontend/**"
+      - "Makefile"
+      - ".github/workflows/ci-frontend.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "Makefile"
+      - ".github/workflows/ci-frontend.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install frontend dependencies
+        run: cd frontend && bun install --frozen-lockfile
+      - name: Run make check-frontend
+        run: make check-frontend
