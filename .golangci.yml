@@ -33,8 +33,8 @@ linters:
     # The exceptions are common, well-known, and unambiguous (i/j/k for loops, etc.)
     # We want to enforce readability and clarity in variable names, while allowing for common conventions.
     varnamelen:
-      min-length: 3
-      allow-underscore: true
+      min-name-length: 3
+      max-name-length: 30
       ignore-names:
         - "i"          # loop counters
         - "j"          # loop counters
