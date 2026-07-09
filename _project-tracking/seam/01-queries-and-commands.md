@@ -103,7 +103,7 @@ standing seam conventions. Known deltas to apply in the seam round:
 
 | # | Delta | Detail |
 |---|---|---|
-| 1 | `AssetFilter` (flat struct) → AST `where` | The flat optional-field filter is exactly the "flat pill row, implicit AND" subset. Evolve: `ListQuery.filter` becomes the boolean tree; the flat struct's fields become the v1 token vocabulary (they already match). Backend `catalog.AssetFilter` likewise: it currently conflates predicate + sort + paging in one struct — the query round splits it into query / arrangement / page per C1/C4. |
+| 1 | `AssetFilter` (flat struct) → AST `where` | The flat optional-field filter is exactly the "flat pill row, implicit AND" subset. Evolve: `ListQuery.filter` becomes the boolean tree; the flat struct's fields become the v1 token vocabulary (they already match). **Backend side DONE (impl/13):** `catalog.AssetFilter` deleted; replaced by `ast.Query` (predicate tree) + `ast.Arrangement` + `ast.Page` per C1/C4. Seam side (contract.ts) still pending. |
 | 2 | `AssetScope` gains `{ kind: "tag"; id }` | Current contract + `deriveListQuery` treat tags as filter fields; the locked state model makes a sidebar tag selection a *scope* (durable, navigational). Tag-as-token also remains (filtering by tag within another scope). |
 | 3 | `AssetSort` → `Arrangement` | Add grouping (group-by key) alongside sort field + direction, per C4. Sort fields keep the ingest/capture distinction (already present as `added`/`captured`). |
 | 4 | `Settings` shape is stale | impl/11 made settings three JSON files and YAGNI-dropped `undoStackSize`, `catalogBackupCount`, `updateCheckEnabled`, `defaultSortField/Dir`; `xmpConflictResolution`/`xmpWriteBack` return with impl/06. Regenerate from `internal/settings` types when bindings land. |

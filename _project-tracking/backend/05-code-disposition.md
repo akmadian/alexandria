@@ -37,7 +37,7 @@ the table:
 | `internal/domain/settings.go` | Keep for now; reconcile with contract Settings at the seam round (open question #5) |
 | `internal/domain/{tag,collection,duplicate,asset_group,errors}.go` | Keep; light edits (+`Origin` on groups) |
 | `internal/catalog/interfaces.go` | **Delete and replace** with the writer-scoped interfaces (impl/02 §2). Do not extend the old fat interface |
-| `internal/catalog/asset_query.go` | Modify: `AssetPatch` **dies**, replaced by FilePatch/TriagePatch; AssetFilter grows later (seam round) |
+| `internal/catalog/asset_query.go` | Modify: `AssetPatch` **dies** (DONE, replaced by FilePatch/TriagePatch); `AssetFilter` **dies** (DONE, impl/13 — replaced by `internal/ast` query types) |
 | `internal/migrations/migrator.go` | **Keep** (sound); remove user_version interplay per impl/01 §18 |
 | `internal/migrations/0001_initial_schema.sql` | **Rewrite in place** per impl/01 (pre-release; no migration stacking) |
 | `internal/sqlite/asset_repo.go` | Heavy modify: DBTX, writer-split methods, sort whitelist. The scan/marshal helpers and patch-SQL builder *mechanics* are fine — port them |

@@ -13,6 +13,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/ast"
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
@@ -112,9 +113,10 @@ func TestMatrix_InRunDuplicatePair(t *testing.T) {
 	if result.Added != 2 || result.Dups != 1 {
 		t.Fatalf("in-run pair: added=%d dups=%d, want 2/1", result.Added, result.Dups)
 	}
-	allAssets, _ := assets.List(ctx, catalog.AssetFilter{})
-	if len(allAssets) != 2 {
-		t.Fatalf("want 2 assets (original + duplicate identity), got %d", len(allAssets))
+	var assetCount int
+	assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&assetCount)
+	if assetCount != 2 {
+		t.Fatalf("want 2 assets (original + duplicate identity), got %d", assetCount)
 	}
 }
 
@@ -247,9 +249,10 @@ func TestCopyThenDeleteMove_RecordedForReview(t *testing.T) {
 		t.Fatalf("no auto-merge: want the original missing (1) + the copy minted (1), got missing=%d added=%d", result.Missing, result.Added)
 	}
 
-	all, _ := assets.List(ctx, catalog.AssetFilter{})
-	if len(all) != 2 {
-		t.Fatalf("both identities must survive (no merge): got %d assets, want 2", len(all))
+	var allCount int
+	assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&allCount)
+	if allCount != 2 {
+		t.Fatalf("both identities must survive (no merge): got %d assets, want 2", allCount)
 	}
 	stale, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4")
 	if stale == nil || stale.ID != original.ID || stale.FileStatus != domain.FileStatusMissing {
@@ -288,9 +291,10 @@ func TestSidecar_TrackedNotIndexed(t *testing.T) {
 	if result.Added != 1 {
 		t.Fatalf("added=%d, want 1 (the mp4; the xmp is a sidecar)", result.Added)
 	}
-	allAssets, _ := assets.List(ctx, catalog.AssetFilter{})
-	if len(allAssets) != 1 {
-		t.Fatalf("want 1 asset, got %d (sidecar leaked in as an asset?)", len(allAssets))
+	var assetCount int
+	assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&assetCount)
+	if assetCount != 1 {
+		t.Fatalf("want 1 asset, got %d (sidecar leaked in as an asset?)", assetCount)
 	}
 	sidecars, err := (&sqlite.SidecarRepo{DB: assets.DB}).ListByKey(ctx, source.ID, "trip", "photo")
 	if err != nil {
@@ -428,15 +432,13 @@ func TestFullProcessingInvariant_Cancel(t *testing.T) {
 	}
 	result, _ := ingester.Run(ctx, source, files) // cancellation returns context.Canceled
 
-	committedAssets, _ := assets.List(context.Background(), catalog.AssetFilter{})
+	committedAssets, _, _ := assets.QueryAssets(context.Background(), ast.Query{Version: ast.Version}, ast.Arrangement{SortField: ast.SortAdded, SortDir: ast.SortDesc}, ast.Page{Limit: 10000})
 	if len(committedAssets) == 0 {
 		t.Skip("cancel raced ahead of the first commit; nothing to check")
 	}
 	dlqRows, _ := imports.ListErrors(context.Background(), result.SessionID)
 	thumbnails := thumbnailer.New(thumbnailDir)
 	for _, asset := range committedAssets {
-		// Every committed asset is FULLY processed: a thumbnail on disk, or a DLQ
-		// row explaining why. No half-imported placeholder, ever.
 		if asset.ThumbnailAt != nil {
 			if _, err := os.Stat(thumbnails.Path(asset.ID, 512)); err != nil {
 				t.Fatalf("asset %s flagged thumbnailed but no file at %s", asset.ID, thumbnails.Path(asset.ID, 512))

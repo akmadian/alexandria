@@ -7,9 +7,8 @@ What a design-refinement instance should pick up. Ordered by when they block.
 - **FTS `tags` column** (was #1) — **RESOLVED: keep, standalone trigger-maintained table**, `tags`
   app-maintained, rebuildable via `sqlite.RebuildFTS`. Chose standalone FTS5 over external-content
   (the old-value bookkeeping for a non-content column was more code). See impl/01 status block.
-- **Sort-field whitelist** (part of #4) — **DONE in impl/02**: `sqlite`'s `List` maps a logical
-  sort name through a whitelist and errors on anything else (kills the ORDER BY injection). The
-  rest of the query-layer round (#4) is still open.
+- **Sort-field whitelist** (part of #4) — **DONE in impl/02**, then superseded by impl/13: the
+  old `sortColumns` map + `List` method deleted; the AST compiler handles sort validation now.
 - **Type-registry package naming** — **RESOLVED: `assettype`** (not `filetype`); type `Handler`
   (not `TypeHandler`). Repo convention: "Type" = format category, "Kind" = entity variant.
 - **`InTx` isolation** — shipped with deferred BEGIN; **follow-up (non-blocking):** switch to
@@ -28,38 +27,13 @@ What a design-refinement instance should pick up. Ordered by when they block.
 
 ## Design rounds that were never held (deliberately deferred)
 
-4. **Query layer round** — **now fully specified: implementation doc `impl/13-query-layer.md`**
-   (2026-07-08 design session — `internal/ast` package holding grammar AND compiler, sealed node
-   union, vocabulary discipline, the full method surface; the residual decisions below are
-   restated there in §9 with recommendations). Everything below stands as the round's history.
-   **Heavily pre-shaped by the 2026-07-07 frontend round**: the AST
-   grammar (nested AND/OR/NOT, versioned, typed structs) and token-registry contract are now
-   DESIGNED in `../seam/01-queries-and-commands.md`; this round makes it *compile* — the one
-   filter→SQL authority that `QueryAssets`, smart collections, and Review projections reuse.
-   Still open here: COUNT strategy for grid scrollbar (`total`) — separate COUNT vs
-   `COUNT(*) OVER()`; NULL `captured_at` sort fallback (#2 above); splitting
-   `catalog.AssetFilter`'s conflated predicate+sort+paging into query/arrangement/page (seam
-   ledger #1). Do before the seam round. (Sort-field whitelist already DONE in impl/02.)
-   **Scope folded in by the 2026-07-08 audit** (all discovered ownerless, all natural residents
-   of this round):
-   - **Collections CRUD** — `catalog.CollectionRepository` is declared with zero implementations
-     and no owning milestone; manual-collection CRUD is the trivial sibling of the smart-collection
-     evaluation this round builds anyway.
-   - **Prior-state bulk read for undo** — `ApplyTriagePatch` returns nothing and `AssetReader`
-     has no get-by-IDs; the P1 undo design captures per-asset prior state, so the read must be
-     shaped alongside the query/command surface (don't design `UpdateAssets` without it).
-   - **FTS⋈tags slice** — the `TODO(fts)` at `sqlite/tag_repo.go`: recompose `assets_fts.tags`
-     on keyword import / `SetAssetTags`, backfill via `RebuildFTS`. Owned by impl/10 historically,
-     but the FTS query tier this round builds is its first real consumer — land it here so search
-     includes keywords the day search ships. Tag-UI backend (Tree/Update/Delete/reparent) stays
-     with impl/10.
-   - **Seam requirements from the 2026-07-08 frontend ground-up redesign round** (full list +
-     rationale in `../frontend/09-ground-up-redesign-notes.md` §Seam requirements): ids-only
-     window `AssetIDSlice(query, arrangement, from, to)`; `IndexOfAsset(query, arrangement, id)`;
-     `exceptIds` on the `UpdateAssets` target (single-statement apply, never id-materialized
-     loops); ORDER BY always appends a unique tiebreaker (`…, id`); distinct-values lookup for
-     suggestable fields; bulk-undo acceptance test (300k triage patch, undo, redo — no stall) +
-     undo history byte budget + the undo-vs-external-write decision (undo notes in the same doc).
+4. **Query layer round** — **✅ RESOLVED (impl/13, built 2026-07-08).** `internal/ast` (grammar +
+   vocabulary + validation + JSON + `CompileToSQL`); full query/command surface (`QueryAssets`,
+   `AssetIDSlice`, `IndexOfAsset`, `DistinctValues`, `ReadTriageStates`, `ApplyTriagePatchByQuery`);
+   collections CRUD; FTS⋈tags recomposition; COALESCE expression index for captured_at sort
+   fallback (#2). `AssetFilter`/`List`/`buildFilterSQL`/`sortColumns` deleted (zero production
+   callers, tests migrated). Separate COUNT strategy chosen (parallel query, not window function).
+   Query/arrangement/page split done (seam ledger #1). All folded-in scope items shipped.
 5. **The seam round** — reconcile `frontend/src/api/contract.ts` against the engine. The work
    list now lives as the **reconciliation ledger** in `../seam/01-queries-and-commands.md`
    (10 numbered deltas: AST filter, tag scope, arrangement, stale Settings/SourceStatus,

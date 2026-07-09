@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/ast"
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 )
@@ -25,17 +27,6 @@ const assetColumns = `id, source_id, relative_path, file_status, last_verified_a
 	xmp_last_read_at, xmp_last_written_at, xmp_hash,
 	thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at,
 	title, caption, judgment_modified_at`
-
-// sortColumns whitelists the logical sort names the API exposes, mapping each to
-// a real column. Anything not in the map is rejected — sort fields are never
-// interpolated raw (that was an injection hole).
-var sortColumns = map[string]string{
-	"captured": "captured_at",
-	"added":    "ingested_at",
-	"rating":   "rating",
-	"filename": "filename",
-	"size":     "size_bytes",
-}
 
 // --- Reader ---
 
@@ -141,49 +132,243 @@ func (r *AssetRepo) ListPathsStatus(ctx context.Context, sourceID string) ([]cat
 	return out, rows.Err()
 }
 
-func (r *AssetRepo) List(ctx context.Context, filter catalog.AssetFilter) ([]*domain.Asset, error) {
-	where, args := buildFilterSQL(filter)
-	q := "SELECT " + assetColumns + " FROM assets"
-	if len(where) > 0 {
-		q += " WHERE " + strings.Join(where, " AND ")
-	}
+// --- Query-layer reader (impl/13) ---
 
-	sortField := "ingested_at"
-	if filter.SortField != "" {
-		col, ok := sortColumns[filter.SortField]
-		if !ok {
-			return nil, fmt.Errorf("invalid sort field %q", filter.SortField)
-		}
-		sortField = col
-	}
-	sortDir := "DESC"
-	if filter.SortDir == "asc" {
-		sortDir = "ASC"
-	}
-	q += " ORDER BY " + sortField + " " + sortDir
+func (r *AssetRepo) QueryAssets(ctx context.Context, query ast.Query, arrangement ast.Arrangement, page ast.Page) ([]catalog.AssetRow, int, error) {
+	now := time.Now()
+	start := time.Now()
 
-	if filter.Limit > 0 {
-		q += fmt.Sprintf(" LIMIT %d", filter.Limit)
-		if filter.Offset > 0 {
-			q += fmt.Sprintf(" OFFSET %d", filter.Offset)
-		}
-	}
-
-	rows, err := r.DB.QueryContext(ctx, q, args...)
+	selectStmt, err := ast.CompileSelect(query, arrangement, page, now)
 	if err != nil {
-		return nil, err
+		return nil, 0, fmt.Errorf("query assets: compile select: %w", err)
+	}
+	countStmt, err := ast.CompileCount(query, now)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query assets: compile count: %w", err)
+	}
+
+	log.Printf("query assets: compiled select (%d args), compiled count (%d args)",
+		len(selectStmt.Args), len(countStmt.Args))
+
+	rows, err := r.DB.QueryContext(ctx, selectStmt.SQL, selectStmt.Args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query assets: select: %w", err)
 	}
 	defer rows.Close()
 
-	var assets []*domain.Asset
+	var result []catalog.AssetRow
 	for rows.Next() {
-		a, err := scanAsset(rows)
+		row, err := scanAssetRowSlim(rows)
 		if err != nil {
+			return nil, 0, fmt.Errorf("query assets: scan: %w", err)
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	var total int
+	if err := r.DB.QueryRowContext(ctx, countStmt.SQL, countStmt.Args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("query assets: count: %w", err)
+	}
+
+	log.Printf("query assets: returned %d rows, total %d, took %s",
+		len(result), total, time.Since(start).Round(time.Millisecond))
+
+	return result, total, nil
+}
+
+func (r *AssetRepo) AssetIDSlice(ctx context.Context, query ast.Query, arrangement ast.Arrangement, fromIndex, toIndex int) ([]string, error) {
+	stmt, err := ast.CompileIDSlice(query, arrangement, fromIndex, toIndex, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("asset id slice: compile: %w", err)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, stmt.SQL, stmt.Args...)
+	if err != nil {
+		return nil, fmt.Errorf("asset id slice: query: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		assets = append(assets, a)
+		ids = append(ids, id)
 	}
-	return assets, rows.Err()
+	return ids, rows.Err()
+}
+
+func (r *AssetRepo) IndexOfAsset(ctx context.Context, query ast.Query, arrangement ast.Arrangement, id string) (*int, error) {
+	stmt, err := ast.CompileIndexOf(query, arrangement, id, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("index of asset: compile: %w", err)
+	}
+
+	var position int
+	err = r.DB.QueryRowContext(ctx, stmt.SQL, stmt.Args...).Scan(&position)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("index of asset: query: %w", err)
+	}
+	return &position, nil
+}
+
+func (r *AssetRepo) DistinctValues(ctx context.Context, field ast.Field) ([]string, error) {
+	stmt, err := ast.CompileDistinctValues(field)
+	if err != nil {
+		return nil, fmt.Errorf("distinct values: compile: %w", err)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, stmt.SQL, stmt.Args...)
+	if err != nil {
+		return nil, fmt.Errorf("distinct values: query: %w", err)
+	}
+	defer rows.Close()
+
+	var values []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
+func (r *AssetRepo) ReadTriageStates(ctx context.Context, ids []string) ([]catalog.TriageState, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := "SELECT id, rating, color_label, flag, note FROM assets WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	rows, err := r.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read triage states: %w", err)
+	}
+	defer rows.Close()
+
+	var states []catalog.TriageState
+	for rows.Next() {
+		var state catalog.TriageState
+		var rating sql.NullInt64
+		var colorLabel, flag, note sql.NullString
+		if err := rows.Scan(&state.ID, &rating, &colorLabel, &flag, &note); err != nil {
+			return nil, err
+		}
+		if rating.Valid {
+			v := int(rating.Int64)
+			state.Rating = &v
+		}
+		if colorLabel.Valid {
+			cl := domain.ColorLabel(colorLabel.String)
+			state.ColorLabel = &cl
+		}
+		if flag.Valid {
+			f := domain.Flag(flag.String)
+			state.Flag = &f
+		}
+		state.Note = nullStringPtr(note)
+		states = append(states, state)
+	}
+	return states, rows.Err()
+}
+
+// ApplyTriagePatchByQuery applies a triage patch via a single UPDATE … WHERE
+// <compiled query>. Returns the affected IDs for undo's before-image capture.
+func (r *AssetRepo) ApplyTriagePatchByQuery(ctx context.Context, query ast.Query, exceptIDs []string, p catalog.TriagePatch) ([]string, error) {
+	clauses, args := buildTriageSQL(p)
+	if len(clauses) == 0 {
+		return nil, nil
+	}
+	now := formatTime(time.Now().UTC())
+	clauses = append(clauses, "judgment_modified_at = ?", "updated_at = ?")
+	args = append(args, now, now)
+
+	whereStmt, err := ast.CompileWhere(query, exceptIDs, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("apply triage by query: compile: %w", err)
+	}
+	args = append(args, whereStmt.Args...)
+
+	updateSQL := "UPDATE assets SET " + strings.Join(clauses, ", ") + " WHERE " + whereStmt.SQL +
+		" RETURNING id"
+
+	rows, err := r.DB.QueryContext(ctx, updateSQL, args...)
+	if err != nil {
+		return nil, fmt.Errorf("apply triage by query: update: %w", err)
+	}
+	defer rows.Close()
+
+	var affectedIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		affectedIDs = append(affectedIDs, id)
+	}
+
+	log.Printf("apply triage by query: affected %d assets", len(affectedIDs))
+	return affectedIDs, rows.Err()
+}
+
+func scanAssetRowSlim(rows *sql.Rows) (catalog.AssetRow, error) {
+	var row catalog.AssetRow
+	var rating sql.NullInt64
+	var colorLabel, flag sql.NullString
+	var width, height sql.NullInt64
+	var capturedAt, thumbnailAt, ingestedAt sql.NullString
+	var sizeBytes int64
+
+	if err := rows.Scan(
+		&row.ID, &row.SourceID, &row.Filename, &row.FileType, &row.FileStatus,
+		&rating, &colorLabel, &flag,
+		&width, &height, &capturedAt, &ingestedAt,
+		&thumbnailAt, &row.RelativePath, &sizeBytes,
+	); err != nil {
+		return catalog.AssetRow{}, err
+	}
+
+	row.SizeBytes = sizeBytes
+	if rating.Valid {
+		v := int(rating.Int64)
+		row.Rating = &v
+	}
+	if colorLabel.Valid {
+		cl := domain.ColorLabel(colorLabel.String)
+		row.ColorLabel = &cl
+	}
+	if flag.Valid {
+		f := domain.Flag(flag.String)
+		row.Flag = &f
+	}
+	if width.Valid {
+		v := int(width.Int64)
+		row.Width = &v
+	}
+	if height.Valid {
+		v := int(height.Int64)
+		row.Height = &v
+	}
+	row.CapturedAt = parseNullTime(capturedAt)
+	row.ThumbnailAt = parseNullTime(thumbnailAt)
+	if ingestedAt.Valid {
+		row.IngestedAt = parseTime(ingestedAt.String)
+	}
+
+	return row, nil
 }
 
 // --- Observation writer (ingest / watcher / reconciler) ---
@@ -392,76 +577,6 @@ func (r *AssetRepo) execUpdateIn(ctx context.Context, clauses []string, args []a
 
 // --- SQL builders ---
 
-func buildFilterSQL(f catalog.AssetFilter) ([]string, []any) {
-	var where []string
-	var args []any
-
-	if !f.IncludeDeleted {
-		where = append(where, "is_deleted = 0")
-	}
-	if len(f.FileTypes) > 0 {
-		ph := make([]string, len(f.FileTypes))
-		for i, ft := range f.FileTypes {
-			ph[i] = "?"
-			args = append(args, string(ft))
-		}
-		where = append(where, "file_type IN ("+strings.Join(ph, ",")+")")
-	}
-	if f.Rating != nil {
-		where = append(where, "rating = ?")
-		args = append(args, *f.Rating)
-	}
-	if f.RatingMin != nil {
-		where = append(where, "rating >= ?")
-		args = append(args, *f.RatingMin)
-	}
-	if len(f.ColorLabels) > 0 {
-		ph := make([]string, len(f.ColorLabels))
-		for i, cl := range f.ColorLabels {
-			ph[i] = "?"
-			args = append(args, string(cl))
-		}
-		where = append(where, "color_label IN ("+strings.Join(ph, ",")+")")
-	}
-	if len(f.Flags) > 0 {
-		ph := make([]string, len(f.Flags))
-		for i, fl := range f.Flags {
-			ph[i] = "?"
-			args = append(args, string(fl))
-		}
-		where = append(where, "flag IN ("+strings.Join(ph, ",")+")")
-	}
-	if len(f.SourceIDs) > 0 {
-		ph := make([]string, len(f.SourceIDs))
-		for i, sid := range f.SourceIDs {
-			ph[i] = "?"
-			args = append(args, sid)
-		}
-		where = append(where, "source_id IN ("+strings.Join(ph, ",")+")")
-	}
-	if f.CapturedAfter != nil {
-		where = append(where, "captured_at >= ?")
-		args = append(args, formatTime(*f.CapturedAfter))
-	}
-	if f.CapturedBefore != nil {
-		where = append(where, "captured_at <= ?")
-		args = append(args, formatTime(*f.CapturedBefore))
-	}
-	if len(f.TagIDs) > 0 {
-		ph := make([]string, len(f.TagIDs))
-		for i, tid := range f.TagIDs {
-			ph[i] = "?"
-			args = append(args, tid)
-		}
-		where = append(where, "id IN (SELECT asset_id FROM asset_tags WHERE tag_id IN ("+strings.Join(ph, ",")+"))")
-	}
-	if f.SearchText != "" {
-		where = append(where, "id IN (SELECT asset_id FROM assets_fts WHERE assets_fts MATCH ?)")
-		args = append(args, f.SearchText)
-	}
-
-	return where, args
-}
 
 // buildTriageSQL returns the sparse SET clauses for the four judgment columns.
 // Shared by the judgment writer and the XMP sync writer (which appends its own

@@ -244,47 +244,6 @@ func TestAssetRepo_SoftDelete(t *testing.T) {
 	}
 }
 
-func TestAssetRepo_ListWithFilters(t *testing.T) {
-	db := testutil.NewTestDB(t)
-	repo := &sqlite.AssetRepo{DB: db}
-	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
-
-	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
-	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
-	testutil.NewTestAsset(t, db, src.ID, "c.jpg")
-
-	// Set one to deleted
-	repo.SoftDelete(ctx, []string{"asset-c.jpg"})
-
-	// List non-deleted (default)
-	assets, err := repo.List(ctx, catalog.AssetFilter{})
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(assets) != 2 {
-		t.Fatalf("got %d, want 2", len(assets))
-	}
-
-	// List including deleted
-	assets, err = repo.List(ctx, catalog.AssetFilter{IncludeDeleted: true})
-	if err != nil {
-		t.Fatalf("list all: %v", err)
-	}
-	if len(assets) != 3 {
-		t.Fatalf("got %d, want 3", len(assets))
-	}
-
-	// Filter by file type
-	assets, err = repo.List(ctx, catalog.AssetFilter{FileTypes: []domain.FileType{domain.FileTypeVideo}})
-	if err != nil {
-		t.Fatalf("list video: %v", err)
-	}
-	if len(assets) != 0 {
-		t.Fatalf("got %d, want 0", len(assets))
-	}
-}
-
 func TestAssetRepo_ApplyTriagePatch_BulkSetsOnlyJudgment(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
@@ -601,15 +560,3 @@ func TestStore_InTxRollback(t *testing.T) {
 	}
 }
 
-func TestAssetRepo_List_RejectsUnknownSortField(t *testing.T) {
-	db := testutil.NewTestDB(t)
-	repo := &sqlite.AssetRepo{DB: db}
-	ctx := context.Background()
-
-	if _, err := repo.List(ctx, catalog.AssetFilter{SortField: "filename; DROP TABLE assets"}); err == nil {
-		t.Fatal("expected error for non-whitelisted sort field")
-	}
-	if _, err := repo.List(ctx, catalog.AssetFilter{SortField: "filename"}); err != nil {
-		t.Fatalf("whitelisted sort field should work: %v", err)
-	}
-}

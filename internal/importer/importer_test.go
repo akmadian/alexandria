@@ -9,7 +9,6 @@ import (
 	"testing/fstest"
 
 	"github.com/akmadian/alexandria/internal/assettype"
-	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/akmadian/alexandria/internal/sqlite"
@@ -50,9 +49,10 @@ func TestRun_IndexesSupportedFilesOnly(t *testing.T) {
 	if res.Added != 3 {
 		t.Fatalf("added=%d, want 3 (jpg, png, mp4)", res.Added)
 	}
-	got, _ := assets.List(context.Background(), catalog.AssetFilter{})
-	if len(got) != 3 {
-		t.Fatalf("catalog has %d assets, want 3", len(got))
+	var count int
+	assets.DB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&count)
+	if count != 3 {
+		t.Fatalf("catalog has %d assets, want 3", count)
 	}
 }
 
@@ -100,10 +100,13 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	if res.Added != want {
 		t.Fatalf("added=%d, want %d JPEGs (the .txt in subdir is unsupported)", res.Added, want)
 	}
-	got, _ := assets.List(context.Background(), catalog.AssetFilter{})
-	for _, a := range got {
-		if a.PartialHash == "" {
-			t.Errorf("asset %s has no hash", a.RelativePath)
+	rows, _ := assets.DB.QueryContext(context.Background(), "SELECT relative_path, partial_hash FROM assets WHERE is_deleted=0")
+	defer rows.Close()
+	for rows.Next() {
+		var path, hash string
+		rows.Scan(&path, &hash)
+		if hash == "" {
+			t.Errorf("asset %s has no hash", path)
 		}
 	}
 
@@ -217,9 +220,10 @@ func TestWalk_FolderReorgRecordsMove(t *testing.T) {
 	if res.Added != 1 || res.Missing != 1 {
 		t.Fatalf("folder reorg must mint the new path (1) + mark old missing (1), got added=%d missing=%d", res.Added, res.Missing)
 	}
-	all, _ := assets.List(ctx, catalog.AssetFilter{})
-	if len(all) != 2 {
-		t.Fatalf("no relink: expected 2 distinct assets, got %d", len(all))
+	var count int
+	assets.DB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&count)
+	if count != 2 {
+		t.Fatalf("no relink: expected 2 distinct assets, got %d", count)
 	}
 	dups, _ := (&sqlite.DuplicateRepo{DB: assets.DB}).ListPending(ctx)
 	if len(dups) != 1 {

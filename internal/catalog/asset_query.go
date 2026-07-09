@@ -6,6 +6,36 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
+// AssetRow is the slim grid-card projection (~15 fields). Full *domain.Asset
+// stays Get-only (seam/01).
+type AssetRow struct {
+	ID           string
+	SourceID     string
+	Filename     string
+	FileType     domain.FileType
+	FileStatus   domain.FileStatus
+	Rating       *int
+	ColorLabel   *domain.ColorLabel
+	Flag         *domain.Flag
+	Width        *int
+	Height       *int
+	CapturedAt   *time.Time
+	IngestedAt   time.Time
+	ThumbnailAt  *time.Time
+	RelativePath string
+	SizeBytes    int64
+}
+
+// TriageState is the prior-state projection undo captures: before-images for
+// value writes.
+type TriageState struct {
+	ID         string
+	Rating     *int
+	ColorLabel *domain.ColorLabel
+	Flag       *domain.Flag
+	Note       *string
+}
+
 // FilePatch is the observation-only update applied on reimport: file facts
 // (always written — the file changed) plus extracted metadata (overlay — a
 // non-nil field overwrites, a nil field preserves the prior value, so a failed
@@ -66,23 +96,3 @@ type PathStatus struct {
 	FileStatus   domain.FileStatus
 }
 
-// AssetFilter is the query specification for AssetReader.List. SortField is a
-// logical name (captured/added/rating/filename/size), not a column — the repo
-// maps it through a whitelist, so an unknown value is rejected, never interpolated.
-type AssetFilter struct {
-	FileTypes      []domain.FileType
-	Rating         *int
-	RatingMin      *int
-	ColorLabels    []domain.ColorLabel
-	Flags          []domain.Flag
-	TagIDs         []string
-	SourceIDs      []string
-	CapturedAfter  *time.Time
-	CapturedBefore *time.Time
-	SearchText     string
-	IncludeDeleted bool
-	SortField      string
-	SortDir        string
-	Limit          int
-	Offset         int
-}

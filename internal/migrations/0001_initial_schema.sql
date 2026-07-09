@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS assets (
     updated_at          TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_assets_captured_at   ON assets(captured_at) WHERE is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_assets_captured_at   ON assets(COALESCE(captured_at, mtime)) WHERE is_deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_assets_file_type     ON assets(file_type) WHERE is_deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_assets_rating        ON assets(rating) WHERE is_deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_assets_color_label   ON assets(color_label) WHERE is_deleted = 0;

@@ -93,10 +93,7 @@ func (r *TagRepo) AddAssetTags(ctx context.Context, assetID string, tagIDs []str
 			return fmt.Errorf("tags: attach %s→%s: %w", assetID, tagID, err)
 		}
 	}
-	// TODO(fts): recompose assets_fts.tags for this asset once FTS⋈tags lands
-	// (impl/10 "FTS integration — DEFERRED", pending the FTS deep-dive). Until then
-	// tag text is only searchable after a RebuildFTS.
-	return nil
+	return r.recomposeFTSTags(ctx, assetID)
 }
 
 // ImportKeywords is the orchestrator both sync consumers call (inside a
@@ -147,6 +144,56 @@ func (r *TagRepo) ImportKeywords(ctx context.Context, assetID string, flat []str
 	}
 
 	return r.AddAssetTags(ctx, assetID, leafIDs, source)
+}
+
+// recomposeFTSTags rewrites the tags column in assets_fts for one asset.
+// Space-joined display names of ACTIVE (removed_at IS NULL) tags, including
+// ancestor names for hierarchical hits ("wedding" matches assets tagged
+// "weddings/2026").
+func (r *TagRepo) recomposeFTSTags(ctx context.Context, assetID string) error {
+	var tagsText string
+	err := r.DB.QueryRowContext(ctx, `
+		SELECT COALESCE(group_concat(name, ' '), '') FROM (
+			SELECT DISTINCT t.name
+			FROM asset_tags at
+			JOIN tags t ON t.id = at.tag_id
+			WHERE at.asset_id = ? AND at.removed_at IS NULL
+		)`,
+		assetID).Scan(&tagsText)
+	if err != nil {
+		return fmt.Errorf("tags: recompose fts for %s: %w", assetID, err)
+	}
+
+	// Also include ancestor tag names for hierarchical search.
+	var ancestorText string
+	err = r.DB.QueryRowContext(ctx, `
+		SELECT COALESCE(group_concat(name, ' '), '') FROM (
+			SELECT DISTINCT ancestor.name
+			FROM asset_tags at
+			JOIN tags leaf ON leaf.id = at.tag_id
+			JOIN tags ancestor ON leaf.path LIKE '%/' || ancestor.id || '/%'
+			WHERE at.asset_id = ? AND at.removed_at IS NULL AND ancestor.id != leaf.id
+		)`,
+		assetID).Scan(&ancestorText)
+	if err != nil {
+		return fmt.Errorf("tags: recompose fts ancestors for %s: %w", assetID, err)
+	}
+
+	combined := tagsText
+	if ancestorText != "" {
+		if combined != "" {
+			combined += " "
+		}
+		combined += ancestorText
+	}
+
+	_, err = r.DB.ExecContext(ctx,
+		"UPDATE assets_fts SET tags = ? WHERE asset_id = ?",
+		combined, assetID)
+	if err != nil {
+		return fmt.Errorf("tags: update fts for %s: %w", assetID, err)
+	}
+	return nil
 }
 
 // RebuildTagPaths recomputes every tag's path from parent_id (the derived-state

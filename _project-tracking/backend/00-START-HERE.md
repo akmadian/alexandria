@@ -35,7 +35,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/10-tag-system.md` | **🔨 consumer slice DONE (2026-07-07)** — D22; adjacency + materialized `path`, direct-attach junction, `color_mode` tri-state, judgment tombstones. `TagRepo` (EnsureTag/AddAssetTags/ImportKeywords/RebuildTagPaths) + `KeywordImporter` seam built; wired into impl/06. Tag-UI backend (Tree/Update/Delete/reparent) + FTS⋈tags deferred |
 | `impl/11-settings-service.md` | **✅ DONE (2026-07-07)** — `internal/settings`: three JSON files (`settings.json`/`machine.json`/`keybindings.json`), no DB table; generic `configFile[T]` with quarantine + hot-reload; ignore-list + worker counts wired. §5 live mid-run pool resize DEFERRED to impl/12 (DEFERRED §6) |
 | `impl/12-app-host.md` | **Stub, not started (created 2026-07-08).** The Wails composition root + everything that needs a long-running process: startup sequence (integrity check, backup-before-migration floor), watcher supervision (DEFERRED §2), live pool resize (DEFERRED §6). Trigger: seam round completes |
-| `impl/13-query-layer.md` | **Designed 2026-07-08, not started.** The query-layer round made concrete: new `internal/ast` (grammar + vocabulary + validation + JSON + `CompileToSQL` — the whole query authority, one pure package); `QueryAssets`/`AssetIDSlice`/`IndexOfAsset`/`DistinctValues`/`ReadTriageStates`/`ApplyTriagePatchByQuery` surface; collections CRUD; FTS⋈tags slice. `AssetFilter` dies. Unblocked NOW; gates the seam round |
+| `impl/13-query-layer.md` | **✅ DONE (2026-07-08).** `internal/ast` (grammar + vocabulary + validation + JSON + `CompileToSQL`); `QueryAssets`/`AssetIDSlice`/`IndexOfAsset`/`DistinctValues`/`ReadTriageStates`/`ApplyTriagePatchByQuery` surface; collections CRUD; FTS⋈tags slice; COALESCE expression index. `AssetFilter`/`List`/`buildFilterSQL`/`sortColumns` deleted. Unblocks the seam round |
 
 ## Where the project is right now
 
@@ -85,7 +85,8 @@ landed as the WRITE stage's 50-item `Store.InTx` in impl/04.
    assets so a missing file that reappears unchanged is restored, not skipped.
 5. ✅ `impl/05` watcher service — DONE (2026-07-07; sensor + poll-timer connectivity, D20 detect-and-flag)
 6. ✅ `impl/07` dependency fleet — exiftool slice DONE (2026-07-07; daemon + discovery; rest deferred)
-7. **IN PROGRESS:** `impl/06` XMP sync — inbound read + conflict decision + judgment application +
+7. ✅ `impl/13` query layer — DONE (2026-07-08; `internal/ast`, query/command surface, collections, FTS⋈tags, old surface deleted)
+8. **IN PROGRESS:** `impl/06` XMP sync — inbound read + conflict decision + judgment application +
    keyword union (impl/10) DONE (2026-07-07). **NEXT here:** caption/title via a sparse observation
    writer, outbound sidecar write, ingest/watcher triggers + debounce, and the
    `xmpWriteBack`/`xmpConflictResolution` settings.

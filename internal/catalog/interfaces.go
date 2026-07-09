@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/ast"
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
@@ -26,11 +27,17 @@ type SourceRepository interface {
 // AssetReader — read-only. Anyone may hold it.
 type AssetReader interface {
 	Get(ctx context.Context, id string) (*domain.Asset, error)
-	List(ctx context.Context, filter AssetFilter) ([]*domain.Asset, error)
-	FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error) // is_deleted=0 only
+	FindByHash(ctx context.Context, hash string, sizeBytes int64) (*domain.Asset, error)
 	FindBySourcePath(ctx context.Context, sourceID, relativePath string) (*domain.Asset, error)
 	ListKnownFiles(ctx context.Context, sourceID string) (map[string]domain.FileStat, error)
 	ListPathsStatus(ctx context.Context, sourceID string) ([]PathStatus, error)
+
+	// Query-layer methods (impl/13). Each is a new result SHAPE (C7).
+	QueryAssets(ctx context.Context, query ast.Query, arrangement ast.Arrangement, page ast.Page) ([]AssetRow, int, error)
+	AssetIDSlice(ctx context.Context, query ast.Query, arrangement ast.Arrangement, fromIndex, toIndex int) ([]string, error)
+	IndexOfAsset(ctx context.Context, query ast.Query, arrangement ast.Arrangement, id string) (*int, error)
+	DistinctValues(ctx context.Context, field ast.Field) ([]string, error)
+	ReadTriageStates(ctx context.Context, ids []string) ([]TriageState, error)
 }
 
 // AssetObservationWriter — ingest / watcher / reconciler ONLY. No judgment,
@@ -47,6 +54,7 @@ type AssetObservationWriter interface {
 // judgment_modified_at (this is the single code path that does).
 type AssetJudgmentWriter interface {
 	ApplyTriagePatch(ctx context.Context, ids []string, p TriagePatch) error
+	ApplyTriagePatchByQuery(ctx context.Context, query ast.Query, exceptIDs []string, p TriagePatch) ([]string, error)
 	SoftDelete(ctx context.Context, ids []string) error
 }
 

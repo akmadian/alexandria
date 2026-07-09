@@ -1,6 +1,6 @@
 # impl/13 — Query Layer (the AST → SQL compile authority)
 
-**Status: NOT STARTED.** Designed 2026-07-08 (Ari + design session; decisions attributed inline).
+**Status: ✅ DONE (2026-07-08).** Designed and built same day. `AssetFilter`/`List`/`buildFilterSQL`/`sortColumns` deleted; tests migrated.
 
 **Scope:** new `internal/ast` (the whole query authority: grammar types, vocabulary, validation,
 JSON wire form, SQL compilation); `internal/catalog` (interfaces grow the query/command surface;
