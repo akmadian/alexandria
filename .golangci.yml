@@ -115,6 +115,10 @@ linters:
     rules:
       - linters: [forbidigo]
         path: "cmd/"
+      # The root main package (main.go/app.go) is the Wails composition root — an
+      # app entrypoint like cmd/, so os.Exit and direct output belong there.
+      - linters: [forbidigo]
+        path: "^(main|app)\\.go$"
       - linters: [forbidigo]
         path: "_test\\.go$"
 

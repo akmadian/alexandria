@@ -3,3 +3,8 @@ spikes/
 .DS_Store
 coverage.out
 /dev
+
+# Wails / frontend build output
+/build/bin
+/frontend/dist
+/frontend/package.json.md5

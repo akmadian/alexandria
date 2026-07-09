@@ -7,6 +7,12 @@
 # and test support by design). Measured 74.0% at gate creation (2026-07-09).
 COVERAGE_MIN := 70
 
+# The engine packages — everything the backend checks touch. Deliberately
+# excludes the root Wails app package (main.go/app.go/logging.go), which needs the
+# gtk/webkit toolchain to build; it has its own `make check-app` (impl/14). This
+# is what lets backend work stay fast and toolchain-free (impl/14 §2, decision 4).
+BACKEND_PKGS := ./internal/... ./cmd/...
+
 check:
 	@failed=0; \
 	$(MAKE) --no-print-directory check-backend || failed=1; \
@@ -24,16 +30,16 @@ tidy-check-backend:
 	go mod tidy -diff
 
 build-backend:
-	go build ./...
+	go build $(BACKEND_PKGS)
 
 lint-backend:
-	golangci-lint run ./...
+	golangci-lint run $(BACKEND_PKGS)
 
 vulncheck-backend:
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	go run golang.org/x/vuln/cmd/govulncheck@latest $(BACKEND_PKGS)
 
 test-backend:
-	go test -race -coverprofile=coverage.out ./...
+	go test -race -coverprofile=coverage.out $(BACKEND_PKGS)
 
 cover-backend: test-backend
 	@grep -v -e '/cmd/dev/' -e '/internal/testutil/' coverage.out > coverage.filtered.out

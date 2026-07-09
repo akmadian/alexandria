@@ -26,6 +26,7 @@ import (
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
+	"github.com/akmadian/alexandria/internal/logging"
 	"github.com/akmadian/alexandria/internal/migrations"
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
@@ -39,7 +40,7 @@ func main() {
 	// The harness exists to see what the engine is doing, so debug logging is on
 	// by default (no flag). Setting it as the package default too means leaf
 	// packages that log via the global logger inherit the level.
-	log.SetDefault(newLogger())
+	log.SetDefault(logging.New(os.Stderr))
 
 	if len(os.Args) < 2 {
 		usage()
@@ -234,19 +235,6 @@ func (catalog *openedCatalog) currentMachine() settings.Machine {
 // the engine default, or a specific N to override.
 func cpuBoundWorkers() int {
 	return max(1, runtime.NumCPU()*3/4)
-}
-
-// newLogger builds the harness logger: debug level, with a timestamp and the
-// calling site so pipeline log lines are traceable to the stage that emitted
-// them. This is a dev tool — verbosity is the point.
-func newLogger() *log.Logger {
-	logger := log.NewWithOptions(os.Stderr, log.Options{
-		ReportTimestamp: true,
-		ReportCaller:    true,
-		TimeFormat:      time.TimeOnly,
-	})
-	logger.SetLevel(log.DebugLevel)
-	return logger
 }
 
 // ensureSource finds the source rooted at absolutePath, creating it if absent.

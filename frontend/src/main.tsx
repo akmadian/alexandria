@@ -1,14 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "@/i18n"; // side effect: i18next init, before any component renders
-import "@/styles/tokens.css";
-import "@/styles/themes/dark.css";
-import "@/styles/themes/light.css";
-import "@/styles/global.css";
-import { App } from "@/app/app";
+
+// impl/14: mounting the throwaway seam walking skeleton to prove the Wails pipe.
+// The real App (@/app/app) returns at the frontend ground-up rebuild (frontend/09).
+import { SeamSkeleton } from "@/seam-skeleton";
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <App />
+        <SeamSkeleton />
     </StrictMode>,
 );

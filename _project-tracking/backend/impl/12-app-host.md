@@ -38,6 +38,19 @@ dev`/`build` run where `wails.json` lives; upstream declined `cmd/` layouts — 
 `internal/seam`. `cmd/dev` stays as the throwaway harness. Wails v2 now; migrate to v3 once it
 stabilizes — the thin-root + `internal/seam` split is what keeps that migration contained.
 
+**App-home layout, decided (Ari, 2026-07-09, during impl/14):** one directory holds everything
+Alexandria owns for a user — default `~/.alexandria` (env `ALEXANDRIA_HOME`), containing
+`logs/` and the default `catalog/`. "Everything in one place, easy to find, copy, and back up."
+The **catalog stays relocatable** (a self-contained dir of db + thumbnails + settings that can
+live anywhere — beside the photos on an external drive; `ALEXANDRIA_CATALOG` overrides);
+`~/.alexandria/catalog` is only the default. Logs are **app-level** (they span catalogs), so
+they sit beside the catalog, never inside one. Deliberate trade-off vs. the macOS-native split
+(`~/Library/Application Support` + `~/Library/Logs` + `~/Library/Caches`): the one-dir model wins
+on portability/backup, and a platform-gated symlink (`~/Library/Logs/Alexandria → <home>/logs`,
+macOS only) buys back Console.app's Log Reports browsability. Thumbnails-in-catalog (vs.
+`~/Library/Caches`) was already the model, so nothing regresses. The resolution + logging live in
+`internal/app` (kept out of the webkit-coupled root package so they stay unit-testable).
+
 **Code-state audit (verified 2026-07-09)** — what the startup sequence can reuse vs. must build:
 
 | Piece | State |
@@ -49,7 +62,8 @@ stabilizes — the thin-root + `internal/seam` split is what keeps that migratio
 | `PRAGMA integrity_check` wiring | Not built |
 | Backup-before-migration (`VACUUM INTO`) | Not built |
 | Update check | Not built (settings field was YAGNI-dropped in impl/11; returns with this) |
-| Catalog-dir resolution | Not built (harness takes `--catalog`) |
+| Catalog-dir resolution | **Seeded** by impl/14 — `internal/app.CatalogDir` (env `ALEXANDRIA_CATALOG` override, else `<app-home>/catalog`). This milestone grows the first-run picker + recent-catalog list. |
+| App home + logging | **Seeded** by impl/14 — `internal/app` resolves the one-dir app home (`~/.alexandria`, env `ALEXANDRIA_HOME`), holding `logs/` + the default `catalog/`; `app.SetupLogging` writes per-run timestamped files there via `internal/logging`, and on macOS symlinks `~/Library/Logs/Alexandria → <app-home>/logs` so Console.app surfaces them. This milestone owns retention, a settings-driven level, and the real dir-resolution UX. |
 
 **Wails v2 idioms to map the design onto (verify against docs during the round):**
 - Lifecycle hooks: `OnStartup(ctx)` is where the startup sequence runs (and where the

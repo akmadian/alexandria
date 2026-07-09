@@ -7,3 +7,6 @@
 *.orf binary
 *.ORF binary
 *.raw binary
+
+# Generated seam artifacts — committed, but excluded from diffs/language stats
+frontend/wailsjs/** linguist-generated=true

@@ -21,10 +21,12 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  // *.check.ts are Node-run self-check scripts (node:assert), not browser app
+  // sources — keep them out of the app compile/bundle.
+  "exclude": ["src/**/*.check.ts"]
 }

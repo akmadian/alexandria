@@ -1,0 +1,18 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "alexandria",
+  "outputfilename": "alexandria",
+  "frontend:install": "bun install --frozen-lockfile",
+  "frontend:build": "bun run build",
+  "frontend:dev:watcher": "bun run dev",
+  "frontend:dev:serverUrl": "auto",
+  "bindings": {
+    "ts_generation": {
+      "outputType": "interfaces"
+    }
+  },
+  "author": {
+    "name": "Ari Madian",
+    "email": "ari@madian.co"
+  }
+}
