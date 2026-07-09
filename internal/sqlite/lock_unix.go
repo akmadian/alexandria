@@ -16,18 +16,18 @@ import (
 type instanceLock struct{ f *os.File }
 
 func acquireLock(path string) (*instanceLock, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = f.Close()
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = file.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			return nil, &domain.CatalogLockedError{Path: path}
 		}
 		return nil, err
 	}
-	return &instanceLock{f: f}, nil
+	return &instanceLock{f: file}, nil
 }
 
 func (l *instanceLock) release() error {

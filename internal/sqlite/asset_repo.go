@@ -374,31 +374,31 @@ func scanAssetRowSlim(rows *sql.Rows) (catalog.AssetRow, error) {
 
 // --- Observation writer (ingest / watcher / reconciler) ---
 
-func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
+func (r *AssetRepo) Create(ctx context.Context, asset *domain.Asset) error {
 	// Minting is observation-only: judgment fields must be zero. Defense in depth
 	// — the interface split already keeps ingest away from the judgment writer.
-	if a.Rating != nil || a.ColorLabel != nil || a.Flag != nil || a.Note != nil || a.IsDeleted || a.JudgmentModifiedAt != nil {
-		return fmt.Errorf("Create: minting is observation-only, judgment fields must be zero (asset %s)", a.ID)
+	if asset.Rating != nil || asset.ColorLabel != nil || asset.Flag != nil || asset.Note != nil || asset.IsDeleted || asset.JudgmentModifiedAt != nil {
+		return fmt.Errorf("Create: minting is observation-only, judgment fields must be zero (asset %s)", asset.ID)
 	}
-	extJSON, err := marshalExtended(a.ExtendedMetadata)
+	extJSON, err := marshalExtended(asset.ExtendedMetadata)
 	if err != nil {
 		return err
 	}
 	_, err = r.DB.ExecContext(ctx, `INSERT INTO assets
 		(`+assetColumns+`) VALUES
 		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?)`,
-		a.ID, a.SourceID, a.RelativePath, a.FileStatus, formatTimePtr(a.LastVerifiedAt),
-		a.Filename, a.Extension, a.MIMEType, a.FileType, a.SizeBytes, formatTime(a.MTime), a.PartialHash,
-		a.Width, a.Height, a.DurationSecs, a.ColorSpace, a.BitDepth,
-		formatTimePtr(a.CapturedAt), a.CameraMake, a.CameraModel, a.LensModel, a.FocalLengthMM,
-		a.Aperture, a.ShutterSpeed, a.ISO, a.GPSLat, a.GPSLon,
-		a.Creator, a.Copyright,
-		extJSON, a.Rating, nilColorLabel(a.ColorLabel), nilFlag(a.Flag), a.Note,
-		formatTimePtr(a.XMPLastReadAt), formatTimePtr(a.XMPLastWrittenAt), a.XMPHash,
-		formatTimePtr(a.ThumbnailAt),
-		boolToInt(a.IsDeleted), formatTimePtr(a.DeletedAt),
-		formatTime(a.IngestedAt), formatTime(a.UpdatedAt),
-		a.Title, a.Caption, formatTimePtr(a.JudgmentModifiedAt))
+		asset.ID, asset.SourceID, asset.RelativePath, asset.FileStatus, formatTimePtr(asset.LastVerifiedAt),
+		asset.Filename, asset.Extension, asset.MIMEType, asset.FileType, asset.SizeBytes, formatTime(asset.MTime), asset.PartialHash,
+		asset.Width, asset.Height, asset.DurationSecs, asset.ColorSpace, asset.BitDepth,
+		formatTimePtr(asset.CapturedAt), asset.CameraMake, asset.CameraModel, asset.LensModel, asset.FocalLengthMM,
+		asset.Aperture, asset.ShutterSpeed, asset.ISO, asset.GPSLat, asset.GPSLon,
+		asset.Creator, asset.Copyright,
+		extJSON, asset.Rating, nilColorLabel(asset.ColorLabel), nilFlag(asset.Flag), asset.Note,
+		formatTimePtr(asset.XMPLastReadAt), formatTimePtr(asset.XMPLastWrittenAt), asset.XMPHash,
+		formatTimePtr(asset.ThumbnailAt),
+		boolToInt(asset.IsDeleted), formatTimePtr(asset.DeletedAt),
+		formatTime(asset.IngestedAt), formatTime(asset.UpdatedAt),
+		asset.Title, asset.Caption, formatTimePtr(asset.JudgmentModifiedAt))
 	return err
 }
 
@@ -406,14 +406,14 @@ func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 // overlaid non-nil). It cannot touch rating/flag/note/is_deleted/xmp_*/
 // thumbnail_at/judgment_modified_at — the reimport-clobber bug is structurally
 // impossible here.
-func (r *AssetRepo) ApplyFilePatch(ctx context.Context, id string, p *catalog.FilePatch) error {
+func (r *AssetRepo) ApplyFilePatch(ctx context.Context, id string, patch *catalog.FilePatch) error {
 	clauses := []string{
 		"filename = ?", "extension = ?", "mime_type = ?", "file_type = ?",
 		"size_bytes = ?", "mtime = ?", "partial_hash = ?", "file_status = ?",
 	}
 	args := []any{
-		p.Filename, p.Extension, p.MIMEType, p.FileType,
-		p.SizeBytes, formatTime(p.MTime), p.PartialHash, p.FileStatus,
+		patch.Filename, patch.Extension, patch.MIMEType, patch.FileType,
+		patch.SizeBytes, formatTime(patch.MTime), patch.PartialHash, patch.FileStatus,
 	}
 
 	set := func(col string, ok bool, val any) {
@@ -422,27 +422,27 @@ func (r *AssetRepo) ApplyFilePatch(ctx context.Context, id string, p *catalog.Fi
 			args = append(args, val)
 		}
 	}
-	set("width", p.Width != nil, ptrInt(p.Width))
-	set("height", p.Height != nil, ptrInt(p.Height))
-	set("duration_secs", p.DurationSecs != nil, ptrFloat(p.DurationSecs))
-	set("captured_at", p.CapturedAt != nil, formatTimePtr(p.CapturedAt))
-	set("camera_make", p.CameraMake != nil, ptrStr(p.CameraMake))
-	set("camera_model", p.CameraModel != nil, ptrStr(p.CameraModel))
-	set("lens_model", p.LensModel != nil, ptrStr(p.LensModel))
-	set("focal_length_mm", p.FocalLengthMM != nil, ptrFloat(p.FocalLengthMM))
-	set("aperture", p.Aperture != nil, ptrFloat(p.Aperture))
-	set("shutter_speed", p.ShutterSpeed != nil, ptrStr(p.ShutterSpeed))
-	set("iso", p.ISO != nil, ptrInt(p.ISO))
-	set("gps_lat", p.GPSLat != nil, ptrFloat(p.GPSLat))
-	set("gps_lon", p.GPSLon != nil, ptrFloat(p.GPSLon))
-	set("color_space", p.ColorSpace != nil, ptrStr(p.ColorSpace))
-	set("bit_depth", p.BitDepth != nil, ptrInt(p.BitDepth))
-	set("creator", p.Creator != nil, ptrStr(p.Creator))
-	set("copyright", p.Copyright != nil, ptrStr(p.Copyright))
-	set("title", p.Title != nil, ptrStr(p.Title))
-	set("caption", p.Caption != nil, ptrStr(p.Caption))
-	if p.Extended != nil {
-		extJSON, err := marshalExtended(p.Extended)
+	set("width", patch.Width != nil, ptrInt(patch.Width))
+	set("height", patch.Height != nil, ptrInt(patch.Height))
+	set("duration_secs", patch.DurationSecs != nil, ptrFloat(patch.DurationSecs))
+	set("captured_at", patch.CapturedAt != nil, formatTimePtr(patch.CapturedAt))
+	set("camera_make", patch.CameraMake != nil, ptrStr(patch.CameraMake))
+	set("camera_model", patch.CameraModel != nil, ptrStr(patch.CameraModel))
+	set("lens_model", patch.LensModel != nil, ptrStr(patch.LensModel))
+	set("focal_length_mm", patch.FocalLengthMM != nil, ptrFloat(patch.FocalLengthMM))
+	set("aperture", patch.Aperture != nil, ptrFloat(patch.Aperture))
+	set("shutter_speed", patch.ShutterSpeed != nil, ptrStr(patch.ShutterSpeed))
+	set("iso", patch.ISO != nil, ptrInt(patch.ISO))
+	set("gps_lat", patch.GPSLat != nil, ptrFloat(patch.GPSLat))
+	set("gps_lon", patch.GPSLon != nil, ptrFloat(patch.GPSLon))
+	set("color_space", patch.ColorSpace != nil, ptrStr(patch.ColorSpace))
+	set("bit_depth", patch.BitDepth != nil, ptrInt(patch.BitDepth))
+	set("creator", patch.Creator != nil, ptrStr(patch.Creator))
+	set("copyright", patch.Copyright != nil, ptrStr(patch.Copyright))
+	set("title", patch.Title != nil, ptrStr(patch.Title))
+	set("caption", patch.Caption != nil, ptrStr(patch.Caption))
+	if patch.Extended != nil {
+		extJSON, err := marshalExtended(patch.Extended)
 		if err != nil {
 			return err
 		}
@@ -485,13 +485,13 @@ func (r *AssetRepo) SetFileStatus(ctx context.Context, assetID string, status do
 // offline (a whole-volume mount/unmount). Files are presumed intact when a
 // source goes offline — this never marks them missing.
 func (r *AssetRepo) MarkConnectivityBySource(ctx context.Context, sourceID string, online bool) error {
-	from, to := domain.FileStatusOnline, domain.FileStatusOffline
+	fromStatus, toStatus := domain.FileStatusOnline, domain.FileStatusOffline
 	if online {
-		from, to = domain.FileStatusOffline, domain.FileStatusOnline
+		fromStatus, toStatus = domain.FileStatusOffline, domain.FileStatusOnline
 	}
 	_, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET file_status = ? WHERE source_id = ? AND file_status = ?",
-		to, sourceID, from)
+		toStatus, sourceID, fromStatus)
 	return err
 }
 
@@ -581,33 +581,33 @@ func (r *AssetRepo) execUpdateIn(ctx context.Context, clauses []string, args []a
 // buildTriageSQL returns the sparse SET clauses for the four judgment columns.
 // Shared by the judgment writer and the XMP sync writer (which appends its own
 // cursor columns and skips the judgment_modified_at bump).
-func buildTriageSQL(p catalog.TriagePatch) ([]string, []any) {
+func buildTriageSQL(patch catalog.TriagePatch) ([]string, []any) {
 	var clauses []string
 	var args []any
 
-	if p.Rating.Set {
+	if patch.Rating.Set {
 		clauses = append(clauses, "rating = ?")
-		args = append(args, p.Rating.Value)
+		args = append(args, patch.Rating.Value)
 	}
-	if p.ColorLabel.Set {
+	if patch.ColorLabel.Set {
 		clauses = append(clauses, "color_label = ?")
-		if p.ColorLabel.Value != nil {
-			args = append(args, string(*p.ColorLabel.Value))
+		if patch.ColorLabel.Value != nil {
+			args = append(args, string(*patch.ColorLabel.Value))
 		} else {
 			args = append(args, nil)
 		}
 	}
-	if p.Flag.Set {
+	if patch.Flag.Set {
 		clauses = append(clauses, "flag = ?")
-		if p.Flag.Value != nil {
-			args = append(args, string(*p.Flag.Value))
+		if patch.Flag.Value != nil {
+			args = append(args, string(*patch.Flag.Value))
 		} else {
 			args = append(args, nil)
 		}
 	}
-	if p.Note.Set {
+	if patch.Note.Set {
 		clauses = append(clauses, "note = ?")
-		args = append(args, p.Note.Value)
+		args = append(args, patch.Note.Value)
 	}
 
 	return clauses, args
@@ -619,8 +619,8 @@ type assetScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
-	var a domain.Asset
+func scanAssetFromRow(scanner assetScanner) (*domain.Asset, error) {
+	var asset domain.Asset
 	var isDeleted int
 	var lastVerifiedAt, mtime, capturedAt sql.NullString
 	var xmpLastReadAt, xmpLastWrittenAt, thumbnailAt, deletedAt sql.NullString
@@ -633,9 +633,9 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	var creator, copyright, title, caption sql.NullString
 	var judgmentModifiedAt sql.NullString
 
-	err := sc.Scan(
-		&a.ID, &a.SourceID, &a.RelativePath, &a.FileStatus, &lastVerifiedAt,
-		&a.Filename, &a.Extension, &a.MIMEType, &a.FileType, &a.SizeBytes, &mtime, &a.PartialHash,
+	err := scanner.Scan(
+		&asset.ID, &asset.SourceID, &asset.RelativePath, &asset.FileStatus, &lastVerifiedAt,
+		&asset.Filename, &asset.Extension, &asset.MIMEType, &asset.FileType, &asset.SizeBytes, &mtime, &asset.PartialHash,
 		&width, &height, &durationSecs, &colorSpace, &bitDepth,
 		&capturedAt, &cameraMake, &cameraModel, &lensModel, &focalLengthMM,
 		&aperture, &shutterSpeed, &iso, &gpsLat, &gpsLon, &creator, &copyright,
@@ -647,57 +647,57 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 		return nil, err
 	}
 
-	a.LastVerifiedAt = parseNullTime(lastVerifiedAt)
-	a.MTime = parseTime(mtime.String)
-	a.Width = nullIntPtr(width)
-	a.Height = nullIntPtr(height)
-	a.DurationSecs = nullFloat64Ptr(durationSecs)
-	a.ColorSpace = nullStringPtr(colorSpace)
-	a.BitDepth = nullIntPtr(bitDepth)
-	a.CapturedAt = parseNullTime(capturedAt)
-	a.CameraMake = nullStringPtr(cameraMake)
-	a.CameraModel = nullStringPtr(cameraModel)
-	a.LensModel = nullStringPtr(lensModel)
-	a.FocalLengthMM = nullFloat64Ptr(focalLengthMM)
-	a.Aperture = nullFloat64Ptr(aperture)
-	a.ShutterSpeed = nullStringPtr(shutterSpeed)
-	a.ISO = nullIntPtr(iso)
-	a.GPSLat = nullFloat64Ptr(gpsLat)
-	a.GPSLon = nullFloat64Ptr(gpsLon)
-	a.Creator = nullStringPtr(creator)
-	a.Copyright = nullStringPtr(copyright)
-	a.Title = nullStringPtr(title)
-	a.Caption = nullStringPtr(caption)
-	a.JudgmentModifiedAt = parseNullTime(judgmentModifiedAt)
+	asset.LastVerifiedAt = parseNullTime(lastVerifiedAt)
+	asset.MTime = parseTime(mtime.String)
+	asset.Width = nullIntPtr(width)
+	asset.Height = nullIntPtr(height)
+	asset.DurationSecs = nullFloat64Ptr(durationSecs)
+	asset.ColorSpace = nullStringPtr(colorSpace)
+	asset.BitDepth = nullIntPtr(bitDepth)
+	asset.CapturedAt = parseNullTime(capturedAt)
+	asset.CameraMake = nullStringPtr(cameraMake)
+	asset.CameraModel = nullStringPtr(cameraModel)
+	asset.LensModel = nullStringPtr(lensModel)
+	asset.FocalLengthMM = nullFloat64Ptr(focalLengthMM)
+	asset.Aperture = nullFloat64Ptr(aperture)
+	asset.ShutterSpeed = nullStringPtr(shutterSpeed)
+	asset.ISO = nullIntPtr(iso)
+	asset.GPSLat = nullFloat64Ptr(gpsLat)
+	asset.GPSLon = nullFloat64Ptr(gpsLon)
+	asset.Creator = nullStringPtr(creator)
+	asset.Copyright = nullStringPtr(copyright)
+	asset.Title = nullStringPtr(title)
+	asset.Caption = nullStringPtr(caption)
+	asset.JudgmentModifiedAt = parseNullTime(judgmentModifiedAt)
 	if extMetadata.Valid && extMetadata.String != "" {
-		a.ExtendedMetadata = make(map[string]any)
-		if err := json.Unmarshal([]byte(extMetadata.String), &a.ExtendedMetadata); err != nil {
+		asset.ExtendedMetadata = make(map[string]any)
+		if err := json.Unmarshal([]byte(extMetadata.String), &asset.ExtendedMetadata); err != nil {
 			return nil, fmt.Errorf("unmarshal extended metadata: %w", err)
 		}
 	}
 	if rating.Valid {
 		v := int(rating.Int64)
-		a.Rating = &v
+		asset.Rating = &v
 	}
 	if colorLabel.Valid {
 		cl := domain.ColorLabel(colorLabel.String)
-		a.ColorLabel = &cl
+		asset.ColorLabel = &cl
 	}
 	if flag.Valid {
 		f := domain.Flag(flag.String)
-		a.Flag = &f
+		asset.Flag = &f
 	}
-	a.Note = nullStringPtr(note)
-	a.XMPLastReadAt = parseNullTime(xmpLastReadAt)
-	a.XMPLastWrittenAt = parseNullTime(xmpLastWrittenAt)
-	a.XMPHash = nullStringPtr(xmpHash)
-	a.ThumbnailAt = parseNullTime(thumbnailAt)
-	a.IsDeleted = isDeleted != 0
-	a.DeletedAt = parseNullTime(deletedAt)
-	a.IngestedAt = parseTime(ingestedAt)
-	a.UpdatedAt = parseTime(updatedAt)
+	asset.Note = nullStringPtr(note)
+	asset.XMPLastReadAt = parseNullTime(xmpLastReadAt)
+	asset.XMPLastWrittenAt = parseNullTime(xmpLastWrittenAt)
+	asset.XMPHash = nullStringPtr(xmpHash)
+	asset.ThumbnailAt = parseNullTime(thumbnailAt)
+	asset.IsDeleted = isDeleted != 0
+	asset.DeletedAt = parseNullTime(deletedAt)
+	asset.IngestedAt = parseTime(ingestedAt)
+	asset.UpdatedAt = parseTime(updatedAt)
 
-	return &a, nil
+	return &asset, nil
 }
 
 func scanAssetRow(row *sql.Row) (*domain.Asset, error) {

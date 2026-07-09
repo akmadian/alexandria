@@ -44,31 +44,31 @@ func (r *SourceRepo) Get(ctx context.Context, id string) (*domain.Source, error)
 	return s, err
 }
 
-func (r *SourceRepo) Create(ctx context.Context, s *domain.Source) error {
+func (r *SourceRepo) Create(ctx context.Context, source *domain.Source) error {
 	_, err := r.DB.ExecContext(ctx, `INSERT INTO sources
 		(`+sourceColumns+`)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.ID, s.Name, s.Kind, s.BasePath, s.FilesystemUUID, s.DiskSerial, s.VolumeLabel,
-		s.Host, s.ShareName, s.PollIntervalSecs, boolToInt(s.ScanRecursively), boolToInt(s.Enabled), s.Connectivity,
-		formatTimePtr(s.LastScannedAt), formatTime(s.CreatedAt), formatTime(s.UpdatedAt))
+		source.ID, source.Name, source.Kind, source.BasePath, source.FilesystemUUID, source.DiskSerial, source.VolumeLabel,
+		source.Host, source.ShareName, source.PollIntervalSecs, boolToInt(source.ScanRecursively), boolToInt(source.Enabled), source.Connectivity,
+		formatTimePtr(source.LastScannedAt), formatTime(source.CreatedAt), formatTime(source.UpdatedAt))
 	return err
 }
 
-func (r *SourceRepo) Update(ctx context.Context, s *domain.Source) error {
-	s.UpdatedAt = time.Now().UTC()
+func (r *SourceRepo) Update(ctx context.Context, source *domain.Source) error {
+	source.UpdatedAt = time.Now().UTC()
 	res, err := r.DB.ExecContext(ctx, `UPDATE sources SET
 		name = ?, kind = ?, base_path = ?, filesystem_uuid = ?, disk_serial = ?,
 		volume_label = ?, host = ?, share_name = ?, poll_interval_secs = ?,
 		scan_recursively = ?, enabled = ?, connectivity = ?, last_scanned_at = ?, updated_at = ?
 		WHERE id = ?`,
-		s.Name, s.Kind, s.BasePath, s.FilesystemUUID, s.DiskSerial,
-		s.VolumeLabel, s.Host, s.ShareName, s.PollIntervalSecs,
-		boolToInt(s.ScanRecursively), boolToInt(s.Enabled), s.Connectivity, formatTimePtr(s.LastScannedAt),
-		formatTime(s.UpdatedAt), s.ID)
+		source.Name, source.Kind, source.BasePath, source.FilesystemUUID, source.DiskSerial,
+		source.VolumeLabel, source.Host, source.ShareName, source.PollIntervalSecs,
+		boolToInt(source.ScanRecursively), boolToInt(source.Enabled), source.Connectivity, formatTimePtr(source.LastScannedAt),
+		formatTime(source.UpdatedAt), source.ID)
 	if err != nil {
 		return err
 	}
-	return checkRowsAffected(res, "source", s.ID)
+	return checkRowsAffected(res, "source", source.ID)
 }
 
 // SetConnectivity records observed reachability (online/offline). Observation
@@ -104,37 +104,37 @@ type sourceScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanSourceFromRow(sc sourceScanner) (*domain.Source, error) {
-	var s domain.Source
+func scanSourceFromRow(scanner sourceScanner) (*domain.Source, error) {
+	var source domain.Source
 	var scanRecursively, enabled int
 	var lastScannedAt sql.NullString
 	var createdAt, updatedAt string
 	var filesystemUUID, diskSerial, volumeLabel, host, shareName sql.NullString
 	var pollInterval sql.NullInt64
 
-	err := sc.Scan(&s.ID, &s.Name, &s.Kind, &s.BasePath,
+	err := scanner.Scan(&source.ID, &source.Name, &source.Kind, &source.BasePath,
 		&filesystemUUID, &diskSerial, &volumeLabel,
-		&host, &shareName, &pollInterval, &scanRecursively, &enabled, &s.Connectivity,
+		&host, &shareName, &pollInterval, &scanRecursively, &enabled, &source.Connectivity,
 		&lastScannedAt, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, err
 	}
 
-	s.ScanRecursively = scanRecursively != 0
-	s.Enabled = enabled != 0
-	s.FilesystemUUID = nullStringPtr(filesystemUUID)
-	s.DiskSerial = nullStringPtr(diskSerial)
-	s.VolumeLabel = nullStringPtr(volumeLabel)
-	s.Host = nullStringPtr(host)
-	s.ShareName = nullStringPtr(shareName)
+	source.ScanRecursively = scanRecursively != 0
+	source.Enabled = enabled != 0
+	source.FilesystemUUID = nullStringPtr(filesystemUUID)
+	source.DiskSerial = nullStringPtr(diskSerial)
+	source.VolumeLabel = nullStringPtr(volumeLabel)
+	source.Host = nullStringPtr(host)
+	source.ShareName = nullStringPtr(shareName)
 	if pollInterval.Valid {
 		v := int(pollInterval.Int64)
-		s.PollIntervalSecs = &v
+		source.PollIntervalSecs = &v
 	}
-	s.LastScannedAt = parseNullTime(lastScannedAt)
-	s.CreatedAt = parseTime(createdAt)
-	s.UpdatedAt = parseTime(updatedAt)
-	return &s, nil
+	source.LastScannedAt = parseNullTime(lastScannedAt)
+	source.CreatedAt = parseTime(createdAt)
+	source.UpdatedAt = parseTime(updatedAt)
+	return &source, nil
 }
 
 func scanSource(rows *sql.Rows) (*domain.Source, error) {

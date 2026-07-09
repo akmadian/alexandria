@@ -235,16 +235,16 @@ func catalogChanged(asset *domain.Asset) bool {
 	return asset.JudgmentModifiedAt.After(*lastSync)
 }
 
-func laterTime(a, b *time.Time) *time.Time {
+func laterTime(first, second *time.Time) *time.Time {
 	switch {
-	case a == nil:
-		return b
-	case b == nil:
-		return a
-	case b.After(*a):
-		return b
+	case first == nil:
+		return second
+	case second == nil:
+		return first
+	case second.After(*first):
+		return second
 	default:
-		return a
+		return first
 	}
 }
 

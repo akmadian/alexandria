@@ -34,15 +34,15 @@ type Repos struct {
 	Collections *CollectionRepo
 }
 
-func reposFor(q DBTX) Repos {
+func reposFor(queryer DBTX) Repos {
 	return Repos{
-		Assets:      &AssetRepo{DB: q},
-		Sources:     &SourceRepo{DB: q},
-		Dups:        &DuplicateRepo{DB: q},
-		Sidecars:    &SidecarRepo{DB: q},
-		Imports:     &ImportRepo{DB: q},
-		Tags:        &TagRepo{DB: q},
-		Collections: &CollectionRepo{DB: q},
+		Assets:      &AssetRepo{DB: queryer},
+		Sources:     &SourceRepo{DB: queryer},
+		Dups:        &DuplicateRepo{DB: queryer},
+		Sidecars:    &SidecarRepo{DB: queryer},
+		Imports:     &ImportRepo{DB: queryer},
+		Tags:        &TagRepo{DB: queryer},
+		Collections: &CollectionRepo{DB: queryer},
 	}
 }
 
@@ -54,7 +54,7 @@ func reposFor(q DBTX) Repos {
 // ponytail: uses the driver's default BEGIN (deferred). Upgrade to BEGIN
 // IMMEDIATE via the "_txlock=immediate" DSN param (set in Open) if write-lock
 // contention ever surfaces; deferred is correct, just lazier about the lock.
-func (s *Store) InTx(ctx context.Context, fn func(Repos) error) (err error) {
+func (s *Store) InTx(ctx context.Context, operation func(Repos) error) (err error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (s *Store) InTx(ctx context.Context, fn func(Repos) error) (err error) {
 			panic(p)
 		}
 	}()
-	if err := fn(reposFor(tx)); err != nil {
+	if err := operation(reposFor(tx)); err != nil {
 		_ = tx.Rollback()
 		return err
 	}

@@ -31,7 +31,7 @@ func NewTestDB(t *testing.T) *sql.DB {
 func NewTestSource(t *testing.T, db *sql.DB, name string) *domain.Source {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
-	s := &domain.Source{
+	source := &domain.Source{
 		ID:              "src-" + name,
 		Name:            name,
 		Kind:            domain.SourceKindLocal,
@@ -44,19 +44,19 @@ func NewTestSource(t *testing.T, db *sql.DB, name string) *domain.Source {
 	}
 	_, err := db.Exec(`INSERT INTO sources (id, name, kind, base_path, scan_recursively, enabled, connectivity, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.ID, s.Name, s.Kind, s.BasePath, boolToInt(s.ScanRecursively), boolToInt(s.Enabled), s.Connectivity,
-		s.CreatedAt.Format(time.RFC3339), s.UpdatedAt.Format(time.RFC3339))
+		source.ID, source.Name, source.Kind, source.BasePath, boolToInt(source.ScanRecursively), boolToInt(source.Enabled), source.Connectivity,
+		source.CreatedAt.Format(time.RFC3339), source.UpdatedAt.Format(time.RFC3339))
 	if err != nil {
 		t.Fatalf("insert test source: %v", err)
 	}
-	return s
+	return source
 }
 
 // NewTestAsset inserts a minimal asset under the given source and returns it.
 func NewTestAsset(t *testing.T, db *sql.DB, sourceID, filename string) *domain.Asset {
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Second)
-	a := &domain.Asset{
+	asset := &domain.Asset{
 		ID:           "asset-" + filename,
 		SourceID:     sourceID,
 		RelativePath: filename,
@@ -75,13 +75,13 @@ func NewTestAsset(t *testing.T, db *sql.DB, sourceID, filename string) *domain.A
 		(id, source_id, relative_path, file_status, filename, extension, mime_type, file_type,
 		 size_bytes, mtime, partial_hash, ingested_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.SourceID, a.RelativePath, a.FileStatus, a.Filename, a.Extension,
-		a.MIMEType, a.FileType, a.SizeBytes, a.MTime.Format(time.RFC3339),
-		a.PartialHash, a.IngestedAt.Format(time.RFC3339), a.UpdatedAt.Format(time.RFC3339))
+		asset.ID, asset.SourceID, asset.RelativePath, asset.FileStatus, asset.Filename, asset.Extension,
+		asset.MIMEType, asset.FileType, asset.SizeBytes, asset.MTime.Format(time.RFC3339),
+		asset.PartialHash, asset.IngestedAt.Format(time.RFC3339), asset.UpdatedAt.Format(time.RFC3339))
 	if err != nil {
 		t.Fatalf("insert test asset: %v", err)
 	}
-	return a
+	return asset
 }
 
 func boolToInt(b bool) int {

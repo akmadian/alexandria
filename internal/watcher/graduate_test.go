@@ -74,7 +74,7 @@ func TestWatcher_SidecarHintFiresCallbackAndIngests(t *testing.T) {
 	type call struct{ abs, rel string }
 	fired := make(chan call, 1)
 
-	w := &Watcher{
+	watcher := &Watcher{
 		Ingester: spy,
 		Source:   &domain.Source{ID: "src-1", Name: "test"},
 		Root:     root,
@@ -88,7 +88,7 @@ func TestWatcher_SidecarHintFiresCallbackAndIngests(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go func() { _ = w.Run(ctx) }()
+	go func() { _ = watcher.Run(ctx) }()
 	spy.waitFor(t, func(runs int, _ []string) bool { return runs == 1 }) // startup reconcile
 
 	write(t, root, "photo.xmp", []byte("<x:xmpmeta/>"))

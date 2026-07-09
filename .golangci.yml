@@ -19,6 +19,7 @@ linters:
     - misspell
     - unconvert
     - nolintlint
+    - varnamelen
     
     # Strict Correctness
     - exhaustive
@@ -28,6 +29,25 @@ linters:
     - copyloopvar
 
   settings:
+    # Abbreviations are often a readability tax, not a benefit.
+    # The exceptions are common, well-known, and unambiguous (i/j/k for loops, etc.)
+    # We want to enforce readability and clarity in variable names, while allowing for common conventions.
+    varnamelen:
+      min-length: 3
+      allow-underscore: true
+      ignore-names:
+        - "i"          # loop counters
+        - "j"          # loop counters
+        - "k"          # loop counters
+        - "id"         # common identifier
+        - "err"        # common error variable
+        - "ok"         # comma-ok idiom (map/type-assert/channel)
+        - "ctx"        # common context variables
+        - "c"          # common context variables
+        - "db"         # common database variables
+        - "tx"         # common database variables
+        - "tc"         # common test case variable
+
     depguard:
       rules:
         domain-stdlib-only:
@@ -36,7 +56,9 @@ linters:
             - "!$test"
           deny:
             - pkg: "github.com/akmadian/alexandria/internal/*"
-              desc: "domain must not import other internal packages"
+              desc: "Domain package holds pure types and logic — no non-stdlib imports"
+            - pkg: "database/sql"
+              desc: "Domain package holds pure types and logic — no non-stdlib imports"
           allow:
             - "$gostd"
             - "github.com/google/uuid"
@@ -47,26 +69,26 @@ linters:
             - "!$test"
           deny:
             - pkg: "database/sql"
-              desc: "ast must be pure — no database imports"
+              desc: "AST holds pure types and logic — no database imports"
             - pkg: "modernc.org/sqlite"
-              desc: "ast must be pure — no database imports"
+              desc: "AST holds pure types and logic — no database imports"
             - pkg: "github.com/akmadian/alexandria/internal/sqlite"
-              desc: "ast must not import the sqlite adapter"
+              desc: "AST holds pure types and logic — no database imports"
             - pkg: "github.com/akmadian/alexandria/internal/catalog"
-              desc: "ast must not import catalog"
+              desc: "AST holds pure types and logic — no database imports"
 
         no-junk-drawer-packages:
           deny:
             - pkg: "github.com/akmadian/alexandria/internal/utils"
-              desc: "no utils package — put it with its concern (coding-guidelines §0)"
+              desc: "no utils package — put it with its concern"
             - pkg: "github.com/akmadian/alexandria/internal/common"
-              desc: "no common package — put it with its concern (coding-guidelines §0)"
+              desc: "no common package — put it with its concern"
             - pkg: "github.com/akmadian/alexandria/internal/helpers"
-              desc: "no helpers package — put it with its concern (coding-guidelines §0)"
+              desc: "no helpers package — put it with its concern"
             - pkg: "github.com/akmadian/alexandria/internal/base"
-              desc: "no base package — put it with its concern (coding-guidelines §0)"
+              desc: "no base package — put it with its concern"
             - pkg: "github.com/akmadian/alexandria/internal/models"
-              desc: "no models package — use domain for shared types (coding-guidelines §0)"
+              desc: "no models package — use domain for shared types"
 
     exhaustive:
       default-signifies-exhaustive: true
@@ -101,3 +123,7 @@ formatters:
   enable:
     - gofmt
     - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

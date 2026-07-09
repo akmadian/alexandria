@@ -19,24 +19,24 @@ func deref[T any](p *T) any {
 // Real-data test: the committed testdata JPEGs are downscaled exports that carry
 // dimensions + rights metadata (creator/copyright) but no camera EXIF.
 func TestExtract_RealJPEG_DimensionsAndRights(t *testing.T) {
-	f, err := os.Open("../../testdata/_6160345-.jpg")
+	file, err := os.Open("../../testdata/_6160345-.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer file.Close()
 
-	md, err := metadata.ExtractRaster(f)
+	result, err := metadata.ExtractRaster(file)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
-	if md.Width == nil || *md.Width != 2160 || md.Height == nil || *md.Height != 1620 {
-		t.Errorf("dimensions = %vx%v, want 2160x1620", deref(md.Width), deref(md.Height))
+	if result.Width == nil || *result.Width != 2160 || result.Height == nil || *result.Height != 1620 {
+		t.Errorf("dimensions = %vx%v, want 2160x1620", deref(result.Width), deref(result.Height))
 	}
-	if md.Creator == nil || *md.Creator != "Ari Madian" {
-		t.Errorf("creator = %v, want Ari Madian", deref(md.Creator))
+	if result.Creator == nil || *result.Creator != "Ari Madian" {
+		t.Errorf("creator = %v, want Ari Madian", deref(result.Creator))
 	}
-	if md.Copyright == nil || *md.Copyright != "ALL RIGHTS RESERVED | Ari Madian" {
-		t.Errorf("copyright = %v", deref(md.Copyright))
+	if result.Copyright == nil || *result.Copyright != "ALL RIGHTS RESERVED | Ari Madian" {
+		t.Errorf("copyright = %v", deref(result.Copyright))
 	}
 }
 
@@ -61,44 +61,44 @@ func TestExtract_Graceful(t *testing.T) {
 // TestExifGPS_DMSToDecimal.
 func TestExtract_FullEXIF(t *testing.T) {
 	const path = "../../testdata/exif-original.jpg"
-	f, err := os.Open(path)
+	file, err := os.Open(path)
 	if err != nil {
 		t.Skipf("no full-EXIF fixture at %s (drop an original camera JPEG there to enable): %v", path, err)
 	}
-	defer f.Close()
+	defer file.Close()
 
-	md, err := metadata.ExtractRaster(f)
+	result, err := metadata.ExtractRaster(file)
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
 
-	if md.CameraMake == nil || *md.CameraMake != "FUJIFILM" {
-		t.Errorf("CameraMake = %v, want FUJIFILM", deref(md.CameraMake))
+	if result.CameraMake == nil || *result.CameraMake != "FUJIFILM" {
+		t.Errorf("CameraMake = %v, want FUJIFILM", deref(result.CameraMake))
 	}
-	if md.CameraModel == nil || *md.CameraModel != "X-T5" {
-		t.Errorf("CameraModel = %v, want X-T5", deref(md.CameraModel))
+	if result.CameraModel == nil || *result.CameraModel != "X-T5" {
+		t.Errorf("CameraModel = %v, want X-T5", deref(result.CameraModel))
 	}
-	if md.LensModel == nil || *md.LensModel != "XF55-200mmF3.5-4.8 R LM OIS" {
-		t.Errorf("LensModel = %v, want XF55-200mmF3.5-4.8 R LM OIS", deref(md.LensModel))
+	if result.LensModel == nil || *result.LensModel != "XF55-200mmF3.5-4.8 R LM OIS" {
+		t.Errorf("LensModel = %v, want XF55-200mmF3.5-4.8 R LM OIS", deref(result.LensModel))
 	}
 	// FNumber rational 11/1 → 11.0 (exifRatFloat).
-	if md.Aperture == nil || *md.Aperture != 11 {
-		t.Errorf("Aperture = %v, want 11", deref(md.Aperture))
+	if result.Aperture == nil || *result.Aperture != 11 {
+		t.Errorf("Aperture = %v, want 11", deref(result.Aperture))
 	}
 	// FocalLength rational 200/1 → 200.0 (exifRatFloat).
-	if md.FocalLengthMM == nil || *md.FocalLengthMM != 200 {
-		t.Errorf("FocalLengthMM = %v, want 200", deref(md.FocalLengthMM))
+	if result.FocalLengthMM == nil || *result.FocalLengthMM != 200 {
+		t.Errorf("FocalLengthMM = %v, want 200", deref(result.FocalLengthMM))
 	}
 	// ExposureTime 1/3200 (<1s) → "1/3200" (exifShutter fast-branch).
-	if md.ShutterSpeed == nil || *md.ShutterSpeed != "1/3200" {
-		t.Errorf("ShutterSpeed = %v, want 1/3200", deref(md.ShutterSpeed))
+	if result.ShutterSpeed == nil || *result.ShutterSpeed != "1/3200" {
+		t.Errorf("ShutterSpeed = %v, want 1/3200", deref(result.ShutterSpeed))
 	}
 	// ISO coerced to int (exifInt).
-	if md.ISO == nil || *md.ISO != 1600 {
-		t.Errorf("ISO = %v, want 1600", deref(md.ISO))
+	if result.ISO == nil || *result.ISO != 1600 {
+		t.Errorf("ISO = %v, want 1600", deref(result.ISO))
 	}
 	// DateTimeOriginal parsed as UTC-labelled wall-clock (exifTime).
-	if md.CapturedAt == nil || !md.CapturedAt.Equal(time.Date(2026, 5, 20, 15, 59, 30, 0, time.UTC)) {
-		t.Errorf("CapturedAt = %v, want 2026-05-20 15:59:30 UTC", deref(md.CapturedAt))
+	if result.CapturedAt == nil || !result.CapturedAt.Equal(time.Date(2026, 5, 20, 15, 59, 30, 0, time.UTC)) {
+		t.Errorf("CapturedAt = %v, want 2026-05-20 15:59:30 UTC", deref(result.CapturedAt))
 	}
 }

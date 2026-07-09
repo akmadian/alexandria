@@ -67,24 +67,24 @@ func encodeJPEG(path string, img image.Image, quality int) error {
 // flattens alpha (PNG/GIF transparency) since JPEG has no alpha channel.
 // ponytail: white fill; revisit if transparent-thumb previews are ever wanted.
 func fit(src image.Image, long int) image.Image {
-	b := src.Bounds()
-	w, h := b.Dx(), b.Dy()
+	bounds := src.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
 
-	tw, th := w, h
-	if w > long || h > long { // downscale only
-		if w >= h {
-			tw, th = long, round(h*long, w)
+	targetWidth, targetHeight := width, height
+	if width > long || height > long { // downscale only
+		if width >= height {
+			targetWidth, targetHeight = long, round(height*long, width)
 		} else {
-			tw, th = round(w*long, h), long
+			targetWidth, targetHeight = round(width*long, height), long
 		}
 	}
 
-	dst := image.NewRGBA(image.Rect(0, 0, tw, th))
+	dst := image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
 	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
-	if tw == w && th == h {
-		draw.Draw(dst, dst.Bounds(), src, b.Min, draw.Over) // 1:1, no resample
+	if targetWidth == width && targetHeight == height {
+		draw.Draw(dst, dst.Bounds(), src, bounds.Min, draw.Over) // 1:1, no resample
 	} else {
-		resizeKernel.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
+		resizeKernel.Scale(dst, dst.Bounds(), src, bounds, draw.Over, nil)
 	}
 	return dst
 }

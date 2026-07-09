@@ -27,11 +27,11 @@ func loadMigrations() ([]migration, error) {
 	}
 
 	var migrations []migration
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
 			continue
 		}
-		parts := strings.SplitN(e.Name(), "_", 2)
+		parts := strings.SplitN(entry.Name(), "_", 2)
 		if len(parts) < 2 {
 			continue
 		}
@@ -39,13 +39,13 @@ func loadMigrations() ([]migration, error) {
 		if err != nil {
 			continue
 		}
-		data, err := migrationFiles.ReadFile(e.Name())
+		data, err := migrationFiles.ReadFile(entry.Name())
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", e.Name(), err)
+			return nil, fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
 		migrations = append(migrations, migration{
 			Version: version,
-			Name:    e.Name(),
+			Name:    entry.Name(),
 			SQL:     string(data),
 		})
 	}
@@ -99,31 +99,31 @@ func Migrate(db *sql.DB) error {
 		return fmt.Errorf("reading applied versions: %w", err)
 	}
 
-	for _, m := range all {
-		if applied[m.Version] {
+	for _, candidate := range all {
+		if applied[candidate.Version] {
 			continue
 		}
 
 		tx, err := db.Begin()
 		if err != nil {
-			return fmt.Errorf("begin migration %s: %w", m.Name, err)
+			return fmt.Errorf("begin migration %s: %w", candidate.Name, err)
 		}
 
-		if _, err := tx.Exec(m.SQL); err != nil {
+		if _, err := tx.Exec(candidate.SQL); err != nil {
 			_ = tx.Rollback()
-			return fmt.Errorf("migration %s failed: %w", m.Name, err)
+			return fmt.Errorf("migration %s failed: %w", candidate.Name, err)
 		}
 
 		if _, err := tx.Exec(
 			"INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
-			m.Version, m.Name, time.Now().UTC().Format(time.RFC3339),
+			candidate.Version, candidate.Name, time.Now().UTC().Format(time.RFC3339),
 		); err != nil {
 			_ = tx.Rollback()
-			return fmt.Errorf("recording migration %s: %w", m.Name, err)
+			return fmt.Errorf("recording migration %s: %w", candidate.Name, err)
 		}
 
 		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit migration %s: %w", m.Name, err)
+			return fmt.Errorf("commit migration %s: %w", candidate.Name, err)
 		}
 	}
 

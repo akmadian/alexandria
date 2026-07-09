@@ -182,15 +182,15 @@ func TestSubtreeFilter(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	store := sqlite.NewStore(db)
 	source := testutil.NewTestSource(t, db, "s")
-	a1 := testutil.NewTestAsset(t, db, source.ID, "tokyo.jpg")
-	a2 := testutil.NewTestAsset(t, db, source.ID, "osaka.jpg")
+	tokyo := testutil.NewTestAsset(t, db, source.ID, "tokyo.jpg")
+	osaka := testutil.NewTestAsset(t, db, source.ID, "osaka.jpg")
 	ctx := context.Background()
 
-	if err := store.ImportKeywords(ctx, a1.ID, nil, [][]string{{"Travel", "Japan", "Tokyo"}}, "xmp"); err != nil {
-		t.Fatalf("import a1: %v", err)
+	if err := store.ImportKeywords(ctx, tokyo.ID, nil, [][]string{{"Travel", "Japan", "Tokyo"}}, "xmp"); err != nil {
+		t.Fatalf("import tokyo: %v", err)
 	}
-	if err := store.ImportKeywords(ctx, a2.ID, nil, [][]string{{"Travel", "Japan", "Osaka"}}, "xmp"); err != nil {
-		t.Fatalf("import a2: %v", err)
+	if err := store.ImportKeywords(ctx, osaka.ID, nil, [][]string{{"Travel", "Japan", "Osaka"}}, "xmp"); err != nil {
+		t.Fatalf("import osaka: %v", err)
 	}
 
 	japan := tagID(t, db, "japan", parentOf(t, db, "travel"))
@@ -214,8 +214,8 @@ func TestSubtreeFilter(t *testing.T) {
 		}
 		got[id] = true
 	}
-	if !got[a1.ID] || !got[a2.ID] {
-		t.Errorf("Japan subtree assets = %v, want both tokyo(%s) and osaka(%s)", got, a1.ID, a2.ID)
+	if !got[tokyo.ID] || !got[osaka.ID] {
+		t.Errorf("Japan subtree assets = %v, want both tokyo(%s) and osaka(%s)", got, tokyo.ID, osaka.ID)
 	}
 }
 

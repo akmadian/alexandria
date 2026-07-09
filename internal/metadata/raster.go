@@ -24,32 +24,32 @@ import (
 // Everything is best-effort: a failure in one part leaves those fields nil rather
 // than failing the whole extraction — a corrupt EXIF block must not stop the file
 // being indexed.
-func ExtractRaster(r io.ReadSeeker) (Metadata, error) {
-	var md Metadata
+func ExtractRaster(reader io.ReadSeeker) (Metadata, error) {
+	var result Metadata
 
-	if _, err := r.Seek(0, io.SeekStart); err == nil {
-		if cfg, _, err := image.DecodeConfig(r); err == nil {
-			md.Width = intPtr(cfg.Width)
-			md.Height = intPtr(cfg.Height)
+	if _, err := reader.Seek(0, io.SeekStart); err == nil {
+		if cfg, _, err := image.DecodeConfig(reader); err == nil {
+			result.Width = intPtr(cfg.Width)
+			result.Height = intPtr(cfg.Height)
 		}
 	}
 
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return md, nil
+	if _, err := reader.Seek(0, io.SeekStart); err != nil {
+		return result, nil
 	}
-	rawExif, err := exif.SearchAndExtractExifWithReader(r)
+	rawExif, err := exif.SearchAndExtractExifWithReader(reader)
 	if err != nil {
 		if errors.Is(err, exif.ErrNoExif) {
-			return md, nil // no EXIF (png/gif/plain jpeg) is normal
+			return result, nil // no EXIF (png/gif/plain jpeg) is normal
 		}
-		return md, fmt.Errorf("reading exif: %w", err) // corrupt: caller logs, keeps dimensions
+		return result, fmt.Errorf("reading exif: %w", err) // corrupt: caller logs, keeps dimensions
 	}
 	tags, _, err := exif.GetFlatExifData(rawExif, nil)
 	if err != nil {
-		return md, fmt.Errorf("parsing exif: %w", err)
+		return result, fmt.Errorf("parsing exif: %w", err)
 	}
-	applyExif(&md, indexTags(tags))
-	return md, nil
+	applyExif(&result, indexTags(tags))
+	return result, nil
 }
 
 func indexTags(tags []exif.ExifTag) map[string]exif.ExifTag {
@@ -62,37 +62,37 @@ func indexTags(tags []exif.ExifTag) map[string]exif.ExifTag {
 	return byName
 }
 
-func applyExif(md *Metadata, tags map[string]exif.ExifTag) {
-	md.CameraMake = exifString(tags, "Make")
-	md.CameraModel = exifString(tags, "Model")
-	md.LensModel = exifString(tags, "LensModel")
-	md.Creator = exifString(tags, "Artist")
-	md.Copyright = exifString(tags, "Copyright")
-	md.CapturedAt = exifTime(tags, "DateTimeOriginal")
-	md.Aperture = exifRatFloat(tags, "FNumber")
-	md.FocalLengthMM = exifRatFloat(tags, "FocalLength")
-	md.ShutterSpeed = exifShutter(tags, "ExposureTime")
-	md.ISO = exifInt(tags, "ISOSpeedRatings")
-	if md.ISO == nil {
-		md.ISO = exifInt(tags, "PhotographicSensitivity") // EXIF 2.3+ name
+func applyExif(result *Metadata, tags map[string]exif.ExifTag) {
+	result.CameraMake = exifString(tags, "Make")
+	result.CameraModel = exifString(tags, "Model")
+	result.LensModel = exifString(tags, "LensModel")
+	result.Creator = exifString(tags, "Artist")
+	result.Copyright = exifString(tags, "Copyright")
+	result.CapturedAt = exifTime(tags, "DateTimeOriginal")
+	result.Aperture = exifRatFloat(tags, "FNumber")
+	result.FocalLengthMM = exifRatFloat(tags, "FocalLength")
+	result.ShutterSpeed = exifShutter(tags, "ExposureTime")
+	result.ISO = exifInt(tags, "ISOSpeedRatings")
+	if result.ISO == nil {
+		result.ISO = exifInt(tags, "PhotographicSensitivity") // EXIF 2.3+ name
 	}
-	md.GPSLat = exifGPS(tags, "GPSLatitude", "GPSLatitudeRef", "S")
-	md.GPSLon = exifGPS(tags, "GPSLongitude", "GPSLongitudeRef", "W")
+	result.GPSLat = exifGPS(tags, "GPSLatitude", "GPSLatitudeRef", "S")
+	result.GPSLon = exifGPS(tags, "GPSLongitude", "GPSLongitudeRef", "W")
 }
 
 func exifString(tags map[string]exif.ExifTag, name string) *string {
-	t, ok := tags[name]
+	tag, ok := tags[name]
 	if !ok {
 		return nil
 	}
 	// Fixed-length EXIF ASCII fields (e.g. LensModel) are NUL-padded to their slot
 	// width; TrimSpace alone leaves the NULs, so they must be cut too or they land
 	// verbatim in the catalog.
-	s := strings.Trim(tagString(&t), " \t\r\n\x00")
-	if s == "" {
+	trimmed := strings.Trim(tagString(&tag), " \t\r\n\x00")
+	if trimmed == "" {
 		return nil
 	}
-	return &s
+	return &trimmed
 }
 
 func tagString(t *exif.ExifTag) string {
@@ -154,37 +154,37 @@ func exifShutter(tags map[string]exif.ExifTag, name string) *string {
 	if !ok || r.Denominator == 0 {
 		return nil
 	}
-	v := ratFloat(r)
-	var s string
+	seconds := ratFloat(r)
+	var formatted string
 	switch {
-	case v <= 0:
+	case seconds <= 0:
 		return nil
-	case v < 1:
-		s = fmt.Sprintf("1/%d", int(math.Round(1/v)))
+	case seconds < 1:
+		formatted = fmt.Sprintf("1/%d", int(math.Round(1/seconds)))
 	default:
-		s = strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", v), "0"), ".")
+		formatted = strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", seconds), "0"), ".")
 	}
-	return &s
+	return &formatted
 }
 
 func exifInt(tags map[string]exif.ExifTag, name string) *int {
-	t, ok := tags[name]
+	tag, ok := tags[name]
 	if !ok {
 		return nil
 	}
-	switch v := t.Value.(type) {
+	switch values := tag.Value.(type) {
 	case []uint16:
-		if len(v) > 0 {
-			n := int(v[0])
+		if len(values) > 0 {
+			n := int(values[0])
 			return &n
 		}
 	case []uint32:
-		if len(v) > 0 {
-			n := int(v[0])
+		if len(values) > 0 {
+			n := int(values[0])
 			return &n
 		}
 	}
-	if n, err := strconv.Atoi(strings.TrimSpace(t.FormattedFirst)); err == nil {
+	if n, err := strconv.Atoi(strings.TrimSpace(tag.FormattedFirst)); err == nil {
 		return &n
 	}
 	return nil

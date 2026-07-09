@@ -33,16 +33,16 @@ func (r *DuplicateRepo) ListPending(ctx context.Context) ([]*domain.Duplicate, e
 
 	var dups []*domain.Duplicate
 	for rows.Next() {
-		var d domain.Duplicate
+		var duplicate domain.Duplicate
 		var detectedAt string
 		var resolvedAt sql.NullString
-		if err := rows.Scan(&d.ID, &d.OriginalAssetID, &d.DuplicateAssetID,
-			&d.PartialHash, &detectedAt, &d.Status, &resolvedAt); err != nil {
+		if err := rows.Scan(&duplicate.ID, &duplicate.OriginalAssetID, &duplicate.DuplicateAssetID,
+			&duplicate.PartialHash, &detectedAt, &duplicate.Status, &resolvedAt); err != nil {
 			return nil, err
 		}
-		d.DetectedAt = parseTime(detectedAt)
-		d.ResolvedAt = parseNullTime(resolvedAt)
-		dups = append(dups, &d)
+		duplicate.DetectedAt = parseTime(detectedAt)
+		duplicate.ResolvedAt = parseNullTime(resolvedAt)
+		dups = append(dups, &duplicate)
 	}
 	return dups, rows.Err()
 }

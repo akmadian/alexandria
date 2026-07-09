@@ -54,7 +54,7 @@ func New(dir string) Registry {
 
 // Generate writes one thumbnail per configured size using gen. A nil gen (the
 // type has no generator) is a no-op reporting ok=false.
-func (reg Registry) Generate(gen GenFunc, r io.ReadSeeker, assetID string) (bool, error) {
+func (reg Registry) Generate(gen GenFunc, reader io.ReadSeeker, assetID string) (bool, error) {
 	if gen == nil {
 		return false, nil
 	}
@@ -64,7 +64,7 @@ func (reg Registry) Generate(gen GenFunc, r io.ReadSeeker, assetID string) (bool
 		}
 	}
 	dst := func(size int) string { return reg.Path(assetID, size) }
-	if err := gen(r, reg.Sizes, reg.Quality, dst); err != nil {
+	if err := gen(reader, reg.Sizes, reg.Quality, dst); err != nil {
 		return false, fmt.Errorf("thumbnail %s: %w", assetID, err)
 	}
 	return true, nil

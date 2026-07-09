@@ -1,7 +1,7 @@
 # All checks live here — Go only operates at the module root, so there is no
 # pretending with per-directory Makefiles. Same checks CI runs: use
 # `make check` (or `make check-backend`) before pushing.
-.PHONY: check check-backend check-frontend tidy-check build lint vulncheck test cover
+.PHONY: check check-backend check-frontend tidy-check-backend build-backend lint-backend vulncheck-backend test-backend cover-backend
 
 # Ratchet up as areas gain tests; never down. Excludes cmd/dev + testutil (wiring
 # and test support by design). Measured 74.0% at gate creation (2026-07-09).
@@ -20,22 +20,22 @@ check:
 
 # --- backend, cheap → expensive ---
 
-tidy-check:
+tidy-check-backend:
 	go mod tidy -diff
 
-build:
+build-backend:
 	go build ./...
 
-lint:
+lint-backend:
 	golangci-lint run ./...
 
-vulncheck:
+vulncheck-backend:
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-test:
+test-backend:
 	go test -race -coverprofile=coverage.out ./...
 
-cover: test
+cover-backend: test-backend
 	@grep -v -e '/cmd/dev/' -e '/internal/testutil/' coverage.out > coverage.filtered.out
 	@go tool cover -func=coverage.filtered.out | tail -1
 	@total=$$(go tool cover -func=coverage.filtered.out | tail -1 | awk '{gsub(/%/, ""); print $$3}'); \
@@ -45,7 +45,7 @@ cover: test
 	}'
 
 check-backend:
-	@if $(MAKE) --no-print-directory tidy-check build lint vulncheck cover; then \
+	@if $(MAKE) --no-print-directory tidy-check-backend build-backend lint-backend vulncheck-backend cover-backend; then \
 		printf '\n\033[1;32m ✓ BACKEND PASSED \033[0m\n\n'; \
 	else \
 		printf '\n\033[1;31m ✗ BACKEND FAILED \033[0m\n\n'; \

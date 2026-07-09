@@ -88,27 +88,27 @@ type leafJSON struct {
 	Value any      `json:"value,omitempty"`
 }
 
-func marshalNode(n Node) ([]byte, error) {
-	switch v := n.(type) {
+func marshalNode(node Node) ([]byte, error) {
+	switch typed := node.(type) {
 	case Group:
-		children := make([]*json.RawMessage, len(v.Children))
-		for i, child := range v.Children {
-			b, err := marshalNode(child)
+		children := make([]*json.RawMessage, len(typed.Children))
+		for i, child := range typed.Children {
+			encoded, err := marshalNode(child)
 			if err != nil {
 				return nil, err
 			}
-			msg := json.RawMessage(b)
+			msg := json.RawMessage(encoded)
 			children[i] = &msg
 		}
-		return json.Marshal(groupJSON{Op: v.Op, Children: children})
+		return json.Marshal(groupJSON{Op: typed.Op, Children: children})
 	case Leaf:
-		val, err := marshalLeafValue(v)
+		val, err := marshalLeafValue(typed)
 		if err != nil {
 			return nil, err
 		}
-		return json.Marshal(leafJSON{Field: v.Field, Cmp: v.Cmp, Value: val})
+		return json.Marshal(leafJSON{Field: typed.Field, Cmp: typed.Cmp, Value: val})
 	default:
-		return nil, fmt.Errorf("unknown node type %T", n)
+		return nil, fmt.Errorf("unknown node type %T", node)
 	}
 }
 
@@ -140,14 +140,14 @@ type dateDurationJSON struct {
 	Days   int `json:"days,omitempty"`
 }
 
-func marshalDateValue(d DateValue) (dateValueJSON, error) {
+func marshalDateValue(date DateValue) (dateValueJSON, error) {
 	out := dateValueJSON{
-		Duration: dateDurationJSON{Years: d.Duration.Years, Months: d.Duration.Months, Days: d.Duration.Days},
+		Duration: dateDurationJSON{Years: date.Duration.Years, Months: date.Duration.Months, Days: date.Duration.Days},
 	}
-	if d.Anchor.Now {
+	if date.Anchor.Now {
 		out.Anchor.Now = true
 	} else {
-		out.Anchor.Date = d.Anchor.Date.Format(time.RFC3339)
+		out.Anchor.Date = date.Anchor.Date.Format(time.RFC3339)
 	}
 	return out, nil
 }
@@ -252,25 +252,25 @@ func coerceDateValue(raw any) (DateValue, error) {
 	if err != nil {
 		return DateValue{}, err
 	}
-	var dj dateValueJSON
-	if err := json.Unmarshal(b, &dj); err != nil {
+	var decoded dateValueJSON
+	if err := json.Unmarshal(b, &decoded); err != nil {
 		return DateValue{}, fmt.Errorf("dateValue: %w", err)
 	}
 
 	var anchor DateAnchor
-	if dj.Anchor.Now {
+	if decoded.Anchor.Now {
 		anchor.Now = true
-	} else if dj.Anchor.Date != "" {
-		t, err := time.Parse(time.RFC3339, dj.Anchor.Date)
+	} else if decoded.Anchor.Date != "" {
+		parsed, err := time.Parse(time.RFC3339, decoded.Anchor.Date)
 		if err != nil {
 			return DateValue{}, fmt.Errorf("dateValue anchor: %w", err)
 		}
-		anchor.Date = t
+		anchor.Date = parsed
 	}
 
 	return DateValue{
 		Anchor:   anchor,
-		Duration: DateDuration{Years: dj.Duration.Years, Months: dj.Duration.Months, Days: dj.Duration.Days},
+		Duration: DateDuration{Years: decoded.Duration.Years, Months: decoded.Duration.Months, Days: decoded.Duration.Days},
 	}, nil
 }
 

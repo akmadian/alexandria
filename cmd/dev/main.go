@@ -477,7 +477,7 @@ func cmdWatch(args []string) error {
 	if err != nil {
 		return err
 	}
-	w := &watcher.Watcher{
+	fileWatcher := &watcher.Watcher{
 		Ingester: newIngester(catalog),
 		Obs:      &sqlite.AssetRepo{DB: catalog.store.DB}, // the one sanctioned write: connectivity
 		Source:   source,
@@ -486,7 +486,7 @@ func cmdWatch(args []string) error {
 		Log:      log.Default(),
 	}
 	fmt.Fprintf(os.Stderr, "watching %s — Ctrl-C to stop\n", absolutePath)
-	if err := w.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	if err := fileWatcher.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}
 	return nil

@@ -323,17 +323,17 @@ func (r *TagRepo) RebuildTagPaths(ctx context.Context) error {
 		}
 		inProgress[id] = true
 		parentID := parent[id]
-		p := "/" + id + "/"
+		builtPath := "/" + id + "/"
 		if parentID != "" {
 			parentPath, err := pathOf(parentID)
 			if err != nil {
 				return "", err
 			}
-			p = parentPath + id + "/"
+			builtPath = parentPath + id + "/"
 		}
 		delete(inProgress, id)
-		memo[id] = p
-		return p, nil
+		memo[id] = builtPath
+		return builtPath, nil
 	}
 
 	for _, id := range ids {

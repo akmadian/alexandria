@@ -45,5 +45,7 @@ jobs:
       # exiftool is a required test dependency: without it the entire xmp sync
       # suite (oscillator guard, echo check, conflict resolution, sidecar merge)
       # and the dependency daemon round-trip self-skip, hiding regressions.
-      - run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
-      - run: make check-backend
+      - name: Install external dependencies needed for tests
+        run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
+      - name: Run make check-backend
+        run: make check-backend

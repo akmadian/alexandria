@@ -55,17 +55,17 @@ func TestVocabularyDisallowedOperators(t *testing.T) {
 		for _, op := range spec.Operators {
 			allowed[op] = true
 		}
-		for _, op := range allOperators {
-			if allowed[op] {
+		for _, operator := range allOperators {
+			if allowed[operator] {
 				continue
 			}
-			value := syntheticValue(field, op)
+			value := syntheticValue(field, operator)
 			query := ast.Query{
 				Version: ast.Version,
-				Where:   ast.Leaf{Field: field, Cmp: op, Value: value},
+				Where:   ast.Leaf{Field: field, Cmp: operator, Value: value},
 			}
 			if err := ast.Validate(query); err == nil {
-				t.Errorf("field=%q op=%q: expected validation error for disallowed operator", field, op)
+				t.Errorf("field=%q op=%q: expected validation error for disallowed operator", field, operator)
 			}
 		}
 	}

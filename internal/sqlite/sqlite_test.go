@@ -51,13 +51,13 @@ func TestSourceRepo_CreateAndGet(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	fsUUID := "uuid-123"
-	s := &domain.Source{
+	source := &domain.Source{
 		ID: "s1", Name: "Photos", Kind: domain.SourceKindExternalDrive,
 		BasePath: "/Volumes/Photos", FilesystemUUID: &fsUUID,
 		ScanRecursively: true, Enabled: true, Connectivity: domain.SourceOnline,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if err := repo.Create(ctx, s); err != nil {
+	if err := repo.Create(ctx, source); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
@@ -164,14 +164,14 @@ func TestAssetRepo_CreateAndGet(t *testing.T) {
 
 	src := testutil.NewTestSource(t, db, "photos")
 	now := time.Now().UTC().Truncate(time.Second)
-	a := &domain.Asset{
+	asset := &domain.Asset{
 		ID: "a1", SourceID: src.ID, RelativePath: "vacation/beach.jpg",
 		FileStatus: domain.FileStatusOnline, Filename: "beach.jpg",
 		Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
 		SizeBytes: 4096, MTime: now, PartialHash: "hash123",
 		IngestedAt: now, UpdatedAt: now,
 	}
-	if err := repo.Create(ctx, a); err != nil {
+	if err := repo.Create(ctx, asset); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	// Judgments are set through the judgment writer, never at minting.
@@ -378,13 +378,13 @@ func TestSchema_SoftDeleteThenReimportSamePath(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	a2 := &domain.Asset{
+	reimported := &domain.Asset{
 		ID: domain.NewID(), SourceID: src.ID, RelativePath: "photo.jpg",
 		FileStatus: domain.FileStatusOnline, Filename: "photo.jpg", Extension: "jpg",
 		MIMEType: "image/jpeg", FileType: domain.FileTypeImage, SizeBytes: 2048,
 		MTime: now, PartialHash: "newhash", IngestedAt: now, UpdatedAt: now,
 	}
-	if err := repo.Create(ctx, a2); err != nil {
+	if err := repo.Create(ctx, reimported); err != nil {
 		t.Fatalf("re-import at same path after soft delete should succeed: %v", err)
 	}
 }
@@ -413,13 +413,13 @@ func TestSchema_FKCascadeOnTagDelete(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
-	a := testutil.NewTestAsset(t, db, src.ID, "x.jpg")
+	asset := testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('tag1', 'Beach', 'beach', '/tag1/', ?)`, now); err != nil {
 		t.Fatalf("tag: %v", err)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 'tag1', 'user', ?)`, a.ID, now); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 'tag1', 'user', ?)`, asset.ID, now); err != nil {
 		t.Fatalf("asset_tag: %v", err)
 	}
 	if _, err := db.ExecContext(ctx, `DELETE FROM tags WHERE id = 'tag1'`); err != nil {
@@ -442,13 +442,13 @@ func TestRebuildFTS_IncludesTags(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	ctx := context.Background()
 	src := testutil.NewTestSource(t, db, "s")
-	a := testutil.NewTestAsset(t, db, src.ID, "img.jpg")
+	asset := testutil.NewTestAsset(t, db, src.ID, "img.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Landscape', 'landscape', '/t1/', ?)`, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 't1', 'user', ?)`, a.ID, now); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 't1', 'user', ?)`, asset.ID, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -459,8 +459,8 @@ func TestRebuildFTS_IncludesTags(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT asset_id FROM assets_fts WHERE assets_fts MATCH 'landscape'`).Scan(&id); err != nil {
 		t.Fatalf("tag search after rebuild: %v", err)
 	}
-	if id != a.ID {
-		t.Fatalf("got %q, want %q", id, a.ID)
+	if id != asset.ID {
+		t.Fatalf("got %q, want %q", id, asset.ID)
 	}
 }
 
@@ -525,15 +525,15 @@ func TestAssetRepo_XMPInbound_DoesNotBumpJudgmentModified(t *testing.T) {
 		catalog.TriagePatch{Rating: domain.SetOpt(3)}, time.Now().UTC(), "xmphash1"); err != nil {
 		t.Fatalf("xmp inbound: %v", err)
 	}
-	a1, _ := repo.Get(ctx, "asset-x.jpg")
-	if a1.Rating == nil || *a1.Rating != 3 {
-		t.Fatalf("xmp value not applied: %v", a1.Rating)
+	asset, _ := repo.Get(ctx, "asset-x.jpg")
+	if asset.Rating == nil || *asset.Rating != 3 {
+		t.Fatalf("xmp value not applied: %v", asset.Rating)
 	}
-	if a1.JudgmentModifiedAt != nil {
-		t.Fatalf("xmp inbound must not bump judgment_modified_at, got %v", a1.JudgmentModifiedAt)
+	if asset.JudgmentModifiedAt != nil {
+		t.Fatalf("xmp inbound must not bump judgment_modified_at, got %v", asset.JudgmentModifiedAt)
 	}
-	if a1.XMPHash == nil || *a1.XMPHash != "xmphash1" {
-		t.Fatalf("xmp cursor not recorded: %v", a1.XMPHash)
+	if asset.XMPHash == nil || *asset.XMPHash != "xmphash1" {
+		t.Fatalf("xmp cursor not recorded: %v", asset.XMPHash)
 	}
 
 	if err := repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Flag: domain.SetOpt(domain.FlagPick)}); err != nil {

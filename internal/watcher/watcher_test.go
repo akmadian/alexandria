@@ -87,7 +87,7 @@ func startWatcher(t *testing.T) (string, chan Event, *spyIngester) {
 	root := t.TempDir()
 	events := make(chan Event, 64)
 	spy := newSpy()
-	w := &Watcher{
+	watcher := &Watcher{
 		Ingester: spy,
 		Source:   &domain.Source{ID: "src-1", Name: "test"},
 		Root:     root,
@@ -98,7 +98,7 @@ func startWatcher(t *testing.T) (string, chan Event, *spyIngester) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go func() { _ = w.Run(ctx) }()
+	go func() { _ = watcher.Run(ctx) }()
 	// The startup reconcile is one Run before any event.
 	spy.waitFor(t, func(runs int, _ []string) bool { return runs == 1 })
 	return root, events, spy
@@ -240,7 +240,7 @@ func TestWatcher_PollFlipsConnectivityOnUnmount(t *testing.T) {
 	root := t.TempDir()
 	spy := newSpy()
 	obs := newSpyObs()
-	w := &Watcher{
+	watcher := &Watcher{
 		Ingester:     spy,
 		Obs:          obs,
 		Source:       &domain.Source{ID: "src-1", Name: "test"},
@@ -251,7 +251,7 @@ func TestWatcher_PollFlipsConnectivityOnUnmount(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go func() { _ = w.Run(ctx) }()
+	go func() { _ = watcher.Run(ctx) }()
 	spy.waitFor(t, func(runs int, _ []string) bool { return runs == 1 }) // startup reconcile
 
 	// Unmount: the root stops existing, so probeReachable fails → offline.
@@ -271,7 +271,7 @@ func TestWatcher_PollFlipsConnectivityOnUnmount(t *testing.T) {
 func TestWatcher_SubscribeFailureDegradesToPolling(t *testing.T) {
 	root := t.TempDir()
 	spy := newSpy()
-	w := &Watcher{
+	watcher := &Watcher{
 		Ingester:     spy,
 		Obs:          newSpyObs(),
 		Source:       &domain.Source{ID: "src-1", Name: "test"},
@@ -284,7 +284,7 @@ func TestWatcher_SubscribeFailureDegradesToPolling(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go func() { _ = w.Run(ctx) }()
+	go func() { _ = watcher.Run(ctx) }()
 
 	// Run #1 is the startup reconcile; polling then re-walks each tick, so the
 	// count keeps climbing with no live events at all — and nothing panicked.

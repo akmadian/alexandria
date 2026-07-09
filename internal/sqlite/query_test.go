@@ -336,7 +336,7 @@ func TestDistinctValues(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	cameraMake := "Canon"
-	a := &domain.Asset{
+	asset := &domain.Asset{
 		ID: "a1", SourceID: src.ID, RelativePath: "a.jpg",
 		FileStatus: domain.FileStatusOnline, Filename: "a.jpg",
 		Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
@@ -344,7 +344,7 @@ func TestDistinctValues(t *testing.T) {
 		CameraMake: &cameraMake, IngestedAt: now, UpdatedAt: now,
 	}
 	repo := &sqlite.AssetRepo{DB: db}
-	if err := repo.Create(ctx, a); err != nil {
+	if err := repo.Create(ctx, asset); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 

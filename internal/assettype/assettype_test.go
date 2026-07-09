@@ -9,17 +9,17 @@ import (
 
 func TestClassify(t *testing.T) {
 	// Case-insensitive and dot-tolerant; capability funcs wired for raster.
-	h, ok := assettype.Classify("JPG")
-	if !ok || h.Type != domain.FileTypeImage || h.MIME != "image/jpeg" {
-		t.Fatalf("JPG: %+v ok=%v", h, ok)
+	classified, ok := assettype.Classify("JPG")
+	if !ok || classified.Type != domain.FileTypeImage || classified.MIME != "image/jpeg" {
+		t.Fatalf("JPG: %+v ok=%v", classified, ok)
 	}
-	if h.Metadata == nil || h.Thumb == nil {
+	if classified.Metadata == nil || classified.Thumb == nil {
 		t.Fatal("jpg should carry metadata + thumbnail capability funcs")
 	}
 
-	h, ok = assettype.Classify(".cr2")
-	if !ok || h.Type != domain.FileTypeRaw {
-		t.Fatalf("cr2: %+v ok=%v", h, ok)
+	classified, ok = assettype.Classify(".cr2")
+	if !ok || classified.Type != domain.FileTypeRaw {
+		t.Fatalf("cr2: %+v ok=%v", classified, ok)
 	}
 
 	if _, ok := assettype.Classify("exe"); ok {
@@ -31,14 +31,14 @@ func TestClassify(t *testing.T) {
 // its nil funcs signal "skip" to the caller (no extractor/thumbnailer to call).
 // This is the "add a format = one row" contract: rows without funcs just work.
 func TestClassify_NilCapabilityDegrades(t *testing.T) {
-	h, ok := assettype.Classify("pdf")
+	classified, ok := assettype.Classify("pdf")
 	if !ok {
 		t.Fatal("pdf should be a supported type")
 	}
-	if h.Type != domain.FileTypeDocument {
-		t.Fatalf("pdf type = %q", h.Type)
+	if classified.Type != domain.FileTypeDocument {
+		t.Fatalf("pdf type = %q", classified.Type)
 	}
-	if h.Metadata != nil || h.Thumb != nil {
+	if classified.Metadata != nil || classified.Thumb != nil {
 		t.Fatal("pdf has no extractor/generator yet — funcs must be nil (graceful skip)")
 	}
 }

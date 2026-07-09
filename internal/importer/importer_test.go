@@ -193,17 +193,17 @@ func TestWalk_MarksMissingThenRestores(t *testing.T) {
 	if res.Missing != 1 {
 		t.Fatalf("walk: missing=%d, want 1", res.Missing)
 	}
-	b, _ := assets.FindBySourcePath(ctx, src.ID, "b.jpg")
-	if b == nil || b.FileStatus != domain.FileStatusMissing {
-		t.Fatalf("b.jpg status = %v, want missing", b)
+	reloaded, _ := assets.FindBySourcePath(ctx, src.ID, "b.jpg")
+	if reloaded == nil || reloaded.FileStatus != domain.FileStatusMissing {
+		t.Fatalf("b.jpg status = %v, want missing", reloaded)
 	}
 
 	// b.jpg came back at its original path: reimport restores it online.
 	if _, err := imp.Run(ctx, src, full); err != nil {
 		t.Fatalf("walk back: %v", err)
 	}
-	if b, _ = assets.FindBySourcePath(ctx, src.ID, "b.jpg"); b.FileStatus != domain.FileStatusOnline {
-		t.Fatalf("b.jpg status = %q, want online", b.FileStatus)
+	if reloaded, _ = assets.FindBySourcePath(ctx, src.ID, "b.jpg"); reloaded.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("b.jpg status = %q, want online", reloaded.FileStatus)
 	}
 }
 

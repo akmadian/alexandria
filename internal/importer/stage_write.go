@@ -19,7 +19,7 @@ import (
 // Store.InTx. Cancellation commits the current batch and exits — completed work
 // is never rolled back.
 
-func (pipe *pipeline) write(ctx context.Context, in <-chan *pipelineItem) error {
+func (pipe *pipeline) write(ctx context.Context, incoming <-chan *pipelineItem) error {
 	batch := make([]*pipelineItem, 0, pipe.batchSize)
 	timer := time.NewTimer(writeLull)
 	timer.Stop()
@@ -37,7 +37,7 @@ func (pipe *pipeline) write(ctx context.Context, in <-chan *pipelineItem) error 
 			// WithoutCancel so the commit itself isn't aborted by the same cancel.
 			_ = pipe.commit(context.WithoutCancel(ctx), batch)
 			return ctx.Err()
-		case item, ok := <-in:
+		case item, ok := <-incoming:
 			if !ok {
 				return flush()
 			}
