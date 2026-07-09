@@ -34,7 +34,6 @@ linters:
     # We want to enforce readability and clarity in variable names, while allowing for common conventions.
     varnamelen:
       min-name-length: 3
-      max-name-length: 30
       ignore-names:
         - "i"          # loop counters
         - "j"          # loop counters
