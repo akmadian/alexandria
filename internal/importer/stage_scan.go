@@ -67,7 +67,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 			fileType: handler.Type, handler: handler, size: info.Size(), mtime: info.ModTime(),
 		}
 		if unchanged(&scanned, pipe.known) {
-			pipe.skippedCount++
+			pipe.skippedCount.Add(1)
 			return nil
 		}
 		pipe.total.Add(1)

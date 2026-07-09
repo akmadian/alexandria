@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/akmadian/alexandria/internal/metadata"
 )
@@ -52,10 +53,12 @@ func TestExtract_Graceful(t *testing.T) {
 	}
 }
 
-// Validates the camera/exposure/GPS mapping (rationals, DMS→decimal) against real
-// data. Skipped until an original camera JPEG with full EXIF is dropped at
-// testdata/exif-original.jpg — the committed fixtures are stripped exports, so
-// this mapping is otherwise unexercised.
+// Validates the camera/exposure mapping (rationals → floats, ExposureTime → "1/x"
+// shutter, ISO int coercion, EXIF timestamp parse) against a real original-camera
+// JPEG. testdata/exif-original.jpg is a FUJIFILM X-T5 frame; these are its actual
+// recorded values, so a regression in any coercion breaks exactly one assertion.
+// The fixture carries no GPS, so the DMS→decimal path is covered separately in
+// TestExifGPS_DMSToDecimal.
 func TestExtract_FullEXIF(t *testing.T) {
 	const path = "../../testdata/exif-original.jpg"
 	f, err := os.Open(path)
@@ -68,17 +71,34 @@ func TestExtract_FullEXIF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
-	t.Logf("Make=%v Model=%v Lens=%v Captured=%v F=%v Focal=%v Shutter=%v ISO=%v GPS=%v,%v",
-		deref(md.CameraMake), deref(md.CameraModel), deref(md.LensModel), deref(md.CapturedAt),
-		deref(md.Aperture), deref(md.FocalLengthMM), deref(md.ShutterSpeed), deref(md.ISO),
-		deref(md.GPSLat), deref(md.GPSLon))
-	if md.CameraMake == nil {
-		t.Error("expected CameraMake from a full-EXIF original")
+
+	if md.CameraMake == nil || *md.CameraMake != "FUJIFILM" {
+		t.Errorf("CameraMake = %v, want FUJIFILM", deref(md.CameraMake))
 	}
-	if md.CapturedAt == nil {
-		t.Error("expected CapturedAt from a full-EXIF original")
+	if md.CameraModel == nil || *md.CameraModel != "X-T5" {
+		t.Errorf("CameraModel = %v, want X-T5", deref(md.CameraModel))
 	}
-	if md.Aperture == nil {
-		t.Error("expected Aperture from a full-EXIF original")
+	if md.LensModel == nil || *md.LensModel != "XF55-200mmF3.5-4.8 R LM OIS" {
+		t.Errorf("LensModel = %v, want XF55-200mmF3.5-4.8 R LM OIS", deref(md.LensModel))
+	}
+	// FNumber rational 11/1 → 11.0 (exifRatFloat).
+	if md.Aperture == nil || *md.Aperture != 11 {
+		t.Errorf("Aperture = %v, want 11", deref(md.Aperture))
+	}
+	// FocalLength rational 200/1 → 200.0 (exifRatFloat).
+	if md.FocalLengthMM == nil || *md.FocalLengthMM != 200 {
+		t.Errorf("FocalLengthMM = %v, want 200", deref(md.FocalLengthMM))
+	}
+	// ExposureTime 1/3200 (<1s) → "1/3200" (exifShutter fast-branch).
+	if md.ShutterSpeed == nil || *md.ShutterSpeed != "1/3200" {
+		t.Errorf("ShutterSpeed = %v, want 1/3200", deref(md.ShutterSpeed))
+	}
+	// ISO coerced to int (exifInt).
+	if md.ISO == nil || *md.ISO != 1600 {
+		t.Errorf("ISO = %v, want 1600", deref(md.ISO))
+	}
+	// DateTimeOriginal parsed as UTC-labelled wall-clock (exifTime).
+	if md.CapturedAt == nil || !md.CapturedAt.Equal(time.Date(2026, 5, 20, 15, 59, 30, 0, time.UTC)) {
+		t.Errorf("CapturedAt = %v, want 2026-05-20 15:59:30 UTC", deref(md.CapturedAt))
 	}
 }

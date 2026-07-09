@@ -46,9 +46,6 @@ func reposFor(q DBTX) Repos {
 	}
 }
 
-// Repos returns repositories that autocommit each statement against the DB.
-func (s *Store) Repos() Repos { return reposFor(s.DB) }
-
 // InTx runs fn with repositories bound to a single transaction: commit on
 // success, roll back on any error (or panic). This is the unit of atomicity for
 // multi-statement writes (relink = UpdatePath + SetFileStatus; duplicate =

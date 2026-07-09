@@ -129,15 +129,3 @@ func Migrate(db *sql.DB) error {
 
 	return nil
 }
-
-// LatestVersion returns the highest migration version embedded in the binary.
-func LatestVersion() (int, error) {
-	all, err := loadMigrations()
-	if err != nil {
-		return 0, err
-	}
-	if len(all) == 0 {
-		return 0, nil
-	}
-	return all[len(all)-1].Version, nil
-}

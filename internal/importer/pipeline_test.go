@@ -418,6 +418,64 @@ func TestBatchVisibility(t *testing.T) {
 	}
 }
 
+// TestMidImportCountsPersist proves the session row's counts climb DURING the run
+// (per-batch UpdateCounts), not only at Finish: a live viewer polling the session
+// sees progress. The OnProgress hook fires right after each batch's count flush, so
+// reading the session there captures the mid-flight persisted count.
+func TestMidImportCountsPersist(t *testing.T) {
+	ingester, source, _, imports := newPipelineImporter(t, "")
+	ctx := context.Background()
+
+	const fileCount = 120 // > 2 batches at 50/txn
+	files := fstest.MapFS{}
+	for i := 0; i < fileCount; i++ {
+		files[filepath.Join("clip", fmtInt(i)+".mp4")] = &fstest.MapFile{
+			Data: []byte("unique-clip-" + fmtInt(i) + "-payload"),
+		}
+	}
+
+	var maxMidRunAdded int
+	var sawMidBatch bool
+	ingester.OnProgress = func(progress importer.Progress) {
+		// Only the non-final batches: their persisted count must be a partial total.
+		if progress.Done == 0 || progress.Done >= fileCount {
+			return
+		}
+		sawMidBatch = true
+		sessions, err := imports.ListSessions(context.Background(), 1)
+		if err != nil || len(sessions) != 1 {
+			t.Errorf("read session mid-run: err=%v sessions=%d", err, len(sessions))
+			return
+		}
+		if sessions[0].FinishedAt != nil {
+			t.Error("session finished mid-run — Finish ran before the walk drained")
+		}
+		if sessions[0].Added > maxMidRunAdded {
+			maxMidRunAdded = sessions[0].Added
+		}
+	}
+
+	result, err := ingester.Run(ctx, source, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sawMidBatch {
+		t.Fatal("no mid-run progress event fired; expected ≥2 batches for 120 files")
+	}
+	if maxMidRunAdded == 0 {
+		t.Fatal("session still showed added=0 mid-import — UpdateCounts is not persisting per batch")
+	}
+	if maxMidRunAdded >= result.Added {
+		t.Fatalf("mid-run added=%d should be a partial count below the final added=%d", maxMidRunAdded, result.Added)
+	}
+
+	// And the final persisted counts (written by Finish) match the result.
+	final, _ := imports.ListSessions(context.Background(), 1)
+	if final[0].Added != result.Added {
+		t.Errorf("final session added=%d, want %d", final[0].Added, result.Added)
+	}
+}
+
 // --- Full-processing invariant (the sacred LrC-trauma test) ---
 
 func TestFullProcessingInvariant_Cancel(t *testing.T) {

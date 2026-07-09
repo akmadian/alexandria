@@ -86,16 +86,16 @@ type pipeline struct {
 	visited      map[string]struct{}
 	unknownTally map[string]int
 	ignoredTally map[string]int
-	skippedCount int
 
 	// WRITE-owned.
 	addedCount, updatedCount, movedCount, duplicateCount, errorCount int
 	missingCount                                                     int
 
 	// cross-goroutine progress (atomics).
-	total    atomic.Int64 // asset items emitted by SCAN
-	done     atomic.Int64 // assets committed by WRITE
-	walkDone atomic.Bool
+	total        atomic.Int64 // asset items emitted by SCAN
+	done         atomic.Int64 // assets committed by WRITE
+	walkDone     atomic.Bool
+	skippedCount atomic.Int64 // SCAN increments; WRITE reads it for the mid-import count flush
 
 	errorsMu  sync.Mutex // guards runErrors
 	runErrors []ImportError
@@ -212,11 +212,34 @@ func (pipe *pipeline) emit(ctx context.Context, out chan<- *pipelineItem, item *
 // postCommit runs the ordered hooks after a batch commits. Grouping recompute is
 // a deliberate no-op stub — sidecar_files rows are already written, so the
 // grouping engine backfills cleanly when it lands. catalog-changed emission is a
-// callback wired to Wails later; for now, progress is the only live hook.
-func (pipe *pipeline) postCommit() {
+// callback wired to Wails later; for now, count persistence and progress are the
+// live hooks.
+func (pipe *pipeline) postCommit(ctx context.Context) {
 	// grouping recompute stub (no-op)
+	pipe.persistCounts(ctx)
 	pipe.emitProgress("write")
 	// catalog-changed callback (wired later)
+}
+
+// persistCounts flushes the running tallies onto the session row after each batch,
+// so a live viewer (dev harness, frontend) sees counts climb mid-import instead of
+// only at Finish. Best-effort: a failed progress write is logged and ignored —
+// Finish writes the authoritative final counts, and the import is idempotent, so a
+// dropped mid-flight update costs nothing. Runs in the WRITE goroutine, so the
+// WRITE-owned counters are read without synchronization; skippedCount is atomic
+// because SCAN is still writing it.
+func (pipe *pipeline) persistCounts(ctx context.Context) {
+	session := &domain.ImportSession{
+		Added:   pipe.addedCount,
+		Updated: pipe.updatedCount,
+		Moved:   pipe.movedCount,
+		Skipped: int(pipe.skippedCount.Load()),
+		Dups:    pipe.duplicateCount,
+		Errors:  pipe.errorCount,
+	}
+	if err := pipe.importer.Imports.UpdateCounts(ctx, pipe.sessionID, session); err != nil {
+		pipe.importer.Log.Debug("mid-import count update failed", "session", pipe.sessionID, "err", err)
+	}
 }
 
 func (pipe *pipeline) emitProgress(stage string) {
@@ -332,7 +355,7 @@ func (pipe *pipeline) result() ImportResult {
 		Added:   pipe.addedCount,
 		Updated: pipe.updatedCount,
 		Moved:   pipe.movedCount,
-		Skipped: pipe.skippedCount,
+		Skipped: int(pipe.skippedCount.Load()),
 		Dups:    pipe.duplicateCount,
 		Missing: pipe.missingCount,
 		Errors:  runErrors,
@@ -344,7 +367,7 @@ func (pipe *pipeline) sessionSnapshot() *domain.ImportSession {
 		Added:          pipe.addedCount,
 		Updated:        pipe.updatedCount,
 		Moved:          pipe.movedCount,
-		Skipped:        pipe.skippedCount,
+		Skipped:        int(pipe.skippedCount.Load()),
 		Dups:           pipe.duplicateCount,
 		Errors:         pipe.errorCount,
 		SkippedUnknown: pipe.unknownTally,

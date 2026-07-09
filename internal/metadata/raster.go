@@ -85,7 +85,10 @@ func exifString(tags map[string]exif.ExifTag, name string) *string {
 	if !ok {
 		return nil
 	}
-	s := strings.TrimSpace(tagString(&t))
+	// Fixed-length EXIF ASCII fields (e.g. LensModel) are NUL-padded to their slot
+	// width; TrimSpace alone leaves the NULs, so they must be cut too or they land
+	// verbatim in the catalog.
+	s := strings.Trim(tagString(&t), " \t\r\n\x00")
 	if s == "" {
 		return nil
 	}

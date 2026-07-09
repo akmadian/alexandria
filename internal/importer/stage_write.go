@@ -99,7 +99,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		}
 	}
 	pipe.done.Add(int64(committed))
-	pipe.postCommit()
+	pipe.postCommit(ctx)
 	return nil
 }
 

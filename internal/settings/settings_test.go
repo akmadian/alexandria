@@ -193,6 +193,30 @@ func TestDebounceCollapsesRapidWrites(t *testing.T) {
 	}
 }
 
+// Open is the composition root's one call: it first-runs all three config files
+// in the dir and returns a handle whose cached Get values are the defaults. Close
+// tears down every hot-reload watch.
+func TestOpenCreatesAllThreeFiles(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := Open(dir, testLogger())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer svc.Close()
+
+	for _, name := range []string{"settings.json", "machine.json", "keybindings.json"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("Open should have created %s: %v", name, err)
+		}
+	}
+	if svc.Settings.Get().ThumbnailQuality != DefaultSettings().ThumbnailQuality {
+		t.Errorf("settings cache = %+v, want defaults", svc.Settings.Get())
+	}
+	if svc.Machine.Get().Workers.Ingest.Hash != DefaultMachine().Workers.Ingest.Hash {
+		t.Errorf("machine cache = %+v, want defaults", svc.Machine.Get())
+	}
+}
+
 // writeJSON writes v as indented JSON directly (bypassing Save), simulating an
 // external editor. Not atomic on purpose — exercises the raw-write path.
 func writeJSON[T any](t *testing.T, path string, v T) {
