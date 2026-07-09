@@ -54,9 +54,9 @@ func ExtractRaster(r io.ReadSeeker) (Metadata, error) {
 
 func indexTags(tags []exif.ExifTag) map[string]exif.ExifTag {
 	byName := make(map[string]exif.ExifTag, len(tags))
-	for _, t := range tags {
-		if _, seen := byName[t.TagName]; !seen { // IFD0 wins over thumbnail IFD1
-			byName[t.TagName] = t
+	for i := range tags {
+		if _, seen := byName[tags[i].TagName]; !seen { // IFD0 wins over thumbnail IFD1
+			byName[tags[i].TagName] = tags[i]
 		}
 	}
 	return byName
@@ -85,14 +85,14 @@ func exifString(tags map[string]exif.ExifTag, name string) *string {
 	if !ok {
 		return nil
 	}
-	s := strings.TrimSpace(tagString(t))
+	s := strings.TrimSpace(tagString(&t))
 	if s == "" {
 		return nil
 	}
 	return &s
 }
 
-func tagString(t exif.ExifTag) string {
+func tagString(t *exif.ExifTag) string {
 	if s, ok := t.Value.(string); ok {
 		return s
 	}
@@ -106,14 +106,14 @@ func exifTime(tags map[string]exif.ExifTag, name string) *time.Time {
 	if !ok {
 		return nil
 	}
-	parsed, err := time.Parse("2006:01:02 15:04:05", strings.TrimSpace(tagString(t)))
+	parsed, err := time.Parse("2006:01:02 15:04:05", strings.TrimSpace(tagString(&t)))
 	if err != nil {
 		return nil
 	}
 	return &parsed
 }
 
-func firstRat(t exif.ExifTag) (exifcommon.Rational, bool) {
+func firstRat(t *exif.ExifTag) (exifcommon.Rational, bool) {
 	if rs, ok := t.Value.([]exifcommon.Rational); ok && len(rs) > 0 {
 		return rs[0], true
 	}
@@ -132,7 +132,7 @@ func exifRatFloat(tags map[string]exif.ExifTag, name string) *float64 {
 	if !ok {
 		return nil
 	}
-	r, ok := firstRat(t)
+	r, ok := firstRat(&t)
 	if !ok || r.Denominator == 0 {
 		return nil
 	}
@@ -147,7 +147,7 @@ func exifShutter(tags map[string]exif.ExifTag, name string) *string {
 	if !ok {
 		return nil
 	}
-	r, ok := firstRat(t)
+	r, ok := firstRat(&t)
 	if !ok || r.Denominator == 0 {
 		return nil
 	}

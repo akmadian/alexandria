@@ -2,6 +2,7 @@ package settings
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -39,7 +40,7 @@ func TestLoadMissingFileReturnsDefaults(t *testing.T) {
 func TestLoadMalformedQuarantinesAndReverts(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")
-	if err := os.WriteFile(path, []byte("{ this is not json"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("{ this is not json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got := loadJSON(path, DefaultSettings(), testLogger())
@@ -51,7 +52,7 @@ func TestLoadMalformedQuarantinesAndReverts(t *testing.T) {
 	if len(matches) != 1 {
 		t.Fatalf("expected exactly one quarantined sibling, found %d", len(matches))
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("original path should be gone (renamed to quarantine)")
 	}
 }
@@ -73,44 +74,46 @@ func TestBadFieldDoesNotZeroGoodFields(t *testing.T) {
 
 func TestSaveRoundTrips(t *testing.T) {
 	for _, testCase := range []string{"settings", "machine", "keybindings"} {
-		dir := t.TempDir()
-		switch testCase {
-		case "settings":
-			c, _ := OpenSettings(dir, testLogger())
-			defer c.Close()
-			want := DefaultSettings()
-			want.ThumbnailQuality = 70
-			want.IgnorePatterns = []string{"*.tmp", ".DS_Store"}
-			if err := c.Save(want); err != nil {
-				t.Fatal(err)
+		t.Run(testCase, func(t *testing.T) {
+			dir := t.TempDir()
+			switch testCase {
+			case "settings":
+				c, _ := OpenSettings(dir, testLogger())
+				defer c.Close()
+				want := DefaultSettings()
+				want.ThumbnailQuality = 70
+				want.IgnorePatterns = []string{"*.tmp", ".DS_Store"}
+				if err := c.Save(want); err != nil {
+					t.Fatal(err)
+				}
+				got := loadJSON(filepath.Join(dir, "settings.json"), DefaultSettings(), testLogger())
+				if got.ThumbnailQuality != 70 || len(got.IgnorePatterns) != 2 {
+					t.Fatalf("settings round-trip mismatch: %+v", got)
+				}
+			case "machine":
+				c, _ := OpenMachine(dir, testLogger())
+				defer c.Close()
+				want := DefaultMachine()
+				want.Workers.Ingest.Thumb = 8
+				if err := c.Save(want); err != nil {
+					t.Fatal(err)
+				}
+				got := loadJSON(filepath.Join(dir, "machine.json"), DefaultMachine(), testLogger())
+				if got.Workers.Ingest.Thumb != 8 {
+					t.Fatalf("machine round-trip mismatch: %+v", got)
+				}
+			case "keybindings":
+				c, _ := OpenKeybindings(dir, testLogger())
+				defer c.Close()
+				if err := c.Save(Keybindings{"nextAsset": "j"}); err != nil {
+					t.Fatal(err)
+				}
+				got := loadJSON(filepath.Join(dir, "keybindings.json"), Keybindings{}, testLogger())
+				if got["nextAsset"] != "j" {
+					t.Fatalf("keybindings round-trip mismatch: %+v", got)
+				}
 			}
-			got := loadJSON(filepath.Join(dir, "settings.json"), DefaultSettings(), testLogger())
-			if got.ThumbnailQuality != 70 || len(got.IgnorePatterns) != 2 {
-				t.Fatalf("settings round-trip mismatch: %+v", got)
-			}
-		case "machine":
-			c, _ := OpenMachine(dir, testLogger())
-			defer c.Close()
-			want := DefaultMachine()
-			want.Workers.Ingest.Thumb = 8
-			if err := c.Save(want); err != nil {
-				t.Fatal(err)
-			}
-			got := loadJSON(filepath.Join(dir, "machine.json"), DefaultMachine(), testLogger())
-			if got.Workers.Ingest.Thumb != 8 {
-				t.Fatalf("machine round-trip mismatch: %+v", got)
-			}
-		case "keybindings":
-			c, _ := OpenKeybindings(dir, testLogger())
-			defer c.Close()
-			if err := c.Save(Keybindings{"nextAsset": "j"}); err != nil {
-				t.Fatal(err)
-			}
-			got := loadJSON(filepath.Join(dir, "keybindings.json"), Keybindings{}, testLogger())
-			if got["nextAsset"] != "j" {
-				t.Fatalf("keybindings round-trip mismatch: %+v", got)
-			}
-		}
+		})
 	}
 }
 
@@ -145,11 +148,13 @@ func TestHotReloadInvalidKeepsPreviousAndDoesNotQuarantine(t *testing.T) {
 	path := filepath.Join(dir, "settings.json")
 	c, _ := OpenSettings(dir, testLogger())
 	defer c.Close()
-	c.Save(func() Settings { s := DefaultSettings(); s.ThumbnailQuality = 55; return s }())
+	if err := c.Save(func() Settings { s := DefaultSettings(); s.ThumbnailQuality = 55; return s }()); err != nil {
+		t.Fatal(err)
+	}
 
 	c.OnChange(func(Settings) { t.Error("OnChange must not fire for an invalid external edit") })
 
-	if err := os.WriteFile(path, []byte("{ broken"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("{ broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// Give the watch+debounce time to (not) act.
@@ -196,7 +201,7 @@ func writeJSON[T any](t *testing.T, path string, v T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

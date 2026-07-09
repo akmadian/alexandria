@@ -22,8 +22,12 @@ func TestQueryAssets_BasicFilter(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "c.jpg")
 
-	repo.ApplyTriagePatch(ctx, []string{"asset-a.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(5)})
-	repo.ApplyTriagePatch(ctx, []string{"asset-b.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)})
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-a.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-b.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)}); err != nil {
+		t.Fatal(err)
+	}
 
 	query := ast.Query{
 		Version: ast.Version,
@@ -49,7 +53,9 @@ func TestQueryAssets_ExcludesDeleted(t *testing.T) {
 
 	testutil.NewTestAsset(t, db, src.ID, "live.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "dead.jpg")
-	repo.SoftDelete(ctx, []string{"asset-dead.jpg"})
+	if err := repo.SoftDelete(ctx, []string{"asset-dead.jpg"}); err != nil {
+		t.Fatal(err)
+	}
 
 	query := ast.Query{Version: ast.Version}
 	rows, total, err := repo.QueryAssets(ctx, query, defaultArrangement(), ast.Page{Limit: 10})
@@ -97,15 +103,21 @@ func TestQueryAssets_NestedBooleanLogic(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "c.jpg")
 
-	repo.ApplyTriagePatch(ctx, []string{"asset-a.jpg"}, catalog.TriagePatch{
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-a.jpg"}, catalog.TriagePatch{
 		Rating: domain.SetOpt(5), Flag: domain.SetOpt(domain.FlagPick),
-	})
-	repo.ApplyTriagePatch(ctx, []string{"asset-b.jpg"}, catalog.TriagePatch{
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-b.jpg"}, catalog.TriagePatch{
 		Rating: domain.SetOpt(3), Flag: domain.SetOpt(domain.FlagPick),
-	})
-	repo.ApplyTriagePatch(ctx, []string{"asset-c.jpg"}, catalog.TriagePatch{
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-c.jpg"}, catalog.TriagePatch{
 		Rating: domain.SetOpt(5), Flag: domain.SetOpt(domain.FlagReject),
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	// (rating=5 OR flag=pick) AND NOT(flag=reject)
 	query := ast.Query{
@@ -159,7 +171,9 @@ func TestQueryAssets_EmptyOperator(t *testing.T) {
 
 	testutil.NewTestAsset(t, db, src.ID, "rated.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "unrated.jpg")
-	repo.ApplyTriagePatch(ctx, []string{"asset-rated.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)})
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-rated.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)}); err != nil {
+		t.Fatal(err)
+	}
 
 	// Unrated: rating IS NULL (not eq 0)
 	query := ast.Query{
@@ -287,9 +301,11 @@ func TestReadTriageStates(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
 
-	repo.ApplyTriagePatch(ctx, []string{"asset-a.jpg"}, catalog.TriagePatch{
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-a.jpg"}, catalog.TriagePatch{
 		Rating: domain.SetOpt(5), Flag: domain.SetOpt(domain.FlagPick),
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	states, err := repo.ReadTriageStates(ctx, []string{"asset-a.jpg", "asset-b.jpg"})
 	if err != nil {
@@ -351,8 +367,12 @@ func TestQueryAssets_TagFilter(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "untagged.jpg")
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Beach', 'beach', '/t1/', ?)`, now)
-	db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES ('asset-tagged.jpg', 't1', 'user', ?)`, now)
+	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Beach', 'beach', '/t1/', ?)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES ('asset-tagged.jpg', 't1', 'user', ?)`, now); err != nil {
+		t.Fatal(err)
+	}
 
 	// has tag
 	query := ast.Query{
@@ -391,9 +411,15 @@ func TestQueryAssets_TagUnderHierarchy(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "other.jpg")
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('root', 'Travel', 'travel', '/root/', ?)`, now)
-	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, parent_id, path, created_at) VALUES ('child', 'Japan', 'japan', 'root', '/root/child/', ?)`, now)
-	db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES ('asset-deep.jpg', 'child', 'user', ?)`, now)
+	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('root', 'Travel', 'travel', '/root/', ?)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, parent_id, path, created_at) VALUES ('child', 'Japan', 'japan', 'root', '/root/child/', ?)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES ('asset-deep.jpg', 'child', 'user', ?)`, now); err != nil {
+		t.Fatal(err)
+	}
 
 	// tag under "root" should find deep.jpg (tagged with child of root)
 	query := ast.Query{
@@ -417,9 +443,13 @@ func TestQueryAssets_TagTombstoneRespected(t *testing.T) {
 
 	testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
-	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Beach', 'beach', '/t1/', ?)`, now)
+	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Beach', 'beach', '/t1/', ?)`, now); err != nil {
+		t.Fatal(err)
+	}
 	// Tombstoned tag — should NOT match.
-	db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, removed_at, created_at) VALUES ('asset-photo.jpg', 't1', 'user', ?, ?)`, now, now)
+	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, removed_at, created_at) VALUES ('asset-photo.jpg', 't1', 'user', ?, ?)`, now, now); err != nil {
+		t.Fatal(err)
+	}
 
 	query := ast.Query{
 		Version: ast.Version,

@@ -50,7 +50,7 @@ func (pipe *pipeline) thumbnailOne(item *pipelineItem) {
 // thumbnail_at, best-effort — the single-file (watcher) path. Unlike the THUMB
 // stage, it writes thumbnail_at directly (there is no batching txn to fold it
 // into). Skipped when the type has no generator.
-func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, scanned scannedFile, assetID string, verdict action, logger *log.Logger) {
+func (imp *Importer) thumbnail(ctx context.Context, fsys fs.FS, scanned *scannedFile, assetID string, verdict action, logger *log.Logger) {
 	if imp.Thumbnail == nil {
 		return
 	}

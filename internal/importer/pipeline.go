@@ -339,8 +339,8 @@ func (pipe *pipeline) result() ImportResult {
 	}
 }
 
-func (pipe *pipeline) sessionSnapshot() domain.ImportSession {
-	return domain.ImportSession{
+func (pipe *pipeline) sessionSnapshot() *domain.ImportSession {
+	return &domain.ImportSession{
 		Added:          pipe.addedCount,
 		Updated:        pipe.updatedCount,
 		Moved:          pipe.movedCount,

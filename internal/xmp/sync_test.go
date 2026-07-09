@@ -3,6 +3,7 @@ package xmp
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -211,7 +212,7 @@ func TestToTriagePatch(t *testing.T) {
 		{"empty-clears-both", Fields{}, domain.ClearOpt[int](), domain.ClearOpt[domain.ColorLabel]()},
 	}
 	for _, tc := range cases {
-		patch := syncer.toTriagePatch(tc.fields, "asset-x")
+		patch := syncer.toTriagePatch(&tc.fields, "asset-x")
 		if !reflect.DeepEqual(patch.Rating, tc.wantRating) {
 			t.Errorf("%s: Rating = %+v, want %+v", tc.name, patch.Rating, tc.wantRating)
 		}
@@ -371,14 +372,14 @@ func TestOutboundMergePreservation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecarPath := t.TempDir() + "/lightroom.xmp"
-	if err := os.WriteFile(sidecarPath, original, 0o644); err != nil {
+	sidecarPath := filepath.Join(t.TempDir(), "lightroom.xmp")
+	if err := os.WriteFile(sidecarPath, original, 0o600); err != nil { //nolint:gosec // test file in t.TempDir
 		t.Fatal(err)
 	}
 
 	rating := 2
 	label := domain.ColorLabelBlue
-	err = Write(context.Background(), daemon, sidecarPath, WriteFields{
+	err = Write(context.Background(), daemon, sidecarPath, &WriteFields{
 		Rating:     &rating,
 		ColorLabel: &label,
 	})
@@ -451,9 +452,11 @@ func TestConflictResolution(t *testing.T) {
 		}
 
 		// Step 3: prepare a DIFFERENT sidecar (sidecar changed).
-		sidecarPath := t.TempDir() + "/sunrise.xmp"
+		sidecarPath := filepath.Join(t.TempDir(), "sunrise.xmp")
 		original, _ := os.ReadFile("testdata/no-rating.xmp")
-		os.WriteFile(sidecarPath, original, 0o644)
+		if err := os.WriteFile(sidecarPath, original, 0o600); err != nil { //nolint:gosec // test file in t.TempDir
+			t.Fatal(err)
+		}
 
 		synced, _ := repo.Get(ctx, asset.ID)
 		return repo, store, synced, sidecarPath
@@ -533,7 +536,9 @@ func TestConflictResolution(t *testing.T) {
 
 		// Write a sidecar that has keywords (copy the full LrC fixture instead).
 		lrcFixture, _ := os.ReadFile("testdata/lightroom.xmp")
-		os.WriteFile(sidecarPath, lrcFixture, 0o644)
+		if err := os.WriteFile(sidecarPath, lrcFixture, 0o600); err != nil { //nolint:gosec // test file in t.TempDir
+			t.Fatal(err)
+		}
 
 		syncer := NewSyncer(daemon, repo, repo, store, catalogWins, log.Default())
 		if _, err := syncer.SyncSidecar(ctx, asset, sidecarPath); err != nil {
@@ -542,9 +547,11 @@ func TestConflictResolution(t *testing.T) {
 
 		// Tags should have been unioned even though the judgment policy is catalog_wins.
 		var count int
-		repo.DB.QueryRowContext(ctx,
+		if err := repo.DB.QueryRowContext(ctx,
 			"SELECT count(*) FROM asset_tags WHERE asset_id = ? AND removed_at IS NULL",
-			asset.ID).Scan(&count)
+			asset.ID).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
 		if count == 0 {
 			t.Error("no tags attached — tags should union regardless of conflict policy")
 		}
@@ -555,7 +562,7 @@ func TestConflictResolution(t *testing.T) {
 func TestBuildWriteArgs(t *testing.T) {
 	rating := 3
 	label := domain.ColorLabelGreen
-	args := buildWriteArgs(WriteFields{
+	args := buildWriteArgs(&WriteFields{
 		Rating:       &rating,
 		ColorLabel:   &label,
 		Tags:         []string{"travel", "japan"},
@@ -580,7 +587,7 @@ func TestBuildWriteArgs(t *testing.T) {
 	}
 
 	// Empty fields → clear args.
-	clearArgs := buildWriteArgs(WriteFields{}, "/tmp/test.xmp", "/tmp/test.xmp.alxtmp")
+	clearArgs := buildWriteArgs(&WriteFields{}, "/tmp/test.xmp", "/tmp/test.xmp.alxtmp")
 	clearJoined := strings.Join(clearArgs, " ")
 	for _, want := range []string{"-Rating=", "-Label=", "-Subject=", "-Description=", "-Title="} {
 		// Must have the clear form (tag=) without a value after it.

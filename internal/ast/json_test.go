@@ -1,6 +1,7 @@
 package ast_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -149,7 +150,7 @@ func assertRoundTrip(t *testing.T, original ast.Query) {
 	if err != nil {
 		t.Fatalf("re-marshal: %v", err)
 	}
-	if string(encoded) != string(reencoded) {
+	if !bytes.Equal(encoded, reencoded) {
 		t.Fatalf("round-trip mismatch:\n  original:  %s\n  roundtrip: %s", encoded, reencoded)
 	}
 }

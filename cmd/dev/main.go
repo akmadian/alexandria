@@ -16,7 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	_ "net/http/pprof" // registers /debug/pprof/* on http.DefaultServeMux
+	_ "net/http/pprof" //nolint:gosec // dev-only profiling endpoint
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -116,12 +116,16 @@ debug web UI (--debug, import only):
 // at the first positional, so we pull the path out and parse the flags that
 // follow it. Returns ok=false if no positional path was given.
 func parsePathAndFlags(flags *flag.FlagSet, args []string) (string, bool) {
-	flags.Parse(args)
+	if err := flags.Parse(args); err != nil {
+		return "", false
+	}
 	if flags.NArg() < 1 {
 		return "", false
 	}
 	path := flags.Arg(0)
-	flags.Parse(flags.Args()[1:]) // flags that appeared after the path
+	if err := flags.Parse(flags.Args()[1:]); err != nil {
+		return "", false
+	}
 	return path, true
 }
 
@@ -149,7 +153,7 @@ func openCatalog(catalogPath string) (*openedCatalog, error) {
 		}
 		database.SetMaxOpenConns(1)
 		if err := migrations.Migrate(database); err != nil {
-			database.Close()
+			_ = database.Close()
 			return nil, err
 		}
 		return &openedCatalog{
@@ -167,7 +171,7 @@ func openCatalog(catalogPath string) (*openedCatalog, error) {
 	settingsDir := filepath.Join(catalogPath, "settings")
 	settingsService, err := settings.Open(settingsDir, log.Default())
 	if err != nil {
-		catalog.Close()
+		_ = catalog.Close()
 		return nil, err
 	}
 	return &openedCatalog{
@@ -298,7 +302,7 @@ func cmdImport(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer catalog.close()
+	defer func() { _ = catalog.close() }()
 
 	if *debug {
 		startDebugServer(*debugAddr)
@@ -393,8 +397,12 @@ func startDebugServer(addr string) {
 		}
 		fmt.Fprint(writer, debugIndexHTML)
 	})
+	server := &http.Server{
+		Addr:              addr,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go func() {
-		if err := http.ListenAndServe(addr, nil); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintln(os.Stderr, "debug server:", err)
 		}
 	}()
@@ -425,7 +433,7 @@ func cmdReconcile(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer catalog.close()
+	defer func() { _ = catalog.close() }()
 
 	ctx := context.Background()
 	source, err := ensureSource(ctx, catalog, absolutePath)
@@ -459,7 +467,7 @@ func cmdWatch(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer catalog.close()
+	defer func() { _ = catalog.close() }()
 
 	// Cancel on Ctrl-C: the watcher returns context.Canceled on a clean shutdown.
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -487,12 +495,14 @@ func cmdWatch(args []string) error {
 func cmdErrors(args []string) error {
 	flags := flag.NewFlagSet("errors", flag.ExitOnError)
 	catalogPath := flags.String("catalog", "", "catalog dir")
-	flags.Parse(args)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
 	catalog, err := openCatalog(*catalogPath)
 	if err != nil {
 		return err
 	}
-	defer catalog.close()
+	defer func() { _ = catalog.close() }()
 
 	imports := &sqlite.ImportRepo{DB: catalog.store.DB}
 	sessions, err := imports.ListSessions(context.Background(), 1)
@@ -517,12 +527,14 @@ func cmdErrors(args []string) error {
 func cmdSessions(args []string) error {
 	flags := flag.NewFlagSet("sessions", flag.ExitOnError)
 	catalogPath := flags.String("catalog", "", "catalog dir")
-	flags.Parse(args)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
 	catalog, err := openCatalog(*catalogPath)
 	if err != nil {
 		return err
 	}
-	defer catalog.close()
+	defer func() { _ = catalog.close() }()
 
 	sessions, err := (&sqlite.ImportRepo{DB: catalog.store.DB}).ListSessions(context.Background(), 20)
 	if err != nil {
@@ -547,12 +559,14 @@ func cmdRebuild(args []string) error {
 	}
 	flags := flag.NewFlagSet("rebuild", flag.ExitOnError)
 	catalogPath := flags.String("catalog", "", "catalog dir")
-	flags.Parse(args[1:])
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
 	catalog, err := openCatalog(*catalogPath)
 	if err != nil {
 		return err
 	}
-	defer catalog.close()
+	defer func() { _ = catalog.close() }()
 
 	if err := sqlite.RebuildFTS(context.Background(), catalog.store.DB); err != nil {
 		return err

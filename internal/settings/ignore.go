@@ -17,7 +17,7 @@ import "path"
 // or "" if none. A directory hit prunes the whole subtree at SCAN; a file hit is
 // tallied by pattern and skipped without a row. Malformed patterns (path.Match
 // only errors on bad syntax, which our defaults never have) are non-matches.
-func (s Settings) MatchIgnore(name string) string {
+func (s *Settings) MatchIgnore(name string) string {
 	for _, pattern := range s.IgnorePatterns {
 		if matched, err := path.Match(pattern, name); err == nil && matched {
 			return pattern
@@ -27,4 +27,4 @@ func (s Settings) MatchIgnore(name string) string {
 }
 
 // Ignored reports whether name matches the ignore list.
-func (s Settings) Ignored(name string) bool { return s.MatchIgnore(name) != "" }
+func (s *Settings) Ignored(name string) bool { return s.MatchIgnore(name) != "" }

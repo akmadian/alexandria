@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -38,7 +39,7 @@ func (r *CollectionRepo) Get(ctx context.Context, id string) (*domain.Collection
 	row := r.DB.QueryRowContext(ctx,
 		"SELECT id, name, parent_id, kind, query, cover_asset_id, sort_field, sort_dir, created_at, updated_at FROM collections WHERE id = ?", id)
 	c, err := scanCollectionRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &domain.NotFoundError{Resource: "collection", ID: id}
 	}
 	return c, err

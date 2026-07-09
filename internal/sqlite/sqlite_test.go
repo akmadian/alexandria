@@ -129,12 +129,14 @@ func TestSourceRepo_FindByFilesystemUUID(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	fsUUID := "fs-abc"
-	repo.Create(ctx, &domain.Source{
+	if err := repo.Create(ctx, &domain.Source{
 		ID: "s1", Name: "ext", Kind: domain.SourceKindExternalDrive,
 		BasePath: "/mnt/ext", FilesystemUUID: &fsUUID,
 		ScanRecursively: true, Enabled: true, Connectivity: domain.SourceOnline,
 		CreatedAt: now, UpdatedAt: now,
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := repo.FindByFilesystemUUID(ctx, "fs-abc")
 	if err != nil {
@@ -277,13 +279,17 @@ func TestAssetRepo_ApplyTriagePatch_ClearField(t *testing.T) {
 	src := testutil.NewTestSource(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 
-	repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)})
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)}); err != nil {
+		t.Fatal(err)
+	}
 	got, _ := repo.Get(ctx, "asset-x.jpg")
 	if got.Rating == nil || *got.Rating != 3 {
 		t.Fatalf("setup: rating=%v", got.Rating)
 	}
 
-	repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Rating: domain.ClearOpt[int]()})
+	if err := repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Rating: domain.ClearOpt[int]()}); err != nil {
+		t.Fatal(err)
+	}
 	got, _ = repo.Get(ctx, "asset-x.jpg")
 	if got.Rating != nil {
 		t.Fatalf("after clear: rating=%v, want nil", got.Rating)
@@ -439,8 +445,12 @@ func TestRebuildFTS_IncludesTags(t *testing.T) {
 	a := testutil.NewTestAsset(t, db, src.ID, "img.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Landscape', 'landscape', '/t1/', ?)`, now)
-	db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 't1', 'user', ?)`, a.ID, now)
+	if _, err := db.ExecContext(ctx, `INSERT INTO tags (id, name, slug, path, created_at) VALUES ('t1', 'Landscape', 'landscape', '/t1/', ?)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO asset_tags (asset_id, tag_id, source, created_at) VALUES (?, 't1', 'user', ?)`, a.ID, now); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := sqlite.RebuildFTS(ctx, db); err != nil {
 		t.Fatalf("rebuild: %v", err)
@@ -476,7 +486,7 @@ func TestAssetRepo_ApplyFilePatch_PreservesJudgment(t *testing.T) {
 
 	// A reimport changes file facts.
 	const newSize = int64(9999)
-	if err := repo.ApplyFilePatch(ctx, "asset-p.jpg", catalog.FilePatch{
+	if err := repo.ApplyFilePatch(ctx, "asset-p.jpg", &catalog.FilePatch{
 		Filename: "p.jpg", Extension: "jpg", MIMEType: "image/jpeg",
 		FileType: domain.FileTypeImage, SizeBytes: newSize,
 		MTime: time.Now().UTC(), PartialHash: "newhash", FileStatus: domain.FileStatusOnline,
@@ -559,4 +569,3 @@ func TestStore_InTxRollback(t *testing.T) {
 		t.Fatalf("rollback failed: path=%q, want m.jpg", got.RelativePath)
 	}
 }
-

@@ -21,7 +21,7 @@ func acquireLock(path string) (*instanceLock, error) {
 		return nil, err
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
+		_ = f.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			return nil, &domain.CatalogLockedError{Path: path}
 		}

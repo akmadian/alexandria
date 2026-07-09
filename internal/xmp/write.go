@@ -20,23 +20,23 @@ import (
 //
 // The caller (writeOutbound) owns the DB cursor update and echo-check hash
 // storage; this function is pure I/O.
-func Write(ctx context.Context, daemon *dependency.ExiftoolDaemon, sidecarPath string, fields WriteFields) error {
+func Write(ctx context.Context, daemon *dependency.ExiftoolDaemon, sidecarPath string, fields *WriteFields) error {
 	tempPath := sidecarPath + ".alxtmp"
 	args := buildWriteArgs(fields, sidecarPath, tempPath)
 	output, err := daemon.Execute(ctx, args...)
 	if err != nil {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("xmp: write %s: %w", sidecarPath, err)
 	}
 	// exiftool prints "1 image files updated" on success; anything else is a
 	// problem. Check for the success marker rather than parsing error text.
 	if !strings.Contains(string(output), "1 image files updated") {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("xmp: write %s: unexpected output: %s", sidecarPath, string(output))
 	}
 
 	if err := os.Rename(tempPath, sidecarPath); err != nil {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("xmp: atomic rename %s: %w", sidecarPath, err)
 	}
 	return nil
@@ -56,7 +56,7 @@ type WriteFields struct {
 // buildWriteArgs constructs the exiftool argument list for a merge write.
 // exiftool writes to a temp file (-o tempPath) from the source sidecar, or
 // creates a new sidecar if the source doesn't exist.
-func buildWriteArgs(fields WriteFields, sidecarPath, tempPath string) []string {
+func buildWriteArgs(fields *WriteFields, sidecarPath, tempPath string) []string {
 	var args []string
 
 	if fields.Rating != nil {
@@ -96,8 +96,8 @@ func buildWriteArgs(fields WriteFields, sidecarPath, tempPath string) []string {
 		// No existing sidecar: create a minimal XMP file at the temp path. exiftool
 		// needs a target file to write tags into, so we touch it first.
 		dir := filepath.Dir(sidecarPath)
-		os.MkdirAll(dir, 0o755)
-		os.WriteFile(tempPath, nil, 0o644)
+		_ = os.MkdirAll(dir, 0o750)
+		_ = os.WriteFile(tempPath, nil, 0o600)
 		args = append(args, tempPath)
 	}
 

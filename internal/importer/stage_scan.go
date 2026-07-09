@@ -66,7 +66,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 			relPath: relativePath, filename: name, ext: extension, mime: handler.MIME,
 			fileType: handler.Type, handler: handler, size: info.Size(), mtime: info.ModTime(),
 		}
-		if unchanged(scanned, pipe.known) {
+		if unchanged(&scanned, pipe.known) {
 			pipe.skippedCount++
 			return nil
 		}
@@ -140,7 +140,7 @@ const mtimeTolerance = 2 * time.Second
 // unchanged reports whether a scanned file matches a known catalog entry closely
 // enough to skip: exact size and mtime within tolerance. This is the idempotency
 // gate — re-running on an unchanged source hashes nothing.
-func unchanged(scanned scannedFile, known map[string]domain.FileStat) bool {
+func unchanged(scanned *scannedFile, known map[string]domain.FileStat) bool {
 	previous, ok := known[scanned.relPath]
 	if !ok {
 		return false

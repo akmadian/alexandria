@@ -203,7 +203,7 @@ func validateEnumValue(field Field, operator Operator, value any) error {
 // validateEnumMember checks that a string is a valid member of the field's
 // domain enum. This and compile.go are the ONLY two places domain may appear.
 func validateEnumMember(field Field, value string) error {
-	switch field {
+	switch field { //nolint:exhaustive // only enum fields have membership to validate
 	case FieldFileType:
 		switch domain.FileType(value) {
 		case domain.FileTypeImage, domain.FileTypeVideo, domain.FileTypeRaw,

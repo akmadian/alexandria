@@ -39,7 +39,7 @@ func NewSyncer(daemon *dependency.ExiftoolDaemon, reader catalog.AssetReader, wr
 		logger = log.Default()
 	}
 	if settingsFunc == nil {
-		settingsFunc = func() settings.Settings { return settings.DefaultSettings() }
+		settingsFunc = settings.DefaultSettings
 	}
 	return &Syncer{daemon: daemon, reader: reader, writer: writer, keywords: keywords, settings: settingsFunc, logger: logger}
 }
@@ -87,7 +87,7 @@ func (s *Syncer) SyncSidecar(ctx context.Context, asset *domain.Asset, sidecarPa
 		}
 
 		if inbound {
-			patch := s.toTriagePatch(fields, asset.ID)
+			patch := s.toTriagePatch(&fields, asset.ID)
 			if err := s.writer.ApplyXMPInbound(ctx, asset.ID, patch, time.Now().UTC(), hash); err != nil {
 				return action, fmt.Errorf("xmp: apply inbound %s: %w", asset.ID, err)
 			}
@@ -139,7 +139,7 @@ func (s *Syncer) writeOutbound(ctx context.Context, asset *domain.Asset, sidecar
 		fields.Hierarchical = hierarchical
 	}
 
-	if err := Write(ctx, s.daemon, sidecarPath, fields); err != nil {
+	if err := Write(ctx, s.daemon, sidecarPath, &fields); err != nil {
 		return err
 	}
 
@@ -192,7 +192,7 @@ func splitHierarchical(paths []string) [][]string {
 // apply-inbound only clears state that was already in sync, i.e. a genuine sidecar
 // removal. Note is never synced (Alexandria-private); flag lives in a custom
 // namespace we don't read yet (best-effort, open question #8) so it stays untouched.
-func (s *Syncer) toTriagePatch(fields Fields, assetID string) catalog.TriagePatch {
+func (s *Syncer) toTriagePatch(fields *Fields, assetID string) catalog.TriagePatch {
 	var patch catalog.TriagePatch
 
 	switch {

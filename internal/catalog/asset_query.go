@@ -95,4 +95,3 @@ type PathStatus struct {
 	RelativePath string
 	FileStatus   domain.FileStatus
 }
-

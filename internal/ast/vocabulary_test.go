@@ -1,6 +1,7 @@
 package ast_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/akmadian/alexandria/internal/ast"
@@ -79,7 +80,8 @@ func TestUnknownFieldValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown field")
 	}
-	if _, ok := err.(*ast.ErrUnknownField); !ok {
+	var target *ast.ErrUnknownField
+	if !errors.As(err, &target) {
 		t.Fatalf("expected ErrUnknownField, got %T: %v", err, err)
 	}
 }

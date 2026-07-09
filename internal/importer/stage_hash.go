@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,7 +17,7 @@ import (
 
 func (pipe *pipeline) hash(ctx context.Context, in <-chan *pipelineItem, out chan<- *pipelineItem) error {
 	for item := range in {
-		hash, head, err := hashAndHead(pipe.fsys, item.scanned)
+		hash, head, err := hashAndHead(pipe.fsys, &item.scanned)
 		if err != nil {
 			item.rejected = true
 			item.addError("hash", "read_failed", err.Error())
@@ -46,14 +47,14 @@ const partialHashBytes = 64 * 1024
 // so a small file can't collide with a prefix of a larger one.
 func partialHash(head []byte, size int64) string {
 	hasher := xxhash.New()
-	hasher.Write(head)
+	_, _ = hasher.Write(head)
 	fmt.Fprintf(hasher, "%d", size)
 	return fmt.Sprintf("%x", hasher.Sum64())
 }
 
 // hashFile opens the file on fsys, reads up to the first 64KB, and returns the
 // partial hash. Orchestration owns the open; partialHash stays pure.
-func hashFile(fsys fs.FS, scanned scannedFile) (string, error) {
+func hashFile(fsys fs.FS, scanned *scannedFile) (string, error) {
 	hash, _, err := hashAndHead(fsys, scanned)
 	return hash, err
 }
@@ -62,7 +63,7 @@ func hashFile(fsys fs.FS, scanned scannedFile) (string, error) {
 // run the magic-byte Sniff on the same buffer (zero extra I/O, D7). The returned
 // head is the actual bytes read (≤64KB); callers must not retain it past the
 // stage — it is per-file and sized for the sniff, not held for the whole run.
-func hashAndHead(fsys fs.FS, scanned scannedFile) (string, []byte, error) {
+func hashAndHead(fsys fs.FS, scanned *scannedFile) (string, []byte, error) {
 	file, err := fsys.Open(scanned.relPath)
 	if err != nil {
 		return "", nil, err
@@ -72,7 +73,7 @@ func hashAndHead(fsys fs.FS, scanned scannedFile) (string, []byte, error) {
 	head := make([]byte, partialHashBytes)
 	bytesRead, err := io.ReadFull(file, head)
 	// Short files return EOF/ErrUnexpectedEOF with bytesRead valid — that's fine.
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return "", nil, err
 	}
 	head = head[:bytesRead]

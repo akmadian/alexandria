@@ -110,7 +110,7 @@ func Migrate(db *sql.DB) error {
 		}
 
 		if _, err := tx.Exec(m.SQL); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("migration %s failed: %w", m.Name, err)
 		}
 
@@ -118,7 +118,7 @@ func Migrate(db *sql.DB) error {
 			"INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
 			m.Version, m.Name, time.Now().UTC().Format(time.RFC3339),
 		); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("recording migration %s: %w", m.Name, err)
 		}
 

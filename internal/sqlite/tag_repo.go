@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ type TagRepo struct {
 
 // EnsureTag finds a tag by (slug, parentID) or creates it — the find-or-create
 // atom. A new tag mints a UUIDv7, computes its path from the parent, and defaults
-// color_mode='inherit'. Sibling uniqueness (the UNIQUE(slug, IFNULL(parent_id,''))
+// color_mode='inherit'. Sibling uniqueness (the UNIQUE(slug, IFNULL(parent_id,”))
 // index) makes the lookup a single indexed probe.
 func (r *TagRepo) EnsureTag(ctx context.Context, name string, parentID *string) (string, error) {
 	slug := domain.Slugify(name)
@@ -38,7 +39,7 @@ func (r *TagRepo) EnsureTag(ctx context.Context, name string, parentID *string) 
 	if err == nil {
 		return id, nil
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("tags: lookup %q: %w", slug, err)
 	}
 
@@ -299,13 +300,13 @@ func (r *TagRepo) RebuildTagPaths(ctx context.Context) error {
 		var id string
 		var parentID sql.NullString
 		if err := rows.Scan(&id, &parentID); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		parent[id] = parentID.String
 		ids = append(ids, id)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -116,7 +117,7 @@ func marshalConfig[T any](value T) ([]byte, error) {
 // place, so a reader (or our own watcher) never observes a half-written file.
 // Creates the parent dir on first write.
 func atomicWrite(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
@@ -125,16 +126,16 @@ func atomicWrite(path string, data []byte) error {
 	}
 	tmpName := tmp.Name()
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return err
 	}
 	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
+		_ = os.Remove(tmpName)
 		return err
 	}
 	return nil
@@ -170,7 +171,7 @@ func (c *configFile[T]) startWatch() {
 		c.logger.Warn("config hot-reload unavailable (watch failed), edits need a restart", "err", err)
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel stored in c.watchStop, called by Close
 	c.watchStop = cancel
 	go c.watchLoop(ctx, events)
 }
@@ -276,5 +277,5 @@ func jsonEqual[T any](a, b T) bool {
 	if err1 != nil || err2 != nil {
 		return false
 	}
-	return string(aJSON) == string(bJSON)
+	return bytes.Equal(aJSON, bJSON)
 }

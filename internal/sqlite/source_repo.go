@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/akmadian/alexandria/internal/domain"
@@ -37,7 +38,7 @@ func (r *SourceRepo) List(ctx context.Context) ([]*domain.Source, error) {
 func (r *SourceRepo) Get(ctx context.Context, id string) (*domain.Source, error) {
 	row := r.DB.QueryRowContext(ctx, "SELECT "+sourceColumns+" FROM sources WHERE id = ?", id)
 	s, err := scanSourceRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &domain.NotFoundError{Resource: "source", ID: id}
 	}
 	return s, err
@@ -84,7 +85,7 @@ func (r *SourceRepo) SetConnectivity(ctx context.Context, id string, c domain.So
 func (r *SourceRepo) FindByFilesystemUUID(ctx context.Context, uuid string) (*domain.Source, error) {
 	row := r.DB.QueryRowContext(ctx, "SELECT "+sourceColumns+" FROM sources WHERE filesystem_uuid = ?", uuid)
 	s, err := scanSourceRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return s, err
@@ -93,7 +94,7 @@ func (r *SourceRepo) FindByFilesystemUUID(ctx context.Context, uuid string) (*do
 func (r *SourceRepo) FindBySharePath(ctx context.Context, host, shareName string) (*domain.Source, error) {
 	row := r.DB.QueryRowContext(ctx, "SELECT "+sourceColumns+" FROM sources WHERE host = ? AND share_name = ?", host, shareName)
 	s, err := scanSourceRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return s, err

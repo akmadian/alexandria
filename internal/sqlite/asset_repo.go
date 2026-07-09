@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -33,7 +34,7 @@ const assetColumns = `id, source_id, relative_path, file_status, last_verified_a
 func (r *AssetRepo) Get(ctx context.Context, id string) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx, "SELECT "+assetColumns+" FROM assets WHERE id = ?", id)
 	a, err := scanAssetRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, &domain.NotFoundError{Resource: "asset", ID: id}
 	}
 	return a, err
@@ -44,7 +45,7 @@ func (r *AssetRepo) FindByHash(ctx context.Context, hash string, sizeBytes int64
 		"SELECT "+assetColumns+" FROM assets WHERE partial_hash = ? AND size_bytes = ? AND is_deleted = 0",
 		hash, sizeBytes)
 	a, err := scanAssetRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return a, err
@@ -55,7 +56,7 @@ func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath
 		"SELECT "+assetColumns+" FROM assets WHERE source_id = ? AND relative_path = ?",
 		sourceID, relativePath)
 	a, err := scanAssetRow(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return a, err
@@ -210,7 +211,7 @@ func (r *AssetRepo) IndexOfAsset(ctx context.Context, query ast.Query, arrangeme
 
 	var position int
 	err = r.DB.QueryRowContext(ctx, stmt.SQL, stmt.Args...).Scan(&position)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -405,7 +406,7 @@ func (r *AssetRepo) Create(ctx context.Context, a *domain.Asset) error {
 // overlaid non-nil). It cannot touch rating/flag/note/is_deleted/xmp_*/
 // thumbnail_at/judgment_modified_at — the reimport-clobber bug is structurally
 // impossible here.
-func (r *AssetRepo) ApplyFilePatch(ctx context.Context, id string, p catalog.FilePatch) error {
+func (r *AssetRepo) ApplyFilePatch(ctx context.Context, id string, p *catalog.FilePatch) error {
 	clauses := []string{
 		"filename = ?", "extension = ?", "mime_type = ?", "file_type = ?",
 		"size_bytes = ?", "mtime = ?", "partial_hash = ?", "file_status = ?",
@@ -577,7 +578,6 @@ func (r *AssetRepo) execUpdateIn(ctx context.Context, clauses []string, args []a
 
 // --- SQL builders ---
 
-
 // buildTriageSQL returns the sparse SET clauses for the four judgment columns.
 // Shared by the judgment writer and the XMP sync writer (which appends its own
 // cursor columns and skips the judgment_modified_at bump).
@@ -671,7 +671,9 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	a.JudgmentModifiedAt = parseNullTime(judgmentModifiedAt)
 	if extMetadata.Valid && extMetadata.String != "" {
 		a.ExtendedMetadata = make(map[string]any)
-		json.Unmarshal([]byte(extMetadata.String), &a.ExtendedMetadata)
+		if err := json.Unmarshal([]byte(extMetadata.String), &a.ExtendedMetadata); err != nil {
+			return nil, fmt.Errorf("unmarshal extended metadata: %w", err)
+		}
 	}
 	if rating.Valid {
 		v := int(rating.Int64)
@@ -696,10 +698,6 @@ func scanAssetFromRow(sc assetScanner) (*domain.Asset, error) {
 	a.UpdatedAt = parseTime(updatedAt)
 
 	return &a, nil
-}
-
-func scanAsset(rows *sql.Rows) (*domain.Asset, error) {
-	return scanAssetFromRow(rows)
 }
 
 func scanAssetRow(row *sql.Row) (*domain.Asset, error) {

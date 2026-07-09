@@ -26,15 +26,15 @@ func TestUnchanged(t *testing.T) {
 		"a.jpg": {MTime: base, SizeBytes: 100},
 	}
 	// Same size, mtime within the 2s tolerance → unchanged.
-	if !unchanged(scannedFile{relPath: "a.jpg", size: 100, mtime: base.Add(time.Second)}, known) {
+	if !unchanged(&scannedFile{relPath: "a.jpg", size: 100, mtime: base.Add(time.Second)}, known) {
 		t.Fatal("expected unchanged within mtime tolerance")
 	}
 	// Size differs → changed, even if mtime matches.
-	if unchanged(scannedFile{relPath: "a.jpg", size: 101, mtime: base}, known) {
+	if unchanged(&scannedFile{relPath: "a.jpg", size: 101, mtime: base}, known) {
 		t.Fatal("a size change must count as changed")
 	}
 	// Unknown path → not unchanged.
-	if unchanged(scannedFile{relPath: "new.jpg", size: 100, mtime: base}, known) {
+	if unchanged(&scannedFile{relPath: "new.jpg", size: 100, mtime: base}, known) {
 		t.Fatal("an unknown path is never unchanged")
 	}
 }

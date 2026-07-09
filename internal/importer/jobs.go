@@ -37,6 +37,7 @@ func (j *Jobs) Start(kind string, work func(ctx context.Context, jobID string)) 
 	j.mu.Unlock()
 
 	go func() {
+		defer cancel()
 		defer j.finish(jobID)
 		work(ctx, jobID)
 	}()

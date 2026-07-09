@@ -27,7 +27,7 @@ func TestOpen_MigratesAndLocks(t *testing.T) {
 	// Second open on the same dir must fail — the instance lock is held.
 	second, err := sqlite.Open(dir)
 	if err == nil {
-		second.Close()
+		_ = second.Close()
 		t.Fatal("expected second Open to fail (lock held)")
 	}
 	var locked *domain.CatalogLockedError

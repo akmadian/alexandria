@@ -57,7 +57,7 @@ func StartExiftool(status Status, logger *log.Logger) (*ExiftoolDaemon, error) {
 
 	// -stay_open True keeps the process alive; -@ - reads arguments from stdin.
 	// -common_args would apply flags to every command; we keep per-call args explicit.
-	cmd := exec.Command(status.Path, "-stay_open", "True", "-@", "-")
+	cmd := exec.Command(status.Path, "-stay_open", "True", "-@", "-") //nolint:gosec // path verified by dependency check
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -73,13 +73,13 @@ func StartExiftool(status Status, logger *log.Logger) (*ExiftoolDaemon, error) {
 	cmd.Stderr = writer
 
 	if err := cmd.Start(); err != nil {
-		reader.Close()
-		writer.Close()
+		_ = reader.Close()
+		_ = writer.Close()
 		return nil, fmt.Errorf("exiftool: start: %w", err)
 	}
 	// The child holds its own dup of the write end; close ours so EOF propagates
 	// to the reader once the child exits.
-	writer.Close()
+	_ = writer.Close()
 
 	logger.Info("dependency: exiftool daemon started", "path", status.Path, "pid", cmd.Process.Pid, "version", status.Version)
 	return &ExiftoolDaemon{

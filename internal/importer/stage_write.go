@@ -113,7 +113,7 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 		}
 	}
 	if item.isSidecar {
-		return repos.Sidecars.UpsertObservation(ctx, buildSidecar(pipe.source, item.scanned, item.hash))
+		return repos.Sidecars.UpsertObservation(ctx, buildSidecar(pipe.source, &item.scanned, item.hash))
 	}
 	if item.rejected {
 		return nil // error row written; no identity minted
@@ -122,12 +122,12 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 	mergeMarker(&item.extractedMetadata, item.mismatchMarker)
 	switch item.verdict {
 	case actionReimport:
-		if err := repos.Assets.ApplyFilePatch(ctx, item.assetID, reimportFilePatch(item.scanned, item.hash, item.extractedMetadata, item.existing)); err != nil {
+		if err := repos.Assets.ApplyFilePatch(ctx, item.assetID, reimportFilePatch(&item.scanned, item.hash, &item.extractedMetadata, item.existing)); err != nil {
 			return err
 		}
 		return pipe.markThumbnail(ctx, repos, item)
 	default: // actionNew, actionDuplicate
-		asset := buildAsset(item.assetID, pipe.source, item.scanned, item.hash, item.extractedMetadata)
+		asset := buildAsset(item.assetID, pipe.source, &item.scanned, item.hash, &item.extractedMetadata)
 		if err := repos.Assets.Create(ctx, asset); err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func (pipe *pipeline) markThumbnail(ctx context.Context, repos sqlite.Repos, ite
 // (judgments untouched — the writer split makes touching them impossible, and a
 // missing file reappearing at its original path is restored online here).
 // Duplicates also log the pair. This is the unbatched sibling of writeItem.
-func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
+func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
 	switch verdict {
 	case actionReimport:
 		logger.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
@@ -189,7 +189,7 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned
 // buildSidecar derives the (dir, stem) filesystem key and observation columns
 // for a companion file. The grouping engine later matches assets to sidecars on
 // this key.
-func buildSidecar(source *domain.Source, scanned scannedFile, hash string) *domain.SidecarFile {
+func buildSidecar(source *domain.Source, scanned *scannedFile, hash string) *domain.SidecarFile {
 	directory := path.Dir(scanned.relPath)
 	if directory == "." {
 		directory = ""
@@ -216,7 +216,7 @@ func buildSidecar(source *domain.Source, scanned scannedFile, hash string) *doma
 // (same overlay semantics: nil preserves the prior value). extended_metadata is
 // merged with the existing map here — the caller has the loaded asset, the patch
 // writer does not.
-func reimportFilePatch(scanned scannedFile, hash string, extractedMetadata metadata.Metadata, existing *domain.Asset) catalog.FilePatch {
+func reimportFilePatch(scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata, existing *domain.Asset) *catalog.FilePatch {
 	patch := catalog.FilePatch{
 		Filename:    scanned.filename,
 		Extension:   scanned.ext,
@@ -255,14 +255,14 @@ func reimportFilePatch(scanned scannedFile, hash string, extractedMetadata metad
 		}
 		patch.Extended = merged
 	}
-	return patch
+	return &patch
 }
 
 // buildAsset creates a new asset from scan + hash, then overlays extracted
 // metadata. The ID is minted by the caller (MATCH mints it before THUMB, which
 // needs it to name the thumbnail file). ThumbnailAt is left nil here — the
 // thumbnail stage patches it after the asset is written (see stage_thumb.go).
-func buildAsset(id string, source *domain.Source, scanned scannedFile, hash string, extractedMetadata metadata.Metadata) *domain.Asset {
+func buildAsset(id string, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata) *domain.Asset {
 	now := time.Now().UTC()
 	asset := &domain.Asset{
 		ID:           id,
@@ -285,7 +285,7 @@ func buildAsset(id string, source *domain.Source, scanned scannedFile, hash stri
 
 // applyMetadata overlays extracted metadata onto an asset. Only non-nil fields
 // are written, so a reimport with empty extraction never clears existing values.
-func applyMetadata(asset *domain.Asset, extractedMetadata metadata.Metadata) {
+func applyMetadata(asset *domain.Asset, extractedMetadata *metadata.Metadata) {
 	if extractedMetadata.Width != nil {
 		asset.Width = extractedMetadata.Width
 	}

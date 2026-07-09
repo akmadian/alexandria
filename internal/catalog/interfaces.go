@@ -44,7 +44,7 @@ type AssetReader interface {
 // sync, or derived column is reachable through it.
 type AssetObservationWriter interface {
 	Create(ctx context.Context, asset *domain.Asset) error // minting; judgment fields must be zero
-	ApplyFilePatch(ctx context.Context, id string, p FilePatch) error
+	ApplyFilePatch(ctx context.Context, id string, p *FilePatch) error
 	UpdatePath(ctx context.Context, assetID, sourceID, relativePath string) error
 	SetFileStatus(ctx context.Context, assetID string, status domain.FileStatus) error
 	MarkConnectivityBySource(ctx context.Context, sourceID string, online bool) error

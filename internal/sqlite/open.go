@@ -47,14 +47,14 @@ func Open(dir string) (*Catalog, error) {
 	}
 	if err != nil {
 		if db != nil {
-			db.Close()
+			_ = db.Close()
 		}
-		lock.release()
+		_ = lock.release()
 		return nil, fmt.Errorf("open catalog: %w", err)
 	}
 	if err := migrations.Migrate(db); err != nil {
-		db.Close()
-		lock.release()
+		_ = db.Close()
+		_ = lock.release()
 		return nil, fmt.Errorf("migrate catalog: %w", err)
 	}
 	return &Catalog{DB: db, lock: lock}, nil

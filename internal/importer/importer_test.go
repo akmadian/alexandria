@@ -50,7 +50,9 @@ func TestRun_IndexesSupportedFilesOnly(t *testing.T) {
 		t.Fatalf("added=%d, want 3 (jpg, png, mp4)", res.Added)
 	}
 	var count int
-	assets.DB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&count)
+	if err := assets.DB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 3 {
 		t.Fatalf("catalog has %d assets, want 3", count)
 	}
@@ -83,12 +85,14 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	// removing sample files doesn't break the test. Count every supported type
 	// (any case, any extension) — that's exactly what the importer indexes.
 	want := 0
-	filepath.WalkDir("../../testdata", func(_ string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir("../../testdata", func(_ string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() && assettype.IsSupported(filepath.Ext(d.Name())) {
 			want++
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if want == 0 {
 		t.Skip("no supported fixtures in testdata/")
 	}
@@ -104,7 +108,9 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 	defer rows.Close()
 	for rows.Next() {
 		var path, hash string
-		rows.Scan(&path, &hash)
+		if err := rows.Scan(&path, &hash); err != nil {
+			t.Fatal(err)
+		}
 		if hash == "" {
 			t.Errorf("asset %s has no hash", path)
 		}
@@ -221,7 +227,9 @@ func TestWalk_FolderReorgRecordsMove(t *testing.T) {
 		t.Fatalf("folder reorg must mint the new path (1) + mark old missing (1), got added=%d missing=%d", res.Added, res.Missing)
 	}
 	var count int
-	assets.DB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&count)
+	if err := assets.DB.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != 2 {
 		t.Fatalf("no relink: expected 2 distinct assets, got %d", count)
 	}

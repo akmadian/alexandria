@@ -136,7 +136,7 @@ func OpenKeybindings(dir string, logger *log.Logger) (*configFile[Keybindings], 
 // sanitizeSettings clamps present-but-bad fields back to defaults, so one bad
 // value never nukes the file's other good fields. Same "non-positive means unset,
 // use default" convention importer.resolvePools already applies to worker counts.
-func sanitizeSettings(settings Settings, logger *log.Logger) Settings {
+func sanitizeSettings(settings Settings, logger *log.Logger) Settings { //nolint:gocritic // value semantics required by configFile[T] sanitize signature
 	defaults := DefaultSettings()
 	clamp := func(name string, field *int, fallback int) {
 		if *field <= 0 {

@@ -19,7 +19,7 @@ func NewTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("open test db: %v", err)
 	}
 	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	if err := migrations.Migrate(db); err != nil {
 		t.Fatalf("migrate test db: %v", err)

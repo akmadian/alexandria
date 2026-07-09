@@ -22,7 +22,7 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 			}
 			continue
 		}
-		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, item.scanned, item.hash, inRunHashes, item.logger)
+		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, &item.scanned, item.hash, inRunHashes, item.logger)
 		if err != nil {
 			item.rejected = true
 			item.addError("match", "match_failed", err.Error())
@@ -65,7 +65,7 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 //     asset is a probable move; against a *present* one, a plain duplicate; the
 //     review queue derives which from live status (DEFERRED §5).
 //  3. New: no match → mint.
-func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned scannedFile, hash string, inRunHashes map[string]string, logger *log.Logger) (action, *domain.Asset, error) {
+func (imp *Importer) classify(ctx context.Context, source *domain.Source, scanned *scannedFile, hash string, inRunHashes map[string]string, logger *log.Logger) (action, *domain.Asset, error) {
 	// (1) Reimport — something already indexed at this exact path (an in-place edit,
 	// or a missing file reappearing at its ORIGINAL path → reimport restores online).
 	atPath, err := imp.Reader.FindBySourcePath(ctx, source.ID, scanned.relPath)

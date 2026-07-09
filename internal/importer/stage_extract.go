@@ -17,7 +17,7 @@ import (
 func (pipe *pipeline) extract(ctx context.Context, in <-chan *pipelineItem, out chan<- *pipelineItem) error {
 	for item := range in {
 		if !item.isSidecar && !item.rejected && (item.verdict == actionNew || item.verdict == actionReimport) {
-			extractedMetadata, err := pipe.importer.extractMetadata(pipe.fsys, item.scanned, item.logger)
+			extractedMetadata, err := pipe.importer.extractMetadata(pipe.fsys, &item.scanned, item.logger)
 			item.extractedMetadata = extractedMetadata
 			if err != nil {
 				item.addError("extract", "decode_failed", err.Error())
@@ -34,7 +34,7 @@ func (pipe *pipeline) extract(ctx context.Context, in <-chan *pipelineItem, out 
 // A move keeps its existing metadata (content is unchanged); a skip never reaches
 // here. This is the single-file (watcher) path; the EXTRACT stage above inlines
 // the same guard.
-func (imp *Importer) metadataFor(fsys fs.FS, scanned scannedFile, verdict action, logger *log.Logger) metadata.Metadata {
+func (imp *Importer) metadataFor(fsys fs.FS, scanned *scannedFile, verdict action, logger *log.Logger) metadata.Metadata {
 	if verdict != actionNew && verdict != actionReimport {
 		return metadata.Metadata{}
 	}
@@ -47,7 +47,7 @@ func (imp *Importer) metadataFor(fsys fs.FS, scanned scannedFile, verdict action
 // caller logs a DLQ row but still indexes the asset — a corrupt EXIF block must
 // not stop the file being indexed). A type with no extractor
 // (handler.Metadata == nil) yields empty metadata and a nil error.
-func (imp *Importer) extractMetadata(fsys fs.FS, scanned scannedFile, logger *log.Logger) (metadata.Metadata, error) {
+func (imp *Importer) extractMetadata(fsys fs.FS, scanned *scannedFile, logger *log.Logger) (metadata.Metadata, error) {
 	if scanned.handler.Metadata == nil {
 		return metadata.Metadata{}, nil
 	}
@@ -83,10 +83,10 @@ func openSeeker(fsys fs.FS, name string) (io.ReadSeeker, func(), error) {
 		return nil, nil, err
 	}
 	if seeker, ok := file.(io.ReadSeeker); ok {
-		return seeker, func() { file.Close() }, nil
+		return seeker, func() { _ = file.Close() }, nil
 	}
 	buffered, err := io.ReadAll(file)
-	file.Close()
+	_ = file.Close()
 	if err != nil {
 		return nil, nil, err
 	}

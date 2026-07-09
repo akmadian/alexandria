@@ -59,7 +59,7 @@ func (reg Registry) Generate(gen GenFunc, r io.ReadSeeker, assetID string) (bool
 		return false, nil
 	}
 	for _, size := range reg.Sizes {
-		if err := os.MkdirAll(filepath.Dir(reg.Path(assetID, size)), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(reg.Path(assetID, size)), 0o750); err != nil {
 			return false, fmt.Errorf("thumbnail dir: %w", err)
 		}
 	}

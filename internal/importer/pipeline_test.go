@@ -52,7 +52,7 @@ func newPipelineImporter(t *testing.T, thumbnailDir string) (*importer.Importer,
 func jpegBytes(seed int) []byte {
 	pixels := image.NewRGBA(image.Rect(0, 0, 16, 16))
 	for i := range pixels.Pix {
-		pixels.Pix[i] = byte((i*7 + seed*131) % 256)
+		pixels.Pix[i] = byte((i*7 + seed*131) % 256) //nolint:gosec // mod 256 fits in byte
 	}
 	var buffer bytes.Buffer
 	_ = jpeg.Encode(&buffer, pixels, &jpeg.Options{Quality: 90})
@@ -114,7 +114,9 @@ func TestMatrix_InRunDuplicatePair(t *testing.T) {
 		t.Fatalf("in-run pair: added=%d dups=%d, want 2/1", result.Added, result.Dups)
 	}
 	var assetCount int
-	assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&assetCount)
+	if err := assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&assetCount); err != nil {
+		t.Fatal(err)
+	}
 	if assetCount != 2 {
 		t.Fatalf("want 2 assets (original + duplicate identity), got %d", assetCount)
 	}
@@ -250,7 +252,9 @@ func TestCopyThenDeleteMove_RecordedForReview(t *testing.T) {
 	}
 
 	var allCount int
-	assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&allCount)
+	if err := assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&allCount); err != nil {
+		t.Fatal(err)
+	}
 	if allCount != 2 {
 		t.Fatalf("both identities must survive (no merge): got %d assets, want 2", allCount)
 	}
@@ -292,7 +296,9 @@ func TestSidecar_TrackedNotIndexed(t *testing.T) {
 		t.Fatalf("added=%d, want 1 (the mp4; the xmp is a sidecar)", result.Added)
 	}
 	var assetCount int
-	assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&assetCount)
+	if err := assets.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&assetCount); err != nil {
+		t.Fatal(err)
+	}
 	if assetCount != 1 {
 		t.Fatalf("want 1 asset, got %d (sidecar leaked in as an asset?)", assetCount)
 	}
@@ -490,7 +496,7 @@ func benchDB(b *testing.B) *sql.DB {
 	if err := migrations.Migrate(database); err != nil {
 		b.Fatal(err)
 	}
-	b.Cleanup(func() { database.Close() })
+	b.Cleanup(func() { _ = database.Close() })
 	return database
 }
 

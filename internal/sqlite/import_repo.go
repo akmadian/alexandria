@@ -32,7 +32,7 @@ func (r *ImportRepo) Start(ctx context.Context, sourceID, kind string) (string, 
 
 // UpdateCounts refreshes the running tallies mid-flight (called per batch so a
 // live viewer sees progress). Cheap single-row update.
-func (r *ImportRepo) UpdateCounts(ctx context.Context, sessionID string, session domain.ImportSession) error {
+func (r *ImportRepo) UpdateCounts(ctx context.Context, sessionID string, session *domain.ImportSession) error {
 	_, err := r.DB.ExecContext(ctx,
 		`UPDATE import_sessions SET added=?, updated=?, moved=?, skipped=?, dups=?, errors=? WHERE id=?`,
 		session.Added, session.Updated, session.Moved, session.Skipped, session.Dups, session.Errors, sessionID)
@@ -41,7 +41,7 @@ func (r *ImportRepo) UpdateCounts(ctx context.Context, sessionID string, session
 
 // Finish stamps finished_at, writes the final counts, and persists the
 // per-extension skip tallies as JSON.
-func (r *ImportRepo) Finish(ctx context.Context, sessionID string, session domain.ImportSession) error {
+func (r *ImportRepo) Finish(ctx context.Context, sessionID string, session *domain.ImportSession) error {
 	_, err := r.DB.ExecContext(ctx,
 		`UPDATE import_sessions SET finished_at=?, added=?, updated=?, moved=?, skipped=?, dups=?, errors=?,
 			skipped_unknown_json=?, skipped_ignored_json=? WHERE id=?`,
@@ -144,6 +144,8 @@ func parseTally(value sql.NullString) map[string]int {
 		return nil
 	}
 	tallies := map[string]int{}
-	json.Unmarshal([]byte(value.String), &tallies)
+	if err := json.Unmarshal([]byte(value.String), &tallies); err != nil {
+		return nil
+	}
 	return tallies
 }

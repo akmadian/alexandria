@@ -29,9 +29,9 @@ type Tag struct {
 	Name      string
 	Slug      string
 	ParentID  *string
-	Color     *string   // hex "#RRGGBB"; used only when ColorMode == ColorCustom
+	Color     *string // hex "#RRGGBB"; used only when ColorMode == ColorCustom
 	ColorMode ColorMode
-	Path      string    // derived materialized ancestry '/rootId/…/selfId/'
+	Path      string // derived materialized ancestry '/rootId/…/selfId/'
 	CreatedAt time.Time
 }
 

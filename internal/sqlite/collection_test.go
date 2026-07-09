@@ -61,7 +61,9 @@ func TestCollectionRepo_List(t *testing.T) {
 	ctx := context.Background()
 
 	for _, name := range []string{"Alpha", "Beta"} {
-		repo.Create(ctx, &domain.Collection{ID: domain.NewID(), Name: name, Kind: domain.CollectionKindManual, SortDir: "asc"})
+		if err := repo.Create(ctx, &domain.Collection{ID: domain.NewID(), Name: name, Kind: domain.CollectionKindManual, SortDir: "asc"}); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	list, err := repo.List(ctx)
@@ -84,10 +86,16 @@ func TestCollectionRepo_AddRemoveAsset(t *testing.T) {
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
 
 	col := &domain.Collection{ID: domain.NewID(), Name: "test", Kind: domain.CollectionKindManual, SortDir: "asc"}
-	repo.Create(ctx, col)
+	if err := repo.Create(ctx, col); err != nil {
+		t.Fatal(err)
+	}
 
-	repo.AddAsset(ctx, col.ID, "asset-a.jpg")
-	repo.AddAsset(ctx, col.ID, "asset-b.jpg")
+	if err := repo.AddAsset(ctx, col.ID, "asset-a.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddAsset(ctx, col.ID, "asset-b.jpg"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Query via collection scope should return both.
 	query := ast.Query{
@@ -104,7 +112,9 @@ func TestCollectionRepo_AddRemoveAsset(t *testing.T) {
 	_ = rows
 
 	// Remove one.
-	repo.RemoveAsset(ctx, col.ID, "asset-a.jpg")
+	if err := repo.RemoveAsset(ctx, col.ID, "asset-a.jpg"); err != nil {
+		t.Fatal(err)
+	}
 	_, total, _ = assetRepo.QueryAssets(ctx, query, defaultArrangement(), ast.Page{Limit: 10})
 	if total != 1 {
 		t.Fatalf("expected 1 after remove, got %d", total)
@@ -122,10 +132,18 @@ func TestCollectionRepo_AddAsset_PositionOrdering(t *testing.T) {
 	}
 
 	col := &domain.Collection{ID: domain.NewID(), Name: "ordered", Kind: domain.CollectionKindManual, SortDir: "asc"}
-	repo.Create(ctx, col)
-	repo.AddAsset(ctx, col.ID, "asset-a.jpg")
-	repo.AddAsset(ctx, col.ID, "asset-b.jpg")
-	repo.AddAsset(ctx, col.ID, "asset-c.jpg")
+	if err := repo.Create(ctx, col); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddAsset(ctx, col.ID, "asset-a.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddAsset(ctx, col.ID, "asset-b.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.AddAsset(ctx, col.ID, "asset-c.jpg"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Positions should be sequential.
 	rows, err := db.QueryContext(ctx,
@@ -149,12 +167,18 @@ func TestCollectionRepo_AddAsset_PositionOrdering(t *testing.T) {
 	}
 
 	// Remove middle, add new — new should get max+1.
-	repo.RemoveAsset(ctx, col.ID, "asset-b.jpg")
+	if err := repo.RemoveAsset(ctx, col.ID, "asset-b.jpg"); err != nil {
+		t.Fatal(err)
+	}
 	testutil.NewTestAsset(t, db, src.ID, "d.jpg")
-	repo.AddAsset(ctx, col.ID, "asset-d.jpg")
+	if err := repo.AddAsset(ctx, col.ID, "asset-d.jpg"); err != nil {
+		t.Fatal(err)
+	}
 
 	var maxPos int
-	db.QueryRowContext(ctx, "SELECT MAX(position) FROM collection_assets WHERE collection_id = ?", col.ID).Scan(&maxPos)
+	if err := db.QueryRowContext(ctx, "SELECT MAX(position) FROM collection_assets WHERE collection_id = ?", col.ID).Scan(&maxPos); err != nil {
+		t.Fatal(err)
+	}
 	if maxPos <= positions[2] {
 		t.Fatalf("new position %d should exceed old max %d", maxPos, positions[2])
 	}
@@ -200,8 +224,10 @@ func TestCollectionRepo_SmartCollectionEvaluatesThroughQueryAssets(t *testing.T)
 	testutil.NewTestAsset(t, db, src.ID, "good.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "bad.jpg")
 
-	assetRepo.ApplyTriagePatch(ctx, []string{"asset-good.jpg"},
-		catalog.TriagePatch{Rating: domain.SetOpt(5)})
+	if err := assetRepo.ApplyTriagePatch(ctx, []string{"asset-good.jpg"},
+		catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
+		t.Fatal(err)
+	}
 
 	// Simulate smart collection: stored query for rating >= 4.
 	storedQuery := ast.Query{

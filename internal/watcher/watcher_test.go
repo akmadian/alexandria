@@ -98,7 +98,7 @@ func startWatcher(t *testing.T) (string, chan Event, *spyIngester) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go w.Run(ctx)
+	go func() { _ = w.Run(ctx) }()
 	// The startup reconcile is one Run before any event.
 	spy.waitFor(t, func(runs int, _ []string) bool { return runs == 1 })
 	return root, events, spy
@@ -127,7 +127,7 @@ func (o *spyObs) MarkConnectivityBySource(_ context.Context, _ string, online bo
 }
 
 func (o *spyObs) Create(context.Context, *domain.Asset) error { panic("unused") }
-func (o *spyObs) ApplyFilePatch(context.Context, string, catalog.FilePatch) error {
+func (o *spyObs) ApplyFilePatch(context.Context, string, *catalog.FilePatch) error {
 	panic("unused")
 }
 func (o *spyObs) UpdatePath(context.Context, string, string, string) error       { panic("unused") }
@@ -162,10 +162,10 @@ func (o *spyObs) waitFor(t *testing.T, wantOnline bool) {
 func write(t *testing.T, root, rel string, data []byte) {
 	t.Helper()
 	full := filepath.Join(root, rel)
-	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(full, data, 0o644); err != nil {
+	if err := os.WriteFile(full, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -251,15 +251,15 @@ func TestWatcher_PollFlipsConnectivityOnUnmount(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go w.Run(ctx)
+	go func() { _ = w.Run(ctx) }()
 	spy.waitFor(t, func(runs int, _ []string) bool { return runs == 1 }) // startup reconcile
 
 	// Unmount: the root stops existing, so probeReachable fails → offline.
-	os.RemoveAll(root)
+	_ = os.RemoveAll(root)
 	obs.waitFor(t, false)
 
 	// Remount: the root returns → online + a catch-up reconcile (a second Run).
-	if err := os.MkdirAll(root, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	obs.waitFor(t, true)
@@ -284,7 +284,7 @@ func TestWatcher_SubscribeFailureDegradesToPolling(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go w.Run(ctx)
+	go func() { _ = w.Run(ctx) }()
 
 	// Run #1 is the startup reconcile; polling then re-walks each tick, so the
 	// count keeps climbing with no live events at all — and nothing panicked.
