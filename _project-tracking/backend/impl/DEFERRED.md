@@ -97,8 +97,8 @@ is an incoherent state (new files appear, moved files stay broken forever) and
 `fidelity ON + auto_add OFF` is a real but niche curator preference. Collapse to
 levels now; add the "fidelity-without-add" advanced split only if a user asks (YAGNI).
 
-**XMP metadata sync** rides the same axis but is **impl/06 — not built**. Live when
-watched, on-reconcile otherwise, once it exists.
+**XMP metadata sync** rides the same axis — **impl/06 core DONE** (2026-07-08).
+Live when watched, on-reconcile otherwise.
 
 **Loose files vs. directories — `source` is doing two jobs (open, 2026-07-07).**
 Importing a *set of individual files* (scattered, drag-and-drop) must not create a

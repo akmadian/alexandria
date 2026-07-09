@@ -22,14 +22,15 @@ import (
 // Settings is catalog-scoped, at <catalog-dir>/settings.json.
 //
 // Only fields with a live consumer live here — this is a YAGNI checkpoint (Ari,
-// 2026-07-07). Removed until something reads them: xmpConflictResolution/xmpWriteBack
-// (impl/06 re-adds when it wires the outbound path), catalogBackupCount, undoStackSize,
+// 2026-07-07). Removed until something reads them: catalogBackupCount, undoStackSize,
 // updateCheckEnabled, defaultSortField/Dir (no query layer to inject them yet).
 type Settings struct {
-	ThumbnailQuality int             `json:"thumbnailQuality"` // JPEG quality 1..100 (thumbnailer)
-	ImportBatchSize  int             `json:"importBatchSize"`  // rows per WRITE transaction
-	IgnorePatterns   []string        `json:"ignorePatterns"`   // D18 — plain, user-editable array
-	UI               json.RawMessage `json:"ui,omitempty"`     // frontend-owned, opaque to Go
+	ThumbnailQuality      int             `json:"thumbnailQuality"`      // JPEG quality 1..100 (thumbnailer)
+	ImportBatchSize       int             `json:"importBatchSize"`       // rows per WRITE transaction
+	IgnorePatterns        []string        `json:"ignorePatterns"`        // D18 — plain, user-editable array
+	XMPWriteBack          bool            `json:"xmpWriteBack"`          // write catalog judgments → sidecars (impl/06)
+	XMPConflictResolution string          `json:"xmpConflictResolution"` // "xmp_wins" (default) | "catalog_wins"
+	UI                    json.RawMessage `json:"ui,omitempty"`          // frontend-owned, opaque to Go
 }
 
 // Machine is machine-scoped, at <app-config-dir>/machine.json.

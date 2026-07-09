@@ -54,6 +54,12 @@ type Importer struct {
 
 	// OnProgress, if set, fires per batch commit and at walk completion. Nil-safe.
 	OnProgress func(Progress)
+
+	// OnAssetCommitted, if set, fires after an asset is committed (batch or
+	// single-file) with the asset ID and source. The XMP sync trigger uses this
+	// to run SyncSidecar for assets that have a companion .xmp sidecar. Errors
+	// from the hook are logged, never fatal — sync is best-effort at ingest time.
+	OnAssetCommitted func(ctx context.Context, source *domain.Source, assetID string, relativePath string)
 }
 
 // ImportError records one file that failed a stage. Per-file failures never
@@ -124,5 +130,8 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 	}
 	imp.thumbnail(ctx, fsys, scanned, assetID, verdict, fileLogger)
 	fileLogger.Info("ingested file", "source", source.Name, "path", scanned.relPath, "verdict", verdict, "assetID", assetID)
+	if imp.OnAssetCommitted != nil {
+		imp.OnAssetCommitted(ctx, source, assetID, scanned.relPath)
+	}
 	return nil
 }

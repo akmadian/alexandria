@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -83,6 +84,10 @@ type Watcher struct {
 	// watch won't apply until restart. Wire svc.Settings.OnChange to refresh it if that
 	// latency ever matters; the dev-session watch doesn't need it.
 	Settings settings.Settings
+
+	// SidecarChanged, if set, fires when a .xmp sidecar graduates. The callback
+	// owns the echo check and catalog action; the watcher just hands it the path.
+	SidecarChanged func(ctx context.Context, source *domain.Source, absolutePath string, relativePath string)
 
 	// offline gates the event loop while the volume is gone: the poll monitor sets
 	// it on unmount so graduate stops feeding paths (a vanished path during an
@@ -237,6 +242,16 @@ func (w *Watcher) graduate(ctx context.Context, fsys fs.FS, relPath string) (req
 			return true // mid-write: come back after it stops changing
 		}
 	}
+	// XMP sidecar hint: a .xmp file graduating fires the sync callback (which owns
+	// the echo check and catalog action) and then falls through to IngestFile so the
+	// sidecar_files row stays tracked. A newly-created sidecar (e.g. LrC starting to
+	// manage a file) needs both the sync and the row.
+	if w.SidecarChanged != nil && isXMPSidecar(relPath) {
+		absolutePath := filepath.Join(w.Root, relPath)
+		w.SidecarChanged(ctx, w.Source, absolutePath, relPath)
+		w.Log.Info("watcher: sidecar hint fired", "path", relPath)
+	}
+
 	// Settled-present, gone, or a transient stat error: hand the path over. On a
 	// transient error the importer re-stats, returns an error we log, and the next
 	// reconcile/poll heals — still no action decided here.
@@ -245,6 +260,10 @@ func (w *Watcher) graduate(ctx context.Context, fsys fs.FS, relPath string) (req
 	}
 	w.Log.Info("watcher: graduate completed", "path", relPath)
 	return false
+}
+
+func isXMPSidecar(relPath string) bool {
+	return strings.HasSuffix(strings.ToLower(relPath), ".xmp")
 }
 
 // settled confirms a present file has stopped changing: a second stat after a

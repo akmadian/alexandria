@@ -83,3 +83,7 @@ func (s *Store) ImportKeywords(ctx context.Context, assetID string, flat []strin
 		return r.Tags.ImportKeywords(ctx, assetID, flat, hierarchical, source)
 	})
 }
+
+func (s *Store) AssetTagNames(ctx context.Context, assetID string) ([]string, []string, error) {
+	return (&TagRepo{DB: s.DB}).AssetTagNames(ctx, assetID)
+}

@@ -10,42 +10,38 @@ import (
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/dependency"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/cespare/xxhash/v2"
 	"github.com/charmbracelet/log"
 )
 
-// Syncer reconciles one asset against its sidecar. This increment implements the
-// INBOUND JUDGMENT application only — rating and color label via the sync writer
-// (AssetSyncWriter.ApplyXMPInbound, which by construction never bumps
-// judgment_modified_at, so applying a sidecar can never masquerade as a user edit
-// and trigger an outbound write: the D15 loop-prevention level 2).
+// Syncer reconciles one asset against its sidecar in both directions:
+//   - Inbound: sidecar → catalog (rating, label, keywords via union).
+//   - Outbound: catalog → sidecar (when xmpWriteBack is enabled).
 //
-// Deliberately NOT here yet, each blocked on infrastructure that does not exist:
-//   - Keyword union (dc:subject/lr:hierarchicalSubject → asset_tags source='xmp')
-//     needs the whole tag repository (find-or-create, hierarchy nodes, FTS tags
-//     maintenance) — deferred from impl/04, not built. NOTE when it lands: tags are
-//     the documented exception to the wholesale/clear-on-absence rule below — they
-//     always UNION, never delete on absence (impl/06 "Tags exception").
-//   - Caption/title (dc:description/dc:title → observation columns) needs a sparse
-//     observation-metadata writer; ApplyFilePatch always rewrites the file-fact
-//     columns, so it would clobber them with zeros here.
-//   - Outbound writes (write-back) — a separate increment with its own settings.
+// Inbound judgment applies via AssetSyncWriter.ApplyXMPInbound, which by
+// construction never bumps judgment_modified_at — loop prevention level 2.
+// Outbound writes merge into the existing sidecar (preserving foreign namespaces)
+// and record the new hash for the watcher's echo check — loop prevention level 1.
 //
-// So WriteBackEnabled is hard-wired false and outbound/catalog-wins verdicts are
-// logged and skipped. Inbound rating/label is the complete, testable slice.
+// Still pending: caption/title inbound (blocked on a sparse observation writer).
 type Syncer struct {
 	daemon   *dependency.ExiftoolDaemon
+	reader   catalog.AssetReader
 	writer   catalog.AssetSyncWriter
 	keywords catalog.TagRepository // nil = skip tag union (e.g. judgment-only tests)
-	policy   ConflictPolicy
+	settings func() settings.Settings
 	logger   *log.Logger
 }
 
-func NewSyncer(daemon *dependency.ExiftoolDaemon, writer catalog.AssetSyncWriter, keywords catalog.TagRepository, policy ConflictPolicy, logger *log.Logger) *Syncer {
+func NewSyncer(daemon *dependency.ExiftoolDaemon, reader catalog.AssetReader, writer catalog.AssetSyncWriter, keywords catalog.TagRepository, settingsFunc func() settings.Settings, logger *log.Logger) *Syncer {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Syncer{daemon: daemon, writer: writer, keywords: keywords, policy: policy, logger: logger}
+	if settingsFunc == nil {
+		settingsFunc = func() settings.Settings { return settings.DefaultSettings() }
+	}
+	return &Syncer{daemon: daemon, reader: reader, writer: writer, keywords: keywords, settings: settingsFunc, logger: logger}
 }
 
 // SyncSidecar reconciles asset against the sidecar file at sidecarPath and returns
@@ -58,58 +54,113 @@ func (s *Syncer) SyncSidecar(ctx context.Context, asset *domain.Asset, sidecarPa
 	}
 	hash := HashSidecar(content)
 
+	current := s.settings()
+	policy := PolicyXMPWins
+	if current.XMPConflictResolution == string(PolicyCatalogWins) {
+		policy = PolicyCatalogWins
+	}
 	state := SyncState{
 		SidecarChanged:   asset.XMPHash == nil || *asset.XMPHash != hash,
 		CatalogChanged:   catalogChanged(asset),
-		WriteBackEnabled: false, // outbound write-back is a later increment
+		WriteBackEnabled: current.XMPWriteBack,
 	}
-	action := Decide(state, s.policy)
+	action := Decide(state, policy)
 	s.logger.Debug("xmp: sync decision", "asset", asset.ID, "sidecar", sidecarPath,
 		"action", action, "sidecarChanged", state.SidecarChanged, "catalogChanged", state.CatalogChanged)
 
-	inbound := action == ActionApplyInbound || (action == ActionConflict && s.policy.InboundWins())
+	inbound := action == ActionApplyInbound || (action == ActionConflict && policy.InboundWins())
+	outbound := action == ActionWriteOutbound || (action == ActionConflict && !policy.InboundWins())
 
 	// Tags are the documented exception to the judgment policy: they always UNION,
 	// both directions, never delete on absence (impl/06). So we read + union keywords
 	// whenever the SIDECAR changed — even under catalog_wins, where the judgment
 	// verdict is outbound — as long as a keyword importer is wired.
 	unionTags := state.SidecarChanged && s.keywords != nil
-	if !inbound && !unionTags {
-		if action != ActionNoop {
-			s.logger.Info("xmp: outbound sync pending (write-back not implemented)",
-				"asset", asset.ID, "action", action)
-		}
+	if !inbound && !outbound && !unionTags {
 		return action, nil
 	}
 
-	fields, err := Read(ctx, s.daemon, sidecarPath)
-	if err != nil {
-		return action, err
-	}
-
-	if inbound {
-		patch := s.toTriagePatch(fields, asset.ID)
-		if err := s.writer.ApplyXMPInbound(ctx, asset.ID, patch, time.Now().UTC(), hash); err != nil {
-			return action, fmt.Errorf("xmp: apply inbound %s: %w", asset.ID, err)
+	if inbound || unionTags {
+		fields, err := Read(ctx, s.daemon, sidecarPath)
+		if err != nil {
+			return action, err
 		}
-		s.logger.Info("xmp: applied inbound judgment", "asset", asset.ID, "action", action,
-			"rating", patch.Rating.Set, "label", patch.ColorLabel.Set)
-	}
 
-	if unionTags && (len(fields.Tags) > 0 || len(fields.Hierarchical) > 0) {
-		hierarchical := splitHierarchical(fields.Hierarchical)
-		if err := s.keywords.ImportKeywords(ctx, asset.ID, fields.Tags, hierarchical, "xmp"); err != nil {
-			return action, fmt.Errorf("xmp: import keywords %s: %w", asset.ID, err)
+		if inbound {
+			patch := s.toTriagePatch(fields, asset.ID)
+			if err := s.writer.ApplyXMPInbound(ctx, asset.ID, patch, time.Now().UTC(), hash); err != nil {
+				return action, fmt.Errorf("xmp: apply inbound %s: %w", asset.ID, err)
+			}
+			s.logger.Info("xmp: applied inbound judgment", "asset", asset.ID, "action", action,
+				"rating", patch.Rating.Set, "label", patch.ColorLabel.Set)
 		}
-		s.logger.Info("xmp: unioned keywords", "asset", asset.ID,
-			"flat", len(fields.Tags), "hierarchical", len(hierarchical))
+
+		if unionTags && (len(fields.Tags) > 0 || len(fields.Hierarchical) > 0) {
+			hierarchical := splitHierarchical(fields.Hierarchical)
+			if err := s.keywords.ImportKeywords(ctx, asset.ID, fields.Tags, hierarchical, "xmp"); err != nil {
+				return action, fmt.Errorf("xmp: import keywords %s: %w", asset.ID, err)
+			}
+			s.logger.Info("xmp: unioned keywords", "asset", asset.ID,
+				"flat", len(fields.Tags), "hierarchical", len(hierarchical))
+		}
+
+		if fields.Caption != "" || fields.Title != "" {
+			s.logger.Debug("xmp: caption/title present but not yet applied (pending sparse observation writer)",
+				"asset", asset.ID, "hasCaption", fields.Caption != "", "hasTitle", fields.Title != "")
+		}
 	}
 
-	if fields.Caption != "" || fields.Title != "" {
-		s.logger.Debug("xmp: caption/title present but not yet applied (pending sparse observation writer)",
-			"asset", asset.ID, "hasCaption", fields.Caption != "", "hasTitle", fields.Title != "")
+	if outbound {
+		if err := s.writeOutbound(ctx, asset, sidecarPath); err != nil {
+			return action, err
+		}
 	}
+
 	return action, nil
+}
+
+// writeOutbound pushes the asset's current catalog values into the sidecar, then
+// records the write cursor + new hash so the watcher's echo check drops the
+// resulting file event.
+func (s *Syncer) writeOutbound(ctx context.Context, asset *domain.Asset, sidecarPath string) error {
+	fields := WriteFields{
+		Rating:     asset.Rating,
+		ColorLabel: asset.ColorLabel,
+		Caption:    ptrOr(asset.Caption, ""),
+		Title:      ptrOr(asset.Title, ""),
+	}
+
+	if s.keywords != nil {
+		flat, hierarchical, err := s.keywords.AssetTagNames(ctx, asset.ID)
+		if err != nil {
+			return fmt.Errorf("xmp: read tags for outbound %s: %w", asset.ID, err)
+		}
+		fields.Tags = flat
+		fields.Hierarchical = hierarchical
+	}
+
+	if err := Write(ctx, s.daemon, sidecarPath, fields); err != nil {
+		return err
+	}
+
+	written, err := os.ReadFile(sidecarPath)
+	if err != nil {
+		return fmt.Errorf("xmp: hash after write %s: %w", sidecarPath, err)
+	}
+	newHash := HashSidecar(written)
+	now := time.Now().UTC()
+	if err := s.writer.RecordXMPWritten(ctx, asset.ID, now, newHash); err != nil {
+		return fmt.Errorf("xmp: record written %s: %w", asset.ID, err)
+	}
+	s.logger.Info("xmp: wrote outbound sidecar", "asset", asset.ID, "path", sidecarPath)
+	return nil
+}
+
+func ptrOr(pointer *string, fallback string) string {
+	if pointer != nil {
+		return *pointer
+	}
+	return fallback
 }
 
 // splitHierarchical turns lr:hierarchicalSubject strings ("Travel|Japan|Tokyo")

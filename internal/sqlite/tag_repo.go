@@ -196,6 +196,95 @@ func (r *TagRepo) recomposeFTSTags(ctx context.Context, assetID string) error {
 	return nil
 }
 
+// AssetTagNames returns the active tag names for an asset, split into flat names
+// (dc:subject) and pipe-delimited hierarchical paths (lr:hierarchicalSubject)
+// for XMP outbound write. A tag with ancestors gets a hierarchical entry
+// ("Travel|Japan|Tokyo"); a root-level tag is flat only. Both lists are
+// deduplicated and sorted for stable output.
+func (r *TagRepo) AssetTagNames(ctx context.Context, assetID string) ([]string, []string, error) {
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT t.name, t.parent_id IS NOT NULL AS has_parent, t.path
+		FROM asset_tags at
+		JOIN tags t ON t.id = at.tag_id
+		WHERE at.asset_id = ? AND at.removed_at IS NULL
+		ORDER BY t.name`, assetID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("tags: asset tag names %s: %w", assetID, err)
+	}
+	defer rows.Close()
+
+	var flat []string
+	type leafInfo struct {
+		name      string
+		hasParent bool
+		path      string
+	}
+	var leaves []leafInfo
+	for rows.Next() {
+		var info leafInfo
+		if err := rows.Scan(&info.name, &info.hasParent, &info.path); err != nil {
+			return nil, nil, err
+		}
+		flat = append(flat, info.name)
+		if info.hasParent {
+			leaves = append(leaves, info)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	var hierarchical []string
+	for _, leaf := range leaves {
+		chain, err := r.buildHierarchyChain(ctx, leaf.path)
+		if err != nil {
+			return nil, nil, err
+		}
+		hierarchical = append(hierarchical, strings.Join(chain, "|"))
+	}
+	return flat, hierarchical, nil
+}
+
+// buildHierarchyChain walks a materialized path to produce a name chain for
+// lr:hierarchicalSubject.
+func (r *TagRepo) buildHierarchyChain(ctx context.Context, tagPath string) ([]string, error) {
+	// Extract IDs from the path: "/rootId/childId/leafId/" → [rootId, childId, leafId]
+	parts := strings.Split(strings.Trim(tagPath, "/"), "/")
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(parts))
+	arguments := make([]any, len(parts))
+	for i, id := range parts {
+		placeholders[i] = "?"
+		arguments[i] = id
+	}
+	rows, err := r.DB.QueryContext(ctx,
+		"SELECT id, name FROM tags WHERE id IN ("+strings.Join(placeholders, ",")+`)`, arguments...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	nameByID := make(map[string]string)
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, err
+		}
+		nameByID[id] = name
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	chain := make([]string, 0, len(parts))
+	for _, id := range parts {
+		if name, ok := nameByID[id]; ok {
+			chain = append(chain, name)
+		}
+	}
+	return chain, nil
+}
+
 // RebuildTagPaths recomputes every tag's path from parent_id (the derived-state
 // rebuild path, mirroring RebuildFTS). Used to repair path or after a bulk
 // structural change. The tree is small, so a full read + per-node UPDATE is fine.

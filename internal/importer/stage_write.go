@@ -93,6 +93,9 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		pipe.tally(item)
 		if !item.isSidecar && !item.rejected {
 			committed++
+			if pipe.importer.OnAssetCommitted != nil {
+				pipe.importer.OnAssetCommitted(ctx, pipe.source, item.assetID, item.scanned.relPath)
+			}
 		}
 	}
 	pipe.done.Add(int64(committed))

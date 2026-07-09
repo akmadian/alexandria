@@ -30,7 +30,7 @@ what *is*).
 
 | Pick | What | Area | State |
 |---|---|---|---|
-| **A** | **impl/06 XMP sync — the wiring increment**: DB application across the three writers in one tx, outbound sidecar write (merge + atomic rename), ingest/watcher triggers + per-asset outbound debounce, `xmpWriteBack`/`xmpConflictResolution` settings consumers, watcher-side echo check | Backend | In progress — read path, conflict grid, judgment apply, keyword union all DONE |
+| **A** | **impl/06 XMP sync**: bidirectional sidecar sync — inbound read, conflict grid, judgment apply, keyword union, outbound merge-write, settings consumers, ingest/watcher triggers, per-asset debounce | Backend | Core DONE (2026-07-08). **Remaining:** caption/title inbound (blocked on sparse observation writer), `alexandria:Flag` custom namespace (OQ #8) |
 | ~~B~~ | ~~Query-layer round~~ | Backend | **✅ DONE (2026-07-08)** — `internal/ast` + full surface + collections + FTS⋈tags. Old `AssetFilter`/`List` deleted. **Seam round is now unblocked.** |
 | **C** | **CI wiring** per [`design/ci.md`](design/ci.md) + [`design/repo-hygiene-backend.md`](design/repo-hygiene-backend.md) (+ the `format`/`format:check` script gap in [`design/repo-hygiene-frontend.md`](design/repo-hygiene-frontend.md)) | Ops | Unblocked, parallel to anything |
 
@@ -66,7 +66,7 @@ per milestone).
 
 | Area | Status | Tracker |
 |---|---|---|
-| Backend | impl/01–05 + 11 + 13 done; impl/06 in progress; impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
+| Backend | impl/01–06 + 11 + 13 done (06 core — caption/title + flag pending); impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
 | Seam | Design pre-shaped; **unblocked now** (query-layer round done) | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
 | Frontend | Design complete (2026-07-07, Wails v2 locked); **architecture locked by the ground-up redesign round (2026-07-08, `frontend/09`)** — `frontend/src/` is disposable, rebuild fresh; implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
 | Ops / Testing | Specs waiting in [`design/`](design/) (CI, release, telemetry, testing strategy); no milestone tracking yet | — |

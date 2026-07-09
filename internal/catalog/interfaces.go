@@ -76,6 +76,9 @@ type AssetDerivedWriter interface {
 // caller.
 type TagRepository interface {
 	ImportKeywords(ctx context.Context, assetID string, flat []string, hierarchical [][]string, source string) error
+	// AssetTagNames returns the active (non-tombstoned) tag names for an asset,
+	// split into flat names and pipe-delimited hierarchical paths for XMP write-back.
+	AssetTagNames(ctx context.Context, assetID string) (flat []string, hierarchical []string, err error)
 }
 
 type CollectionRepository interface {

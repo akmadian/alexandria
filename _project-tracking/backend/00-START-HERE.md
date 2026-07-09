@@ -28,7 +28,7 @@ XMP sync → settings architecture → job/queue strategy. Frontend design was *
 | `impl/done/03-type-registry-and-classifier.md` | **Blocker 3 — ✅ DONE (2026-07-06)** — unified `assettype` registry + `Sniff` |
 | `impl/done/04-ingest-pipeline.md` | **The milestone — ✅ DONE (2026-07-06)** — the six-stage concurrent pipeline, sidecar/session repos, job envelope, Sniff mismatch wiring |
 | `impl/done/05-watcher-service.md` | **✅ DONE (2026-07-07)** — sensor + poll-timer connectivity; D20 detect-and-flag |
-| `impl/06-xmp-sync.md` | **🔨 IN PROGRESS (2026-07-07)** — inbound read + conflict decision + judgment application + keyword union DONE; caption/title, outbound write, triggers pending |
+| `impl/06-xmp-sync.md` | **🔨 IN PROGRESS (2026-07-08)** — inbound + outbound + settings + triggers + debounce DONE; caption/title inbound pending (sparse observation writer) |
 | `impl/07-dependency-fleet.md` | **🔨 exiftool slice DONE (2026-07-07)** — daemon + discovery; other tools / downloads / one-shot Run deferred |
 | `impl/08-dev-harness.md` | `cmd/dev` — ✅ core subcommands (import/reconcile/errors/sessions/rebuild) DONE with impl/04; `--debug` HTTP server (pprof/expvar/statsviz/`/state`) still deferred |
 | `impl/09-lrc-migration.md` | **Design only, not started.** Lightroom Classic catalog migration — D21; engine-first (`internal/lrcimport` + `cmd/lrcimport`), Wails wizard wraps it later; pure-read preflight, LrC-side DNG/XMP prep instead of hand-parsing Develop settings |
@@ -86,10 +86,9 @@ landed as the WRITE stage's 50-item `Store.InTx` in impl/04.
 5. ✅ `impl/05` watcher service — DONE (2026-07-07; sensor + poll-timer connectivity, D20 detect-and-flag)
 6. ✅ `impl/07` dependency fleet — exiftool slice DONE (2026-07-07; daemon + discovery; rest deferred)
 7. ✅ `impl/13` query layer — DONE (2026-07-08; `internal/ast`, query/command surface, collections, FTS⋈tags, old surface deleted)
-8. **IN PROGRESS:** `impl/06` XMP sync — inbound read + conflict decision + judgment application +
-   keyword union (impl/10) DONE (2026-07-07). **NEXT here:** caption/title via a sparse observation
-   writer, outbound sidecar write, ingest/watcher triggers + debounce, and the
-   `xmpWriteBack`/`xmpConflictResolution` settings.
+8. **IN PROGRESS:** `impl/06` XMP sync — inbound + outbound + settings + triggers + debounce
+   DONE (2026-07-08). **Remaining:** caption/title inbound (blocked on sparse observation writer),
+   `alexandria:Flag` custom namespace (best-effort, OQ #8).
 
 **Explicitly NOT needed for the ingest milestone:** dependency fleet (pure-Go covers JPEG/PNG/GIF),
 grouping engine (derived state, backfillable — ingest only writes `sidecar_files`), watcher, XMP

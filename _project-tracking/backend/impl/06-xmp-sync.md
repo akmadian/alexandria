@@ -1,6 +1,6 @@
 # impl/06 — XMP Sync
 
-**Status: inbound read + conflict decision + judgment DB application + keyword union DONE (2026-07-07); caption/title application, outbound write, and triggers pending.**
+**Status: inbound read + conflict + judgment apply + keyword union + outbound sidecar write + settings consumers + ingest/watcher triggers + debounce DONE (2026-07-08). Caption/title inbound pending (sparse observation writer).**
 **Scope:** new `internal/xmp`. **References:** D15, `03-data-model.md` §1.
 
 > **DONE increment 2 (2026-07-07) — inbound JUDGMENT application, end-to-end.** `sync.go`:
@@ -27,10 +27,21 @@
 > yields the leaf `Tokyo` attached, ancestors deduped, `source='xmp'`. FTS⋈tags stays deferred within
 > impl/10.
 >
-> **Still pending** (unchanged from below, minus what landed): caption/title — blocked on a
-> sparse observation-metadata writer (`ApplyFilePatch` rewrites file-fact columns, so it can't set
-> caption/title alone); outbound sidecar write + `xmpWriteBack`/`xmpConflictResolution` settings;
-> ingest/watcher triggers + debounce; `alexandria:Flag` custom namespace.
+> **DONE increment 3 (2026-07-08) — outbound write, settings, triggers, debounce.** `write.go`:
+> `Write(ctx, daemon, sidecarPath, fields)` drives exiftool merge-write (only our tags touched,
+> foreign namespaces preserved) → atomic temp+rename. `writeOutbound` in `sync.go` reads the
+> asset's current rating/label/tags/caption/title, calls Write, then `RecordXMPWritten` (advances
+> cursor + stores new hash for echo check). `settings.Settings` gained `XMPWriteBack` bool +
+> `XMPConflictResolution` string; `Syncer` reads them live via a `func() settings.Settings`
+> accessor (hot-reloaded for free). Ingest trigger: `Importer.OnAssetCommitted` callback fires
+> after batch and single-file commits. Watcher trigger: `Watcher.SidecarChanged` callback fires
+> when a `.xmp` path graduates; the sidecar also falls through to IngestFile for sidecar_files
+> tracking. `WriteBackDebouncer` coalesces judgment changes into per-asset outbound writes (~2s
+> quiet). `TagRepository.AssetTagNames` reads active tags as flat+hierarchical for outbound.
+>
+> **Still pending:** caption/title inbound — blocked on a sparse observation-metadata writer
+> (`ApplyFilePatch` rewrites file-fact columns, so it can't set caption/title alone);
+> `alexandria:Flag` custom namespace (best-effort, open question #8).
 
 > **DONE (2026-07-07) — the self-contained, daemon-backed read core.** Built on the impl/07
 > exiftool slice; the DB-application wiring is a distinct next increment (see below).

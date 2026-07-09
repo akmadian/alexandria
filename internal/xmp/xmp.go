@@ -7,10 +7,10 @@
 // output onto catalog concepts.
 //
 // This file is the inbound read path and the pure field mapping. Conflict
-// resolution is in conflict.go. Outbound writes, the ingest/watcher triggers, and
-// the debounce live with their consumers (next increment) — the DB application
-// spans three writer classes (judgment via ApplyXMPInbound, observation for
-// caption/title, asset_tags for keywords) and settings that don't exist yet.
+// resolution is in conflict.go; outbound writes in write.go; per-asset debounce
+// in debounce.go. The DB application spans judgment (ApplyXMPInbound), keywords
+// (TagRepository.ImportKeywords), and the sync-state cursors (RecordXMPWritten).
+// Caption/title inbound is still pending (needs a sparse observation writer).
 package xmp
 
 import (
