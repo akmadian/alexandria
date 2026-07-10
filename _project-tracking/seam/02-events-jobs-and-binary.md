@@ -16,8 +16,16 @@ single pipe.
 - `catalog` carries the existing `CatalogChange` design (coarse by default, scope/ids-capable for
   selective invalidation — consumers may ignore the payload and invalidate the active view).
 - `sources`/history/update events from contract.ts fold into topics (`watcher` carries source
-  connectivity; `catalog` carries history state) — exact type list is a seam-round work item,
-  written into the catalog file as it lands.
+  connectivity; `catalog` carries history state). **Built (impl/16, 2026-07-10):** the type
+  catalog is `internal/seam/events.go` (`eventCatalog`) — `catalog`→`changed`/`historyChanged`,
+  `jobs`→`progress`/`done`, `watcher`→`sourceStatus`, `sync` reserved. `historyChanged` and
+  `sourceStatus` are declared with no producer yet (undo service / watcher supervisor land them —
+  DEFERRED §7/§2). `UpdateAvailable` deferred with the update check (impl/12).
+- **The one emit choke point:** `internal/seam/events_wails.go` is the sole `runtime.EventsEmit`
+  caller (forbidigo-enforced); services hold a `seam.Emitter` and never touch Wails. `Emit` derives
+  the topic from the catalog (a deliberate tightening of the design's `Emit(topic, type, payload)`
+  — a type can't ride the wrong topic) and validates the payload's Go type against the catalog
+  exemplar, so a malformed event can't cross.
 - Events are hints for *display and invalidation*; request/response stays synchronous typed
   calls. No EDA (C8).
 

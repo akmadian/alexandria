@@ -98,6 +98,8 @@ linters:
           msg: "use charmbracelet/log, not fmt.Print — see coding-guidelines §4"
         - pattern: "os\\.Exit"
           msg: "os.Exit only in main — return errors instead"
+        - pattern: "runtime\\.EventsEmit"
+          msg: "emit through seam.Emitter — events_wails.go is the sole runtime.EventsEmit caller (C8)"
 
     gocritic:
       enabled-tags:
@@ -121,6 +123,10 @@ linters:
         path: "^(main|app)\\.go$"
       - linters: [forbidigo]
         path: "_test\\.go$"
+      # events_wails.go is the ONE sanctioned runtime.EventsEmit caller (C8); the
+      # ban applies everywhere else so ad-hoc emits can't sneak in.
+      - linters: [forbidigo]
+        path: "internal/seam/events_wails\\.go$"
 
 formatters:
   enable:

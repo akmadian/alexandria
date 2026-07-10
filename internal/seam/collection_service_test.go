@@ -297,3 +297,65 @@ func TestDeleteCollection_CallsRepo(t *testing.T) {
 		t.Fatalf("expected delete of c1, got %q", fake.deleted)
 	}
 }
+
+// --- catalog/changed emission (impl/16) ------------------------------------
+
+func TestCreateCollection_EmitsCatalogChanged(t *testing.T) {
+	fake := &fakeCollections{byID: map[string]*domain.Collection{}}
+	emitter := &fakeEmitter{}
+	service := seam.NewCollectionService(fake, seam.WithEmitter(emitter))
+
+	if _, err := service.CreateCollection(seam.CollectionInput{Name: "Trip"}); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+	events := emitter.snapshot()
+	if len(events) != 1 || events[0].Type != seam.EventCatalogChanged {
+		t.Fatalf("want one catalog/changed, got %v", emitter.typesOf())
+	}
+	change, ok := events[0].Payload.(seam.CatalogChange)
+	if !ok || change.Scope != seam.ScopeCollections {
+		t.Fatalf("want collections-scoped change, got %+v", events[0].Payload)
+	}
+}
+
+func TestAddToCollection_EmptyIsNoOpAndEmitsNothing(t *testing.T) {
+	fake := &fakeCollections{byID: map[string]*domain.Collection{}}
+	emitter := &fakeEmitter{}
+	service := seam.NewCollectionService(fake, seam.WithEmitter(emitter))
+
+	if err := service.AddToCollection("c1", nil); err != nil {
+		t.Fatalf("AddToCollection: %v", err)
+	}
+	if len(emitter.snapshot()) != 0 {
+		t.Fatalf("empty membership add must emit nothing, got %v", emitter.typesOf())
+	}
+}
+
+func TestUpdateCollection_EmptyPatchIsNoOpAndEmitsNothing(t *testing.T) {
+	fake := &fakeCollections{byID: map[string]*domain.Collection{"c1": {ID: "c1", Name: "x"}}}
+	emitter := &fakeEmitter{}
+	service := seam.NewCollectionService(fake, seam.WithEmitter(emitter))
+
+	if err := service.UpdateCollection("c1", seam.CollectionPatch{}); err != nil {
+		t.Fatalf("UpdateCollection: %v", err)
+	}
+	if fake.updated != nil {
+		t.Fatalf("empty-patch update should not write, got %+v", fake.updated)
+	}
+	if len(emitter.snapshot()) != 0 {
+		t.Fatalf("empty-patch update must emit nothing, got %v", emitter.typesOf())
+	}
+}
+
+func TestRemoveFromCollection_EmptyIsNoOpAndEmitsNothing(t *testing.T) {
+	fake := &fakeCollections{byID: map[string]*domain.Collection{}}
+	emitter := &fakeEmitter{}
+	service := seam.NewCollectionService(fake, seam.WithEmitter(emitter))
+
+	if err := service.RemoveFromCollection("c1", nil); err != nil {
+		t.Fatalf("RemoveFromCollection: %v", err)
+	}
+	if len(emitter.snapshot()) != 0 {
+		t.Fatalf("empty membership remove must emit nothing, got %v", emitter.typesOf())
+	}
+}

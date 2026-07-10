@@ -3,6 +3,7 @@ spikes/
 .DS_Store
 coverage.out
 /dev
+_assets/
 
 # Wails / frontend build output
 /build/bin

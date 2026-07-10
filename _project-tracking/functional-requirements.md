@@ -640,6 +640,14 @@ These elevate Alexandria above competitors. Build after P0/P1 is solid.
 - One-shot only — no ongoing sync against live .lrcat
 - Import wizard: select file, preview what will be imported, confirm
 
+### Final Cut Pro Project Import
+
+*Same shape as the LrC bootstrap above. Design: `_project-tracking/design/interop-targets.md`.*
+
+- Import **FCPXML** (`.fcpxml` / `.fcpxmld`) — markers, keywords, ratings, roles, clip paths
+- **Never parse `.fcpbundle`** — Apple-proprietary, unpublished, changes across releases, and held open by FCP while running. FCPXML is Apple's documented interchange format and carries the same rows
+- One-shot only. FCP never writes metadata back to media files, so there is no ongoing sync to have
+
 ---
 
 ## P3 — Post-Stabilization
@@ -715,7 +723,7 @@ Build after the core product is stable and well-used.
 - **DaVinci Resolve codec compatibility:** detect incompatible codecs at ingest, badge, offer transcode
 - **Frame rate mismatch indicator:** per-clip badge and collection-level notice for mixed frame rates
 - **Audio channel indicator:** stereo/mono/no audio on video assets
-- **Timestamped video clip annotations:** notes tied to timecodes ("good b-roll at 0:23"), export to xmpDM:markers for Premiere interop
+- **Timestamped video clip annotations:** notes tied to timecodes ("good b-roll at 0:23"). Interop is per-target, not one format — `xmpDM:markers` reaches **Premiere only**, embedded in the container (no NLE reads an XMP sidecar next to a video), and only for the QuickTime family (MOV/MP4) exiftool can write. Final Cut Pro needs FCPXML; Resolve needs CSV/EDL. Neither FCP nor Resolve writes metadata back to media files at all. Full design: `_project-tracking/design/interop-targets.md`
 
 ### Export Pipeline
 

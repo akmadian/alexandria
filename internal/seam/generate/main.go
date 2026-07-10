@@ -46,6 +46,7 @@ func main() {
 	write(*outDir, "vocabulary.ts", renderVocabulary())
 	write(*outDir, "enums.ts", renderDomainEnums())
 	write(*outDir, "errors.ts", renderSeamCodes())
+	write(*outDir, "events.ts", renderSeamEvents())
 }
 
 func write(dir, name string, source []byte) {
@@ -155,6 +156,39 @@ func renderSeamCodes() []byte {
 	header(&buffer, "internal/seam (apierror.go)")
 	for _, typeName := range seamCodeTypes {
 		writeUnion(&buffer, typeName, stringsOf(members[typeName]))
+	}
+	return bytes.TrimRight(buffer.Bytes(), "\n")
+}
+
+// seamEventTypes is the event-catalog manifest: the C8 topic/type/job-state
+// unions the frontend event pump switches on (impl/16). Members are discovered
+// from the consts in events.go the same way as the domain enums, so the catalog is
+// single-sourced in Go and cannot drift. NOTE: only these *unions* are generated —
+// the event PAYLOAD structs (CatalogChange, JobProgress, …) are NOT yet generated;
+// they stay hand-written in contract.ts until the wails-dev reconciliation pass
+// wires a struct→TS emitter (DEFERRED §7). The Go structs in events.go are shaped
+// to match contract.ts so that pass is mechanical.
+const seamEventTypes = "internal/seam (events.go)"
+
+// tsUnionName maps a Go enum type name to its TypeScript union name where they
+// differ. Topic → EventTopic (a bare "Topic" is too generic in the TS namespace);
+// everything else keeps its Go name.
+var tsUnionName = map[string]string{"Topic": "EventTopic"}
+
+// renderSeamEvents builds events.ts from the seam's Topic / EventType / JobState
+// consts.
+func renderSeamEvents() []byte {
+	typeNames := []string{"Topic", "EventType", "JobState"}
+	members := loadEnumMembers(seamPackage, typeNames)
+
+	var buffer bytes.Buffer
+	header(&buffer, seamEventTypes)
+	for _, typeName := range typeNames {
+		name := typeName
+		if mapped, ok := tsUnionName[typeName]; ok {
+			name = mapped
+		}
+		writeUnion(&buffer, name, stringsOf(members[typeName]))
 	}
 	return bytes.TrimRight(buffer.Bytes(), "\n")
 }

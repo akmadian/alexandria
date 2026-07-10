@@ -81,11 +81,29 @@ What a design-refinement instance should pick up. Ordered by when they block.
 10. FSEvents/inotify rename-event pairing reliability across the target platforms (impl/05 —
     determines how often the rename enrichment actually fires vs falls back).
 
+15. **Does exiftool's XMP write leave a video's stream payloads bit-identical?** Take a `.mov`,
+    `ffmpeg -i f -map 0 -c copy -f streamhash -hash sha256 -`, write an `XMP-xmpDM` marker with
+    exiftool, streamhash again, compare. If equal, "annotate a master safely" stops being a gamble
+    and becomes a verified invariant — and the whole container-write question in
+    `design/interop-targets.md` resolves. ffmpeg's own docs caveat that streamhash is for
+    content-validation, not remux-validation, so this must be measured, not assumed. Fifteen
+    minutes; blocks nothing until outbound Premiere is on the table.
+
 ## Known-open product questions (not architecture)
 
 11. **Bundle export/merge-back format** (P2/P3) — self-contained mini-catalog; merge semantics on
-    return (tag merge rules exist; collection/judgment merge needs design). D1/D2 made it possible;
-    nobody designed it.
+    return. D1/D2 made it possible; nobody designed it. **Downgraded 2026-07-10:** the merge is
+    less open than it reads — observations re-derive, derived rebuilds, sync-state resets, and only
+    *judgments* merge, per-asset LWW on `judgment_modified_at` (the same coarseness #14 already
+    accepts for XMP); collection membership is the D22 tag-tombstone rule verbatim. The one edge
+    needing real thought is that returned file bytes must never overwrite the creator's masters —
+    they land as new assets + a pending review, per D20. **The open question is whether to build it
+    at all:** XMP sync already round-trips ratings, labels, keywords and notes, so a bundle's entire
+    remaining value is the judgment XMP can't carry — collection membership, flags (`impl/06` §flag),
+    groups, pins. Contractors on the receiving end mostly run NLEs and design tools, not DAMs. Revisit
+    when a real user reports losing collection structure across a handoff; that is the trigger
+    condition, and until then this is speculative. Distinct from
+    `design/interop-targets.md` — do not entangle them.
 12. **machine.json exact schema** — trivial; write when the first consumer lands (worker pools at
     ingest tuning time).
 13. **Telemetry event schema** (P3, opt-in) — per-extension skip counts and error reason codes are

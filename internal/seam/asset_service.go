@@ -35,15 +35,24 @@ type assetJudgmentWriter interface {
 // AssetService exposes the asset read + judgment-write surface — the workhorse of
 // the seam (C7): one QueryAssets absorbs every predicate, one UpdateAssets absorbs
 // every triage write. It reads through the query authority (ast) and writes
-// through the judgment writer; it holds no business logic itself.
+// through the judgment writer; it holds no business logic itself. Successful
+// writes emit catalog/changed (C8) so the frontend invalidates — the mutation
+// choke point is the natural producer (impl/16 §4).
 type AssetService struct {
+	emitting
 	reader assetReader
 	writer assetJudgmentWriter
 }
 
 // NewAssetService constructs the bound service over the asset read/write slices.
-func NewAssetService(reader assetReader, writer assetJudgmentWriter) *AssetService {
-	return &AssetService{reader: reader, writer: writer}
+// Pass WithEmitter to wire catalog/changed events; without it, writes succeed and
+// emit nothing (the nil-safe default) — which is what the existing tests rely on.
+func NewAssetService(reader assetReader, writer assetJudgmentWriter, opts ...Option) *AssetService {
+	service := &AssetService{reader: reader, writer: writer}
+	for _, opt := range opts {
+		opt(service)
+	}
+	return service
 }
 
 // QueryResult is the QueryAssets envelope: the grid-card page plus the total
@@ -174,18 +183,32 @@ func (s *AssetService) UpdateAssets(target UpdateTarget, patch TriagePatchInput)
 	if err != nil {
 		return normalizeError(err)
 	}
+	// An empty patch touches nothing. Guard it per-branch (not before the target
+	// switch) so an empty *target* still validation-errors below regardless of the
+	// patch, while a valid target with nothing to write is a true no-op that
+	// neither writes nor emits (impl/16 §6: a no-op does not emit).
+	emptyPatch := triage == (catalog.TriagePatch{})
 
 	switch {
 	case len(target.IDs) > 0:
+		if emptyPatch {
+			log.Debug("seam: UpdateAssets no-op (empty patch)", "ids", len(target.IDs))
+			return nil
+		}
 		if err := s.writer.ApplyTriagePatch(seamContext(), target.IDs, triage); err != nil {
 			log.Error("seam: UpdateAssets by ids failed", "count", len(target.IDs), "err", err)
 			return normalizeError(err)
 		}
 		log.Info("seam: updated assets by ids", "count", len(target.IDs))
+		s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeAssets})
 		return nil
 	case target.Query != nil:
 		if err := ast.Validate(*target.Query); err != nil {
 			return normalizeError(err)
+		}
+		if emptyPatch {
+			log.Debug("seam: UpdateAssets no-op (empty patch)")
+			return nil
 		}
 		affected, err := s.writer.ApplyTriagePatchByQuery(seamContext(), *target.Query, target.ExceptIDs, triage)
 		if err != nil {
@@ -193,6 +216,10 @@ func (s *AssetService) UpdateAssets(target UpdateTarget, patch TriagePatchInput)
 			return normalizeError(err)
 		}
 		log.Info("seam: updated assets by query", "affected", len(affected))
+		// Only a write that moved rows is a change worth invalidating on.
+		if len(affected) > 0 {
+			s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeAssets})
+		}
 		return nil
 	default:
 		return normalizeError(&domain.ValidationError{
@@ -206,11 +233,16 @@ func (s *AssetService) UpdateAssets(target UpdateTarget, patch TriagePatchInput)
 // undo). Destructive on-disk deletion is a separate, unbuilt engine capability —
 // see DEFERRED §7.
 func (s *AssetService) RemoveFromCatalog(ids []string) error {
+	if len(ids) == 0 {
+		log.Debug("seam: RemoveFromCatalog no-op (no ids)")
+		return nil
+	}
 	if err := s.writer.SoftDelete(seamContext(), ids); err != nil {
 		log.Error("seam: RemoveFromCatalog failed", "count", len(ids), "err", err)
 		return normalizeError(err)
 	}
 	log.Info("seam: removed assets from catalog", "count", len(ids))
+	s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeAssets})
 	return nil
 }
 

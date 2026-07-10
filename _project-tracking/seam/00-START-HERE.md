@@ -49,9 +49,15 @@ Cross-cutting rules live in `../CONSTANTS.md` (C6–C9, C13 are the seam's).
      generated `errors.ts` code catalog — landed webkit-free. ~40% of the contract surface was
      **deferred, not stubbed** (no backing engine), and the contract.ts/`models` TS reconciliation is
      deferred to the `wails dev` pass (both with triggers in `../backend/impl/DEFERRED.md` §7).
-   - **impl/16: the frontier now.** Adds events/jobs on the same host + generator; its
-     `catalog/changed` emit hooks into impl/15's now-existing write methods. No new seam plumbing.
+   - **impl/16: ✅ DONE (2026-07-10).** The C8 event catalog + single `Emit` choke point
+     (`events.go` pure; `events_wails.go` the sole `runtime.EventsEmit` caller, forbidigo-enforced),
+     the C9 job envelope over `importer.Progress`, a real `ImportService` (first producer —
+     `startImport`/`cancelJob` under `importer.Jobs`, wired in the app host), `catalog/changed`
+     emits in impl/15's asset/collection write methods, and `events.ts` from the generator.
+     Deviation: `Emit` derives topic from the catalog (stricter than `Emit(topic, type, payload)`).
+     Deferred with triggers: event payload TS *interfaces* (DEFERRED §7), the frontend event-pump
+     consumer (frontend/09 §Event pump).
 
-Frontend implementation unblocks after these — and now means the **ground-up rebuild** per
+**The seam round is COMPLETE.** Frontend implementation is unblocked — the **ground-up rebuild** per
 `../frontend/09-ground-up-redesign-notes.md` (architecture locked 2026-07-08); its seam-method
 requirements are listed in `01-queries-and-commands.md` §Additions.

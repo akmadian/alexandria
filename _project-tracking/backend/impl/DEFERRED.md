@@ -187,7 +187,11 @@ watchers.
   restarted unit does a startup reconcile and re-converges. This is just
   "reconcile answers every failure" applied to the *lifecycle*.
 - **Per-source status snapshot** (mode `events`/`polling`/`offline`, last
-  reconcile, dirty count) → status bar and the P3 health panel.
+  reconcile, dirty count) → status bar and the P3 health panel. *The seam side
+  already exists (impl/16): the `watcher/sourceStatus` event type and the
+  `seam.SourceStatus` payload are declared, shaped so this fuller snapshot extends
+  it additively (no new event type). The supervisor is the missing **producer** —
+  it calls `emitter.Emit(seam.EventSourceStatus, …)` on a connectivity/mode flip.*
 - **Lifecycle wiring:** start/stop/quiesce units on source enable/disable/remove
   and on connectivity flips (from impl/05.3's volume monitor).
 
@@ -405,6 +409,29 @@ of the webkit-free backend gate (drift caught at the next `wails dev`/`build`). 
 the TS half of the ledger rows lands when the frontend rebuild runs under Wails,
 with the frontend types in hand (which is also when the `TriagePatchInput` raw-JSON
 wire encoding gets its final shape).
+
+**Event PAYLOAD TypeScript types (impl/16, 2026-07-10) — deferred, intentionally,
+with a hard trigger.** impl/16 generates the C8 topic/type/`JobState` *unions* to
+`events.ts`, but NOT the payload interfaces (`CatalogChange`, `JobProgress`,
+`JobDone`, `HistoryState`, `SourceStatus`). Reasons: (1) the hand-rolled generator
+emits string-literal unions from Go consts — reflecting arbitrary structs to TS is a
+new capability (a mini-tygo) not worth building before a consumer needs it; (2) the
+real consumer is the frontend rebuild's event pump, which per frontend/09 owns the
+typed sinks; (3) full contract.ts reconciliation is already deferred to the same
+`wails dev` pass, so the payload types ride along with it for free.
+- **Mitigation (so this can't silently rot):** the Go structs in `internal/seam/events.go`
+  are shaped field-for-field to match the hand-written interfaces in
+  `frontend/src/api/contract.ts` today (json tags = the contract). JobProgress/JobDone
+  intentionally exceed contract.ts's older sketch — that is the C9 target, and contract.ts
+  is the thing being reconciled *away*.
+- **Trigger (concrete, not "someday"):** the frontend-rebuild event-pump work item —
+  the first task that subscribes to a topic and needs a typed payload. That task either
+  (a) extends the generator to reflect these five structs (preferred — keeps C13's
+  "generated, never hand-maintained" honest), or (b) hand-writes them in the rebuilt
+  `api/` against the Go structs as the spec. Either way it is a checklist item of the
+  event-pump task, and `01-queries-and-commands.md` ledger #7 + `seam/02` both point here.
+- **Owner of the reminder:** `frontend/09-ground-up-redesign-notes.md` §Event pump (the
+  pump's design) and this ledger row. When the rebuild's pump lands, delete this row.
 
 **Trigger (umbrella):** each row above is pulled in by its named milestone; none
 blocks impl/16 or the frontend rebuild's read path.

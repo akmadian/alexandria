@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 
 	"github.com/charmbracelet/log"
 
 	"github.com/akmadian/alexandria/internal/app"
+	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/akmadian/alexandria/internal/seam"
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
+	"github.com/akmadian/alexandria/internal/thumbnailer"
 )
 
 // host is the app-host composition root: it owns the process-lifetime catalog
@@ -22,10 +26,13 @@ import (
 type host struct {
 	catalog     *sqlite.Catalog
 	settings    *settings.Service
+	thumbDir    string
+	emitter     *seam.WailsEmitter
 	sources     *seam.SourceService
 	assets      *seam.AssetService
 	collections *seam.CollectionService
 	settingsAPI *seam.SettingsService
+	imports     *seam.ImportService
 }
 
 // newHost runs the minimal startup sequence: resolve the catalog directory, then
@@ -56,27 +63,67 @@ func newHost() (*host, error) {
 	}
 
 	assetRepo := &sqlite.AssetRepo{DB: catalog.DB}
-	return &host{
+	sourceRepo := &sqlite.SourceRepo{DB: catalog.DB}
+	emitter := seam.NewWailsEmitter()
+
+	newHost := &host{
 		catalog:     catalog,
 		settings:    settingsService,
-		sources:     seam.NewSourceService(&sqlite.SourceRepo{DB: catalog.DB}),
-		assets:      seam.NewAssetService(assetRepo, assetRepo),
-		collections: seam.NewCollectionService(&sqlite.CollectionRepo{DB: catalog.DB}),
+		thumbDir:    filepath.Join(dir, "thumbnails"),
+		emitter:     emitter,
+		sources:     seam.NewSourceService(sourceRepo),
+		assets:      seam.NewAssetService(assetRepo, assetRepo, seam.WithEmitter(emitter)),
+		collections: seam.NewCollectionService(&sqlite.CollectionRepo{DB: catalog.DB}, seam.WithEmitter(emitter)),
 		settingsAPI: seam.NewSettingsService(settingsService.Settings, settingsService.Keybindings),
-	}, nil
+	}
+	// ImportService needs a way to run an import that reports progress; the host
+	// owns the pipeline's dependencies, so it supplies that closure (runImport). The
+	// engine never imports Wails (D1) — it just hands over OnProgress and RunJob.
+	newHost.imports = seam.NewImportService(sourceRepo, importer.NewJobs(), newHost.runImport, emitter)
+	return newHost, nil
+}
+
+// runImport builds a wired importer for one run, routes its OnProgress to the
+// seam's onProgress callback, and walks the source's filesystem root. It is the
+// runImport the ImportService calls under the Jobs registry. The importer is built
+// per run so its OnProgress closes over this call's callback with no shared state
+// (mirrors cmd/dev's newIngester wiring).
+func (h *host) runImport(ctx context.Context, jobID string, source *domain.Source, onProgress func(importer.Progress)) (importer.ImportResult, error) {
+	assetRepo := &sqlite.AssetRepo{DB: h.catalog.DB}
+	set := h.settings.Settings.Get()
+	thumb := thumbnailer.New(h.thumbDir)
+	if set.ThumbnailQuality > 0 {
+		thumb.Quality = set.ThumbnailQuality // settings owns JPEG quality
+	}
+	ingester := &importer.Importer{
+		Reader:     assetRepo,
+		Obs:        assetRepo,
+		Derived:    assetRepo,
+		Dups:       &sqlite.DuplicateRepo{DB: h.catalog.DB},
+		Thumbnail:  thumb,
+		Store:      sqlite.NewStore(h.catalog.DB),
+		Imports:    &sqlite.ImportRepo{DB: h.catalog.DB},
+		Settings:   set,
+		Machine:    h.settings.Machine.Get(),
+		Log:        log.Default(),
+		OnProgress: onProgress,
+	}
+	return ingester.RunJob(ctx, jobID, source, os.DirFS(source.BasePath))
 }
 
 // boundServices is the list Wails binds and generates TypeScript for. Each new
 // seam service (impl/16 events & jobs) joins this slice — one line, no new seam
 // plumbing.
 func (h *host) boundServices() []any {
-	return []any{h.sources, h.assets, h.collections, h.settingsAPI}
+	return []any{h.sources, h.assets, h.collections, h.settingsAPI, h.imports}
 }
 
-// onStartup fires once the webview context exists. impl/12 grows the post-window
-// startup steps here (background integrity check, watcher supervision, the
-// app:ready event); for now it only logs readiness.
-func (h *host) onStartup(_ context.Context) {
+// onStartup fires once the webview context exists. It binds that context into the
+// event emitter — before this, emits are dropped (no window to receive them). impl/12
+// grows the rest of the post-window startup steps here (background integrity check,
+// watcher supervision, the app:ready event).
+func (h *host) onStartup(ctx context.Context) {
+	h.emitter.Bind(ctx)
 	log.Info("alexandria ready")
 }
 

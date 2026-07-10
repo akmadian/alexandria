@@ -28,14 +28,21 @@ type collectionRepository interface {
 // CollectionService exposes collection CRUD + membership (ledger #9). Collections
 // are scopes, not filter fields (C1) — a smart collection persists an AST query
 // (with a version, C6) that the query system reuses; a manual collection is a
-// membership list. Both live in one table, discriminated by kind.
+// membership list. Both live in one table, discriminated by kind. Successful
+// mutations emit catalog/changed with the collections scope (C8).
 type CollectionService struct {
+	emitting
 	collections collectionRepository
 }
 
-// NewCollectionService constructs the bound service over the collection repo.
-func NewCollectionService(collections collectionRepository) *CollectionService {
-	return &CollectionService{collections: collections}
+// NewCollectionService constructs the bound service over the collection repo. Pass
+// WithEmitter to wire catalog/changed events; without it, mutations emit nothing.
+func NewCollectionService(collections collectionRepository, opts ...Option) *CollectionService {
+	service := &CollectionService{collections: collections}
+	for _, opt := range opts {
+		opt(service)
+	}
+	return service
 }
 
 // CollectionInput creates a collection. A smart collection carries an AST query;
@@ -108,11 +115,19 @@ func (s *CollectionService) CreateCollection(input CollectionInput) (*domain.Col
 		return nil, normalizeError(err)
 	}
 	log.Info("seam: created collection", "id", collection.ID, "kind", collection.Kind)
+	s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeCollections})
 	return collection, nil
 }
 
 // UpdateCollection applies the patch to an existing collection (read-modify-write).
 func (s *CollectionService) UpdateCollection(id string, patch CollectionPatch) error {
+	// An all-nil patch changes nothing — skip the read-modify-write and the emit, so
+	// a no-op update is a true no-op (impl/16 §6; matches UpdateAssets' empty-patch
+	// guard). This also spares a spurious catalog/changed invalidation.
+	if patch.Name == nil && patch.CoverAssetID == nil && patch.Query == nil {
+		log.Debug("seam: UpdateCollection no-op (empty patch)", "id", id)
+		return nil
+	}
 	collection, err := s.collections.Get(seamContext(), id)
 	if err != nil {
 		return normalizeError(err)
@@ -135,6 +150,7 @@ func (s *CollectionService) UpdateCollection(id string, patch CollectionPatch) e
 		return normalizeError(err)
 	}
 	log.Info("seam: updated collection", "id", id)
+	s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeCollections})
 	return nil
 }
 
@@ -145,6 +161,7 @@ func (s *CollectionService) DeleteCollection(id string) error {
 		return normalizeError(err)
 	}
 	log.Info("seam: deleted collection", "id", id)
+	s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeCollections})
 	return nil
 }
 
@@ -155,6 +172,10 @@ func (s *CollectionService) DeleteCollection(id string) error {
 // N results" flow lands, give the repo a batch AddAssets (one multi-row INSERT)
 // and call it here.
 func (s *CollectionService) AddToCollection(collectionID string, assetIDs []string) error {
+	if len(assetIDs) == 0 {
+		log.Debug("seam: AddToCollection no-op (no ids)")
+		return nil
+	}
 	for _, assetID := range assetIDs {
 		if err := s.collections.AddAsset(seamContext(), collectionID, assetID); err != nil {
 			log.Error("seam: AddToCollection failed", "collection", collectionID, "asset", assetID, "err", err)
@@ -162,11 +183,16 @@ func (s *CollectionService) AddToCollection(collectionID string, assetIDs []stri
 		}
 	}
 	log.Info("seam: added assets to collection", "collection", collectionID, "count", len(assetIDs))
+	s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeCollections})
 	return nil
 }
 
 // RemoveFromCollection removes the given assets from a manual collection.
 func (s *CollectionService) RemoveFromCollection(collectionID string, assetIDs []string) error {
+	if len(assetIDs) == 0 {
+		log.Debug("seam: RemoveFromCollection no-op (no ids)")
+		return nil
+	}
 	for _, assetID := range assetIDs {
 		if err := s.collections.RemoveAsset(seamContext(), collectionID, assetID); err != nil {
 			log.Error("seam: RemoveFromCollection failed", "collection", collectionID, "asset", assetID, "err", err)
@@ -174,6 +200,7 @@ func (s *CollectionService) RemoveFromCollection(collectionID string, assetIDs [
 		}
 	}
 	log.Info("seam: removed assets from collection", "collection", collectionID, "count", len(assetIDs))
+	s.emit(EventCatalogChanged, CatalogChange{Scope: ScopeCollections})
 	return nil
 }
 

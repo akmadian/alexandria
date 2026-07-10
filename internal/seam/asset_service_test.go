@@ -216,7 +216,8 @@ func TestUpdateAssets_ByQueryPassesExceptIDs(t *testing.T) {
 	service := seam.NewAssetService(fake, fake)
 
 	query := validQuery()
-	err := service.UpdateAssets(seam.UpdateTarget{Query: &query, ExceptIDs: []string{"skip"}}, seam.TriagePatchInput{})
+	// A real patch (empty patches are now a no-op) so the by-query write path runs.
+	err := service.UpdateAssets(seam.UpdateTarget{Query: &query, ExceptIDs: []string{"skip"}}, seam.TriagePatchInput{Rating: json.RawMessage(`3`)})
 	if err != nil {
 		t.Fatalf("UpdateAssets: %v", err)
 	}
@@ -362,5 +363,106 @@ func TestRemoveFromCatalog_OverRealCatalog_SoftDeletes(t *testing.T) {
 	}
 	if got.Total != 0 {
 		t.Fatalf("expected the soft-deleted asset gone from the working set, got total=%d", got.Total)
+	}
+}
+
+// --- catalog/changed emission (impl/16) ------------------------------------
+
+func TestUpdateAssets_EmitsCatalogChanged(t *testing.T) {
+	fake := &fakeAssets{}
+	emitter := &fakeEmitter{}
+	service := seam.NewAssetService(fake, fake, seam.WithEmitter(emitter))
+
+	patch := seam.TriagePatchInput{Rating: json.RawMessage(`5`)}
+	if err := service.UpdateAssets(seam.UpdateTarget{IDs: []string{"a"}}, patch); err != nil {
+		t.Fatalf("UpdateAssets: %v", err)
+	}
+	events := emitter.snapshot()
+	if len(events) != 1 || events[0].Type != seam.EventCatalogChanged {
+		t.Fatalf("want one catalog/changed, got %v", emitter.typesOf())
+	}
+	change, ok := events[0].Payload.(seam.CatalogChange)
+	if !ok || change.Scope != seam.ScopeAssets {
+		t.Fatalf("want assets-scoped change, got %+v", events[0].Payload)
+	}
+}
+
+func TestUpdateAssets_EmptyPatchIsNoOpAndEmitsNothing(t *testing.T) {
+	fake := &fakeAssets{}
+	emitter := &fakeEmitter{}
+	service := seam.NewAssetService(fake, fake, seam.WithEmitter(emitter))
+
+	// An all-absent patch touches nothing: no write, no event.
+	if err := service.UpdateAssets(seam.UpdateTarget{IDs: []string{"a"}}, seam.TriagePatchInput{}); err != nil {
+		t.Fatalf("UpdateAssets: %v", err)
+	}
+	if fake.gotIDs != nil {
+		t.Fatalf("empty patch should not reach the writer, got ids %v", fake.gotIDs)
+	}
+	if len(emitter.snapshot()) != 0 {
+		t.Fatalf("a no-op write must emit nothing, got %v", emitter.typesOf())
+	}
+}
+
+func TestUpdateAssets_ByQueryAffectingNoRowsEmitsNothing(t *testing.T) {
+	fake := &fakeAssets{byQueryResult: nil} // zero rows affected
+	emitter := &fakeEmitter{}
+	service := seam.NewAssetService(fake, fake, seam.WithEmitter(emitter))
+
+	query := validQuery()
+	patch := seam.TriagePatchInput{Rating: json.RawMessage(`3`)}
+	if err := service.UpdateAssets(seam.UpdateTarget{Query: &query}, patch); err != nil {
+		t.Fatalf("UpdateAssets: %v", err)
+	}
+	if len(emitter.snapshot()) != 0 {
+		t.Fatalf("a query that moved no rows must emit nothing, got %v", emitter.typesOf())
+	}
+}
+
+func TestRemoveFromCatalog_EmitsCatalogChanged(t *testing.T) {
+	fake := &fakeAssets{}
+	emitter := &fakeEmitter{}
+	service := seam.NewAssetService(fake, fake, seam.WithEmitter(emitter))
+
+	if err := service.RemoveFromCatalog([]string{"a"}); err != nil {
+		t.Fatalf("RemoveFromCatalog: %v", err)
+	}
+	if types := emitter.typesOf(); len(types) != 1 || types[0] != seam.EventCatalogChanged {
+		t.Fatalf("want one catalog/changed, got %v", types)
+	}
+}
+
+func TestRemoveFromCatalog_EmptyIsNoOpAndEmitsNothing(t *testing.T) {
+	fake := &fakeAssets{}
+	emitter := &fakeEmitter{}
+	service := seam.NewAssetService(fake, fake, seam.WithEmitter(emitter))
+
+	if err := service.RemoveFromCatalog(nil); err != nil {
+		t.Fatalf("RemoveFromCatalog: %v", err)
+	}
+	if fake.gotIDs != nil {
+		t.Fatalf("empty remove should not reach the writer, got %v", fake.gotIDs)
+	}
+	if len(emitter.snapshot()) != 0 {
+		t.Fatalf("empty remove must emit nothing, got %v", emitter.typesOf())
+	}
+}
+
+func TestUpdateAssets_ByQueryEmptyPatchIsNoOpAndEmitsNothing(t *testing.T) {
+	fake := &fakeAssets{}
+	emitter := &fakeEmitter{}
+	service := seam.NewAssetService(fake, fake, seam.WithEmitter(emitter))
+
+	query := validQuery()
+	// Empty patch on the by-query branch: validated, then short-circuited — the
+	// writer is never called and nothing is emitted.
+	if err := service.UpdateAssets(seam.UpdateTarget{Query: &query}, seam.TriagePatchInput{}); err != nil {
+		t.Fatalf("UpdateAssets: %v", err)
+	}
+	if fake.gotQuery != nil {
+		t.Fatalf("empty-patch by-query should not reach the writer, got %+v", fake.gotQuery)
+	}
+	if len(emitter.snapshot()) != 0 {
+		t.Fatalf("empty-patch by-query must emit nothing, got %v", emitter.typesOf())
 	}
 }
