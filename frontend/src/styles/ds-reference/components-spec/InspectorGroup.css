@@ -1,0 +1,31 @@
+/* InspectorGroup — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-insp-group { border-bottom: 1px solid var(--border-subtle); padding: 8px 10px 10px; }
+.ax-insp-title {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  font-family: var(--font-ui); font-size: var(--fs-10); font-weight: var(--fw-medium);
+  letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--text-3);
+  cursor: default; user-select: none;
+}
+.ax-insp-row {
+  display: flex; align-items: baseline; gap: 10px; min-height: 18px;
+  font-size: var(--fs-11);
+}
+.ax-insp-row dt { flex: none; width: 76px; color: var(--text-3); font-family: var(--font-ui); }
+.ax-insp-row dd {
+  margin: 0; flex: 1; min-width: 0; color: var(--text-1); text-align: right;
+  font-family: var(--font-mono); font-feature-settings: var(--mono-settings);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ax-stars { display: inline-flex; gap: 2px; }
+.ax-stars button { all: unset; cursor: pointer; color: var(--text-3); display: inline-flex; padding: 1px; }
+.ax-stars button[data-on="true"] { color: var(--text-1); }
+.ax-stars button:hover { color: var(--text-1); }
+.ax-labels { display: inline-flex; gap: 5px; }
+.ax-labels button {
+  all: unset; width: 13px; height: 13px; border-radius: 3px; cursor: pointer;
+  border: 1px solid transparent; box-sizing: border-box;
+}
+.ax-labels button[data-on="true"] { border-color: var(--cursor-ring); }
+.ax-labels button:hover { transform: scale(1.15); }

@@ -1,0 +1,36 @@
+/* CommandPalette — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-palette-scrim {
+  position: fixed; inset: 0; z-index: var(--z-palette);
+  display: grid; justify-items: center; align-items: start; padding-top: 12vh;
+  background: var(--scrim);
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+}
+.ax-palette {
+  width: 520px; max-width: calc(100vw - 48px);
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  border-radius: var(--r-3); overflow: hidden;
+  backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+  font-family: var(--font-ui);
+}
+.ax-palette-input {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle); color: var(--text-3);
+}
+.ax-palette-input input {
+  all: unset; flex: 1; font-size: var(--fs-13); color: var(--text-1);
+}
+.ax-palette-input input::placeholder { color: var(--text-3); }
+.ax-palette-list { max-height: 300px; overflow-y: auto; padding: 4px; }
+.ax-palette-row {
+  display: flex; align-items: center; gap: 9px; height: 26px; padding: 0 8px;
+  border-radius: var(--r-2); font-size: var(--fs-12); color: var(--text-1);
+  cursor: pointer;
+}
+.ax-palette-row[data-active="true"] { background: var(--hover-ground); }
+.ax-palette-row .ax-palette-hint { margin-left: auto; }
+.ax-palette-section {
+  padding: 6px 8px 2px; font-size: var(--fs-10); letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--text-3);
+}

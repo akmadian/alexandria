@@ -1,0 +1,17 @@
+/* SegmentedControl — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-seg {
+  display: inline-flex; align-items: stretch; height: var(--control-h);
+  background: var(--panel-sunken); border: 1px solid var(--border-control);
+  border-radius: var(--r-2); padding: 1px; gap: 1px; box-shadow: var(--deboss);
+}
+.ax-seg button {
+  all: unset; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 0 9px; border-radius: calc(var(--r-2) - 1px); cursor: pointer;
+  font-family: var(--font-ui); font-size: var(--fs-11); font-weight: var(--fw-medium);
+  color: var(--text-3); transition: background var(--t-instant) var(--ease-out);
+}
+.ax-seg button:hover { color: var(--text-1); background: var(--hover-ground); }
+.ax-seg button[aria-pressed="true"] { background: var(--control-bg-hover); color: var(--text-1); box-shadow: var(--chrome-edge), var(--emboss); }
+.ax-seg button:focus-visible { outline: 1px dotted var(--focus-ring); outline-offset: -1px; }

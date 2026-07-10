@@ -1,0 +1,87 @@
+/* GridCell — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-cell {
+  --pad: 11px;
+  position: relative;
+  display: flex; flex-direction: column; gap: 9px; padding: var(--pad);
+  border-radius: var(--r-3); cursor: default; user-select: none; width: 100%;
+  /* a floating glass card — the new material, not a flat cell */
+  background: var(--panel);
+  box-shadow: var(--emboss), var(--chrome-edge);
+  transition: box-shadow var(--t-fast) var(--ease-out);
+}
+.ax-cell:hover { box-shadow: var(--card-float); }
+.ax-cell[data-selected="true"] { box-shadow: var(--card-float); }
+/* emboss OFF — flat, clean cards for a quieter grid (fill kept, shadows dropped) */
+.ax-cell[data-elevated="false"],
+.ax-cell[data-elevated="false"]:hover,
+.ax-cell[data-elevated="false"][data-selected="true"] { box-shadow: none; }
+.ax-cell > * { position: relative; z-index: 1; }
+/* state ground — composes over the glass card fill */
+.ax-cell::before {
+  content: ""; position: absolute; inset: 0; border-radius: var(--r-3); z-index: 0;
+  background: transparent; pointer-events: none;
+  transition: background var(--t-instant) var(--ease-out);
+}
+.ax-cell:hover::before { background: var(--hover-ground); }
+.ax-cell[data-selected="true"]::before { background: var(--select-ground); }
+/* cursor ring sits above everything */
+.ax-cell[data-cursor="true"]::after {
+  content: ""; position: absolute; inset: 0; border-radius: var(--r-3); z-index: 2;
+  border: var(--bw-cursor) solid var(--cursor-ring); pointer-events: none;
+}
+
+.ax-cell-thumb {
+  position: relative; border-radius: var(--r-2); overflow: hidden;
+  background: var(--panel-sunken); aspect-ratio: var(--thumb-ratio, 3 / 2);
+  display: grid; place-items: center; box-shadow: var(--deboss);
+}
+.ax-cell-thumb img {
+  max-width: 100%; max-height: 100%; width: auto; height: auto;
+  object-fit: contain; display: block;
+}
+.ax-cell[data-rejected="true"] .ax-cell-thumb img { opacity: 0.32; }
+.ax-cell-tr { position: absolute; top: 0; right: 0; }
+.ax-cell-br {
+  position: absolute; right: 5px; bottom: 5px; display: inline-flex; align-items: center; gap: 4px;
+}
+.ax-cell-duration {
+  padding: 1px 5px; border-radius: var(--r-1); background: rgba(10,10,10,0.72); color: #eaeaea;
+  font-family: var(--font-mono); font-size: var(--fs-10); line-height: 1.3;
+}
+.ax-cell-type { color: #f2f2f2; display: inline-flex; filter: drop-shadow(0 0 1px rgba(0,0,0,0.7)); }
+.ax-cell-corner {
+  width: 0; height: 0;
+  border-left: 12px solid transparent; border-top: 12px solid var(--label-blue);
+}
+
+/* ── below the thumbnail ─────────────────────────────────────── */
+.ax-cell-foot { display: grid; gap: 7px; padding: 0 2px 1px; }
+
+/* caption row: filename leads, badges sit quietly on the right */
+.ax-cell-caption { display: flex; align-items: center; gap: 8px; min-height: 16px; }
+.ax-cell-name {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-mono); font-feature-settings: var(--mono-settings);
+  font-size: var(--fs-11); font-weight: var(--fw-medium); color: var(--text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ax-cell[data-selected="true"] .ax-cell-name { color: var(--select-ink); }
+.ax-cell-badges { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.ax-cell-flag { display: inline-flex; color: var(--text-2); }
+.ax-cell[data-selected="true"] .ax-cell-flag { color: var(--select-ink); }
+.ax-cell-stars { display: inline-flex; color: var(--text-1); font-size: 11px; line-height: 1; letter-spacing: 1.5px; }
+.ax-cell[data-selected="true"] .ax-cell-stars { color: var(--select-ink); }
+.ax-cell-chip { width: 9px; height: 9px; border-radius: 3px; flex: none; box-shadow: var(--chrome-edge); }
+
+/* secondary metadata strip: quiet, roomy, wraps */
+.ax-cell-meta {
+  display: flex; flex-wrap: wrap; gap: 3px 12px;
+  font-family: var(--font-mono); font-feature-settings: var(--mono-settings);
+  font-size: var(--fs-10); line-height: 1.5; color: var(--text-3);
+}
+.ax-cell[data-selected="true"] .ax-cell-meta { color: color-mix(in srgb, var(--select-ink) 68%, transparent); }
+.ax-cell-meta .f { display: inline-flex; gap: 4px; min-width: 0; }
+.ax-cell-meta .f .k { color: color-mix(in srgb, var(--text-3) 62%, transparent); flex: none; }
+.ax-cell-meta .f .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

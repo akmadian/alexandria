@@ -1,0 +1,39 @@
+/* Checkbox — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-check {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex: none; padding: 0;
+  background: var(--panel-sunken); color: transparent;
+  border: 1px solid var(--border-control); border-radius: var(--r-1);
+  box-shadow: var(--deboss); cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
+}
+.ax-check:hover { background: var(--control-bg-active); }
+.ax-check[aria-checked="true"], .ax-check[aria-checked="mixed"] {
+  background: var(--control-primary-bg); color: var(--control-primary-ink); border-color: transparent;
+}
+.ax-check[aria-checked="true"]:hover, .ax-check[aria-checked="mixed"]:hover {
+  background: var(--control-primary-bg-hover);
+}
+.ax-check:focus-visible { outline: 1px dotted var(--focus-ring); outline-offset: 2px; }
+.ax-check[data-disabled="true"] { opacity: 0.5; cursor: default; }
+.ax-check-bar { width: 8px; height: 2px; border-radius: 1px; background: currentColor; }
+
+/* Evidentiary pop: the mark reports the flip. Fast, interruptible, and it
+   degrades to an instant swap under reduced-motion. */
+.ax-check-mark { display: inline-flex; }
+@media (prefers-reduced-motion: no-preference) {
+  .ax-check-mark { animation: ax-check-pop var(--t-fast, 100ms) var(--ease-out) both; }
+  @keyframes ax-check-pop {
+    0%   { transform: scale(0.2); opacity: 0; }
+    60%  { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+}
+
+.ax-check-field {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+  font-family: var(--font-ui); font-size: var(--fs-12); color: var(--text-1); line-height: 1;
+}
+.ax-check-field[data-disabled="true"] { cursor: default; color: var(--text-disabled); }

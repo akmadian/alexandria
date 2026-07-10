@@ -1,0 +1,29 @@
+/* Button — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--control-h); padding: 0 10px;
+  font-family: var(--font-ui); font-size: var(--fs-12); font-weight: var(--fw-medium);
+  color: var(--text-1); background: var(--control-bg);
+  background-image: var(--chrome-sheen); box-shadow: var(--chrome-edge), var(--emboss);
+  border: 1px solid var(--border-control); border-radius: var(--r-2);
+  cursor: pointer; user-select: none; white-space: nowrap;
+  transition: background var(--t-instant) var(--ease-out), box-shadow var(--t-instant) var(--ease-out);
+}
+.ax-btn:hover { background: var(--control-bg-hover); }
+.ax-btn:active { background: var(--control-bg-active); box-shadow: var(--deboss); }
+.ax-btn:focus-visible { outline: 1px dotted var(--focus-ring); outline-offset: 2px; }
+.ax-btn[disabled] { color: var(--text-disabled); background: var(--control-bg); opacity: 0.55; cursor: default; }
+.ax-btn--primary { background: var(--control-primary-bg); color: var(--control-primary-ink); border-color: transparent; }
+.ax-btn--primary:hover { background: var(--control-primary-bg-hover); }
+.ax-btn--primary:active { background: var(--control-primary-bg); }
+.ax-btn--ghost { background: transparent; background-image: none; box-shadow: none; border-color: transparent; color: var(--text-2); }
+.ax-btn--ghost:hover { background: var(--hover-ground); color: var(--text-1); }
+.ax-btn--ghost:active { background: var(--control-bg-active); }
+.ax-btn--danger { color: var(--data-danger); }
+.ax-btn--lg { height: var(--control-h-lg); padding: 0 14px; font-size: var(--fs-13); }
+.ax-btn--sm { height: 20px; padding: 0 7px; font-size: var(--fs-11); }
+.ax-iconbtn { padding: 0; width: var(--control-h); }
+.ax-iconbtn.ax-btn--lg { width: var(--control-h-lg); }
+.ax-iconbtn.ax-btn--sm { width: 20px; }

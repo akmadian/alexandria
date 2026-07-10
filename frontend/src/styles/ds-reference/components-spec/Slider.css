@@ -1,0 +1,24 @@
+/* Slider — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-slider-root { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+.ax-slider-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ax-slider-label { font-family: var(--font-ui); font-size: var(--fs-11); color: var(--text-2); }
+.ax-slider-val { font-family: var(--font-mono); font-size: var(--fs-11); color: var(--text-1); font-feature-settings: var(--mono-settings); white-space: nowrap; }
+.ax-slider-track { position: relative; height: 22px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+.ax-slider-rail { position: absolute; left: 0; right: 0; height: 4px; border-radius: var(--r-pill); background: var(--panel-sunken); box-shadow: var(--deboss); }
+.ax-slider-fill { position: absolute; height: 4px; border-radius: var(--r-pill); background: var(--accent, var(--text-2)); }
+.ax-slider-thumb {
+  position: absolute; top: 50%; width: 14px; height: 14px; margin-left: -7px; transform: translateY(-50%);
+  border-radius: 50%; background: var(--control-bg); background-image: var(--chrome-sheen);
+  border: 1px solid var(--border-control); box-shadow: var(--chrome-edge), var(--emboss);
+  cursor: grab; transition: box-shadow var(--t-instant) var(--ease-out), transform var(--t-instant) var(--ease-out);
+}
+.ax-slider-thumb:focus-visible { outline: 1px dotted var(--focus-ring); outline-offset: 3px; }
+.ax-slider-thumb[data-grab="true"] { cursor: grabbing; box-shadow: var(--deboss); }
+@media (prefers-reduced-motion: no-preference) {
+  .ax-slider-thumb[data-grab="true"] { transform: translateY(-50%) scale(1.14); }
+}
+.ax-slider-ticks { position: absolute; left: 0; right: 0; top: 15px; height: 4px; }
+.ax-slider-tick { position: absolute; width: 1px; height: 3px; background: var(--border-control); transform: translateX(-0.5px); }
+.ax-slider[data-disabled="true"] { opacity: 0.5; pointer-events: none; }

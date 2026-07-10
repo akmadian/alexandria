@@ -1,0 +1,29 @@
+/* Badge — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 16px; padding: 0 6px; border-radius: var(--r-pill);
+  font-family: var(--font-ui); font-size: var(--fs-10); font-weight: var(--fw-medium);
+  line-height: 1; color: var(--text-2); white-space: nowrap; vertical-align: middle;
+}
+.ax-badge--mono { font-family: var(--font-mono); font-feature-settings: var(--mono-settings); }
+.ax-badge--sm { height: 13px; padding: 0 5px; }
+.ax-badge--soft { background: var(--hover-ground); }
+.ax-badge--outline { border: 1px solid var(--border-control); }
+.ax-badge--solid { background: var(--control-primary-bg); color: var(--control-primary-ink); }
+
+.ax-badge[data-tone="success"] { color: var(--data-success); }
+.ax-badge[data-tone="warning"] { color: var(--data-warning); }
+.ax-badge[data-tone="danger"] { color: var(--data-danger); }
+.ax-badge--solid[data-tone="success"] { background: var(--data-success); color: #0c1a0f; }
+.ax-badge--solid[data-tone="warning"] { background: var(--data-warning); color: #1c1706; }
+.ax-badge--solid[data-tone="danger"] { background: var(--data-danger); color: #fff; }
+
+.ax-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.ax-badge-ic { display: inline-flex; flex: none; }
+.ax-badge-val { display: inline-block; }
+@media (prefers-reduced-motion: no-preference) {
+  .ax-badge-val--bump { animation: ax-badge-bump 200ms var(--ease-out); }
+  @keyframes ax-badge-bump { 0% { transform: scale(1); } 40% { transform: scale(1.24); } 100% { transform: scale(1); } }
+}

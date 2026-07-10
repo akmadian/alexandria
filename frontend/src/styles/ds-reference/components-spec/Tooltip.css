@@ -1,0 +1,13 @@
+/* Tooltip — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-tooltip-host { position: relative; display: inline-flex; }
+.ax-tooltip {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 3px 7px; border-radius: var(--r-2); z-index: var(--z-popover);
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+  font-family: var(--font-ui); font-size: var(--fs-11); color: var(--text-1);
+  pointer-events: none;
+}

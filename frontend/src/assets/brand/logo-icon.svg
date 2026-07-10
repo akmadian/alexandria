@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Alexandria">
+  <defs>
+    <linearGradient id="axbg" x1="32" y1="0" x2="32" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0b0b0d"></stop><stop offset="1" stop-color="#262630"></stop></linearGradient>
+    <linearGradient id="axwall" x1="32" y1="49.6" x2="32" y2="55.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#cbcbd4"></stop><stop offset="1" stop-color="#8e8e9b"></stop></linearGradient>
+    <linearGradient id="axglass" x1="32" y1="12" x2="32" y2="52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff"></stop><stop offset="1" stop-color="#c6c6d0"></stop></linearGradient>
+    <linearGradient id="axlamp" x1="29" y1="15" x2="35" y2="21" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffd76f"></stop><stop offset="0.5" stop-color="#ff9bd2"></stop><stop offset="1" stop-color="#b79bff"></stop></linearGradient>
+    <radialGradient id="axglow" cx="32" cy="18.25" r="11" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffc4e6" stop-opacity="0.6"></stop><stop offset="0.5" stop-color="#ffc4e6" stop-opacity="0.13"></stop><stop offset="1" stop-color="#ffc4e6" stop-opacity="0"></stop></radialGradient>
+    <linearGradient id="axbeam" x1="34.9" y1="18.3" x2="57.5" y2="10" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.85"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient>
+    <linearGradient id="axedge" x1="34.9" y1="15.7" x2="57.5" y2="5.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.95"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient>
+    <clipPath id="axclip"><rect x="0" y="0" width="64" height="64" rx="14.32" ry="14.32"></rect></clipPath>
+  </defs>
+  <g clip-path="url(#axclip)">
+    <rect x="0" y="0" width="64" height="64" fill="url(#axbg)"></rect>
+    <path d="M23.5 35 L40.5 35 L41 55 L23 55 Z" fill="url(#axglass)"></path>
+    <g stroke="#74747d" stroke-opacity="0.38" stroke-width="0.65" stroke-linecap="round"><path d="M27 36.5 L26.85 48.5"></path><path d="M30.35 36.5 L30.28 48.5"></path><path d="M33.65 36.5 L33.72 48.5"></path><path d="M37 36.5 L37.15 48.5"></path></g>
+    <rect x="22" y="33" width="20" height="2.2" rx="0.8" fill="url(#axglass)"></rect>
+    <path d="M27.7 22.5 L36.3 22.5 L36.5 33 L27.5 33 Z" fill="url(#axglass)"></path>
+    <g stroke="#74747d" stroke-opacity="0.38" stroke-width="0.6" stroke-linecap="round"><path d="M30.2 23.5 L30.15 32"></path><path d="M33.8 23.5 L33.85 32"></path></g>
+    <rect x="26.4" y="21" width="11.2" height="1.8" rx="0.7" fill="url(#axglass)"></rect>
+    <rect x="31.4" y="9.8" width="1.2" height="5.7" rx="0.6" fill="url(#axglass)"></rect>
+    <path d="M28.9 15.5 Q32 11.6 35.1 15.5 Z" fill="url(#axglass)"></path>
+    <circle cx="32" cy="9.2" r="1" fill="url(#axglass)"></circle>
+    <rect x="18.2" y="49.6" width="27.6" height="2" rx="0.7" fill="url(#axwall)"></rect>
+    <rect x="19" y="51.6" width="26" height="4.2" rx="1" fill="url(#axwall)"></rect>
+    <g fill="#33333c" fill-opacity="0.8"><path d="M21.5 55.8 L21.5 54.1 A1.5 1.5 0 0 1 24.5 54.1 L24.5 55.8 Z"></path><path d="M26 55.8 L26 54.1 A1.5 1.5 0 0 1 29 54.1 L29 55.8 Z"></path><path d="M30.5 55.8 L30.5 54.1 A1.5 1.5 0 0 1 33.5 54.1 L33.5 55.8 Z"></path><path d="M35 55.8 L35 54.1 A1.5 1.5 0 0 1 38 54.1 L38 55.8 Z"></path><path d="M39.5 55.8 L39.5 54.1 A1.5 1.5 0 0 1 42.5 54.1 L42.5 55.8 Z"></path></g>
+    <circle cx="32" cy="18.25" r="11" fill="url(#axglow)"></circle>
+    <rect x="29.25" y="15.5" width="5.5" height="5.5" rx="1.2" fill="url(#axlamp)"></rect>
+    <path d="M34.9 15.7 L57.5 5.5 L58 16.5 L34.9 20.9 Z" fill="url(#axbeam)"></path>
+    <path d="M34.9 15.6 L57.5 5.2" stroke="url(#axedge)" stroke-width="1.3" stroke-linecap="round"></path>
+    <path d="M34.9 18.3 L58 11.5" stroke="url(#axbeam)" stroke-width="0.9" stroke-linecap="round"></path>
+  </g>
+</svg>

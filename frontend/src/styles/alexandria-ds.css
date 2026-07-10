@@ -1,0 +1,670 @@
+/* ============================================================
+   Alexandria Design System — distributable build (GENERATED).
+   Do not edit. Regenerated from the DS source on each release.
+   One import gives the full visual foundation: @font-face + the
+   complete token layer (themeable via [data-theme] / [data-material]).
+   ============================================================ */
+
+/* ===== fonts (@font-face) ===== */
+/* Alexandria — webfonts (local, fully offline).
+   All four faces are bundled in this folder and declared via @font-face — no
+   network dependency. Geist Sans/Mono are the variable woff2 (full weight axis);
+   Geist Pixel is the sanctioned pixel/display accent; Instrument Serif
+   (--font-display: wordmark, splash, about, dev-corner) ships as regular + italic. */
+
+@font-face {
+  font-family: "Geist";
+  src: url("./fonts/Geist.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Pixel";
+  src: url("./fonts/GeistPixel.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./fonts/InstrumentSerif-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./fonts/InstrumentSerif-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ===== tokens/primitives.css ===== */
+/* Alexandria — primitives. Raw values only; components never read these directly.
+   Neutral ramp is keyed by approximate L* (CIELAB lightness). --n-50 is the
+   photographic middle grey and is BINDING (#777777). */
+:root {
+  /* Neutral ramp (L* keyed) */
+  --n-02: #060606;
+  --n-05: #0e0e0e;
+  --n-08: #141414;
+  --n-12: #1d1d1d;
+  --n-16: #262626;
+  --n-20: #2f2f2f;
+  --n-24: #383838;
+  --n-28: #424242;
+  --n-32: #4b4b4b;
+  --n-35: #515151;
+  --n-38: #565656;
+  --n-42: #616161;
+  --n-46: #6c6c6c;
+  --n-50: #777777; /* binding: photographic middle grey, L* = 50 */
+  --n-58: #8c8c8c;
+  --n-65: #9e9e9e;
+  --n-72: #b1b1b1;
+  --n-80: #c6c6c6;
+  --n-88: #dcdcdc;
+  --n-94: #eeeeee;
+  --n-98: #fafafa;
+
+  /* Paper primitives (light theme register: paper-and-ink) */
+  --paper-1: #f1efe9;
+  --paper-2: #e8e5dd;
+  --paper-3: #dedad0;
+  --ink-1: #1c1b18;
+  --ink-2: #4d4b45;
+  --ink-3: #807d74;
+
+  /* Data colors — user data only, IDENTICAL across themes. Never in chrome. */
+  --label-red: #e5484d;
+  --label-orange: #ee7d2e;
+  --label-yellow: #e7c116;
+  --label-green: #46a758;
+  --label-blue: #3e8fdd;
+  --label-purple: #8e6ade;
+
+  --data-danger: #e5484d;
+  --data-success: #46a758;
+  --data-warning: #e7c116;
+
+  /* Sanctioned gradient palette (§8 moments only — never decorative) */
+  --prism-a: #ff9bd2;
+  --prism-b: #ffd76f;
+  --prism-c: #8ee3ff;
+  --prism-d: #b79bff;
+}
+
+/* ===== tokens/semantic.css ===== */
+/* Alexandria — semantic layer. Components consume ONLY these.
+   :root = Middle theme (default, first-class). Themes override this layer.
+
+   Accent contract: --accent is UNSET by default. Every state that may be
+   tinted reads var(--accent, <neutral fallback>). No state may DEPEND on it. */
+:root {
+  /* Surfaces. Canvas is constant across themes (hard rule). */
+  --canvas: var(--n-50);            /* grid backdrop, loupe surround */
+  --panel: var(--n-42);             /* sidebars, inspector, status bar (lifted per design review; brief suggested L*32–38) */
+  --panel-raised: var(--n-46);      /* hover rows, raised strips */
+  --panel-sunken: var(--n-35);      /* wells, input grounds */
+  --lightsout: #0a0a0a;             /* cull / loupe lights-out surface */
+
+  /* Text (lives on panels, never on canvas) */
+  --text-1: #f0f0f0;
+  --text-2: #b9b9b9;
+  --text-3: #8f8f8f;
+  --text-disabled: #6f6f6f;
+  --text-invert: #161616;           /* text on inverted/selected grounds */
+
+  /* Borders & structure (flat construction: lightness steps + borders) */
+  --border-strong: #343434;         /* pane seams */
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-control: rgba(255, 255, 255, 0.16);
+
+  /* Selection system (§6) — neutral by construction, accent-tintable */
+  --select-ground: var(--accent, #d9d9d9);  /* selected cell pad: inversion */
+  --select-ink: #161616;                     /* badges/text on selection */
+  --cursor-ring: #fafafa;                    /* cursor is NEVER accent-tinted */
+  --hover-ground: rgba(255, 255, 255, 0.12); /* grid-cell hover lift */
+  --focus-ring: var(--text-2);               /* chrome keyboard focus (dotted) */
+
+  /* Controls */
+  --control-bg: var(--n-46);
+  --control-bg-hover: var(--n-50);
+  --control-bg-active: var(--n-38);
+  --control-primary-bg: #e4e4e4;    /* primary = inversion, not hue */
+  --control-primary-ink: #161616;
+  --control-primary-bg-hover: #f2f2f2;
+
+  /* Transient layer material (blur is transient-only; persistent chrome opaque) */
+  --scrim: rgba(10, 10, 10, 0.45);
+  --glass-bg: rgba(38, 38, 38, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-blur: 18px; /* @kind other */
+
+  /* Cardified-chrome layout tokens. No-ops in flat (chrome tiles edge to edge);
+     the glass material turns these on to float panels as cards on a flat base
+     substrate (--app-bg), with breathing room, radius and a soft lift. */
+  --app-bg: var(--panel);          /* substrate behind cards; = panel when not cardified */
+  --layout-pad: 0px;               /* padding around the whole card layout */
+  --layout-gap: 0px;               /* gap between cards */
+  --card-radius: 0px;              /* card corner radius */
+  --card-float: none; /* @kind other */  /* card rim + lift shadow (drawn via box-shadow) */
+  --seam: var(--chrome-hairline);  /* edge divider color; transparent once cards float */
+  --titlebar-bg: var(--panel);     /* app header fill; transparent when it blends into base */
+
+  /* Chrome material: flat by default (persistent chrome opaque, per hard rule).
+     Glass mode (opt-in, [data-material="glass"]) swaps this in. */
+  --chrome-backdrop: none; /* @kind other */
+  --chrome-hairline: var(--border-strong);
+  /* Glassy surface treatment (glass material only): a subtle top-lit sheen +
+     a hairline light edge. Reads "clean glass" without heavy blur. */
+  --chrome-sheen: none; /* @kind other */
+  --chrome-edge: none; /* @kind other */
+  /* Neumorphic structure (glass material only): raised emboss / inset deboss.
+     Flat mode = none, so flat construction stays shadowless per the hard rule. */
+  --emboss: none; /* @kind other */
+  --deboss: none; /* @kind other */
+
+  color-scheme: dark;
+}
+
+/* ===== tokens/themes.css ===== */
+/* Alexandria — theme overrides. Themes override the SEMANTIC layer only.
+   Data colors (labels, danger/success/warning) are primitives and never
+   restyle per theme. Canvas stays photographic middle grey in every theme. */
+
+/* ---- Light theme (second-class): paper-and-ink register ---- */
+[data-theme="light"] {
+  --canvas: var(--n-50);
+  --panel: var(--paper-1);
+  --panel-raised: #f7f5f0;
+  --panel-sunken: var(--paper-2);
+  --lightsout: #0a0a0a;
+
+  --text-1: var(--ink-1);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --text-disabled: #a5a29a;
+  --text-invert: #f4f2ec;
+
+  --border-strong: #c9c5bb;
+  --border-subtle: rgba(28, 27, 24, 0.10);
+  --border-control: rgba(28, 27, 24, 0.22);
+
+  --select-ground: var(--accent, #2b2a27);   /* inversion flips: dark pad on paper */
+  --select-ink: #f4f2ec;
+  --cursor-ring: #131313;
+  --hover-ground: rgba(255, 255, 255, 0.22);
+  --focus-ring: var(--ink-2);
+
+  --control-bg: var(--paper-2);
+  --control-bg-hover: var(--paper-3);
+  --control-bg-active: #d3cfc4;
+  --control-primary-bg: #23221f;
+  --control-primary-ink: #f4f2ec;
+  --control-primary-bg-hover: #3a3833;
+
+  --scrim: rgba(28, 27, 24, 0.28);
+  --glass-bg: rgba(244, 242, 236, 0.78);
+  --glass-border: rgba(28, 27, 24, 0.12);
+
+  color-scheme: light;
+}
+
+/* ---- Dark theme (second-class): near-black, dim-room culling ---- */
+[data-theme="dark"] {
+  --canvas: var(--n-50);
+  --panel: #161616;
+  --panel-raised: var(--n-12);
+  --panel-sunken: var(--n-08);
+  --lightsout: #050505;
+
+  --text-1: #dcdcdc;
+  --text-2: #a3a3a3;
+  --text-3: #787878;
+  --text-disabled: #565656;
+  --text-invert: #111111;
+
+  --border-strong: #000000;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-control: rgba(255, 255, 255, 0.14);
+
+  --select-ground: var(--accent, #c9c9c9);
+  --select-ink: #111111;
+  --cursor-ring: #ececec;
+  --hover-ground: rgba(255, 255, 255, 0.10);
+  --focus-ring: var(--text-2);
+
+  --control-bg: var(--n-16);
+  --control-bg-hover: var(--n-20);
+  --control-bg-active: var(--n-08);
+  --control-primary-bg: #d6d6d6;
+  --control-primary-ink: #111111;
+  --control-primary-bg-hover: #eaeaea;
+
+  --scrim: rgba(0, 0, 0, 0.55);
+  --glass-bg: rgba(20, 20, 20, 0.74);
+  --glass-border: rgba(255, 255, 255, 0.10);
+
+  color-scheme: dark;
+}
+
+/* ===== tokens/material.css ===== */
+/* Alexandria — chrome material.
+
+   GLASS is now the PRIMARY design language and the default (no attribute
+   needed). It's a CARDIFIED system: a single flat substrate (--app-bg) runs
+   behind everything, and panels lift OFF it as soft cards — rounded
+   (--card-radius), separated by real breathing room (--layout-gap / --layout-pad)
+   and given depth by --card-float (a hairline top rim + perimeter ring + a soft
+   drop shadow), NOT by borders or blur. Edge seams disappear (--seam
+   transparent); the app header goes transparent (--titlebar-bg) and blends into
+   the base. Controls are soft, subtly-raised chips (emboss); wells sink
+   (deboss). Hierarchy by elevation, not lines.
+
+   Glass values live at :root (middle) and [data-theme="dark|light"] so they
+   apply with no opt-in. semantic.css / themes.css still hold the SHARED tokens
+   (text, selection, data colors) and the flat fallbacks these blocks override.
+
+   FLAT is the opt-out — <html data-material="flat">. Its reset blocks below
+   restore the plain tiled chrome: opaque ramp panels, edge seams, no lift, no
+   radius, no gaps. Higher specificity than the glass defaults, so it always
+   wins when present. */
+
+/* ============================================================================
+   GLASS DEFAULT — middle (graphite cards on a graphite base)
+   ============================================================================ */
+:root {
+  --app-bg: #56575b;                /* flat substrate the cards float on */
+  --canvas: #4e4f53;                /* grid well (a hair below the card) */
+
+  --panel: #64656a;                 /* card fill */
+  --panel-raised: #6f7075;          /* nested / hover card */
+  --panel-sunken: #4c4d51;          /* wells, input grounds */
+
+  --border-strong: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-control: rgba(255, 255, 255, 0.1);
+
+  --control-bg: #6f7075;            /* soft raised chip */
+  --control-bg-hover: #797a80;
+  --control-bg-active: #56575b;
+  --hover-ground: rgba(255, 255, 255, 0.08);
+
+  --chrome-backdrop: none; /* @kind other */
+  --chrome-hairline: transparent;  /* seams gone; cards separate by lift */
+  --chrome-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%); /* @kind other */
+  --chrome-edge: inset 0 1px 0 rgba(255, 255, 255, 0.14); /* @kind other */
+
+  --emboss: 0 1px 2px rgba(0, 0, 0, 0.28), 0 4px 10px -4px rgba(0, 0, 0, 0.4); /* @kind other */
+  --deboss: inset 0 1px 3px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(255, 255, 255, 0.04); /* @kind other */
+
+  --layout-pad: 11px;
+  --layout-gap: 9px;
+  --card-radius: 14px;
+  --titlebar-bg: transparent;
+  --seam: transparent;
+  --card-float: inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 34px -14px rgba(0, 0, 0, 0.45); /* @kind other */
+
+  --glass-bg: #6a6b70;
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: 0px; /* @kind other */
+}
+
+/* ============================================================================
+   GLASS DEFAULT — dark (soft dark cards on a near-black base) — primary look
+   ============================================================================ */
+[data-theme="dark"] {
+  --app-bg: #0c0d10;
+  --canvas: #121317;
+
+  --panel: #17191d;
+  --panel-raised: #202329;
+  --panel-sunken: #101115;
+
+  --border-strong: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-control: rgba(255, 255, 255, 0.08);
+
+  --control-bg: #202329;
+  --control-bg-hover: #262a31;
+  --control-bg-active: #16181c;
+  --hover-ground: rgba(255, 255, 255, 0.05);
+
+  --chrome-backdrop: none; /* @kind other */
+  --chrome-hairline: transparent;
+  --chrome-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 55%); /* @kind other */
+  --chrome-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08); /* @kind other */
+
+  --emboss: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px -4px rgba(0, 0, 0, 0.6); /* @kind other */
+  --deboss: inset 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.03); /* @kind other */
+
+  --layout-pad: 11px;
+  --layout-gap: 9px;
+  --card-radius: 14px;
+  --titlebar-bg: transparent;
+  --seam: transparent;
+  --card-float: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.5), 0 18px 38px -16px rgba(0, 0, 0, 0.7); /* @kind other */
+
+  --glass-bg: #1c1f24;
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-blur: 0px; /* @kind other */
+}
+
+/* ============================================================================
+   GLASS DEFAULT — light (soft light cards on a warm light base)
+   ============================================================================ */
+[data-theme="light"] {
+  --app-bg: #dbdad4;
+  --canvas: #d3d1cb;
+
+  --panel: #f3f2ee;
+  --panel-raised: #fbfaf7;
+  --panel-sunken: #e7e5df;
+
+  --border-strong: rgba(28, 27, 24, 0.1);
+  --border-subtle: rgba(28, 27, 24, 0.07);
+  --border-control: rgba(28, 27, 24, 0.11);
+
+  --control-bg: #fbfaf7;
+  --control-bg-hover: #ffffff;
+  --control-bg-active: #eceae4;
+  --hover-ground: rgba(255, 255, 255, 0.6);
+
+  --chrome-backdrop: none; /* @kind other */
+  --chrome-hairline: transparent;
+  --chrome-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 55%); /* @kind other */
+  --chrome-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9); /* @kind other */
+
+  --emboss: 0 1px 2px rgba(28, 27, 24, 0.08), 0 4px 10px -4px rgba(28, 27, 24, 0.14); /* @kind other */
+  --deboss: inset 0 1px 3px rgba(28, 27, 24, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.6); /* @kind other */
+
+  --layout-pad: 11px;
+  --layout-gap: 9px;
+  --card-radius: 14px;
+  --titlebar-bg: transparent;
+  --seam: transparent;
+  --card-float: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 0 0 1px rgba(28, 27, 24, 0.06), 0 1px 2px rgba(28, 27, 24, 0.06), 0 16px 32px -14px rgba(28, 27, 24, 0.2); /* @kind other */
+
+  --glass-bg: #f6f5f1;
+  --glass-border: rgba(28, 27, 24, 0.08);
+  --glass-blur: 0px; /* @kind other */
+}
+
+/* ============================================================================
+   OPTIONAL BASE TINT — [data-glass-scene="mono" | "aurora"]
+   Cards already carry the material; this only tints the flat SUBSTRATE behind
+   them. Off by default. Quiet — never busy.
+   ============================================================================ */
+[data-glass-scene="mono"] {
+  --app-bg: radial-gradient(135% 120% at 50% -12%, #63656a 0%, #56575b 60%, #4c4d51 100%); /* @kind other */
+}
+[data-glass-scene="aurora"] {
+  --app-bg: radial-gradient(46% 46% at 12% 6%, rgba(120, 150, 255, 0.16), transparent 66%), radial-gradient(44% 46% at 90% 14%, rgba(110, 200, 150, 0.13), transparent 66%), radial-gradient(56% 56% at 82% 106%, rgba(175, 140, 235, 0.16), transparent 70%), radial-gradient(135% 120% at 50% -12%, #5c5d62, #4e4f54 72%); /* @kind other */
+}
+[data-theme="dark"][data-glass-scene="mono"] {
+  --app-bg: radial-gradient(135% 120% at 50% -12%, #14161b 0%, #0c0d10 58%, #08090c 100%); /* @kind other */
+}
+[data-theme="dark"][data-glass-scene="aurora"] {
+  --app-bg: radial-gradient(46% 46% at 12% 6%, rgba(79, 124, 255, 0.15), transparent 66%), radial-gradient(44% 46% at 90% 14%, rgba(70, 167, 100, 0.12), transparent 66%), radial-gradient(56% 56% at 82% 106%, rgba(142, 106, 222, 0.16), transparent 70%), radial-gradient(135% 120% at 50% -12%, #12141a, #0a0b0e 72%); /* @kind other */
+}
+[data-theme="light"][data-glass-scene="mono"] {
+  --app-bg: radial-gradient(135% 120% at 50% -12%, #e6e4de 0%, #dbdad4 60%, #cfcdc6 100%); /* @kind other */
+}
+[data-theme="light"][data-glass-scene="aurora"] {
+  --app-bg: radial-gradient(46% 46% at 12% 6%, rgba(120, 150, 255, 0.14), transparent 66%), radial-gradient(44% 46% at 90% 14%, rgba(80, 190, 130, 0.11), transparent 66%), radial-gradient(56% 56% at 82% 106%, rgba(170, 140, 235, 0.14), transparent 70%), radial-gradient(135% 120% at 50% -12%, #e0ded8, #d2d0ca 72%); /* @kind other */
+}
+
+/* ============================================================================
+   FLAT OPT-OUT — <html data-material="flat">
+   Restores the plain tiled chrome. Higher specificity than the glass defaults.
+   ============================================================================ */
+[data-material="flat"] {
+  --app-bg: var(--panel);
+  --canvas: var(--n-50);
+  --panel: var(--n-42);
+  --panel-raised: var(--n-46);
+  --panel-sunken: var(--n-35);
+
+  --border-strong: #343434;
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-control: rgba(255, 255, 255, 0.16);
+
+  --control-bg: var(--n-46);
+  --control-bg-hover: var(--n-50);
+  --control-bg-active: var(--n-38);
+  --hover-ground: rgba(255, 255, 255, 0.12);
+
+  --chrome-backdrop: none; /* @kind other */
+  --chrome-hairline: var(--border-strong);
+  --chrome-sheen: none; /* @kind other */
+  --chrome-edge: none; /* @kind other */
+  --emboss: none; /* @kind other */
+  --deboss: none; /* @kind other */
+
+  --layout-pad: 0px;
+  --layout-gap: 0px;
+  --card-radius: 0px;
+  --card-float: none; /* @kind other */
+  --seam: var(--chrome-hairline);
+  --titlebar-bg: var(--panel);
+
+  --glass-bg: rgba(38, 38, 38, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-blur: 18px; /* @kind other */
+}
+
+[data-theme="dark"][data-material="flat"] {
+  --app-bg: var(--panel);
+  --canvas: var(--n-50);
+  --panel: #161616;
+  --panel-raised: var(--n-12);
+  --panel-sunken: var(--n-08);
+
+  --border-strong: #000000;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-control: rgba(255, 255, 255, 0.14);
+
+  --control-bg: var(--n-16);
+  --control-bg-hover: var(--n-20);
+  --control-bg-active: var(--n-08);
+  --hover-ground: rgba(255, 255, 255, 0.1);
+
+  --chrome-hairline: var(--border-strong);
+  --chrome-sheen: none; /* @kind other */
+  --chrome-edge: none; /* @kind other */
+  --emboss: none; /* @kind other */
+  --deboss: none; /* @kind other */
+
+  --layout-pad: 0px;
+  --layout-gap: 0px;
+  --card-radius: 0px;
+  --card-float: none; /* @kind other */
+  --seam: var(--chrome-hairline);
+  --titlebar-bg: var(--panel);
+
+  --glass-bg: rgba(20, 20, 20, 0.74);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"][data-material="flat"] {
+  --app-bg: var(--panel);
+  --canvas: var(--n-50);
+  --panel: var(--paper-1);
+  --panel-raised: #f7f5f0;
+  --panel-sunken: var(--paper-2);
+
+  --border-strong: #c9c5bb;
+  --border-subtle: rgba(28, 27, 24, 0.1);
+  --border-control: rgba(28, 27, 24, 0.22);
+
+  --control-bg: var(--paper-2);
+  --control-bg-hover: var(--paper-3);
+  --control-bg-active: #d3cfc4;
+  --hover-ground: rgba(255, 255, 255, 0.22);
+
+  --chrome-hairline: var(--border-strong);
+  --chrome-sheen: none; /* @kind other */
+  --chrome-edge: none; /* @kind other */
+  --emboss: none; /* @kind other */
+  --deboss: none; /* @kind other */
+
+  --layout-pad: 0px;
+  --layout-gap: 0px;
+  --card-radius: 0px;
+  --card-float: none; /* @kind other */
+  --seam: var(--chrome-hairline);
+  --titlebar-bg: var(--panel);
+
+  --glass-bg: rgba(244, 242, 236, 0.78);
+  --glass-border: rgba(28, 27, 24, 0.12);
+}
+
+/* ===== tokens/typography.css ===== */
+/* Alexandria — typography. Compact ceiling is binding (11–13px body).
+   Geist Sans = UI face · Geist Mono = data face (all values, counts,
+   file names, telemetry) · pixel face = sanctioned display accent, sparing. */
+:root {
+  --font-ui: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-pixel: "Geist Pixel", "Geist Mono", monospace; /* real Geist Pixel, bundled locally */
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif; /* sanctioned serif display — wordmark, splash, about, dev-corner only */
+
+  /* Compact scale */
+  --fs-10: 10px;  /* mono micro-telemetry only */
+  --fs-11: 11px;  /* dense data rows, status bar, badges */
+  --fs-12: 12px;  /* default body / controls */
+  --fs-13: 13px;  /* primary body, list rows */
+  --fs-15: 15px;  /* pane headers, task-view titles */
+  --fs-18: 18px;  /* task-view display, first-run */
+
+  --lh-tight: 1.25; /* @kind other */
+  --lh-body: 1.45; /* @kind other */
+
+  --fw-regular: 400; /* @kind other */
+  --fw-medium: 500; /* @kind other */
+  --fw-semibold: 600; /* @kind other */
+
+  /* Section-label voice: small caps + tracking */
+  --tracking-label: 0.08em; /* @kind other */
+  --tracking-wide: 0.14em; /* @kind other */
+
+  /* Mono digits tick in place: keep tabular everywhere data lives */
+  --mono-settings: "tnum" 1, "zero" 1; /* @kind other */
+}
+
+/* ===== tokens/spacing.css ===== */
+/* Alexandria — spacing, radii, borders, z. Density is compact (hard rule). */
+:root {
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 20px;
+  --sp-8: 24px;
+  --sp-9: 32px;
+
+  /* Radii: softened per design review (Claude-panel inspo) — rounder, more
+     polished than the original hard technical edges. Pills for tokens/chips. */
+  --r-1: 7px;
+  --r-2: 11px;
+  --r-3: 15px;
+  --r-pill: 999px;
+
+  --bw-1: 1px;
+  --bw-cursor: 2px; /* cursor ring width */
+
+  /* Component metrics (a touch more breathing room in the polish pass) */
+  --control-h: 26px;       /* buttons, inputs, segmented controls */
+  --control-h-lg: 30px;    /* task-view primary actions */
+  --row-h: 26px;           /* tree rows, list rows */
+  --filterbar-h: 38px;
+  --statusbar-h: 26px;
+  --titlebar-h: 38px;
+
+  --z-chrome: 10; /* @kind other */
+  --z-popover: 40; /* @kind other */
+  --z-modal: 60; /* @kind other */
+  --z-palette: 70; /* @kind other */
+  --z-toast: 80; /* @kind other */
+  --z-moment: 90; /* @kind other */ /* sanctioned gradient moments */
+}
+
+/* ===== tokens/motion.css ===== */
+/* Alexandria — motion. Ambient and evidentiary: motion reports state,
+   never garnishes. Fast, interruptible. */
+:root {
+  --t-instant: 60ms; /* @kind other */   /* hover reveals, press feedback */
+  --t-fast: 100ms; /* @kind other */     /* ambient layer default: ticks, swaps, morphs */
+  --t-move: 160ms; /* @kind other */     /* panes, popovers, drawers */
+  --t-moment: 420ms; /* @kind other */   /* sanctioned moments only (cull overlay, import done) */
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1); /* @kind other */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+
+  /* Dither/dissolve is the native transition for glyphs & empty states —
+     implemented as stepped opacity, not fades. */
+  --dither-steps: steps(4, end); /* @kind other */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-instant: 0ms; /* @kind other */
+    --t-fast: 0ms; /* @kind other */
+    --t-move: 0ms; /* @kind other */
+    --t-moment: 0ms; /* @kind other */
+  }
+}
+
+/* ===== tokens/base.css ===== */
+/* Alexandria — base element rules + shared utility voices. */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+  line-height: var(--lh-body);
+  color: var(--text-1);
+  background: var(--panel);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--text-1); text-decoration-color: var(--text-3); }
+a:hover { color: var(--text-1); text-decoration-color: var(--text-1); }
+
+code, kbd, samp,
+.ax-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: var(--mono-settings);
+}
+
+/* Section-label voice: small caps + tracking */
+.ax-section-label {
+  font-family: var(--font-ui);
+  font-size: var(--fs-11);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* Chrome keyboard focus: neutral, dotted — visually distinct from selection */
+.ax-focusable:focus-visible {
+  outline: 1px dotted var(--focus-ring);
+  outline-offset: 1px;
+}
+
+::selection { background: var(--select-ground); color: var(--select-ink); }
+

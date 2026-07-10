@@ -1,0 +1,23 @@
+/* FilterBar — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-filterbar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+  height: var(--filterbar-h); padding: 0 10px;
+  background: var(--panel); border-bottom: 1px solid var(--chrome-hairline);
+  backdrop-filter: var(--chrome-backdrop); -webkit-backdrop-filter: var(--chrome-backdrop);
+  overflow-x: auto; scrollbar-width: none;
+}
+.ax-filterbar::-webkit-scrollbar { display: none; }
+.ax-filterbar-input {
+  all: unset; flex: 1; min-width: 90px;
+  font-family: var(--font-ui); font-size: var(--fs-12); color: var(--text-1);
+}
+.ax-filterbar-input::placeholder { color: var(--text-3); }
+.ax-filterbar-save {
+  all: unset; display: inline-flex; align-items: center; gap: 5px; flex: none;
+  height: 20px; padding: 0 8px; border-radius: var(--r-pill); cursor: pointer;
+  font-family: var(--font-ui); font-size: var(--fs-11); color: var(--text-3);
+  border: 1px dashed var(--border-control);
+}
+.ax-filterbar-save:hover { color: var(--text-1); border-style: solid; background: var(--hover-ground); }

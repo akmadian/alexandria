@@ -1,0 +1,26 @@
+/* Banner — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-banner {
+  position: relative; display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px 10px 13px; border: 1px solid var(--border-subtle); border-radius: var(--r-2);
+  background: var(--panel-raised); overflow: hidden; font-family: var(--font-ui);
+}
+.ax-banner::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--ax-accent); }
+.ax-banner-ic { flex: none; margin-top: 0.5px; color: var(--ax-accent); }
+.ax-banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ax-banner-title { font-size: var(--fs-12); font-weight: var(--fw-medium); color: var(--text-1); }
+.ax-banner-msg { font-size: var(--fs-11); color: var(--text-2); line-height: 1.45; }
+.ax-banner-msg .mono, .ax-banner-mono { font-family: var(--font-mono); font-feature-settings: var(--mono-settings); color: var(--text-1); }
+.ax-banner-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-top: 1px; }
+.ax-banner-x {
+  all: unset; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: var(--r-1); color: var(--text-3); cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out);
+}
+.ax-banner-x:hover { background: var(--hover-ground); color: var(--text-1); }
+.ax-banner-x:focus-visible { outline: 1px dotted var(--focus-ring); outline-offset: 1px; }
+@media (prefers-reduced-motion: no-preference) {
+  .ax-banner { animation: ax-banner-in 160ms var(--ease-out) both; }
+  @keyframes ax-banner-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+}

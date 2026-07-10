@@ -1,0 +1,23 @@
+/* StatusBar — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-statusbar {
+  display: flex; align-items: center; gap: 16px;
+  height: var(--statusbar-h); padding: 0 10px;
+  background: var(--panel); border-top: 1px solid var(--chrome-hairline);
+  backdrop-filter: var(--chrome-backdrop); -webkit-backdrop-filter: var(--chrome-backdrop);
+  font-family: var(--font-ui); font-size: var(--fs-11); color: var(--text-2);
+  user-select: none;
+}
+.ax-statusbar-query { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ax-statusbar-scope { margin: 0 auto; color: var(--text-1); font-weight: var(--fw-medium); white-space: nowrap; }
+.ax-statusbar-tele {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono); font-feature-settings: var(--mono-settings);
+  font-size: var(--fs-10); color: var(--text-3); white-space: nowrap; cursor: pointer;
+}
+.ax-statusbar-tele:hover { color: var(--text-1); }
+.ax-heartbeat { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--data-success); }
+.ax-heartbeat[data-live="true"] { animation: ax-beat 2.4s var(--ease-in-out) infinite; }
+@keyframes ax-beat { 0%, 88%, 100% { opacity: 0.35; } 6% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ax-heartbeat[data-live="true"] { animation: none; opacity: 1; } }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Alexandria">
+  <g fill="currentColor">
+    <rect x="4.6" y="19.4" width="14.8" height="3.1" rx="1"></rect>
+    <path d="M8 19.4 L16 19.4 L15 12 L9 12 Z"></path>
+    <rect x="8" y="10.8" width="8" height="1.7" rx="0.6"></rect>
+    <path d="M9.4 10.8 L14.6 10.8 L14 6.4 L10 6.4 Z"></path>
+    <rect x="9.3" y="5.4" width="5.4" height="1.5" rx="0.5"></rect>
+    <rect x="10" y="2.5" width="4" height="3.3" rx="0.7"></rect>
+    <path d="M9.5 2.8 L14.5 2.8 L12 0.5 Z"></path>
+  </g>
+</svg>

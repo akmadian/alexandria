@@ -1,0 +1,26 @@
+/* Pill — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-pill2 {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px;
+  padding: 0 9px; flex: none; max-width: 100%;
+  font-family: var(--font-ui); font-size: var(--fs-11);
+  color: var(--text-1); background: var(--control-bg);
+  border: 1px solid var(--border-control); border-radius: var(--r-pill);
+  box-shadow: var(--chrome-edge), var(--emboss);
+  cursor: default; user-select: none; white-space: nowrap;
+  transition: background var(--t-instant) var(--ease-out);
+}
+.ax-pill2[data-interactive="true"] { cursor: pointer; }
+.ax-pill2[data-interactive="true"]:hover { background: var(--control-bg-hover); }
+.ax-pill2[data-active="true"] { border-color: var(--focus-ring); background: var(--control-bg-hover); }
+.ax-pill2[data-invalid="true"] { border-color: var(--data-danger); color: var(--data-danger); }
+.ax-pill2[data-size="sm"] { height: 18px; padding: 0 7px; font-size: var(--fs-10); }
+.ax-pill2-lead { display: inline-flex; align-items: center; color: var(--text-3); flex: none; }
+.ax-pill2-body { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ax-pill2-x {
+  all: unset; display: inline-flex; align-items: center; justify-content: center;
+  margin-right: -3px; padding: 2px; border-radius: var(--r-pill);
+  color: var(--text-3); cursor: pointer; flex: none;
+}
+.ax-pill2-x:hover { color: var(--text-1); background: var(--hover-ground); }

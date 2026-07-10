@@ -1,0 +1,28 @@
+/* Tree — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-tree { display: grid; align-content: start; font-family: var(--font-ui); font-size: var(--fs-12); }
+.ax-tree-row {
+  display: flex; align-items: center; gap: 6px; height: var(--row-h);
+  padding: 0 8px; color: var(--text-2); cursor: default; user-select: none;
+  border-radius: var(--r-1); margin: 0 4px;
+}
+.ax-tree-row:hover { background: var(--hover-ground); color: var(--text-1); }
+.ax-tree-row[data-selected="true"] { background: var(--control-bg-hover); color: var(--text-1); }
+.ax-tree-row[data-drop="true"] { box-shadow: inset 0 0 0 1px var(--cursor-ring); }
+.ax-tree-row[data-offline="true"] { color: var(--text-disabled); }
+.ax-tree-disclosure {
+  all: unset; display: inline-flex; width: 12px; justify-content: center;
+  color: var(--text-3); cursor: pointer; flex: none;
+}
+.ax-tree-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.ax-tree-count {
+  font-family: var(--font-mono); font-feature-settings: var(--mono-settings);
+  font-size: var(--fs-10); color: var(--text-3); flex: none;
+}
+.ax-tree-badge {
+  display: inline-flex; align-items: center; gap: 3px; flex: none;
+  font-family: var(--font-mono); font-size: var(--fs-10); line-height: 1;
+  padding: 2px 5px; border-radius: var(--r-pill);
+  background: var(--panel-sunken); color: var(--text-2);
+}

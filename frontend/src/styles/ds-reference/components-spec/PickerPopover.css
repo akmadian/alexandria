@@ -1,0 +1,48 @@
+/* PickerPopover — component styles. Consumes design tokens from tokens/*.css.
+   Behavior lives in the React component / your React Aria layer; this file is look only. */
+
+.ax-pick { width: 236px; display: grid; }
+.ax-pick-search {
+  display: flex; align-items: center; gap: 7px; padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle); color: var(--text-3);
+}
+.ax-pick-search input { all: unset; flex: 1; font-size: var(--fs-12); color: var(--text-1); min-width: 0; }
+.ax-pick-search input::placeholder { color: var(--text-3); }
+.ax-pick-list { max-height: 288px; overflow-y: auto; padding: 4px; display: grid; align-content: start; }
+.ax-pick-foot {
+  display: flex; align-items: center; gap: 14px; padding: 6px 10px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--fs-10); color: var(--text-3);
+}
+.ax-pick-foot span { display: inline-flex; align-items: center; gap: 5px; }
+
+.ax-pick-row {
+  display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 7px;
+  border-radius: var(--r-1); font-size: var(--fs-12); color: var(--text-1);
+  cursor: default; user-select: none;
+}
+.ax-pick-row:hover { background: var(--hover-ground); }
+.ax-pick-row[data-active="true"] { background: var(--hover-ground); }
+.ax-pick-row[data-muted="true"] .ax-pick-label { color: var(--text-3); }
+.ax-pick-row[data-strike="true"] .ax-pick-label { text-decoration: line-through; color: var(--text-3); }
+.ax-pick-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.ax-pick-label > span.txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ax-pick-count { font-family: var(--font-mono); font-feature-settings: var(--mono-settings); font-size: var(--fs-10); color: var(--text-3); flex: none; }
+.ax-pick-handle { color: var(--text-3); flex: none; display: inline-flex; cursor: grab; }
+.ax-pick-lead { flex: none; display: inline-flex; align-items: center; }
+.ax-pick-trail { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+
+.ax-pick-check {
+  width: 15px; height: 15px; border-radius: 5px; flex: none;
+  border: 1px solid var(--border-control); background: var(--panel-sunken);
+  display: grid; place-items: center; color: var(--text-1);
+}
+.ax-pick-row[data-check="include"] .ax-pick-check { background: var(--control-primary-bg); color: var(--control-primary-ink); border-color: transparent; }
+.ax-pick-row[data-check="exclude"] .ax-pick-check { color: var(--data-danger); border-color: var(--data-danger); }
+
+.ax-pin {
+  all: unset; display: inline-grid; place-items: center; width: 20px; height: 20px;
+  border-radius: var(--r-1); color: var(--text-3); cursor: pointer;
+}
+.ax-pin:hover { background: var(--hover-ground); color: var(--text-1); }
+.ax-pin[data-pinned="true"] { color: var(--text-1); }
