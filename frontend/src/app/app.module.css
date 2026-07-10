@@ -1,0 +1,42 @@
+/* Three-row desktop shell. Header and status are chrome (opaque --panel, seamed
+ * with --border-strong); the main region is the --canvas well the grid sits on. */
+.shell {
+    height: 100%;
+    display: grid;
+    grid-template-rows: var(--titlebar-h) 1fr var(--statusbar-h);
+    background: var(--panel);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+    padding: 0 var(--sp-5);
+    border-bottom: 1px solid var(--border-strong);
+}
+
+.title {
+    font-family: var(--font-ui);
+    font-size: var(--fs-13);
+    font-weight: var(--fw-semibold);
+    color: var(--text-1);
+}
+
+.main {
+    min-height: 0;
+    background: var(--canvas);
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    padding: 0 var(--sp-5);
+    border-top: 1px solid var(--border-strong);
+}
+
+.metric {
+    font-family: var(--font-mono);
+    font-feature-settings: var(--mono-settings);
+    font-size: var(--fs-11);
+    color: var(--text-2);
+}

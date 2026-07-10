@@ -1,151 +1,288 @@
-// Mock seed data + format helpers. The domain shapes live in ./models.ts; this
-// file is only the fake catalog the UI runs against until the backend binds.
-// ponytail: static mock; swap for the Wails-bound catalog API when it exists.
+// The mock backend — a faithful `AlexandriaAPI` implementation with an in-memory
+// AST query engine. `evaluate` is the SQL stand-in: it runs the same WhereNode
+// tree the real compiler will, so filter / sort / paging genuinely work and the
+// UI develops against real query behavior with no Wails, no Go. When the Wails
+// adapter binds, the contract is unchanged — this file is simply not selected in
+// ./client.ts.
 
-import type { Asset, Collection, ColorLabel, FileStatus, FileType, Flag, Source, Tag } from "../models/index.ts";
+import type { ColorLabel, FileStatus, FileType, Flag } from "@/_generated-types/enums";
+import type { TokenField } from "@/_generated-types/vocabulary";
+import type { Arrangement, Leaf, Query, WhereNode } from "@/query-model/ast";
+import { isLeaf } from "@/query-model/ast";
+import type { AlexandriaAPI, AssetQueryResult, AssetRow } from "./contract";
 
-export const sources: Source[] = [
-    { id: "src-main", name: "Main SSD", kind: "local", status: "active", count: 18 },
-    { id: "src-photos", name: "Photo Archive", kind: "external_drive", status: "active", count: 6 },
-    { id: "src-nas", name: "Studio NAS", kind: "smb", status: "offline", count: 0 },
-];
-
-export const collections: Collection[] = [
-    { id: "col-portfolio", name: "Portfolio 2026", kind: "manual", count: 12 },
-    { id: "col-clients", name: "Client Delivery", kind: "manual", count: 8 },
-    { id: "col-5star", name: "Five Star Picks", kind: "smart", count: 5 },
-    { id: "col-untagged", name: "Needs Tagging", kind: "smart", count: 7 },
-];
-
-export const tags: Tag[] = [
-    { id: "t-landscape", name: "Landscape", color: "green", count: 9 },
-    { id: "t-portrait", name: "Portrait", color: "purple", count: 6 },
-    { id: "t-street", name: "Street", color: "orange", count: 5 },
-    { id: "t-clientwork", name: "Client Work", color: "blue", count: 8 },
-    { id: "t-archive", name: "Archive", color: "red", count: 4 },
-];
-
-const cameras: [string, string, string][] = [
-    ["Sony", "α7 IV", "FE 24-70mm F2.8 GM II"],
-    ["Canon", "EOS R5", "RF 50mm F1.2 L"],
-    ["Nikon", "Z8", "NIKKOR Z 70-200mm f/2.8"],
-    ["Fujifilm", "X-T5", "XF 35mm F1.4 R"],
-    ["Leica", "Q3", "Summilux 28mm f/1.7"],
-];
-
-const shots: { name: string; type: FileType; loc?: string; w: number; h: number }[] = [
-    { name: "Golden hour ridge", type: "raw", loc: "Dolomites, IT", w: 6000, h: 4000 },
-    { name: "Studio headshot — Mara", type: "raw", loc: "Studio A", w: 4000, h: 6000 },
-    { name: "Neon crosswalk", type: "image", loc: "Shibuya, JP", w: 6000, h: 4000 },
-    { name: "Coastal fog", type: "image", loc: "Big Sur, US", w: 6000, h: 4000 },
-    { name: "Product — ceramic mug", type: "image", loc: "Studio B", w: 5000, h: 5000 },
-    { name: "Forest path", type: "raw", loc: "Black Forest, DE", w: 6000, h: 4000 },
-    { name: "Rooftop portrait", type: "image", loc: "Brooklyn, US", w: 4000, h: 6000 },
-    { name: "Desert dunes", type: "raw", loc: "Merzouga, MA", w: 6000, h: 4000 },
-    { name: "Campaign cut v3", type: "video", loc: "Studio A", w: 3840, h: 2160 },
-    { name: "Market vendor", type: "image", loc: "Marrakech, MA", w: 6000, h: 4000 },
-    { name: "Mountain lake", type: "raw", loc: "Banff, CA", w: 6000, h: 4000 },
-    { name: "Editorial — knitwear", type: "image", loc: "Loft 5", w: 4000, h: 6000 },
-    { name: "Rain on glass", type: "image", loc: "London, UK", w: 6000, h: 4000 },
-    { name: "Vineyard rows", type: "raw", loc: "Tuscany, IT", w: 6000, h: 4000 },
-    { name: "Skater midair", type: "image", loc: "Venice Beach, US", w: 6000, h: 4000 },
-    { name: "Brand logo lockup", type: "vector", w: 2400, h: 2400 },
-    { name: "Snow peak alpenglow", type: "raw", loc: "Chamonix, FR", w: 6000, h: 4000 },
-    { name: "Cafe window seat", type: "image", loc: "Paris, FR", w: 6000, h: 4000 },
-    { name: "Behind the scenes", type: "video", loc: "Studio A", w: 3840, h: 2160 },
-    { name: "Wildflower macro", type: "image", loc: "Provence, FR", w: 6000, h: 4000 },
-    { name: "Old town alley", type: "image", loc: "Lisbon, PT", w: 4000, h: 6000 },
-    { name: "Tide pools", type: "raw", loc: "Oregon Coast, US", w: 6000, h: 4000 },
-    { name: "Concert crowd", type: "image", loc: "Berlin, DE", w: 6000, h: 4000 },
-    { name: "Contract & brief", type: "document", w: 1700, h: 2200 },
-];
-
-const labels: (ColorLabel | null)[] = ["red", "yellow", "green", "blue", "purple", null, null, null];
-const flags: Flag[] = ["pick", null, null, "pick", "reject", null, "pick", null];
-const extFor: Record<FileType, string> = {
-    raw: "ARW", image: "JPG", video: "MP4", vector: "SVG", document: "PDF", audio: "WAV",
-};
-
-// Folder buckets per source, so the derived filesystem tree has real structure to show.
-const foldersBySource: Record<string, string[]> = {
-    "src-main": ["2026/06/Dolomites", "2026/06/Studio", "2026/05/Japan", "Clients/Acme", "Personal/Travel"],
-    "src-photos": ["Archive/2025/Landscapes", "Archive/2025/Portraits", "Archive/2024"],
-};
-
-export const assets: Asset[] = shots.map((s, i) => {
-    const [make, model, lens] = cameras[i % cameras.length];
-    const hasExif = s.type === "raw" || s.type === "image";
-    const day = String((i % 27) + 1).padStart(2, "0");
-    const status: FileStatus = i % 11 === 0 ? "offline" : "online";
-    const sourceId = i < 18 ? "src-main" : "src-photos";
-    const filename = `${s.name.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "")}.${extFor[s.type].toLowerCase()}`;
-    const folders = foldersBySource[sourceId];
-    const ingestedAt = `2026-06-${String((i % 27) + 1).padStart(2, "0")}T09:${String((i * 13) % 60).padStart(2, "0")}:00Z`;
-    return {
-        id: `asset-${String(i + 1).padStart(3, "0")}`,
-        sourceId,
-        relativePath: `${folders[i % folders.length]}/${filename}`,
-        filename,
-        extension: extFor[s.type],
-        fileType: s.type,
-        fileStatus: status,
-        sizeBytes: (s.type === "raw" ? 42 : s.type === "video" ? 380 : 8) * 1024 * 1024 + i * 111111,
-        width: s.w,
-        height: s.h,
-        durationSecs: s.type === "video" ? 8 + (i % 5) * 6.5 : undefined,
-        capturedAt: `2026-0${(i % 6) + 1}-${day}T${String(8 + (i % 10)).padStart(2, "0")}:${String((i * 7) % 60).padStart(2, "0")}:00Z`,
-        cameraMake: hasExif ? make : undefined,
-        cameraModel: hasExif ? model : undefined,
-        lensModel: hasExif ? lens : undefined,
-        focalLengthMM: hasExif ? [24, 35, 50, 85, 135, 200][i % 6] : undefined,
-        aperture: hasExif ? [1.4, 1.8, 2.8, 4, 5.6, 8][i % 6] : undefined,
-        shutterSpeed: hasExif ? ["1/1000", "1/500", "1/250", "1/125", "1/60"][i % 5] : undefined,
-        iso: hasExif ? [100, 200, 400, 800, 1600][i % 5] : undefined,
-        location: s.loc,
-        creator: "Ari Madian",
-        rating: [5, 4, 3, 0, 5, 2, 4, 0][i % 8],
-        colorLabel: labels[i % labels.length],
-        flag: flags[i % flags.length],
-        note: i % 4 === 0 ? "Flagged for portfolio review." : null,
-        tagIds: tags.filter((_, ti) => (i + ti) % 3 === 0).map((t) => t.id).slice(0, 3),
-        ingestedAt,
-        thumbnailAt: ingestedAt,
-    };
-});
-
-// Thumbnail URL — picsum seeded by id, aspect from the asset dimensions.
-export function thumbUrl(a: Asset, w = 500): string {
-    const h = Math.round((w * a.height) / a.width);
-    return `https://picsum.photos/seed/${a.id}/${w}/${h}`;
+// Rich internal record the engine evaluates over — a superset of AssetRow plus the
+// filterable metadata fields (stands in for a catalog row).
+interface MockAsset {
+    id: string;
+    filename: string;
+    fileType: FileType;
+    fileStatus: FileStatus;
+    rating: number;
+    colorLabel: ColorLabel | null;
+    flag: Flag | null;
+    width: number;
+    height: number;
+    sizeBytes: number;
+    durationSecs: number | null;
+    capturedAt: string; // ISO
+    ingestedAt: string; // ISO
+    cameraMake: string | null;
+    cameraModel: string | null;
+    lensModel: string | null;
+    title: string | null;
+    caption: string | null;
+    creator: string | null;
+    copyright: string | null;
+    sourceId: string;
+    tagIds: string[];
+    thumbURL: string;
 }
 
-export function formatBytes(n: number): string {
-    if (n < 1024) return `${n} B`;
-    const u = ["KB", "MB", "GB", "TB"];
-    let v = n / 1024;
-    let i = 0;
-    while (v >= 1024 && i < u.length - 1) {
-        v /= 1024;
-        i++;
+// --- seed --------------------------------------------------------------------
+
+function thumbDataUri(seed: number, ratio: [number, number]): string {
+    const hue = (seed * 47) % 360;
+    const [rw, rh] = ratio;
+    const width = 240;
+    const height = Math.round((width * rh) / rw);
+    const svg =
+        `<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'>` +
+        `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+        `<stop offset='0' stop-color='hsl(${hue}, 42%, 56%)'/>` +
+        `<stop offset='1' stop-color='hsl(${(hue + 40) % 360}, 38%, 34%)'/>` +
+        `</linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/></svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+const LABELS: (ColorLabel | null)[] = ["red", "yellow", "green", "blue", "purple", "orange", null, null, null];
+const CAMERAS: [string, string][] = [
+    ["Sony", "A7 IV"],
+    ["Canon", "EOS R5"],
+    ["Nikon", "Z8"],
+    ["Fujifilm", "X-T5"],
+    ["Leica", "Q3"],
+];
+const KIND: { type: FileType; ext: string; ratio: [number, number]; temporal: boolean }[] = [
+    { type: "image", ext: "jpg", ratio: [3, 2], temporal: false },
+    { type: "raw", ext: "arw", ratio: [3, 2], temporal: false },
+    { type: "image", ext: "png", ratio: [1, 1], temporal: false },
+    { type: "video", ext: "mp4", ratio: [16, 9], temporal: true },
+    { type: "vector", ext: "svg", ratio: [4, 3], temporal: false },
+];
+
+function seededAssets(count: number): MockAsset[] {
+    const assets: MockAsset[] = [];
+    for (let i = 0; i < count; i++) {
+        const kind = KIND[i % KIND.length];
+        const [rw, rh] = kind.ratio;
+        const longEdge = 4000 + (i % 6) * 640;
+        const camera = i % 6 === 5 ? null : CAMERAS[i % CAMERAS.length];
+        const flag: Flag | null = i % 7 === 0 ? "pick" : i % 11 === 0 ? "reject" : null;
+        assets.push({
+            id: `mock-${String(i).padStart(4, "0")}`,
+            filename: `${kind.temporal ? "CLIP" : "DSC"}_${String(4820 + i).padStart(5, "0")}.${kind.ext}`,
+            fileType: kind.type,
+            fileStatus: "online",
+            rating: [0, 0, 3, 5, 2, 4, 0, 1][i % 8],
+            colorLabel: LABELS[i % LABELS.length],
+            flag,
+            width: longEdge,
+            height: Math.round((longEdge * rh) / rw),
+            sizeBytes: (8 + (i % 20)) * 1024 * 1024,
+            durationSecs: kind.temporal ? 12 + (i % 5) * 47 : null,
+            capturedAt: new Date(2025, i % 12, (i % 27) + 1, 9 + (i % 8), (i * 7) % 60).toISOString(),
+            ingestedAt: new Date(2026, 5, (i % 27) + 1).toISOString(),
+            cameraMake: camera?.[0] ?? null,
+            cameraModel: camera?.[1] ?? null,
+            lensModel: camera ? "24-70mm F2.8" : null,
+            title: i % 4 === 0 ? `Untitled ${i}` : null,
+            caption: null,
+            creator: i % 3 === 0 ? "A. Photographer" : null,
+            copyright: null,
+            sourceId: `src-${i % 3}`,
+            tagIds: [],
+            thumbURL: thumbDataUri(i + 1, kind.ratio),
+        });
     }
-    return `${v.toFixed(1)} ${u[i]}`;
+    return assets;
 }
 
-export function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+const CATALOG: MockAsset[] = seededAssets(64);
+
+function toRow(asset: MockAsset): AssetRow {
+    return {
+        kind: "asset",
+        id: asset.id,
+        filename: asset.filename,
+        fileType: asset.fileType,
+        fileStatus: asset.fileStatus,
+        rating: asset.rating,
+        colorLabel: asset.colorLabel,
+        flag: asset.flag,
+        width: asset.width,
+        height: asset.height,
+        sizeBytes: asset.sizeBytes,
+        durationSecs: asset.durationSecs,
+        capturedAt: asset.capturedAt,
+        cameraModel: asset.cameraModel,
+        thumbURL: asset.thumbURL,
+    };
 }
 
-export function formatDateTime(iso: string): string {
-    return new Date(iso).toLocaleString("en-US", {
-        year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-    });
+// --- the query engine (SQL stand-in) -----------------------------------------
+
+// Field → value accessor. `satisfies Record<TokenField, …>` is the completeness
+// gate (C10): a new generated field fails to compile until it has an accessor.
+const FIELD: Record<TokenField, (asset: MockAsset) => unknown> = {
+    cameraMake: (a) => a.cameraMake,
+    cameraModel: (a) => a.cameraModel,
+    caption: (a) => a.caption,
+    capturedAt: (a) => a.capturedAt,
+    colorLabel: (a) => a.colorLabel,
+    copyright: (a) => a.copyright,
+    creator: (a) => a.creator,
+    fileStatus: (a) => a.fileStatus,
+    fileType: (a) => a.fileType,
+    filename: (a) => a.filename,
+    flag: (a) => a.flag,
+    height: (a) => a.height,
+    ingestedAt: (a) => a.ingestedAt,
+    lensModel: (a) => a.lensModel,
+    rating: (a) => a.rating,
+    source: (a) => a.sourceId,
+    tag: (a) => a.tagIds,
+    text: (a) => `${a.filename} ${a.title ?? ""} ${a.caption ?? ""} ${a.creator ?? ""}`,
+    title: (a) => a.title,
+    width: (a) => a.width,
+} satisfies Record<TokenField, (asset: MockAsset) => unknown>;
+
+function isEmpty(field: TokenField, value: unknown): boolean {
+    if (field === "rating") return value === 0; // 0 = unrated
+    if (Array.isArray(value)) return value.length === 0;
+    return value === null || value === undefined || value === "";
 }
 
-export const colorLabelClass: Record<ColorLabel, string> = {
-    red: "bg-red-500",
-    orange: "bg-orange-500",
-    yellow: "bg-yellow-400",
-    green: "bg-green-500",
-    blue: "bg-blue-500",
-    purple: "bg-purple-500",
+const asString = (value: unknown): string => (value == null ? "" : String(value)).toLowerCase();
+
+// Half-open date interval from an anchor + signed duration (frontend/09). Minimal
+// unit parser — full calendar-unit grammar arrives with the date editor (widen).
+// ponytail: d/w/m(30d)/y(365d) approximation; calendar-exact months land later.
+function dateWithin(iso: string, value: unknown): boolean {
+    if (typeof value !== "object" || value === null) return false;
+    const { anchor, duration } = value as { anchor?: unknown; duration?: unknown };
+    const anchorMs = anchor === "now" ? Date.now() : Date.parse(String(anchor));
+    const match = /^([+-]?\d+)([dwmy])$/.exec(String(duration));
+    if (Number.isNaN(anchorMs) || !match) return false;
+    const days = { d: 1, w: 7, m: 30, y: 365 }[match[2] as "d" | "w" | "m" | "y"];
+    const otherMs = anchorMs + Number(match[1]) * days * 86_400_000;
+    const t = Date.parse(iso);
+    return t >= Math.min(anchorMs, otherMs) && t < Math.max(anchorMs, otherMs);
+}
+
+function evaluateLeaf(leaf: Leaf, asset: MockAsset): boolean {
+    const value = FIELD[leaf.field](asset);
+    const arr = Array.isArray(leaf.value) ? (leaf.value as unknown[]) : null;
+    switch (leaf.cmp) {
+        case "eq":
+            return value === leaf.value;
+        case "neq":
+            return value !== leaf.value;
+        case "gte":
+            return typeof value === "number" && typeof leaf.value === "number" && value >= leaf.value;
+        case "lte":
+            return typeof value === "number" && typeof leaf.value === "number" && value <= leaf.value;
+        case "contains":
+            return asString(value).includes(asString(leaf.value));
+        case "startsWith":
+            return asString(value).startsWith(asString(leaf.value));
+        case "matches":
+            return asString(value).includes(asString(leaf.value));
+        case "in":
+            return arr !== null && arr.includes(value);
+        case "notIn":
+            return arr === null || !arr.includes(value);
+        case "empty":
+            return isEmpty(leaf.field, value);
+        case "notEmpty":
+            return !isEmpty(leaf.field, value);
+        case "has":
+            return Array.isArray(value) && value.includes(leaf.value);
+        case "lacks":
+        case "notUnder":
+            return !(Array.isArray(value) && value.includes(leaf.value));
+        case "under":
+            return Array.isArray(value) && value.includes(leaf.value);
+        case "within":
+            return typeof value === "string" && dateWithin(value, leaf.value);
+        case "notWithin":
+            return typeof value === "string" && !dateWithin(value, leaf.value);
+    }
+}
+
+function evaluate(node: WhereNode | null, asset: MockAsset): boolean {
+    if (node === null) return true;
+    if (isLeaf(node)) return evaluateLeaf(node, asset);
+    switch (node.op) {
+        case "and":
+            return node.children.every((child) => evaluate(child, asset));
+        case "or":
+            return node.children.some((child) => evaluate(child, asset));
+        case "not":
+            return !node.children.some((child) => evaluate(child, asset));
+    }
+}
+
+// Scope narrowing (the extensional root). Vertical: library = all; collection/tag
+// membership + folder paths arrive with the sidebar (widen).
+function inScope(query: Query, asset: MockAsset): boolean {
+    switch (query.scope.kind) {
+        case "library":
+            return true;
+        case "folder":
+            return asset.sourceId === query.scope.sourceId;
+        case "collection":
+        case "tag":
+            return true; // membership tables land with the browser sidebar
+    }
+}
+
+function compare(a: MockAsset, b: MockAsset, arrangement: Arrangement): number {
+    const field = arrangement.sortField;
+    const av = a[field];
+    const bv = b[field];
+    let primary: number;
+    if (typeof av === "number" && typeof bv === "number") primary = av - bv;
+    else primary = String(av).localeCompare(String(bv));
+    // Direction applies to the sort field ONLY; the id tiebreaker is always
+    // ascending — matching SQL `ORDER BY <field> <dir>, id ASC` (seam/01 §Additions
+    // #4). Negating the tiebreaker too would order tied rows id-descending under
+    // desc, diverging from the backend this mock stands in for.
+    const directed = arrangement.sortDir === "desc" ? -primary : primary;
+    return directed !== 0 ? directed : a.id.localeCompare(b.id);
+}
+
+function orderedMatches(query: Query, arrangement: Arrangement): MockAsset[] {
+    return CATALOG.filter((asset) => inScope(query, asset) && evaluate(query.where, asset)).sort((a, b) =>
+        compare(a, b, arrangement),
+    );
+}
+
+// Simulate seam latency so loading states get exercised.
+const delay = <T>(value: T): Promise<T> => new Promise((resolve) => setTimeout(() => resolve(value), 80));
+
+export const mockApi: AlexandriaAPI = {
+    queryAssets(query, arrangement, page): Promise<AssetQueryResult> {
+        const matches = orderedMatches(query, arrangement);
+        const items = matches.slice(page.offset, page.offset + page.limit).map(toRow);
+        return delay({ items, total: matches.length });
+    },
+    assetIdSlice(query, arrangement, fromIndex, toIndex): Promise<string[]> {
+        const matches = orderedMatches(query, arrangement);
+        return delay(matches.slice(Math.max(0, fromIndex), toIndex + 1).map((asset) => asset.id));
+    },
+    indexOfAsset(query, arrangement, id): Promise<number | null> {
+        const index = orderedMatches(query, arrangement).findIndex((asset) => asset.id === id);
+        return delay(index === -1 ? null : index);
+    },
 };

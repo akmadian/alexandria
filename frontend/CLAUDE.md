@@ -3,11 +3,12 @@
 React + TypeScript + Vite desktop UI for the Alexandria DAM. Talks to a Go backend through a
 typed seam (Wails v2, locked 2026-07-07); runs against an in-memory mock until the backend binds.
 
-> **Status (2026-07-08): ground-up rebuild decided — everything under `src/` is disposable.**
-> The rebuild's architecture is LOCKED: `../_project-tracking/frontend/09-ground-up-redesign-notes.md`.
-> Implementation remains DEFERRED until the backend query-layer round and the seam round complete
-> (sequencing in `../_project-tracking/seam/00-START-HERE.md`). Do not evolve the existing
-> `src/` — it is reference-only until the rebuild replaces it.
+> **Status (2026-07-10): ground-up rebuild UNDERWAY.** Architecture LOCKED:
+> `../_project-tracking/frontend/09-ground-up-redesign-notes.md`. The pre-rework `src/` is deleted;
+> the new foundation is bottom-up and real (`query-model/` pure AST + registry, `api/` contract +
+> AST mock engine + client/hook, `stores/` catalog store, `features/grid/` virtualized DS grid),
+> built **in isolation** against a contract-faithful mock (`bun run dev`, no Wails/Go), thin-
+> vertical-then-widen. Status + next slices: `../_project-tracking/frontend/00-START-HERE.md`.
 
 **Read these first** — they are the source of truth, not this file:
 

@@ -5,7 +5,7 @@ human or Claude: it answers *what's next, right now*, and links down. Area track
 and why*. **Maintenance contract:** whoever completes (or reprioritizes) a frontier item updates
 this file in the same change — a stale head is worse than no head.
 
-**Last updated:** 2026-07-09.
+**Last updated:** 2026-07-10.
 
 **Layout:** `backend/` · `seam/` · `frontend/` (area trackers + specs) ·
 [`functional-requirements.md`](functional-requirements.md) (the backlog, P0–P4) · `design/`
@@ -57,9 +57,13 @@ write methods, and the generator extended to emit `events.ts`. Payload TS *inter
 the wails-dev pass with a hard trigger (DEFERRED §7); the frontend event-pump consumer belongs to
 the rebuild (frontend/09 §Event pump). **The seam round is COMPLETE.**
 
-**Frontier pick now:** the **frontend ground-up rebuild** (`frontend/09`; unblocked — the seam's
-read + write + async surfaces all exist) and/or the **impl/12 app-host** round (watcher supervision,
-startup sequence, live pool resize). A (impl/06 remainder) is independent and small.
+**Frontier pick now:** the **frontend ground-up rebuild** is **UNDERWAY** (started 2026-07-10) —
+building in isolation against a contract-faithful mock, thin-vertical-then-widen. The foundation
+vertical has landed (query-model + `AlexandriaAPI` contract + AST mock engine + catalog store +
+virtualized DS grid; old pre-rework `src/` deleted); see `frontend/00-START-HERE.md §Where the
+project is right now`. Widen slices are the active work. Independent alternatives: the **impl/12
+app-host** round (watcher supervision, startup sequence, live pool resize) and A (impl/06 remainder,
+small).
 
 ## The tree below the frontier (dependency order)
 
@@ -93,5 +97,5 @@ per milestone).
 |---|---|---|
 | Backend | impl/01–06 + 11 + 13 done (06 core — caption/title + flag pending); impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
 | Seam | **COMPLETE** — impl/14 DONE; impl/15 Phase 1 DONE (backed Go surface + ApiError + `errors.ts`); **impl/16 DONE** (2026-07-10 — event catalog + `Emit` choke point + `ImportService` + `catalog/changed` emits + `events.ts`). Deferred (documented, DEFERRED §7): unbacked impl/15 methods, event payload TS types, contract.ts reconciliation — all to the wails-dev pass / their engines | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
-| Frontend | Design complete (2026-07-07, Wails v2 locked); **architecture locked by the ground-up redesign round (2026-07-08, `frontend/09`)** — `frontend/src/` is disposable, rebuild fresh; implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
+| Frontend | Design + architecture locked (`frontend/09`); **rebuild IMPLEMENTATION STARTED 2026-07-10** — foundation vertical landed (query-model + `AlexandriaAPI` contract + AST mock engine + catalog store + virtualized DS grid, built in isolation); pre-rework `src/` deleted; widen slices next | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
 | Ops / Testing | CI + backend hygiene BUILT (2026-07-09, `Makefile` + `ci.yml`); release, telemetry, testing-strategy specs still waiting in [`design/`](design/) | — |

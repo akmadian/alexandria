@@ -1,0 +1,12 @@
+/* App-level base only. The DS (alexandria-ds.css) owns box-sizing, body type,
+ * colours, and ::selection; this file adds just the full-height app frame. The
+ * shell owns all scrolling. */
+html,
+body,
+#root {
+    height: 100%;
+}
+
+#root {
+    overflow: hidden;
+}

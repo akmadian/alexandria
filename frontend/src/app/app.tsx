@@ -1,53 +1,45 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { installGlobalCapture, recentLogs } from "@/lib/logger";
-import { Button } from "@/components/button/button";
-import { ErrorBoundary } from "./error-boundary";
-import { LibraryProvider } from "./library-state";
-import { Shell } from "./shell";
+// The rebuild's app root (frontend/09). Slice 1: a minimal three-row shell —
+// header, the grid on its canvas well, a status bar — running entirely against
+// the mock catalog (no Wails, no Go). Panes, sidebar, filter bar, inspector, and
+// the other view modes layer in from here.
+//
+// ponytail: user-facing chrome strings ("Library", "selected") are literals for
+// now — they become i18n keys (C14) when the shell adopts the i18n scaffolding.
+// Data values (counts) already go through Intl.
 
-installGlobalCapture();
+import { useQueryAssets } from "@/api/queries";
+import { Grid } from "@/features/grid/grid";
+import { formatNumber } from "@/lib/format";
+import { useCatalogQuery, useSelectionCount } from "@/stores/catalog-store";
+import s from "./app.module.css";
+import { Providers } from "./providers";
 
-// Query defaults tuned for a local desktop app: cheap to re-fetch (sub-10ms IPC),
-// pointless on window focus; small gcTime keeps the list cache a browsing window,
-// not a DB mirror. Reads auto-retry once (seam error shape: _project-tracking/seam/02-events-jobs-and-binary.md); writes never.
-function makeClient() {
-    return new QueryClient({
-        defaultOptions: {
-            queries: { refetchOnWindowFocus: false, staleTime: 30_000, gcTime: 5 * 60_000, retry: 1 },
-            mutations: { retry: 0 },
-        },
-    });
-}
+function Shell() {
+    const { query, arrangement } = useCatalogQuery();
+    const { data } = useQueryAssets(query, arrangement);
+    const total = data?.total ?? 0;
+    const selected = useSelectionCount(total);
 
-const CrashScreen = ({ error }: { error: Error }) => {
-    const { t } = useTranslation();
-    const copy = () => {
-        void navigator.clipboard.writeText(JSON.stringify({ error: { message: error.message, stack: error.stack }, logs: recentLogs().slice(-200) }, null, 2));
-    };
     return (
-        <div style={{ display: "grid", placeItems: "center", height: "100dvh", textAlign: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", maxWidth: 420 }}>
-                <h1 style={{ fontSize: "var(--text-lg)" }}>{t("errors.appCrashed")}</h1>
-                <p style={{ color: "var(--text-tertiary)", fontSize: "var(--text-sm)" }}>{t("errors.restartHint")}</p>
-                <Button variant="primary" onPress={copy}>
-                    {t("errors.copyDetails")}
-                </Button>
-            </div>
+        <div className={s.shell}>
+            <header className={s.header}>
+                <span className={s.title}>Library</span>
+                {data && <span className={s.metric}>{formatNumber(total)} assets</span>}
+            </header>
+            <main className={s.main}>
+                <Grid />
+            </main>
+            <footer className={s.status}>
+                <span className={s.metric}>{selected > 0 ? `${formatNumber(selected)} selected` : "—"}</span>
+            </footer>
         </div>
     );
-};
+}
 
-export const App = () => {
-    const [client] = useState(makeClient);
+export function App() {
     return (
-        <ErrorBoundary fallback={(error) => <CrashScreen error={error} />}>
-            <QueryClientProvider client={client}>
-                <LibraryProvider>
-                    <Shell />
-                </LibraryProvider>
-            </QueryClientProvider>
-        </ErrorBoundary>
+        <Providers>
+            <Shell />
+        </Providers>
     );
-};
+}

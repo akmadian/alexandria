@@ -43,12 +43,32 @@ This set **supersedes** the deleted `frontend-architecture.md` / `frontend-ui-ar
 
 ## Where the project is right now
 
-**Design complete for the surfaces above; architecture locked (2026-07-08, `09`);
-implementation not started.** Sequencing unchanged (see `../seam/00-START-HERE.md`): backend
-query-layer round → seam round (contract reconciliation + bindings) → frontend implementation —
-which now means the **ground-up rebuild**: `frontend/src/` is disposable (2026-07-08 decision,
-superseding `07`'s EVOLVE verdicts); the patterns worth keeping were re-ratified on their merits
-in `09`, not preserved as code.
+**Design complete; architecture locked (2026-07-08, `09`); ground-up rebuild IMPLEMENTATION
+STARTED (2026-07-10).** The backend query-layer + seam rounds are done, so the rebuild is
+unblocked and underway, built **in isolation** (a contract-faithful mock, no Wails/Go — `bun run
+dev`) via a **thin end-to-end vertical, then widen** strategy.
+
+**Foundation vertical landed (2026-07-10):** the pre-rework `frontend/src/` cluster is deleted
+(the `09` disposability decision, executed); the new bottom-up foundation is in place —
+
+- `query-model/` — pure AST (`ast.ts`), token registry seeded from the generated `fieldGrammar`
+  (`registry.ts`), stable query serializer (`serialize.ts`); `leaf`/`validate` gates. Tests.
+- `api/` — the reconciled `AlexandriaAPI` **contract** (AST query model, not the retired flat
+  filter); the **mock** = a real in-memory AST query engine (`evaluate`/sort+tiebreaker/page/total)
+  standing in for SQL; the `client` swap point + `useQueryAssets` hook. Tests.
+- `stores/catalog-store.ts` — the full C2 `CatalogViewState` (Zustand, reducer `dispatch`,
+  `{ids}|{all}` selection, curated selectors, memoized canonical-query derivation).
+- `features/grid/` — the bespoke `tanstack-virtual` grid on the DS `GridCell` port, over the real
+  `queryAssets`; store-owned selection/cursor. `app/` shell + providers + DS wiring.
+
+This is the frontend-side of the seam `contract.ts` reconciliation the seam round deferred to the
+"wails-dev pass" (`../seam/01` ledger, `../backend/impl/DEFERRED.md §7`). **Widen next:** windowed
+block fetch (+ switch range materialization to the `assetIdSlice` seam call, + cursor auto-seed via
+a `working-set-changed(total)` echo — both marked `ponytail:` in the store/grid) · filter bar +
+pills (query-model `parseValue`/kind-editors) · sidebar Browser trees · mutations + optimistic/undo ·
+event pump · inspector/status-bar/palette.
+
+The patterns worth keeping were re-ratified on their merits in `09`, not preserved as code.
 
 ### What this round deliberately deferred
 

@@ -43,6 +43,17 @@ export function formatBytes(bytes: number): string {
     return f.format(value);
 }
 
+/** Locale-aware integer/decimal grouping — counts, pixel dimensions, EXIF numbers. */
+export function formatNumber(value: number): string {
+    const k = `${i18n.language}:n`;
+    let f = cache.get(k) as Intl.NumberFormat | undefined;
+    if (!f) {
+        f = new Intl.NumberFormat(i18n.language);
+        cache.set(k, f);
+    }
+    return f.format(value);
+}
+
 /** 65 → "1:05"; 3725 → "1:02:05". Media duration, not a date. */
 export function formatDuration(totalSecs: number): string {
     const s = Math.round(totalSecs);

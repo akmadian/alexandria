@@ -1,12 +1,15 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { App } from "@/app/app";
+import { installGlobalCapture } from "@/lib/logger";
+import "@/i18n"; // side-effect: init i18next before first render
+import "@/styles/alexandria-ds.css"; // DS tokens + fonts (must load first)
+import "@/styles/app-base.css"; // app-level height/scroll reset
 
-// impl/14: mounting the throwaway seam walking skeleton to prove the Wails pipe.
-// The real App (@/app/app) returns at the frontend ground-up rebuild (frontend/09).
-import { SeamSkeleton } from "@/seam-skeleton";
+installGlobalCapture(); // global error capture + periodic log flush
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <SeamSkeleton />
+        <App />
     </StrictMode>,
 );

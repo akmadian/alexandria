@@ -146,3 +146,16 @@ statement via `ApplyTriagePatchByQuery`. Bulk-undo/history-service verbs are **n
 
 The full deferred list (unbacked engines + the TS reconciliation pass) is `../backend/impl/DEFERRED.md`
 §7. Ledger row #7 (job envelope) belongs to impl/16.
+
+### TS-side reconciliation begun frontend-first (2026-07-10, frontend rebuild)
+
+The frontend ground-up rebuild started the contract.ts reconciliation from the UI side, ahead of a
+live `wails dev`: `frontend/src/api/contract.ts` re-expresses the **read surface** as `AlexandriaAPI`
+over the **AST query model** (delta #1 applied — `queryAssets(query, arrangement, page)` +
+`assetIdSlice`/`indexOfAsset`, not the flat filter), with `AssetRow`/`ApiError` on the generated
+enums/codes. `frontend/src/api/mock.ts` implements it as an in-memory AST **query engine** (the SQL
+stand-in), so the UI develops against real query behavior with no Wails. The AST wire types
+(`Query`/`Leaf`/`Arrangement`) and `AssetRow` are **hand-written provisional** in `query-model/` +
+`contract.ts` until the Go generator emits them (C13) — when it does, they're deleted for the
+generated versions and the mock/adapter split is unchanged. Write surface + the rest of the verb
+surface land in the frontend "widen" phase. See `../frontend/00-START-HERE.md`.

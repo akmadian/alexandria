@@ -1,7 +1,7 @@
 // i18n init — imported for its side effect once in main.tsx. Keys are stable
-// identifiers namespaced by feature; enum labels come from lib/enum-display
-// (which returns keys, not strings). Dates/numbers never go through catalogs —
-// that's lib/format.ts (Intl).
+// identifiers namespaced by feature; enum labels will map through per-domain
+// display registries (rebuilt in the widen phase), which return keys, not
+// strings. Dates/numbers never go through catalogs — that's lib/format.ts (Intl).
 
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
