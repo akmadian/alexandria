@@ -39,8 +39,15 @@ const maxDepth = 16
 // Validate checks a query for structural, grammar, and value correctness.
 // Pure — no I/O, no DB.
 func Validate(query Query) error {
-	if query.Version != Version {
-		return fmt.Errorf("unsupported version %d", query.Version)
+	// Typed version errors so the seam can map them to stable codes (a too-new
+	// query written by a newer app version vs. a structurally invalid one), rather
+	// than an opaque string. UnmarshalJSON catches this at the wire too; Validate
+	// also catches queries built as structs (not decoded from JSON).
+	if query.Version > Version {
+		return &ErrVersionTooNew{Got: query.Version, Want: Version}
+	}
+	if query.Version < 1 {
+		return &ErrStructure{Message: fmt.Sprintf("invalid query version %d", query.Version)}
 	}
 	if query.Scope != nil {
 		if err := validateScope(query.Scope); err != nil {

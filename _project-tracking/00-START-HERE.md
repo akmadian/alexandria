@@ -43,9 +43,15 @@ models; a hand-rolled generator (`internal/seam/generate`) emits the `TokenField
 `internal/domain`* (no EnumBind, no hand-maintained lists — see the impl/14 status block for the
 two deviations). Enforced by a freshness gate on the backend path + three path-filtered CI jobs
 (backend / frontend / app), which also now prove the toolchain isolation. The composition root is
-the impl/12 app-host seed. **Frontier picks now:** [`seam/impl/15-method-surface.md`](seam/impl/15-method-surface.md)
-∥ [`seam/impl/16-events-and-jobs.md`](seam/impl/16-events-and-jobs.md) (parallel). A (impl/06
-remainder) is independent and small.
+the impl/12 app-host seed. [`seam/impl/15-method-surface.md`](seam/impl/15-method-surface.md) is now
+**Phase 1 shipped (2026-07-09)** — the backed Go surface (`AssetService`/`CollectionService`/
+`SettingsService`/`SourceService`), the `ApiError` normalization layer + generated `errors.ts` code
+catalog, per-method tests, all webkit-free. ~40% of the contract surface was **deferred, not stubbed**
+(no backing engine yet) with per-row triggers, and the contract.ts/`models` TS reconciliation is
+deferred to the `wails dev` pass — see [`backend/impl/DEFERRED.md`](backend/impl/DEFERRED.md) §7.
+**Frontier pick now:** [`seam/impl/16-events-and-jobs.md`](seam/impl/16-events-and-jobs.md) (its
+catalog-changed emit hooks into impl/15's write methods, which now exist). A (impl/06 remainder) is
+independent and small.
 
 ## The tree below the frontier (dependency order)
 
@@ -78,6 +84,6 @@ per milestone).
 | Area | Status | Tracker |
 |---|---|---|
 | Backend | impl/01–06 + 11 + 13 done (06 core — caption/title + flag pending); impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
-| Seam | **Build-ready**: impl/14/15/16 specs written 2026-07-09; structure locked (root Wails scaffolding, `internal/seam`, committed generated TS + CI freshness) | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
+| Seam | impl/14 DONE; **impl/15 Phase 1 DONE** (2026-07-09 — backed Go surface + ApiError + `errors.ts`; unbacked methods & TS reconciliation deferred, DEFERRED §7); impl/16 (events & jobs) is the frontier | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
 | Frontend | Design complete (2026-07-07, Wails v2 locked); **architecture locked by the ground-up redesign round (2026-07-08, `frontend/09`)** — `frontend/src/` is disposable, rebuild fresh; implementation awaits seam | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
 | Ops / Testing | CI + backend hygiene BUILT (2026-07-09, `Makefile` + `ci.yml`); release, telemetry, testing-strategy specs still waiting in [`design/`](design/) | — |

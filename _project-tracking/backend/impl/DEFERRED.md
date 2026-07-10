@@ -365,6 +365,52 @@ user concretely asks to retune workers without restarting an in-flight import.
 
 ---
 
+## 7. Seam methods awaiting their backing engines (impl/15 Phase 1 scope cut)
+
+**Surfaced:** impl/15 (2026-07-09). impl/15's charter is *"services **wrapping** the
+catalog interfaces."* When the contract surface was inventoried against real engine
+capability, a cluster of contract.ts methods turned out to have **no engine to
+wrap** — building those engines is each its own feature, not seam glue. Per the
+"bind the verbs when the engine exists — don't fake them" rule (spec §3, applied to
+undo/redo and extended here), they are **deferred, not stubbed**. The seam is
+extensible by construction (a new bound method is one thin wrapper + one line in
+`host.boundServices()`), so each lands cheaply the day its engine does.
+
+**Phase 1 shipped (this change):** `AssetService` (QueryAssets, GetAsset,
+AssetIDSlice, IndexOfAsset, DistinctValues, UpdateAssets by ids/query+exceptIds,
+RemoveFromCatalog), `CollectionService` (full CRUD + membership), `SettingsService`
+(settings get/set, keybindings get/set/reset), `SourceService` (+Create/Update),
+the `ApiError` normalization layer + generated `errors.ts` code catalog.
+
+**Deferred, each with the engine it waits on and its trigger:**
+
+| Seam method(s) | Missing engine | Trigger to build |
+|---|---|---|
+| `getFolderTree` | no path→tree deriver (folders are derived from asset paths, never stored) | the browse/sidebar UI that renders the folder tree |
+| `pickDirectory` | native OS dialog (Wails runtime, not the engine) | the Add-Source flow; wire via `runtime.OpenDirectoryDialog` in the app host |
+| `openAsset` / `openWith` / `revealInFileManager` | no OS-shell executor (`Machine.OpenInApps` is config only, no launcher) | the open-in feature + its executor (uses `Machine.OpenInApps`) |
+| `tagTree` / `createTag` / `updateTag` / `deleteTag` / `setAssetTags` (replace) | `TagRepository` exposes only keyword-import + `AddAssetTags` (additive); no tree/get/update/delete/replace, by design ("lands when the UI is the caller") | the tag-management UI milestone |
+| `removeSource` | no `SourceRepo.Delete` (source removal + asset re-homing/cleanup policy unresolved) | source-management milestone (decide cascade vs. orphan policy first) |
+| `deleteFromDisk` | `AssetRepo.DeleteByID` removes the row, not the file; no on-disk unlink path, and orphaned-thumbnail GC is itself deferred (§4) | a hard-delete feature (file unlink + thumbnail GC together) |
+| `undo` / `redo` (+ history events) | history/command service is a later milestone (spec §3 already defers) | the undo/history service milestone |
+| soft-delete **by query** (`RemoveFromCatalog` currently ids-only) | no `ApplySoftDeleteByQuery`; the judgment writer has by-query only for triage | when a "delete all matching" UX needs it (add the engine method mirroring `ApplyTriagePatchByQuery`) |
+| keybinding **preset** list/apply | no preset engine; the default set is the frontend command registry's vocabulary | the keyboard-settings UI, if presets are still wanted then |
+| `machine.json` exposure (worker pools, dependency paths) | settings engine exists, but no UI consumes it and machine scope is app-host-owned | the performance/settings UI milestone |
+
+**Also deferred to the `wails dev` pass (not an engine gap — a toolchain one):** the
+**contract.ts / `frontend/src/models/` reconciliation** (ledger #1–3/#8 TS side).
+Regenerating the `wailsjs/` bindings for the new services runs `wails generate`,
+which needs the webkit toolchain and runs the app — impl/14 already ruled that out
+of the webkit-free backend gate (drift caught at the next `wails dev`/`build`). So
+the TS half of the ledger rows lands when the frontend rebuild runs under Wails,
+with the frontend types in hand (which is also when the `TriagePatchInput` raw-JSON
+wire encoding gets its final shape).
+
+**Trigger (umbrella):** each row above is pulled in by its named milestone; none
+blocks impl/16 or the frontend rebuild's read path.
+
+---
+
 ## Not promoted (tracked elsewhere — left as inline `ponytail:` markers)
 
 These are real deferrals too, but each is either owned by a named milestone or is a

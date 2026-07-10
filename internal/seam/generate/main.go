@@ -45,6 +45,7 @@ func main() {
 	}
 	write(*outDir, "vocabulary.ts", renderVocabulary())
 	write(*outDir, "enums.ts", renderDomainEnums())
+	write(*outDir, "errors.ts", renderSeamCodes())
 }
 
 func write(dir, name string, source []byte) {
@@ -133,6 +134,26 @@ func renderDomainEnums() []byte {
 	var buffer bytes.Buffer
 	header(&buffer, "internal/domain (asset.go, source.go)")
 	for _, typeName := range domainEnumTypes {
+		writeUnion(&buffer, typeName, stringsOf(members[typeName]))
+	}
+	return bytes.TrimRight(buffer.Bytes(), "\n")
+}
+
+// seamPackage and seamCodeTypes are the error-catalog manifest: the ApiError kind
+// and code unions the frontend switches on (impl/15 §4). Members are discovered
+// the same way as the domain enums — from the consts in apierror.go — so the
+// catalog is single-sourced in Go and cannot drift.
+const seamPackage = "github.com/akmadian/alexandria/internal/seam"
+
+var seamCodeTypes = []string{"ApiErrorKind", "ErrorCode"}
+
+// renderSeamCodes builds errors.ts from the seam's ApiErrorKind / ErrorCode consts.
+func renderSeamCodes() []byte {
+	members := loadEnumMembers(seamPackage, seamCodeTypes)
+
+	var buffer bytes.Buffer
+	header(&buffer, "internal/seam (apierror.go)")
+	for _, typeName := range seamCodeTypes {
 		writeUnion(&buffer, typeName, stringsOf(members[typeName]))
 	}
 	return bytes.TrimRight(buffer.Bytes(), "\n")

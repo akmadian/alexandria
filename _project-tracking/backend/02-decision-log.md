@@ -363,3 +363,39 @@ counts. Tag-UI backend (`Tree`/`Update`/`Delete`/replace-`SetAssetTags`).
 **Revisit trigger:** live descendant-inclusive counts on the entire tag tree become a requirement,
 or a real catalog's tag tree is deep/wide enough that `GLOB`-prefix expansion measurably regresses →
 add the closure/materialized-membership table then.
+
+## D23 — Seam method surface: per-entity services, thin boundary, one error shape (impl/15 Phase 1)
+
+**Decision (2026-07-09, impl/15).** The synchronous seam is **per-entity bound services**
+(`AssetService`, `CollectionService`, `SettingsService`, `SourceService`) — each thin, each Wails-
+bound, the frontend adapter composes them behind one `AlexandriaAPI` later. Chosen over one
+40-method struct: keeps files and tests small and scoping obvious. Resolutions of impl/15 §5's
+pre-scoped decisions:
+
+- **Errors: one normalization layer.** Every bound method returns through `normalizeError` into a
+  single `ApiError{kind, code, detail}` whose `Error()` is compact JSON (so kind+code survive Wails's
+  error→string serialization). Codes are `ErrorCode` consts in `internal/seam`, **published to
+  `errors.ts` by the impl/14 generator** by type-checking the package — same single-source mechanism
+  as the domain enums, no hand-copied TS list. Only codes the Go side actually produces exist
+  (keybinding-conflict is frontend-owned, so it is *not* a backend code).
+- **Settings write = whole-object set,** not a partial patch: `GetSettings`→edit→`UpdateSettings`.
+  Avoids a reflection-based field-merge for zero benefit (the frontend holds the full object). A new
+  setting is a new struct field, not a new method.
+- **Boundary context = `context.Background()`** via one `seamContext()` helper. Wails v2 gives bound
+  methods no per-call context; these are short synchronous engine calls. The helper is the single
+  upgrade point to the Wails startup context if a long-running bound call ever lands.
+- **`ast.Validate` version errors made typed.** Changed `internal/ast/validate.go` to return
+  `*ErrVersionTooNew` / `*ErrStructure` for bad versions instead of a plain `fmt.Errorf`, so the seam
+  can map a too-new query to `query_version_too_new` (impl/15 §3 row #1) rather than swallowing it as
+  `unexpected`. Behaviour-preserving for valid queries.
+
+**Deferred (named), not stubbed.** ~40% of the contract surface has no backing engine; building those
+is each its own feature. They are recorded with per-row triggers in `impl/DEFERRED.md` §7 (folder
+tree, native dialog, open-in, tag management, source delete, disk delete, undo/redo, soft-delete-by-
+query, keybinding presets, machine.json), plus the contract.ts/`models` TS reconciliation deferred to
+the `wails dev` pass (regenerating `wailsjs/` needs the webkit toolchain, kept off the backend gate
+by impl/14). The seam is extensible by construction — each lands as one thin wrapper + one
+`boundServices()` line when its engine exists.
+
+**Revisit trigger:** each deferred row is pulled in by its named milestone; the per-entity split is
+revisited only if the service count or a cross-entity operation makes composition awkward.

@@ -47,3 +47,6 @@ You are picking up a unit of work in Alexandria. The tracking docs are the sourc
 Full identifiers, no abbreviations beyond the repo's allowed set. Comprehensive logging
 (milestones at Info, per-item at Debug). Never commit without presenting the work and getting
 explicit approval. On landing, execute the spec's doc-maintenance section in the same change.
+When you believe the work is complete — checks green, docs maintained — run the
+`pre-commit-review` skill and drive its findings to resolution BEFORE presenting the work for
+commit approval.

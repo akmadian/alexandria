@@ -116,3 +116,33 @@ standing seam conventions. Known deltas to apply in the seam round:
 
 Everything else in contract.ts (sources/tags/collections CRUD, folder tree, open-in, undo/redo
 + history events, error shape, binary URL builders) stands as designed.
+
+### impl/15 Phase 1 status (2026-07-09) — Go side bound; TS reconciliation + unbacked methods deferred
+
+impl/15 landed the **backed** synchronous surface as thin `internal/seam` services
+(`AssetService`, `CollectionService`, `SettingsService`, `SourceService`) + the `ApiError`
+normalization layer (§4) with a generated `errors.ts` code catalog. Ledger disposition:
+
+- **#1 `QueryAssets`** — bound; validates (`ast.Validate`) before the repo, maps `ErrVersionTooNew`
+  → `query_version_too_new` and the grammar/value/structure errors → `query_invalid`. *(engine +
+  Go seam done; contract.ts/TS side pending the wails pass)*
+- **#3 `Arrangement`** — bound as `ast.Arrangement` (GroupBy still unimplemented per impl/13). *(done)*
+- **#4 Settings** — bound over `internal/settings` types verbatim (whole-object `UpdateSettings`, not
+  a partial patch — read-modify-write on the frontend; see decision log). `machine.json` **not**
+  exposed (no UI — DEFERRED §7). *(Go side done)*
+- **#5 Keybindings** — file-based get/set/reset bound; **presets deferred** (DEFERRED §7); conflict
+  detection stays frontend-owned (backend never interprets chords). *(core done)*
+- **#6 `SourceStatus` → `enabled`+`connectivity`** — the split model is generated; `SourceService`
+  gained `Create`/`Update`; `SourcePatch` carries `enabled` (judgment), never connectivity. *(done)*
+- **#9 Smart-collection CRUD** — `CollectionService` binds create/list/update/delete + membership over
+  the impl/13 repo (which `ast.Validate`s smart queries; the service validates early for a clean code). *(done)*
+- **#2 / #8 / #10 deferred:** #2 tag-as-scope rides `ast.ScopeKind` already, but tag *management* is
+  unbacked (DEFERRED §7); #8 (`models/*.ts` retire) and the TS side of #1/#3 wait for the `wails dev`
+  reconciliation pass; #10 thumbnail URL builders wait for their asset handler (unbacked — DEFERRED §7).
+
+**§Additions — bound:** `AssetIDSlice`, `IndexOfAsset`, `DistinctValues` (validates field is known +
+suggestable), and `UpdateAssets` with the `{ids} | {query, exceptIds}` target compiled to one
+statement via `ApplyTriagePatchByQuery`. Bulk-undo/history-service verbs are **not faked** (deferred).
+
+The full deferred list (unbacked engines + the TS reconciliation pass) is `../backend/impl/DEFERRED.md`
+§7. Ledger row #7 (job envelope) belongs to impl/16.

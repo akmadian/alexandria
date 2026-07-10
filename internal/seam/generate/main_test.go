@@ -16,6 +16,7 @@ func TestDeterministic(t *testing.T) {
 	}{
 		{"vocabulary", renderVocabulary},
 		{"domain enums", renderDomainEnums},
+		{"seam codes", renderSeamCodes},
 	} {
 		if !bytes.Equal(render.fn(), render.fn()) {
 			t.Errorf("%s: render is not deterministic", render.name)
@@ -68,10 +69,31 @@ func TestDomainEnumsShape(t *testing.T) {
 	}
 }
 
+// TestSeamCodesShape checks the error catalog is emitted as literal unions the
+// frontend switches on, with representative kind + code members present.
+func TestSeamCodesShape(t *testing.T) {
+	source := string(renderSeamCodes())
+
+	wants := []string{
+		"export type ApiErrorKind =",
+		"export type ErrorCode =",
+		`  | "unexpected"`,            // an ApiErrorKind member
+		`  | "query_version_too_new"`, // an ErrorCode member
+	}
+	for _, want := range wants {
+		if !strings.Contains(source, want) {
+			t.Errorf("errors.ts missing %q", want)
+		}
+	}
+	if strings.Contains(source, "enum ") {
+		t.Error("errors.ts emitted a TS `enum` keyword; frontend/09 mandates literal unions")
+	}
+}
+
 // TestUnionMembersSorted guards the determinism precondition: union members are
 // emitted in sorted order.
 func TestUnionMembersSorted(t *testing.T) {
-	for _, source := range []string{string(renderVocabulary()), string(renderDomainEnums())} {
+	for _, source := range []string{string(renderVocabulary()), string(renderDomainEnums()), string(renderSeamCodes())} {
 		for _, block := range strings.Split(source, "export type ")[1:] {
 			var previous string
 			for _, line := range strings.Split(block, "\n") {

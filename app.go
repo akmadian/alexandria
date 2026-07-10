@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/charmbracelet/log"
 
 	"github.com/akmadian/alexandria/internal/app"
 	"github.com/akmadian/alexandria/internal/seam"
+	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 )
 
@@ -18,8 +20,12 @@ import (
 // to impl/12 and grows this same host in place; this is that host seeded minimal
 // (seam impl/14 §2, decision 3).
 type host struct {
-	catalog *sqlite.Catalog
-	sources *seam.SourceService
+	catalog     *sqlite.Catalog
+	settings    *settings.Service
+	sources     *seam.SourceService
+	assets      *seam.AssetService
+	collections *seam.CollectionService
+	settingsAPI *seam.SettingsService
 }
 
 // newHost runs the minimal startup sequence: resolve the catalog directory, then
@@ -39,17 +45,32 @@ func newHost() (*host, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Settings, keybindings, and machine config live beside the catalog (the same
+	// layout the dev harness uses); impl/12 splits the app-scoped files into
+	// <app-config-dir> when it resolves one.
+	settingsService, err := settings.Open(filepath.Join(dir, "settings"), log.Default())
+	if err != nil {
+		_ = catalog.Close()
+		return nil, err
+	}
+
+	assetRepo := &sqlite.AssetRepo{DB: catalog.DB}
 	return &host{
-		catalog: catalog,
-		sources: seam.NewSourceService(&sqlite.SourceRepo{DB: catalog.DB}),
+		catalog:     catalog,
+		settings:    settingsService,
+		sources:     seam.NewSourceService(&sqlite.SourceRepo{DB: catalog.DB}),
+		assets:      seam.NewAssetService(assetRepo, assetRepo),
+		collections: seam.NewCollectionService(&sqlite.CollectionRepo{DB: catalog.DB}),
+		settingsAPI: seam.NewSettingsService(settingsService.Settings, settingsService.Keybindings),
 	}, nil
 }
 
 // boundServices is the list Wails binds and generates TypeScript for. Each new
-// seam service (impl/15 method surface, impl/16 events & jobs) joins this slice
-// — one line, no new seam plumbing.
+// seam service (impl/16 events & jobs) joins this slice — one line, no new seam
+// plumbing.
 func (h *host) boundServices() []any {
-	return []any{h.sources}
+	return []any{h.sources, h.assets, h.collections, h.settingsAPI}
 }
 
 // onStartup fires once the webview context exists. impl/12 grows the post-window
@@ -59,8 +80,10 @@ func (h *host) onStartup(_ context.Context) {
 	log.Info("alexandria ready")
 }
 
-// onShutdown releases the catalog (DB handle + instance lock) on window close.
+// onShutdown releases the settings watches and the catalog (DB handle + instance
+// lock) on window close.
 func (h *host) onShutdown(_ context.Context) {
+	h.settings.Close()
 	if err := h.catalog.Close(); err != nil {
 		log.Error("closing catalog", "err", err)
 	}

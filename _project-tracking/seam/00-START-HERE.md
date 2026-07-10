@@ -44,8 +44,13 @@ Cross-cutting rules live in `../CONSTANTS.md` (C6–C9, C13 are the seam's).
      generated TS is freshness-gated on the backend path; three path-filtered CI jobs
      (backend/frontend/app) enforce it and the toolchain isolation. The composition root is the
      `../backend/impl/12-app-host.md` seed.
-   - **impl/15 ∥ impl/16: the frontier now** (parallel). They add bound methods/events on the
-     same host + generator; no new seam plumbing.
+   - **impl/15: Phase 1 shipped (2026-07-09).** The backed synchronous surface — per-entity bound
+     services (`Asset`/`Collection`/`Settings`/`Source`), the `ApiError` normalization layer, and a
+     generated `errors.ts` code catalog — landed webkit-free. ~40% of the contract surface was
+     **deferred, not stubbed** (no backing engine), and the contract.ts/`models` TS reconciliation is
+     deferred to the `wails dev` pass (both with triggers in `../backend/impl/DEFERRED.md` §7).
+   - **impl/16: the frontier now.** Adds events/jobs on the same host + generator; its
+     `catalog/changed` emit hooks into impl/15's now-existing write methods. No new seam plumbing.
 
 Frontend implementation unblocks after these — and now means the **ground-up rebuild** per
 `../frontend/09-ground-up-redesign-notes.md` (architecture locked 2026-07-08); its seam-method

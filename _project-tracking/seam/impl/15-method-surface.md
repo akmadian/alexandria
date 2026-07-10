@@ -1,7 +1,9 @@
 # impl/15 — Seam Method Surface
 
-**Status: spec ready (2026-07-09), not started.** Second seam-round doc; runs after impl/14,
-in parallel with impl/16.
+**Status: Phase 1 shipped (2026-07-09) — the backed Go surface + ApiError + generated code
+catalog. The unbacked contract methods and the contract.ts/TS reconciliation are deferred with
+triggers (see §7 + `../../backend/impl/DEFERRED.md` §7).** Second seam-round doc; ran after
+impl/14, in parallel with impl/16.
 
 **Scope:** the synchronous request/response surface — `internal/seam` services wrapping the
 catalog interfaces, the ApiError normalization, and the reconciliation of `contract.ts` against
@@ -88,9 +90,38 @@ switches on generated literals, not strings. Display text is frontend-owned (C14
 - `frontend/src/models/` is gone; frontend typecheck passes against generated types alone.
 - Ledger rows #1–6/#8–10 checked off in `../01-queries-and-commands.md` (same change).
 
-## 7. Doc maintenance on landing (same change)
+## 7. What shipped + the scope cut (2026-07-09, Phase 1)
 
-- `../01-queries-and-commands.md`: ledger rows marked done; §Additions marked bound.
-- Master head status table; `../00-START-HERE.md` sequencing.
-- `../../backend/02-decision-log.md`: entries for §5 resolutions.
-- This file: status block → shipped + deviations.
+**Built to spec (the backed surface):** four thin per-entity services in `internal/seam`
+(`AssetService`, `CollectionService`, `SettingsService`, `SourceService` — Wails binds each; the
+frontend adapter composes them later), the `ApiError` normalization layer (§4) with a
+constants catalog (`ApiErrorKind` / `ErrorCode` in `apierror.go`) **published to
+`frontend/src/_generated-types/errors.ts` by the impl/14 generator** (discovered by type-checking
+the seam package, same mechanism as the domain enums — so TS switches on generated literals). New
+services joined `host.boundServices()`; `internal/settings` is now opened by the app host. All
+webkit-free: `make check-backend` green (per-method happy + error-mapping tests).
+
+**The scope cut (agreed with Ari 2026-07-09).** impl/15's charter is *wrapping* the catalog
+interfaces; ~40% of the contract surface had **no engine to wrap**. Rather than fabricate 5–6
+engine subsystems, those methods are **deferred, not stubbed** — the seam is extensible, so each
+lands as one wrapper the day its engine does. Full list + triggers: `../../backend/impl/DEFERRED.md`
+§7 (folder tree, pickDirectory, open-in verbs, tag management/`setAssetTags`, `removeSource`,
+`deleteFromDisk`, undo/redo, soft-delete-by-query, keybinding presets, `machine.json`). The
+**contract.ts / `frontend/src/models/` reconciliation** (ledger #1–3/#8 TS side) is deferred to the
+`wails dev` pass — regenerating `wailsjs/` needs the webkit toolchain (impl/14 kept it off the
+backend gate), and it is where the `TriagePatchInput` wire encoding gets finalized.
+
+**Decisions resolved (§5), recorded in `../../backend/02-decision-log.md`:** per-entity services;
+whole-object `UpdateSettings` (not partial patch); `context.Background()` at the boundary with a
+single documented upgrade point (`seamContext`); AST-version errors made typed in `ast.Validate`
+(so `query_version_too_new` is mappable). `AssetRow` field list and the thumbnail content token
+ride with their deferred consumers (grid rebuild / asset handler).
+
+### Original scope (for reference)
+
+## 7-orig. Doc maintenance on landing (same change)
+
+- `../01-queries-and-commands.md`: ledger rows marked done; §Additions marked bound. ✅
+- Master head status table; `../00-START-HERE.md` sequencing. ✅
+- `../../backend/02-decision-log.md`: entries for §5 resolutions. ✅
+- This file: status block → shipped + deviations. ✅
