@@ -1,59 +1,127 @@
-name: CI — backend
+name: CI
 
-# One workflow per check surface (backend / frontend / app), each path-filtered
-# to its own trigger so a change only spins up the jobs it can affect — the
-# separation impl/14 §2 (decision 4) locks. Native path filters (not
-# dorny/paths-filter): fine while main is deliberately unprotected for solo
-# velocity. When branch protection + required checks arrive (the contribution-
-# readiness round), revisit — a required check that never runs because a PR
-# didn't touch its paths blocks merge. See _project-tracking/design/ci.md.
+# One workflow, three check surfaces (backend / frontend / app). A `changes` job
+# (dorny/paths-filter) decides which surface a push/PR touched, and each surface
+# job runs only if its paths changed. Native `on.paths` can't do this in a single
+# file — it gates the whole workflow, not individual jobs — hence the filter job.
+# See _project-tracking/design/ci.md. NOTE: once branch protection + required
+# checks arrive, a required check that is skipped (because a PR didn't touch its
+# paths) can block merge — revisit then (the contribution-readiness round).
 on:
   push:
     branches: [main, dev]
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - ".golangci.yml"
-      - "Makefile"
-      - "testdata/**"
-      - ".github/workflows/ci.yml"
   pull_request:
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - ".golangci.yml"
-      - "Makefile"
-      - "testdata/**"
-      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            backend:
+              - "**.go"
+              - "go.mod"
+              - "go.sum"
+              - ".golangci.yml"
+              - "Makefile"
+              - "testdata/**"
+              - ".github/workflows/ci.yml"
+            frontend:
+              - "frontend/**"
+              - "Makefile"
+              - ".github/workflows/ci.yml"
+            app:
+              - "main.go"
+              - "app.go"
+              - "wails.json"
+              - "build/**"
+              - "internal/seam/**"
+              - "internal/ast/**"
+              - "internal/domain/**"
+              - "frontend/wailsjs/**"
+              - "frontend/src/_generated-types/**"
+              - "go.mod"
+              - "go.sum"
+              - "Makefile"
+              - ".github/workflows/ci.yml"
+
   backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Install the pinned binary only; `make lint-backend` is the single, scoped
+      # lint authority (./internal/... ./cmd/...). golangci-lint-action has no
+      # install-only mode — it always runs an UNSCOPED `golangci-lint run ./...`,
+      # which loads the root Wails package and dies on its `//go:embed
+      # all:frontend/dist` (dist is gitignored, absent in backend-only CI).
       # Version must match the local Homebrew install — findings differ across
       # linter majors, and "local and CI are identical" is the whole contract.
-      - uses: golangci/golangci-lint-action@v7
-        with:
-          version: v2.12.2
-          install-only: true
+      - name: Install golangci-lint (pinned)
+        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v2.12.2/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2
       # exiftool is a required test dependency: without it the entire xmp sync
       # suite (oscillator guard, echo check, conflict resolution, sidecar merge)
       # and the dependency daemon round-trip self-skip, hiding regressions.
       # No gtk/webkit on purpose: check-backend excludes the root Wails package,
       # and this job passing without those headers IS the toolchain-isolation
-      # guarantee (impl/14 §5). The webkit-coupled root build lives in ci-app.yml.
+      # guarantee (impl/14 §5). The webkit-coupled root build lives in the app job.
       - name: Install external dependencies needed for tests
         run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
       # check-backend also runs the generated-TS freshness gate (webkit-free):
       # a vocabulary/enum edit here that forgot `make generate-seam` fails.
       - name: Run make check-backend
         run: make check-backend
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    # bun only, no Go toolchain — that this passes without Go is the other half of
+    # the toolchain-isolation guarantee (impl/14 §5). Typechecks against the
+    # *committed* generated types, so the `satisfies Record<TokenField, …>`
+    # completeness gate (C10) runs here.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install frontend dependencies
+        run: cd frontend && bun install --frozen-lockfile
+      - name: Run make check-frontend
+        run: make check-frontend
+
+  app:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    # Compile the root Wails package the backend job excludes, so a break in the
+    # composition root, the bound seam services, or the generated bindings is
+    # caught. The ONE job that needs the gtk/webkit toolchain — kept isolated so
+    # the backend job proves it does not. ubuntu-latest (24.04) ships
+    # webkit2gtk-4.1 only → the Makefile builds with -tags webkit2_41.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install webkit build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      # check-app stubs frontend/dist for the //go:embed, runs the freshness gate,
+      # and compiles the root with -tags webkit2_41. No bun: this is a compile
+      # check, not an asset-bundling check (that is `wails build`, a release step).
+      - name: Run make check-app
+        run: make check-app
