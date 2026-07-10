@@ -1,0 +1,102 @@
+/* Button primitive — ported from ds-reference/components-spec/Button.css.
+ * Look is the DS spec verbatim (every token identical); behavior/ARIA/focus is
+ * React Aria's. DS hover/active/focus/[disabled] selectors remap to RAC data-*. */
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: var(--control-h);
+    padding: 0 10px;
+    font-family: var(--font-ui);
+    font-size: var(--fs-12);
+    font-weight: var(--fw-medium);
+    color: var(--text-1);
+    background: var(--control-bg);
+    background-image: var(--chrome-sheen);
+    box-shadow: var(--chrome-edge), var(--emboss);
+    border: 1px solid var(--border-control);
+    border-radius: var(--r-2);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition:
+        background var(--t-instant) var(--ease-out),
+        box-shadow var(--t-instant) var(--ease-out);
+
+    &[data-hovered] {
+        background: var(--control-bg-hover);
+    }
+    &[data-pressed] {
+        background: var(--control-bg-active);
+        box-shadow: var(--deboss);
+    }
+    &[data-focus-visible] {
+        outline: 1px dotted var(--focus-ring);
+        outline-offset: 2px;
+    }
+    &[data-disabled] {
+        color: var(--text-disabled);
+        background: var(--control-bg);
+        opacity: 0.55;
+        cursor: default;
+    }
+}
+
+.primary {
+    background: var(--control-primary-bg);
+    color: var(--control-primary-ink);
+    border-color: transparent;
+
+    &[data-hovered] {
+        background: var(--control-primary-bg-hover);
+    }
+    &[data-pressed] {
+        background: var(--control-primary-bg);
+    }
+}
+
+.ghost {
+    background: transparent;
+    background-image: none;
+    box-shadow: none;
+    border-color: transparent;
+    color: var(--text-2);
+
+    &[data-hovered] {
+        background: var(--hover-ground);
+        color: var(--text-1);
+    }
+    &[data-pressed] {
+        background: var(--control-bg-active);
+    }
+}
+
+.danger {
+    color: var(--data-danger);
+}
+
+.lg {
+    height: var(--control-h-lg);
+    padding: 0 14px;
+    font-size: var(--fs-13);
+}
+
+.sm {
+    height: 20px;
+    padding: 0 7px;
+    font-size: var(--fs-11);
+}
+
+.icon {
+    padding: 0;
+    width: var(--control-h);
+
+    &.lg {
+        width: var(--control-h-lg);
+    }
+    &.sm {
+        width: 20px;
+    }
+}

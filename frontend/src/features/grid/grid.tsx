@@ -7,7 +7,7 @@
 // lands in the api/queries hook — this component keeps its shape.
 
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type KeyboardEvent, type PointerEvent, useCallback, useRef, useState } from "react";
+import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { AssetRow } from "@/api/contract";
 import { useQueryAssets } from "@/api/queries";
 import { useCatalogDispatch, useCatalogQuery, useCursorId } from "@/stores/catalog-store";
@@ -20,6 +20,17 @@ const GAP = 16; // matches --sp-5, and the virtualizer row gap
 export function Grid() {
     const { query, arrangement } = useCatalogQuery();
     const { data, isPending, isError, refetch } = useQueryAssets(query, arrangement);
+    const dispatch = useCatalogDispatch();
+
+    // Echo the working-set size + first row back to the store so it can hold the
+    // cursor invariant (seed when empty→non-empty, clear when it empties). The grid
+    // is the one owner of "the working set"; the store never fetches (frontend/09).
+    // ponytail: firstId is items[0] because the whole result is one page; when
+    // windowed fetch lands, source it from the ordered slice, not the loaded page.
+    useEffect(() => {
+        if (!data) return;
+        dispatch({ type: "working-set-changed", total: data.total, firstId: data.items[0]?.id ?? null });
+    }, [data, dispatch]);
 
     // ponytail: loading/error/Retry copy is literal until the i18n key catalog
     // lands (widen); C14. The RAC Button port replaces the bare <button> then too.

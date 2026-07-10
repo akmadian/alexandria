@@ -54,6 +54,20 @@ Apple Liquid Glass materiality — used transiently, never persistently.
   leak asset color into the UI, defeating hue-free chrome. Modal-over-modal: the stack dims/blurs
   progressively (the modal-stack reference).
 
+> **Amended 2026-07-10 (Ari): the app default adopts the DS `glass` material**, superseding the two
+> bullets above (flat construction + transient blur). `<html data-material="glass">` is now the
+> default; `data-material="flat"` is the opt-out. What this changes and preserves:
+> - **Depth returns.** Persistent chrome gains the DS's neumorphic construction —
+>   `--emboss`/`--deboss`/`--chrome-edge`/`--chrome-sheen`/`--card-float`, plus card radius and
+>   inter-card gaps. This reverses "construction is flat / no shadow stacks."
+> - **Still opaque, so hue-free holds.** Glass mode's `--glass-bg` and panels are opaque (it is
+>   *neumorphic* glass, not translucent); no asset color leaks into chrome — the load-bearing
+>   rationale for "persistent chrome always opaque" is intact.
+> - **Transient blur is off by default in glass** (`--glass-blur: 0`): overlays read as opaque
+>   floating cards (lift + light edge) rather than frosted. If we want the frosted-overlay
+>   treatment *on top of* glass chrome, re-enable blur for transient surfaces in glass mode (a DS
+>   token tweak) — flagged, not yet done.
+
 ## Selection, cursor, and focus (spec requirement)
 
 Selection is neutral and must be *specced*, not improvised. The design system must deliver

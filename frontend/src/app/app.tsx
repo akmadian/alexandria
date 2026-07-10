@@ -8,6 +8,7 @@
 // Data values (counts) already go through Intl.
 
 import { useQueryAssets } from "@/api/queries";
+import { FilterBar } from "@/features/filter-bar/filter-bar";
 import { Grid } from "@/features/grid/grid";
 import { formatNumber } from "@/lib/format";
 import { useCatalogQuery, useSelectionCount } from "@/stores/catalog-store";
@@ -26,6 +27,7 @@ function Shell() {
                 <span className={s.title}>Library</span>
                 {data && <span className={s.metric}>{formatNumber(total)} assets</span>}
             </header>
+            <FilterBar />
             <main className={s.main}>
                 <Grid />
             </main>

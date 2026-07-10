@@ -1,0 +1,29 @@
+/* Popover primitive — the transient glass surface, ported from
+ * ds-reference/components-spec/Popover.css (.ax-pop). RAC's Popover owns
+ * positioning, portalling, collision and z-index (the DS .ax-pop-anchored rules),
+ * so this is surface look only. Blur is transient-only per the DS golden rules. */
+
+.popover {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-3);
+    overflow: hidden;
+    box-shadow: var(--card-float);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    font-family: var(--font-ui);
+    color: var(--text-1);
+
+    /* Evidentiary entrance: scale/fade from the trigger. RAC toggles data-entering/
+     * data-exiting; --t-* collapses to 0ms under prefers-reduced-motion (DS rule 6). */
+    &[data-entering] {
+        animation: popover-in var(--t-fast) var(--ease-out);
+    }
+}
+
+@keyframes popover-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97) translateY(-3px);
+    }
+}

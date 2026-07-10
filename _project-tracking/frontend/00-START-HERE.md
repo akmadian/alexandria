@@ -62,11 +62,37 @@ dev`) via a **thin end-to-end vertical, then widen** strategy.
   `queryAssets`; store-owned selection/cursor. `app/` shell + providers + DS wiring.
 
 This is the frontend-side of the seam `contract.ts` reconciliation the seam round deferred to the
-"wails-dev pass" (`../seam/01` ledger, `../backend/impl/DEFERRED.md §7`). **Widen next:** windowed
-block fetch (+ switch range materialization to the `assetIdSlice` seam call, + cursor auto-seed via
-a `working-set-changed(total)` echo — both marked `ponytail:` in the store/grid) · filter bar +
-pills (query-model `parseValue`/kind-editors) · sidebar Browser trees · mutations + optimistic/undo ·
-event pump · inspector/status-bar/palette.
+"wails-dev pass" (`../seam/01` ledger, `../backend/impl/DEFERRED.md §7`).
+
+**Filter-bar slice landed (2026-07-10), enum + numeric + text:** the query model is now
+*interactive* — the first widen vertical, built on the primitives/features split (RAC for chrome
+behavior, DS for look):
+
+- `components/` — the **primitives**: `button/`, `popover/`, `menu/`, and `field/` (text + number
+  on RAC TextField/NumberField), thin RAC wrappers skinned by the DS `.css` specs (look ported
+  verbatim; DS state selectors remapped to RAC `data-*`; the DS's hand-rolled fixed-position menu
+  floater dropped for RAC `Popover`).
+- `features/filter-bar/` — the flat pill row that IS the top-level predicate (`03`). A **generic**
+  `filter-pill` (field│operator│value│×) draws a kind-agnostic operator segment from the token's
+  operators and delegates the value segment to a **per-kind editor registry** (`kinds.tsx`: enum
+  multi-select Menu · numeric/text field-in-Popover; C10 — new kind = one row, no pill branch).
+  `fields.ts` is the offered-field registry (kind mirrored from the generated grammar; enums bridge
+  to runtime members via the completeness trick). The add-field Menu is grouped by category. Tests +
+  live browser verification.
+- `query-model/assemble.ts` — pure `addLeaf`/`removeLeaf`/`replaceLeaf`/`topLevelLeaves` (flat
+  pill row = top-level AND). `registry.ts` exposes `valuelessOperator` (empty/notEmpty → no value
+  segment). Tests.
+- `stores/catalog-store.ts` — `filter-replaced` (query change resets ephemeral tiers) +
+  `working-set-changed` echo, which **retires the cursor-auto-seed `ponytail:` debt** (cursor now
+  exists iff the working set is non-empty). Grid dispatches the echo.
+
+**Widen next (filter system, in order):** the **date** kind (its own editor — the anchor+duration
+half-open grammar + presets, aligned to the mock's `dateWithin`) · **tag / source** kinds (need
+vocabulary — a mock `distinctValues` + the "vocabulary passed in, never fetched" hook) · the
+recursive **AND/OR/NOT group editor** + status-bar narration (the round-trip property). Then the
+rest of the app: windowed block fetch (+ range materialization via the `assetIdSlice` seam call —
+still `ponytail:` in the grid) · sidebar Browser trees ·
+mutations + optimistic/undo · event pump · inspector/status-bar/palette.
 
 The patterns worth keeping were re-ratified on their merits in `09`, not preserved as code.
 

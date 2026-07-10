@@ -29,6 +29,53 @@
         },
         "theme": "Switch color scheme"
     },
+    "filter": {
+        "add": "Add filter",
+        "clear": "Clear filters",
+        "remove": "Remove filter",
+        "editOperator": "Change operator",
+        "editValue": "Edit value",
+        "category": {
+            "triage": "Triage",
+            "file": "File",
+            "capture": "Capture",
+            "metadata": "Metadata"
+        },
+        "field": {
+            "rating": "Rating",
+            "flag": "Flag",
+            "colorLabel": "Color label",
+            "fileType": "File type",
+            "filename": "Filename",
+            "cameraMake": "Camera make",
+            "cameraModel": "Camera model",
+            "title": "Title"
+        },
+        "op": {
+            "in": "is any of",
+            "notIn": "is none of",
+            "eq": "is",
+            "neq": "is not",
+            "gte": "at least",
+            "lte": "at most",
+            "contains": "contains",
+            "startsWith": "starts with",
+            "empty": "is empty",
+            "notEmpty": "is set"
+        },
+        "opShort": {
+            "in": "any",
+            "notIn": "none",
+            "eq": "=",
+            "neq": "≠",
+            "gte": "≥",
+            "lte": "≤",
+            "contains": "has",
+            "startsWith": "starts",
+            "empty": "empty",
+            "notEmpty": "set"
+        }
+    },
     "grid": {
         "empty": "No assets match this view",
         "loading": "Loading…"

@@ -40,16 +40,18 @@ export type CatalogAction =
     | { type: "range-committed"; ids: readonly AssetID[] } // shift-click / shift-arrow
     | { type: "cursor-set"; id: AssetID; select: boolean } // arrow-key nav
     | { type: "select-all" }
-    | { type: "selection-cleared" };
+    | { type: "selection-cleared" }
+    | { type: "filter-replaced"; filter: WhereNode | null } // scope/filter family — a query change
+    | { type: "working-set-changed"; total: number; firstId: AssetID | null }; // data echo from the fetch
 
 const EMPTY: ReadonlySet<AssetID> = new Set();
 
 // The reducer reads only these fields; narrowing the parameter makes it a pure
 // function unit tests can drive without constructing the whole store.
-type SelectionState = Pick<CatalogViewState, "selection" | "cursorId">;
+type ReducerState = Pick<CatalogViewState, "selection" | "cursorId" | "filter">;
 
 // Exported for unit tests — this reducer is the app's real internal API (frontend/09).
-export function reduce(state: SelectionState, action: CatalogAction): Partial<SelectionState> {
+export function reduce(state: ReducerState, action: CatalogAction): Partial<ReducerState> {
     switch (action.type) {
         case "asset-clicked": {
             if (!action.additive) return { selection: { kind: "ids", ids: new Set([action.id]) }, cursorId: action.id };
@@ -74,6 +76,19 @@ export function reduce(state: SelectionState, action: CatalogAction): Partial<Se
             return { selection: { kind: "all", except: EMPTY } };
         case "selection-cleared":
             return { selection: { kind: "ids", ids: EMPTY } };
+        case "filter-replaced":
+            // A query change resets the ephemeral tiers (frontend/02): selection
+            // cleared, cursor dropped so the working-set-changed echo re-seeds it to
+            // the new first row. ponytail: keeping the cursor's asset if it survives
+            // the new query (LrC) needs an async IndexOfAsset lookup in the feature
+            // layer; TRIGGER: build cursor keep-if-present across queries.
+            return { filter: action.filter, selection: { kind: "ids", ids: EMPTY }, cursorId: null };
+        case "working-set-changed":
+            // The cursor exists iff the working set is non-empty (frontend/09): seed
+            // it to the first row when we hold none, clear it when the set empties.
+            // Selection is untouched — membership doesn't move with the data (C4).
+            if (action.total === 0) return { cursorId: null };
+            return state.cursorId === null ? { cursorId: action.firstId } : {};
     }
 }
 
@@ -83,11 +98,9 @@ const useCatalogStore = create<CatalogViewState>((set) => ({
     arrangement: DEFAULT_ARRANGEMENT,
     viewMode: "grid",
     selection: { kind: "ids", ids: EMPTY },
-    // ponytail: cursor starts null and is seeded on first interaction only. The
-    // frontend/09 invariant "cursor exists whenever the working set is non-empty"
-    // needs a `working-set-changed(total)` echo action that seeds cursor→index 0
-    // (or clears it when empty). TRIGGER: wire it when the grid feeds the query
-    // total back into the store — the same point the windowed-fetch widen lands.
+    // Starts null; the grid's working-set-changed echo seeds it to the first row
+    // once the query resolves and clears it when the set empties, satisfying the
+    // frontend/09 invariant "cursor exists whenever the working set is non-empty".
     cursorId: null,
     dispatch: (action) => set((state) => reduce(state, action)),
 }));
@@ -108,6 +121,7 @@ export function selectionSize(selection: Selection, total: number): number {
 export const useIsSelected = (id: AssetID): boolean => useCatalogStore((s) => selectionHas(s.selection, id));
 export const useIsCursor = (id: AssetID): boolean => useCatalogStore((s) => s.cursorId === id);
 export const useCursorId = (): AssetID | null => useCatalogStore((s) => s.cursorId);
+export const useFilter = (): WhereNode | null => useCatalogStore((s) => s.filter);
 export const useViewMode = (): ViewMode => useCatalogStore((s) => s.viewMode);
 export const useCatalogDispatch = (): ((action: CatalogAction) => void) => useCatalogStore((s) => s.dispatch);
 export const useSelectionCount = (total: number): number => useCatalogStore((s) => selectionSize(s.selection, total));

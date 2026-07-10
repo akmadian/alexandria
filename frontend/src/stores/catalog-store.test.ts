@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
+import type { WhereNode } from "@/query-model/ast";
+import { leaf } from "@/query-model/registry";
 import { reduce, type Selection, selectionHas, selectionSize } from "./catalog-store";
 
 const ids = (...values: string[]): Selection => ({ kind: "ids", ids: new Set(values) });
 const all = (...except: string[]): Selection => ({ kind: "all", except: new Set(except) });
-const state = (selection: Selection = ids(), cursorId: string | null = null) => ({ selection, cursorId });
+const state = (selection: Selection = ids(), cursorId: string | null = null, filter: WhereNode | null = null) => ({
+    selection,
+    cursorId,
+    filter,
+});
 const idList = (selection: Selection | undefined) => (selection?.kind === "ids" ? [...selection.ids] : null);
 
 describe("reduce", () => {
@@ -49,6 +55,29 @@ describe("reduce", () => {
     it("selection-cleared empties the selection", () => {
         const next = reduce(state(all("a")), { type: "selection-cleared" });
         expect(next.selection).toEqual({ kind: "ids", ids: new Set() });
+    });
+
+    it("filter-replaced sets the filter and resets the ephemeral tiers", () => {
+        const where = leaf("fileType", "in", ["image"]);
+        const next = reduce(state(ids("a", "b"), "a"), { type: "filter-replaced", filter: where });
+        expect(next.filter).toBe(where);
+        expect(next.selection).toEqual({ kind: "ids", ids: new Set() });
+        expect(next.cursorId).toBeNull();
+    });
+});
+
+describe("reduce — working-set-changed (cursor invariant)", () => {
+    it("seeds the cursor to the first row when none is held", () => {
+        const next = reduce(state(ids(), null), { type: "working-set-changed", total: 64, firstId: "first" });
+        expect(next.cursorId).toBe("first");
+    });
+    it("clears the cursor when the working set empties", () => {
+        const next = reduce(state(ids(), "old"), { type: "working-set-changed", total: 0, firstId: null });
+        expect(next.cursorId).toBeNull();
+    });
+    it("leaves an existing cursor in place (no jump on refetch)", () => {
+        const next = reduce(state(ids(), "held"), { type: "working-set-changed", total: 64, firstId: "first" });
+        expect(next.cursorId).toBeUndefined(); // no change emitted
     });
 });
 

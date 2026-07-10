@@ -3,7 +3,8 @@
 .shell {
     height: 100%;
     display: grid;
-    grid-template-rows: var(--titlebar-h) 1fr var(--statusbar-h);
+    /* header · filter bar (self-sized) · canvas well · status bar */
+    grid-template-rows: var(--titlebar-h) auto 1fr var(--statusbar-h);
     background: var(--panel);
 }
 

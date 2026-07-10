@@ -31,8 +31,8 @@ export function leaf(field: TokenField, cmp: TokenOperator, value: unknown): Lea
 }
 
 // Absence is an operator on the base token ("unrated" → rating empty), so
-// empty/notEmpty carry no value.
-function valuelessOperator(cmp: TokenOperator): boolean {
+// empty/notEmpty carry no value — the filter bar renders no value segment for them.
+export function valuelessOperator(cmp: TokenOperator): boolean {
     return cmp === "empty" || cmp === "notEmpty";
 }
 
