@@ -1,6 +1,6 @@
 -- Alexandria catalog schema, v1 (pre-release; edited in place, not stacked).
 --
--- Column classes (see docs/.../03-data-model.md §1) are annotated per column:
+-- Column classes (see docs/data-model.md §1) are annotated per column:
 --   [obs]  observation  — copied from the filesystem; ingest/watcher write it, world wins
 --   [jdg]  judgment     — user-declared; only the user-action path writes it, DB wins
 --   [syn]  sync-state   — a reconciler's own cursor; only its owner writes it

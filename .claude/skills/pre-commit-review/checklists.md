@@ -8,11 +8,10 @@ exhaustive switches, coverage gate, generated-TS freshness) — do not re-litiga
 
 - **Scope fidelity.** The diff matches the scope confirmed at task-pickup: nothing the spec
   requires is missing; nothing landed that wasn't in scope (fold-ins must have been agreed).
-- **Doc maintenance in the same change.** Procedure: open the spec's doc-maintenance section
-  and check each doc it names appears in the diff, item by item; independently verify the
-  spec's own status block, the area tracker, the master head
-  (`_project-tracking/00-START-HERE.md` — frontier + "Last updated"), and any ledger rows
-  (DEFERRED triggers, seam reconciliation ledger, open questions the work answers). Absence
+- **Doc maintenance in the same change (D27 fold-and-delete).** Procedure: if the round
+  completes its work item, verify the diff DELETES it and folds the residue — the reference
+  docs / package READMEs it should update, a decision entry if anything was decided — plus any
+  ledger rows (DEFERRED triggers, open questions the work answers). Absence
   is the failure mode here — you cannot find a missing doc update by reading the hunks that
   exist.
 - **Logging ships with the flow** (guidelines §4). Evidence, not impression: list each
@@ -147,11 +146,14 @@ Guidelines discipline (Important unless noted):
 
 ## Docs
 
-- **Status claims verified against code**, never inferred from another doc — anything marked
-  pending that shipped (or vice versa) is a finding.
-- **Master head contract.** Completing or reprioritizing a frontier item updates
-  `00-START-HERE.md` in the same change, including "Last updated". Relative dates converted to
-  absolute.
+- **No recorded state (D27).** Status prose, checkmarks, or done-ledgers anywhere outside
+  `docs/decisions.md`/`DEFERRED.md` are findings (`make check-docs` catches the mechanical
+  cases; judge the rest). Claims in work items verified against code, never inferred from
+  another doc.
+- **Fold-and-delete contract (D27).** A round that completes a work item deletes it AND folds
+  the residue (reference docs / package READMEs / decision entry) in the same change; an epic
+  design round mints all child tasks. A deletion without its fold — or a "done" item still
+  possessing a file — is a finding. Relative dates converted to absolute.
 - **CONSTANTS.md is LOCKED.** A doc change that edits a C-rule to match drifted code is
   Critical — the code is what's wrong, or the rule gets reopened explicitly with date +
   rationale. C-numbers and D-numbers are never renumbered or reused.

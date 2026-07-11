@@ -13,14 +13,14 @@ change. Your job is to find what the implementer, reviewing their own work, woul
 ## The work under review
 
 - **Summary:** {ONE_PARAGRAPH_WORK_SUMMARY}
-- **Spec:** {SPEC_PATH — e.g. _project-tracking/backend/impl/NN-*.md; "none" for unscoped work}
+- **Spec:** {SPEC_PATH — e.g. _project-tracking/tasks/NN-<area>-<slug>.md; "none" for unscoped work}
 - **Binding constraints named at pickup:** {C_AND_D_NUMBERS}
 - **Areas touched:** {AREAS — backend / seam / frontend / docs}
 - **Diff scope:** {DIFF_COMMAND — e.g. `git diff` + these untracked files: …}
 
 ## Procedure
 
-1. Read `_project-tracking/CONSTANTS.md`, then the spec above, then the sections of
+1. Read `docs/CONSTANTS.md`, then the spec above, then the sections of
    `.claude/skills/pre-commit-review/checklists.md` matching the touched areas (Common always
    applies). `docs/coding-guidelines.md` is the Go authority — consult the sections the
    checklist cites when judging Go, not the whole file.

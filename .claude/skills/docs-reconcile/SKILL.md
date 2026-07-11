@@ -5,37 +5,42 @@ description: Documentation reconciliation sweep for Alexandria. Use when asked t
 
 # Docs reconcile
 
-The tracking docs under `_project-tracking/` carry a maintenance contract: whoever completes or
-reprioritizes work updates the affected docs in the same change. This skill is the audit for when
-that contract slipped. Docs hold state; you re-derive state from the code and git, then make the
-docs match.
+The docs system (D27) derives state from the tree — mechanical drift is caught by
+`make check-docs` (status prose, work-item authority pointers, dead links, filename contracts).
+This skill is the JUDGMENT half: the checks a grep can't run. Code is truth, docs are claims;
+re-derive, then make the docs match.
 
 ## Procedure
 
-1. **Establish reality first, docs second.** `git log --oneline` since the master head's
-   "Last updated" date; note what landed. Skim the touched packages — code is truth, docs are
-   claims.
-2. **Sweep, in this order:**
-   - `_project-tracking/00-START-HERE.md` — frontier table, dependency tree, status-at-a-glance,
-     "Last updated" date. This is the doc whose staleness costs most.
-   - Area trackers (`backend/`, `seam/`, `frontend/` `00-START-HERE.md`) — status vs. reality.
-   - Every `impl/NN-*.md` status block — anything marked pending that shipped, or vice versa.
-   - `backend/impl/DEFERRED.md` — entries whose trigger has fired or whose premise dissolved;
-     the `ponytail:` marker census in its audit note (recount with grep; note stale markers —
-     completed-but-still-commented).
-   - `backend/04-open-questions.md` — questions answered by landed work.
-   - The reconciliation ledger in `seam/01-queries-and-commands.md` — per-row done/pending.
-   - Cross-references — links between docs that moved or retired.
-3. **Check `CONSTANTS.md` last, differently.** Constants are LOCKED; never edit one to match
-   drifted code. If code contradicts a C-rule, that is a *finding to report*, not a doc fix.
-4. **Apply and report.** Make factual updates directly (status blocks, dates, checkmarks, links,
-   counts). For anything requiring judgment — reprioritizing the frontier, retiring a ledger
-   entry, promoting a marker — propose it and let the user decide. Do not commit; end with a
+1. **Run `make check-docs` first.** Fix anything it reports before judging — never hand-audit
+   what the machine already checks.
+2. **Establish reality.** `git log --oneline` since the last reconcile/round; skim the touched
+   packages.
+3. **Judgment sweep, in this order:**
+   - **Fold completeness.** For each work item deleted since the last sweep
+     (`git log --diff-filter=D -- _project-tracking/`): did its round actually fold the residue —
+     reference docs updated, decision entry appended where a decision was made? A deletion
+     without its fold is the worst drift this system allows.
+   - **Reference docs vs code reality.** `docs/*.md` + package READMEs — anything they state that
+     the code no longer does. These are the docs whose staleness costs most.
+   - `_project-tracking/DEFERRED.md` — entries whose trigger has fired or whose premise
+     dissolved; recount the `ponytail:` markers with grep (note completed-but-still-commented).
+   - `_project-tracking/ideation/backend-open-questions.md` — questions answered by landed work
+     (delete them; the answer lives in the decision log).
+   - `tasks/` — items whose scope has partially landed (rescope them), or whose `Blocked by:`
+     names a file that never existed (typo — fix it).
+   - `epics/` — epics whose design round quietly completed without minting tasks.
+4. **Check `docs/CONSTANTS.md` last, differently.** Constants are LOCKED; never edit one to
+   match drifted code. If code contradicts a C-rule, that is a *finding to report*, not a doc fix.
+5. **Apply and report.** Make factual updates directly (reference-doc corrections, dead-entry
+   deletions, link fixes). For anything requiring judgment — retiring a ledger entry, rescoping
+   a task, promoting a marker — propose it and let the user decide. Do not commit; end with a
    summary of what changed and the judgment calls awaiting an answer.
 
 ## Rules
 
-- Update a status by *verifying the code*, never by inferring from another doc.
+- Update a claim by *verifying the code*, never by inferring from another doc.
 - Convert relative dates to absolute when touching them.
-- Keep the master head's maintenance contract intact — if this sweep found drift, the interesting
-  question is which round skipped its doc-maintenance step; note it.
+- Never ADD status prose while reconciling — done work is deleted and folded, not annotated.
+- If this sweep found drift, the interesting question is which round skipped its fold-and-delete
+  step; note it.

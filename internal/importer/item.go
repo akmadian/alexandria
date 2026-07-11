@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// action is the identity-matrix verdict for one hashed file (03-data-model.md §6).
+// action is the identity-matrix verdict for one hashed file (docs/data-model.md §6).
 type action int
 
 const (

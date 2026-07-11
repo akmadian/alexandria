@@ -9,31 +9,27 @@ to build UI here (the design-system ↔ React Aria reconciliation). The deep spe
 truth — this orients you to them and encodes the operational know-how that isn't written elsewhere.
 Don't start building until §1–§4 are in your head.
 
-> **Status (2026-07-10): ground-up rebuild UNDERWAY.** Architecture LOCKED:
-> `../_project-tracking/frontend/09-ground-up-redesign-notes.md`. The pre-rework `src/` is deleted;
-> the new foundation is bottom-up and real (`query-model/` pure AST + registry, `api/` contract +
-> AST mock engine + client/hook, `stores/` catalog store, `features/grid/` virtualized DS grid),
-> built **in isolation** against a contract-faithful mock, thin-vertical-then-widen. The first
-> widen slice landed the **primitives layer** (`components/` button/popover/menu/field — RAC
-> behavior, DS-ported look) and an interactive **filter bar** (`features/filter-bar/`): a generic
-> pill + a **per-kind value-editor registry** (enum/numeric/text today; date/tag/source next) +
-> `query-model/assemble` + store filter actions. Status + next slices:
-> `../_project-tracking/frontend/00-START-HERE.md`.
+> **The ground-up rebuild strategy** (architecture LOCKED 2026-07-08:
+> `../docs/frontend-architecture.md`): built **in isolation** against a contract-faithful mock
+> (`bun run dev`, no Wails/Go), thin-vertical-then-widen — a full end-to-end vertical first
+> (query-model → api/mock → store → grid), then widen slice by slice (filter kinds, editors,
+> views). What exists is what `src/` contains — the tree is the status; don't trust prose for it.
 
 ---
 
 ## 1. Read before you build — the map, in dependency order
 
 These decide things; don't reinvent them. Read top-down — each assumes the ones above. You don't
-need all of 01–08 every time; always load CONSTANTS + `09`, then the doc your feature lives in.
+need the whole corpus every time; always load CONSTANTS + the architecture record, then the doc
+your feature lives in.
 
 | Doc | Why you need it |
 |---|---|
-| `../_project-tracking/CONSTANTS.md` (C1–C14) | The cross-cutting invariants every surface obeys — vocabulary, the state equation, query-model-is-the-AST, registries, generated-types, i18n. About to contradict one? You're wrong; stop. |
-| `../_project-tracking/frontend/09-ground-up-redesign-notes.md` | **The architecture record (LOCKED).** State planes, the store shape + action vocabulary + invariants, seam integration, fetch/perf/retry policy, the token/AST contract, optimistic-mutation discipline. Wins over 01–08 for architecture; §6 below is its enforcement summary. |
-| `../_project-tracking/frontend/02-state-model.md` · `03-search-and-filter-ux.md` | The state glossary (scope/filter/query/selection/cursor/arrangement/view-mode) and the filter-bar/pill/search-tier UX. Read before touching the store or the filter bar. |
-| `../_project-tracking/frontend/{01,04,05,06,08}` | Flows/views · keyboard+actions+palette · culling+signals · Review · **design language** (08 is the visual authority: neutral chrome, canvas, flat construction). Read the one your feature is in. |
-| `../_project-tracking/seam/01-queries-and-commands.md` | The engine↔UI contract: the query AST, the workhorse methods (`queryAssets`/`updateAssets`/`assetIdSlice`/`indexOfAsset`/`distinctValues`), the event/job envelopes. The mock implements this; the Wails adapter will too. |
+| `../docs/CONSTANTS.md` (C1–C15) | The cross-cutting invariants every surface obeys — vocabulary, the state equation, query-model-is-the-AST, registries, generated-types, i18n. About to contradict one? You're wrong; stop. |
+| `../docs/frontend-architecture.md` | **The architecture record (LOCKED).** State planes, the store shape + action vocabulary + invariants, seam integration, fetch/perf/retry policy, the token/AST contract, optimistic-mutation discipline. Wins over the rest of the corpus for architecture; §6 below is its enforcement summary. |
+| `frontend-state-model` · `frontend-search-filter-ux` (the frontend epic corpus — `ls` the epics directory under project tracking) | The state glossary (scope/filter/query/selection/cursor/arrangement/view-mode) and the filter-bar/pill/search-tier UX. Read before touching the store or the filter bar. |
+| the rest of the frontend epic corpus (`frontend-flows-and-views` · `frontend-keyboard-actions` · `frontend-culling-signals` · `frontend-review` · `frontend-design-language`) | Flows/views · keyboard+actions+palette · culling+signals · Review · **design language** (the visual authority: neutral chrome, canvas, flat construction). Read the one your feature is in. |
+| `../docs/seam-contract.md` | The engine↔UI contract: the query AST, the workhorse methods (`queryAssets`/`updateAssets`/`assetIdSlice`/`indexOfAsset`/`distinctValues`), the event/job envelopes. The mock implements this; the Wails adapter will too. |
 | `src/styles/ds-reference/CLAUDE.md` + `PORTING.md` | How to consume the design system: golden rules (semantic tokens, hue-free chrome, flat construction), the token vocabulary, the component-port recipe. `components-spec/*.css` are per-component **visual specs** — read to port, never import. |
 
 **React Aria is documented live** — use the React Aria MCP server (`list_react_aria_pages`,
@@ -143,7 +139,7 @@ picker), bridge with the completeness trick — a `Record<TheEnum, …>`-keyed l
 read back — so a newly generated member breaks the build until handled. See
 `features/filter-bar/enum-fields.ts`.
 
-## 6. Coding standards (the rebuild rules, rationale in `09`)
+## 6. Coding standards (the rebuild rules, rationale in the architecture record)
 
 ### State — three planes
 - Catalog view state → the one Zustand store (single reducer-style `dispatch`; the action
@@ -161,7 +157,7 @@ read back — so a newly generated member breaks the build until handled. See
 - Long `staleTime` + event-driven invalidation (the engine pushes C8 events — we own the freshness
   signal). `refetchOnWindowFocus` / `refetchOnReconnect` off.
 - **Mutation payloads carry absolute values, never deltas** — idempotent by construction.
-- Optimistic discipline (per `09` §Optimistic mutation): cancel-on-mutate + invalidation gate while
+- Optimistic discipline (per the architecture record §Optimistic mutation): cancel-on-mutate + invalidation gate while
   catalog-editing mutations are in flight; ONE ordered lane for mutations + undo/redo; undo/redo
   render pessimistically; optimism only for ids-shaped targets; failure = revert + toast, loud never
   silent.

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Docs-system greps (D27) — milliseconds, self-explaining failures.
+# Heavier checks stay make-discipline (`make check` before commit).
+exec make --no-print-directory check-docs

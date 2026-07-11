@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// MATCH is the identity matrix (03-data-model.md §6), run on a single goroutine
+// MATCH is the identity matrix (docs/data-model.md §6), run on a single goroutine
 // so its catalog reads see a serializable view of the state the pipeline is
 // mutating. It decides new/reimport/relink/duplicate, mints the UUID for the
 // verdicts that need one (before THUMB, which names the thumbnail file by ID),
@@ -46,7 +46,7 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 }
 
 // classify decides what to do with a hashed file, in the matrix's precedence
-// order (03-data-model.md §6). The returned asset is the existing/matched record
+// order (docs/data-model.md §6). The returned asset is the existing/matched record
 // the action refers to (nil for a brand-new file). inRunHashes maps this run's
 // freshly-minted hashes → asset IDs so a first-import duplicate PAIR (a copy that
 // exists before its original is committed) is still caught; pass nil for the

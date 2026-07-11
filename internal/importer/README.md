@@ -5,10 +5,8 @@ source, figures out what each file *is* relative to what the catalog already
 knows, extracts metadata, generates thumbnails, and writes everything the
 catalog needs — durably, concurrently, and idempotently.
 
-If you read one thing first, read
-[`impl/done/04-ingest-pipeline.md`](../../_project-tracking/backend/impl/done/04-ingest-pipeline.md)
-— this package is its implementation. The `D<n>` references below point at
-[`02-decision-log.md`](../../_project-tracking/backend/02-decision-log.md).
+This README is the reference for the pipeline. The `D<n>` references below point at
+[`docs/decisions.md`](../../docs/decisions.md).
 
 ## The five ideas that explain everything else
 

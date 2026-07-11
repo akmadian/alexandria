@@ -47,7 +47,7 @@ These are the foundation. Everything else depends on them.
 - xxHash of first 64KB + file size for fast change detection and dedup
 - MATCH per D20 (detect-and-flag, never auto-mutate): any content match at a new path — move, rename, or copy — mints the new path as a distinct asset and records a pending pair in the `duplicates` ledger for Review; nothing is ever auto-relinked or auto-merged
 - Per-file error handling — individual file failures do not abort the pipeline
-- Mid-scan source disconnect (drive unplugged, share dropped) must never mass-mark unvisited assets missing — the walk-completeness guard is an open design task (`backend/04-open-questions.md` #15)
+- Mid-scan source disconnect (drive unplugged, share dropped) must never mass-mark unvisited assets missing — the walk-completeness guard is an open design task (`ideation/backend-open-questions.md` #15)
 - Cancellable at any point via context
 - Batched catalog writes (default 50 per transaction) for performance
 - Import is idempotent — re-running on unchanged source is essentially free
@@ -77,11 +77,11 @@ These are the foundation. Everything else depends on them.
   - PDF: first page preview via Ghostscript CLI
   - Markdown: text-preview thumbnail
 - External tools invoked as subprocesses, never cgo bindings — subprocess crash kills the subprocess, not Alexandria
-- Extension floor (from `_scratch/file-types-to-support.md`), beyond the list above: HEIC (raster path via platform decoder or libheif), plain text/CSS (text-preview like Markdown), fonts (woff/woff2/ttf — specimen-render thumbnail; full viewer is P3), zip (classify + generic card, no preview). Adding a type = one registry row per side (backend `assettype`, frontend presentation registry)
+- Extension floor (from `ideation/file-types-to-support.md`), beyond the list above: HEIC (raster path via platform decoder or libheif), plain text/CSS (text-preview like Markdown), fonts (woff/woff2/ttf — specimen-render thumbnail; full viewer is P3), zip (classify + generic card, no preview). Adding a type = one registry row per side (backend `assettype`, frontend presentation registry)
 
 ### External Tool Acquisition
 
-*The subprocess fleet (exiftool, ffmpeg, dcraw_emu, ImageMagick, Ghostscript) gates RAW/video/PSD/PDF thumbnails and metadata — the acquisition UX is part of making P0 formats work. From `_scratch/sysde.md`.*
+*The subprocess fleet (exiftool, ffmpeg, dcraw_emu, ImageMagick, Ghostscript) gates RAW/video/PSD/PDF thumbnails and metadata — the acquisition UX is part of making P0 formats work. From `ideation/sysde.md`.*
 
 - Auto-detect tools on PATH at startup, plus common install locations
 - In-app UX offering to fetch/download missing tools where licensing permits; otherwise clear guidance to install
@@ -151,7 +151,7 @@ These are the foundation. Everything else depends on them.
 
 ### View Mode System
 
-*Locked 2026-07-07 (CONSTANTS C2): `view state = viewMode(query + arrangement, selection + cursor)`. A view mode is a pure renderer over shared catalog state — all modes present the same working set, arrangement, selection, and cursor; only rendering and input mapping change. Full spec: `frontend/02-state-model.md`.*
+*Locked 2026-07-07 (CONSTANTS C2): `view state = viewMode(query + arrangement, selection + cursor)`. A view mode is a pure renderer over shared catalog state — all modes present the same working set, arrangement, selection, and cursor; only rendering and input mapping change. Full spec: `epics/frontend-state-model.md`.*
 
 - Four modes: **Grid** (G, P0), **Loupe** (E/Enter, P0), **Compare** (C, P2), **Cull** (D, P1)
 - Switches are single keys, instant (<100ms), stateless — no navigation stack; Escape always steps down toward Grid
@@ -230,7 +230,7 @@ Without these, the app isn't competitive with existing tools for the target user
 
 *Core value proposition for creative professional triage. Depends on: basic organization, grid view.*
 
-- Action registry: every user-invokable operation is an entry `{id, title, aliases, context predicate, handler, default binding}`; grows incrementally as features land (spec: `frontend/04-keyboard-and-actions.md`)
+- Action registry: every user-invokable operation is an entry `{id, title, aliases, context predicate, handler, default binding}`; grows incrementally as features land (spec: `epics/frontend-keyboard-actions.md`)
 - Verb grammar (locked 2026-07-07): **universal verbs** identical everywhere — navigate (arrows/J/K), rate (1–5, 0 clears), label (6–9, − clears), flag (P/X/U), view modes (G/E/C/D), Escape steps down, open-in (O), quick preview (Space in Grid); **media verbs** type-interpreted via the type registry — Space = "engage the asset" (photo: 100% zoom; video/audio: play/pause). Asset type is never a dispatch dimension
 - All keybindings user-configurable
 - Context-scoped dispatch `(context, key) → action`: global, grid, loupe, compare, cull, import, review, palette
@@ -242,7 +242,7 @@ Without these, the app isn't competitive with existing tools for the target user
 
 ### Command Palette
 
-*Pulled forward from P2 (2026-07-07 design round): ships WITH the keyboard system because it is the action registry's face — every entry shows its current binding, so it teaches the keys. It also absorbs chrome: rare actions (Open Settings, Export Logs, Rebuild Thumbnails) live here instead of toolbar real estate. Spec: `frontend/04-keyboard-and-actions.md`.*
+*Pulled forward from P2 (2026-07-07 design round): ships WITH the keyboard system because it is the action registry's face — every entry shows its current binding, so it teaches the keys. It also absorbs chrome: rare actions (Open Settings, Export Logs, Rebuild Thumbnails) live here instead of toolbar real estate. Spec: `epics/frontend-keyboard-actions.md`.*
 
 - Fuzzy subsequence matcher (VS Code/fzf scoring) over titles + aliases, filtered by context predicate; frecency ranking
 - Prefix modes: bare text = search (parses via the search tiers, emits pills), `>` = actions, `#` = go-to (collection/tag/source)
@@ -251,7 +251,7 @@ Without these, the app isn't competitive with existing tools for the target user
 
 ### Cull View Mode
 
-*The ingest-day weapon; benchmark is Photo Mechanic speed. Absorbs the former standalone Lights Out Mode, Fullscreen View, and Auto-Advance items. Spec: `frontend/05-culling-and-signals.md`.*
+*The ingest-day weapon; benchmark is Photo Mechanic speed. Absorbs the former standalone Lights Out Mode, Fullscreen View, and Auto-Advance items. Spec: `epics/frontend-culling-signals.md`.*
 
 - Fullscreen, lights-out chrome by default; filmstrip; inherits the current query/arrangement/cursor (a view mode, not a separate place)
 - Auto-advance on P/X/rating (toggleable, default off)
@@ -294,7 +294,7 @@ Without these, the app isn't competitive with existing tools for the target user
 
 ### Filter Bar and Query Pills
 
-*Depends on: the query layer (AST→SQL). Locked 2026-07-07 (C6/C12): the query AST is the spine; a pill is the rendered form of one AST leaf. Spec: `frontend/03-search-and-filter-ux.md` + `seam/01-queries-and-commands.md`.*
+*Depends on: the query layer (AST→SQL). Locked 2026-07-07 (C6/C12): the query AST is the spine; a pill is the rendered form of one AST leaf. Spec: `epics/frontend-search-filter-ux.md` + `../docs/seam-contract.md`.*
 
 - Pill row = the query, visibly (one thing on screen = one AST node); click to edit operator/value, × to remove; flat row = implicit AND
 - Filterable: file type, rating (minimum), color label, flag, date range, source, dimensions, camera — any registered token type
@@ -308,18 +308,18 @@ Without these, the app isn't competitive with existing tools for the target user
 
 ### Status Bar and Transparency Chrome
 
-*Part of the base UI shell. "Showing the work" is the positioning made visible — layers from ambient to nerdy, per `frontend/01-flows-and-views.md`.*
+*Part of the base UI shell. "Showing the work" is the positioning made visible — layers from ambient to nerdy, per `epics/frontend-flows-and-views.md`.*
 
 - Left zone: the current query narrated in plain words ("Sources ▸ 2024 ▸ Iceland · RAW · ★≥3 · 412 assets") — the app never shows a mystery subset
 - Center zone: selection scope — count, total file size, total duration if video selected. Hidden when nothing selected.
 - Right zone: compact live job/health indicator — glyph-based telegraphy in the mono face (`▁▃▆`, `◐`, watcher heartbeat dot), character-swap animation, no SVG weight
 - **Activity drawer** (right zone expands): the Jobs envelope stream rendered generically — per-job progress, plain-language history ("Relinked 34 moved files · 2m ago"), detail lines
-- **Dev corner** (deepest drawer tab; discoverable, not advertised): live queue depths, watcher event feed, per-stage pipeline timings — the `_scratch/sysde.md` observability wishlist
+- **Dev corner** (deepest drawer tab; discoverable, not advertised): live queue depths, watcher event feed, per-stage pipeline timings — the `ideation/sysde.md` observability wishlist
 - In-grid corner ticks on assets with pending Review items
 
 ### Review
 
-*New first-class surface from the 2026-07-07 design round — the frontend face of backend D20 (detect-and-flag, never auto-mutate). Unifies what was scattered: the Missing Files view (this tier), the Duplicate Resolution UI (formerly P2), XMP conflicts, import errors. Spec: `frontend/06-review.md`; backend projection specced in `backend/impl/DEFERRED.md` §5.*
+*New first-class surface from the 2026-07-07 design round — the frontend face of backend D20 (detect-and-flag, never auto-mutate). Unifies what was scattered: the Missing Files view (this tier), the Duplicate Resolution UI (formerly P2), XMP conflicts, import errors. Spec: `epics/frontend-review.md`; backend projection specced in `DEFERRED.md` §5.*
 
 - One task view collecting everything the engine noticed but refused to decide: probable moves/renames, duplicates, missing files, XMP conflicts, import errors, suggested rejects (when signals land)
 - Sidebar item with count badge — ambient, never modal; opening it is a full-window task view (C3)
@@ -337,7 +337,7 @@ Without these, the app isn't competitive with existing tools for the target user
 
 ### Catalog Backup
 
-*Depends on: catalog infrastructure. The backup-before-migration floor is owned by the app-host milestone (`backend/impl/12-app-host.md`); the backup system proper is an unscheduled design task (`backend/04-open-questions.md` #16).*
+*Depends on: catalog infrastructure. The backup-before-migration floor is owned by the app-host milestone (`epics/backend-app-host.md`); the backup system proper is an unscheduled design task (`ideation/backend-open-questions.md` #16).*
 
 - Must use SQLite backup API or `VACUUM INTO`, never raw file copy (raw copy of open SQLite = corruption)
 - Automatic backup before every migration
@@ -656,7 +656,7 @@ Build after the core product is stable and well-used.
 
 ### Signals Milestone (ENRICH Stage + Enrichment Jobs)
 
-*Architecture locked 2026-07-07 (C11: models propose as data, the user disposes via the query). Every signal is a metadata column exposed as a query token type — no verdicts, no opaque scores driving hidden behavior. Engine spec: `backend/06-signals-and-enrichment.md`; UX: `frontend/05-culling-and-signals.md`. Subsumes the former standalone "Perceptual Hash" and "Technical Quality Scoring" entries.*
+*Architecture locked 2026-07-07 (C11: models propose as data, the user disposes via the query). Every signal is a metadata column exposed as a query token type — no verdicts, no opaque scores driving hidden behavior. Engine spec: `epics/backend-enrichment.md`; UX: `epics/frontend-culling-signals.md`. Subsumes the former standalone "Perceptual Hash" and "Technical Quality Scoring" entries.*
 
 - **Cheap signals ride ingest** (the ENRICH pipeline stage, on the in-memory thumbnail): sharpness (Laplacian variance), highlight/shadow clipping % (histogram), phash — there when the user sits down to cull, no waiting
 - **Heavy signals are background enrichment jobs**, never pipeline stages: blink/eyes-closed probability, face count/quality, embeddings (P4). Priority is work-follows-attention: opening a working set bumps its pending enrichment; within a set, sharpest first
@@ -673,7 +673,7 @@ Build after the core product is stable and well-used.
 
 ### Natural-Language Query Fallback (local LLM)
 
-*Tier 2 of the search system (`frontend/03-search-and-filter-ux.md`); the deterministic parser (tier 1) ships with the query layer and covers most real input. Off by default until built; parked until the deterministic parser has usage.*
+*Tier 2 of the search system (`epics/frontend-search-filter-ux.md`); the deterministic parser (tier 1) ships with the query layer and covers most real input. Off by default until built; parked until the deterministic parser has usage.*
 
 - Only for the unresolved remainder: paraphrase/synonyms, fuzzy time ("a couple summers ago")
 - Schema-constrained to emit only valid AST against the token vocabulary; candidate tag/place names injected as a shortlist
@@ -944,12 +944,12 @@ Ideas worth preserving but with no committed timeline.
 
 ## Open Product/Architecture Questions
 
-*Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`_project-tracking/backend/impl/DEFERRED.md`) and the architectural decision log (`_project-tracking/backend/02-decision-log.md`); these haven't reached a decision yet.*
+*Carried over from todo.md — genuine unresolved questions, not settled features. Distinct from the implementation-deferred ledger (`DEFERRED.md`) and the architectural decision log (`../docs/decisions.md`); these haven't reached a decision yet.*
 
 - ~~Frontend state management~~ — **RESOLVED (2026-07-07 frontend design round):** no state
   library; one reducer holding the state equation (`view state = viewMode(query + arrangement,
   selection + cursor)`, CONSTANTS C2), server state in TanStack Query, everything else derived.
-  See `_project-tracking/frontend/02-state-model.md`.
+  See `epics/frontend-state-model.md`.
 - Map view / location search: how do we generalize raw GPS coordinates to a town or area name someone would actually search for? (Reverse geocoding via offline gazetteer is the current lead — see Map View, P3 — but the UX of "searchable place" from a lat/lng pair isn't fully worked out.)
 - Responsiveness/scaling system: desktop-only, no mobile/tablet target, but still want a system that gives grid/layout scaling without hand-rolling it — which existing tool/approach fits that constraint without the overhead of a full responsive framework aimed at screen sizes that will never be supported here?
 

@@ -1,7 +1,7 @@
 # All checks live here — Go only operates at the module root, so there is no
 # pretending with per-directory Makefiles. Same checks CI runs: use
 # `make check` (or `make check-backend`) before pushing.
-.PHONY: check check-backend check-frontend check-app tidy-check-backend build-backend lint-backend vulncheck-backend test-backend cover-backend generate generate-seam check-generated
+.PHONY: check check-backend check-frontend check-app check-docs hooks tidy-check-backend build-backend lint-backend vulncheck-backend test-backend cover-backend generate generate-seam check-generated
 
 # Coverage policy lives in .testcoverage.yml (per-package tiers: ast/domain at
 # 100%, default floor 70). Ratchet up, never down.
@@ -17,8 +17,21 @@ BACKEND_PKGS := ./internal/... ./cmd/...
 # webkit, no tag. Detected so `make check-app` works on both (impl/14 §2, dec. 4).
 WEBKIT_TAGS := $(if $(filter Linux,$(shell uname -s)),-tags webkit2_41,)
 
-check:
+# Docs-system greps (D27): status prose, work-item authority pointers, dead
+# links, filename contracts. Milliseconds; every finding prints file:line +
+# rule + remedy. Also runs from the pre-commit hook.
+check-docs:
+	@./scripts/check-docs.sh
+
+# Install the repo hooks (idempotent, milliseconds). `check` runs this too, so
+# following the "make check before commit" rule auto-installs the hook — no
+# separate setup step for a fresh clone.
+hooks:
+	@git config core.hooksPath .githooks
+
+check: hooks
 	@failed=0; \
+	$(MAKE) --no-print-directory check-docs || failed=1; \
 	$(MAKE) --no-print-directory check-backend || failed=1; \
 	$(MAKE) --no-print-directory check-frontend || failed=1; \
 	if [ $$failed -eq 0 ]; then \

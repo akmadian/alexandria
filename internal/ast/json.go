@@ -135,7 +135,7 @@ func marshalLeafValue(leaf Leaf) any {
 	}
 }
 
-// dateValueJSON is the wire form of DateValue (frontend/09 + the ISO 8601
+// dateValueJSON is the wire form of DateValue (docs/frontend-architecture.md + the ISO 8601
 // decision, 2026-07-10): anchor is "now" | RFC 3339 timestamp | date-only
 // "2006-01-02" (local midnight); duration is an ISO 8601 duration string.
 type dateValueJSON struct {

@@ -45,6 +45,13 @@ Where a concept lives is decided by what it *is*:
    materialization that pays for itself — cite it against a second source of
    truth.
 
+## Naming doctrine — Type vs Kind
+
+**"Type" is reserved for a file's format category; "Kind" for entity variants** (Ari's call,
+impl/03 close-out 2026-07-06). `domain.FileType` and the `assettype` package resolve format
+categories, so they are "type"; variant discriminators on entities (`GroupKind`, scope kinds,
+`ValueKind`) are "kind". A new discriminator picks its word by this rule, not by taste.
+
 ## Translation verbs — they encode round-trip-ability
 
 - **serialize / deserialize** (AST ↔ JSON): same structure, different encoding.
@@ -72,9 +79,8 @@ matches.
   the W3C UIEvents `KeyboardEvent.key`/`code` vocabulary.
 - **`ExtendedMetadata` is never load-bearing.** Nothing users can filter on may
   live only in the blob (LrC's opaque-blob rot is the cautionary tale). Keys are
-  canonical exiftool tag names so the promotion recipe
-  ([guides/promote-metadata-field.md](guides/promote-metadata-field.md)) can
-  backfill deterministically.
+  canonical exiftool tag names so promotion (blob → column is ALTER + backfill
+  from blob, never a file re-read — D11) stays deterministic.
 - **Paths: compare keys, open bytes.** `domain.PathKey` (Unicode NFC) exists for
   equality/matching/dedup only; on-disk bytes are the truth for I/O. There is no
   "denormalize" — the mapping is one-way by design (D24).

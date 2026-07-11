@@ -15,7 +15,7 @@ type Query struct {
 }
 
 // ScopeKind identifies what the scope selects. The alphabet is the
-// frontend/09 vocabulary (C1): library = everything; folder = a directory
+// Scope vocabulary (C1, docs/frontend-architecture.md): library = everything; folder = a directory
 // subtree within a source; collection/tag = membership.
 type ScopeKind string
 

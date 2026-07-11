@@ -18,7 +18,7 @@ type SourceRepository interface {
 	FindBySharePath(ctx context.Context, host, shareName string) (*domain.Source, error)
 }
 
-// The asset repository is split by writer CLASS (see docs/.../03-data-model.md
+// The asset repository is split by writer CLASS (see docs/data-model.md
 // §1). Each consumer is injected only the interface for the columns it is allowed
 // to touch, so a cross-class write is a compile error, not a code-review catch.
 // One concrete type (sqlite.AssetRepo) satisfies them all; scoping happens at

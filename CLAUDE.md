@@ -4,21 +4,20 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 
 ## Design authority (read before designing or implementing anything)
 
-1. **`_project-tracking/CONSTANTS.md`** — cross-cutting load-bearing invariants (C1–C14:
-   vocabulary, state equation, seam rules, registry rules). Applies to every area.
-2. **`_project-tracking/00-START-HERE.md`** — the master head of the implementation task
-   tree: what's next right now, and links to the per-area trackers (`backend/`, `seam/`,
-   `frontend/` — each has its own `00-START-HERE.md`). The backend decision log
-   (`backend/02-decision-log.md`) **wins every conflict** with older docs and existing code.
-3. `_project-tracking/functional-requirements.md` — the single source of truth for the
+1. **`docs/CONSTANTS.md`** — cross-cutting load-bearing invariants (C1–C15: vocabulary, state
+   equation, seam rules, registry rules). Applies to every area.
+2. **`docs/decisions.md`** — the append-only decision log (D-numbers). It **wins every
+   conflict** with older docs and existing code. D27 defines the docs system itself.
+3. **`_project-tracking/00-START-HERE.md`** — how work is tracked (state = directory:
+   `ideation/ → epics/ → tasks/ → deleted`; the queue is `ls tasks/` in NN order). Work items
+   are transient; never cite one as an authority.
+4. `_project-tracking/functional-requirements.md` — the single source of truth for the
    feature roadmap (P0–P4): what will be built, and when.
-4. Existing backend code follows the disposition table (`backend/05-code-disposition.md`):
-   specs win; you have explicit license to delete what it marks deleted. `frontend/src/` is
-   **disposable in its entirety** — the ground-up redesign round
-   (`frontend/09-ground-up-redesign-notes.md`, 2026-07-08) voided the older frontend/07
-   verdicts; don't invest in the current frontend source.
-5. `internal/importer/README.md` (ingest engine, impl/04) and `_project-tracking/perf/`
-   (thumbnail/hardware acceleration) are the up-to-date implementation references for the pipeline.
+5. Living reference: `docs/` (data model, seam contract, vocabulary, requirements distilled)
+   plus package READMEs beside the code (`internal/importer/README.md` for the ingest engine,
+   `internal/xmp/README.md` for sidecar sync). Where code and current specs conflict, specs
+   win. `frontend/src/` predating the ground-up redesign (2026-07-08, the frontend-redesign
+   epic) was disposable by decision; the rebuild now underway replaces it.
 
 ## Commands
 
@@ -33,7 +32,7 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
 ## Architecture invariants — violating any of these is a bug, not a style choice
 
 These are the system-level rules that no single file's code review would catch. The full
-rationale lives in `_project-tracking/backend/02-decision-log.md` and `03-data-model.md`.
+rationale lives in `docs/decisions.md` and `docs/data-model.md`.
 
 - **Writer classes:** ingest/watcher code writes observation columns only; judgment columns
   (rating/label/flag/note/deletes) are written only by the user-action path, which is the ONLY
@@ -68,9 +67,12 @@ rationale lives in `_project-tracking/backend/02-decision-log.md` and `03-data-m
   welcome — the rule bans *redundant* dependencies, not dependencies.
 - Shared vocabularies/shapes are declared once in Go and generated everywhere (C15):
   `cmd/generate` is the schema compiler (`make generate`); hand-written parallel definitions
-  are a defect. Concepts: `docs/vocabulary.md`; inventory: `docs/data-dictionary.md`;
-  extension recipes: `docs/guides/`.
+  are a defect. Concepts: `docs/vocabulary.md`; inventory: `docs/data-dictionary.md`.
 - Settings live in the three JSON files owned by `internal/settings` — never a DB table.
+- Docs discipline (D27): status is never written down — no ✅/DONE prose, no ledgers; work
+  items are deleted on completion after folding residue into `docs/` + the decision log.
+  Durable docs never point at `_project-tracking/` work items. `make check-docs` (pre-commit
+  hook + CI) enforces the mechanical half of this.
 
 ## Coding standards
 

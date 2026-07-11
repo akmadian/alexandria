@@ -3,8 +3,8 @@
 User/machine/keybinding config, stored as **plain JSON files** — not a catalog DB
 table. Files were chosen so a user can hand-edit them while the app runs; every
 open file is watched and hot-reloaded. Each is **created with defaults on first
-run**, the same strategy `sqlite.Open` uses for the catalog DB. Full rationale in
-[`impl/11-settings-service.md`](../../_project-tracking/backend/impl/11-settings-service.md).
+run**, the same strategy `sqlite.Open` uses for the catalog DB. Full rationale in the
+decision log (D16 and its supersession notes — `docs/decisions.md`).
 
 ## Three files, three scopes
 

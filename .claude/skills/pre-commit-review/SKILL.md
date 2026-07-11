@@ -18,9 +18,11 @@ point: the session that wrote the code reviews it leniently.
    you wrote code, look at per-function coverage for it now
    (`go tool cover -func` filtered to your files) — a 0% function you can see yourself is
    cheaper to fix before the review than after it.
-2. **Doc maintenance is done**: the spec's doc-maintenance section executed, status blocks and
-   the master head updated in the same change. The reviewer checks this; showing up without it
-   is a guaranteed finding.
+2. **The fold-and-delete is done (D27)**: if this round completes a work item, the diff deletes
+   it from `_project-tracking/` and folds its durable residue (reference docs / package READMEs
+   updated; a decision entry if the round decided anything). An epic design round mints ALL its
+   child tasks in the same change. `make check-docs` is green. The reviewer checks this;
+   showing up without it is a guaranteed finding.
 3. Nothing is committed. (Standing rule — review precedes commit approval, always.)
 
 ## Procedure

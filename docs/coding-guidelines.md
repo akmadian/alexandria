@@ -465,7 +465,7 @@ a signal column. Predicates are query-AST nodes, not methods.
   `UpdateAssets(ids, patch)` patch struct, not per-field setters.
 
 Rationale and the full seam design: `_project-tracking/CONSTANTS.md` (C7) and
-`_project-tracking/seam/01-queries-and-commands.md`. The failure mode this
+`docs/seam-contract.md`. The failure mode this
 prevents is 200 narrow methods each supporting some permutation of filters.
 
 ---
