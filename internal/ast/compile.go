@@ -159,7 +159,8 @@ func MergeScope(outer Query, storedWhere Node) Query {
 const assetRowColumns = `id, source_id, filename, file_type, file_status,
 	rating, color_label, flag,
 	width, height, captured_at, ingested_at,
-	thumbnail_at, relative_path, size_bytes`
+	thumbnail_at, relative_path, size_bytes,
+	duration_secs, camera_model`
 
 // --- Internals ---
 

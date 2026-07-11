@@ -328,8 +328,9 @@ func (r *AssetRepo) ApplyTriagePatchByQuery(ctx context.Context, query ast.Query
 func scanAssetRowSlim(rows *sql.Rows) (catalog.AssetRow, error) {
 	var row catalog.AssetRow
 	var rating sql.NullInt64
-	var colorLabel, flag sql.NullString
+	var colorLabel, flag, cameraModel sql.NullString
 	var width, height sql.NullInt64
+	var durationSecs sql.NullFloat64
 	var capturedAt, thumbnailAt, ingestedAt sql.NullString
 	var sizeBytes int64
 
@@ -338,8 +339,16 @@ func scanAssetRowSlim(rows *sql.Rows) (catalog.AssetRow, error) {
 		&rating, &colorLabel, &flag,
 		&width, &height, &capturedAt, &ingestedAt,
 		&thumbnailAt, &row.RelativePath, &sizeBytes,
+		&durationSecs, &cameraModel,
 	); err != nil {
 		return catalog.AssetRow{}, err
+	}
+
+	if durationSecs.Valid {
+		row.DurationSecs = &durationSecs.Float64
+	}
+	if cameraModel.Valid {
+		row.CameraModel = &cameraModel.String
 	}
 
 	row.SizeBytes = sizeBytes

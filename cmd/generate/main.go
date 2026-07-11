@@ -1,21 +1,26 @@
-// Command generate emits the TypeScript the frontend query layer consumes, in
-// the string-literal-union shape frontend/09 mandates (no TS `enum`s). Two
-// surfaces, two files, each importing its Go source of truth directly so it
-// compiles against it and cannot drift (C13):
+// Command generate is the schema compiler (C15): it projects the Go-declared
+// vocabularies and shared models into every derived medium. The declarations
+// live in internal/domain (nouns, enums), internal/ast (the query grammar),
+// and internal/seam (error codes, event catalog, payload shapes); this command
+// imports them directly so it compiles against the source of truth and cannot
+// drift (C13). Outputs:
 //
-//   - vocabulary.ts — from internal/ast: the TokenField / TokenOperator /
-//     ValueKind unions and the per-field grammar table.
-//   - enums.ts — from internal/domain: the closed-set enums (FileType,
-//     ColorLabel, …) as literal unions.
+//   - vocabulary.ts — the token grammar (TokenField/TokenOperator/ValueKind +
+//     fieldGrammar) and the query-shape unions (ScopeKind/GroupOp/SortField/
+//     SortDir), from internal/ast.
+//   - enums.ts — the domain closed-set enums as literal unions.
+//   - errors.ts / events.ts — the seam's error and event catalogs.
+//   - models.ts — shared struct models (AssetRow, event payloads), reflected
+//     from the Go structs whose json tags are the wire contract.
+//   - docs/data-dictionary.md — the human-readable inventory of all of the
+//     above, with the crosswalk map.
 //
-// This is the whole TS-generation story for these shapes: Wails handles struct
-// models by reflection, but Go has no reflectable enum, so the member sets come
-// from domain's authored lists and are emitted here. Output is committed and CI
-// enforces freshness; it is NOT hooked into `wails build`. Run it with
-// `make generate-seam` after changing the Go vocabulary or a domain enum.
+// Output is committed and CI enforces freshness; it is NOT hooked into
+// `wails build`. Run with `make generate` (or `go generate ./...` — the source
+// packages carry go:generate directives pointing here).
 //
-// Output is deterministic: every union's members are sorted, so two runs produce
-// byte-identical files.
+// Output is deterministic: unions are sorted, struct fields keep declaration
+// order, so two runs produce byte-identical files.
 package main
 
 import (
@@ -38,15 +43,22 @@ import (
 func main() {
 	outDir := flag.String("out", "frontend/src/_generated-types",
 		"directory to write generated TypeScript into (relative to cwd)")
+	docsDir := flag.String("docs", "docs",
+		"directory to write the generated data dictionary into (relative to cwd)")
 	flag.Parse()
 
 	if err := os.MkdirAll(*outDir, 0o750); err != nil {
 		log.Fatalf("generate: mkdir %s: %v", *outDir, err)
 	}
+	if err := os.MkdirAll(*docsDir, 0o750); err != nil {
+		log.Fatalf("generate: mkdir %s: %v", *docsDir, err)
+	}
 	write(*outDir, "vocabulary.ts", renderVocabulary())
 	write(*outDir, "enums.ts", renderDomainEnums())
 	write(*outDir, "errors.ts", renderSeamCodes())
 	write(*outDir, "events.ts", renderSeamEvents())
+	write(*outDir, "models.ts", renderModels())
+	write(*docsDir, "data-dictionary.md", renderDataDictionary())
 }
 
 func write(dir, name string, source []byte) {
@@ -78,11 +90,19 @@ func renderVocabulary() []byte {
 	}
 
 	var buffer bytes.Buffer
-	header(&buffer, "internal/ast (vocabulary.go)")
+	header(&buffer, "internal/ast (vocabulary.go, types.go)")
 
 	writeUnion(&buffer, "TokenField", stringsOf(fields))
 	writeUnion(&buffer, "TokenOperator", sortedKeys(operatorSet))
 	writeUnion(&buffer, "ValueKind", sortedKeys(kindSet))
+
+	// The query-shape unions ride the same file: they are query vocabulary
+	// too, and generating them retires the hand-written TS copies that had
+	// already drifted (SortField members, ScopeKind alphabet — audit F1/F2).
+	queryShapeMembers := loadEnumMembers(astPackage, queryShapeTypes)
+	for _, typeName := range queryShapeTypes {
+		writeUnion(&buffer, typeName, stringsOf(queryShapeMembers[typeName]))
+	}
 
 	buffer.WriteString("export interface FieldGrammar {\n")
 	buffer.WriteString("  operators: readonly TokenOperator[];\n")
@@ -116,6 +136,13 @@ func renderVocabulary() []byte {
 // the package (loadEnumMembers), so domain stays pure `type`+`const` with no
 // list to drift, and adding a const surfaces automatically.
 const domainPackage = "github.com/akmadian/alexandria/internal/domain"
+
+// astPackage and queryShapeTypes: the query-shape unions generated into
+// vocabulary.ts alongside the token grammar, discovered by type-checking
+// internal/ast exactly like the domain enums.
+const astPackage = "github.com/akmadian/alexandria/internal/ast"
+
+var queryShapeTypes = []string{"ScopeKind", "GroupOp", "SortField", "SortDir"}
 
 var domainEnumTypes = []string{
 	"FileType",
@@ -160,15 +187,11 @@ func renderSeamCodes() []byte {
 	return bytes.TrimRight(buffer.Bytes(), "\n")
 }
 
-// seamEventTypes is the event-catalog manifest: the C8 topic/type/job-state
-// unions the frontend event pump switches on (impl/16). Members are discovered
-// from the consts in events.go the same way as the domain enums, so the catalog is
-// single-sourced in Go and cannot drift. NOTE: only these *unions* are generated —
-// the event PAYLOAD structs (CatalogChange, JobProgress, …) are NOT yet generated;
-// they stay hand-written in contract.ts until the wails-dev reconciliation pass
-// wires a struct→TS emitter (DEFERRED §7). The Go structs in events.go are shaped
-// to match contract.ts so that pass is mechanical.
-const seamEventTypes = "internal/seam (events.go)"
+// seamEventsSourceLabel is the events.ts header's source attribution. The C8
+// topic/type/job-state unions the event pump switches on are discovered from
+// the consts in events.go the same way as the domain enums; the event PAYLOAD
+// structs are generated too, by the model emitter (models.go → models.ts).
+const seamEventsSourceLabel = "internal/seam (events.go)"
 
 // tsUnionName maps a Go enum type name to its TypeScript union name where they
 // differ. Topic → EventTopic (a bare "Topic" is too generic in the TS namespace);
@@ -182,7 +205,7 @@ func renderSeamEvents() []byte {
 	members := loadEnumMembers(seamPackage, typeNames)
 
 	var buffer bytes.Buffer
-	header(&buffer, seamEventTypes)
+	header(&buffer, seamEventsSourceLabel)
 	for _, typeName := range typeNames {
 		name := typeName
 		if mapped, ok := tsUnionName[typeName]; ok {
@@ -199,14 +222,7 @@ func renderSeamEvents() []byte {
 // consts are the single source of truth. It fails loudly if a requested type
 // has no members (renamed or removed), so the manifest can't silently drift.
 func loadEnumMembers(pkgPath string, typeNames []string) map[string][]string {
-	config := &packages.Config{Mode: packages.NeedName | packages.NeedTypes | packages.NeedDeps | packages.NeedImports}
-	pkgs, err := packages.Load(config, pkgPath)
-	if err != nil {
-		log.Fatalf("generate: load %s: %v", pkgPath, err)
-	}
-	if packages.PrintErrors(pkgs) > 0 {
-		log.Fatalf("generate: %s has type errors", pkgPath)
-	}
+	pkgs := loadPackages(pkgPath)
 
 	want := make(map[string]bool, len(typeNames))
 	for _, name := range typeNames {
@@ -229,10 +245,32 @@ func loadEnumMembers(pkgPath string, typeNames []string) map[string][]string {
 
 	for _, name := range typeNames {
 		if len(members[name]) == 0 {
-			log.Fatalf("generate: domain enum %q has no string consts (renamed or removed?)", name)
+			log.Fatalf("generate: enum %q in %s has no string consts (renamed or removed?)", name, pkgPath)
 		}
 	}
 	return members
+}
+
+// packageCache memoizes type-checked loads — every emitter (and the
+// determinism test's double renders) reuses the same packages, and
+// packages.Load is by far the slowest step.
+var packageCache = map[string][]*packages.Package{}
+
+func loadPackages(patterns ...string) []*packages.Package {
+	key := strings.Join(patterns, "\x00")
+	if cached, ok := packageCache[key]; ok {
+		return cached
+	}
+	config := &packages.Config{Mode: packages.NeedName | packages.NeedTypes | packages.NeedDeps | packages.NeedImports}
+	pkgs, err := packages.Load(config, patterns...)
+	if err != nil {
+		log.Fatalf("generate: load %s: %v", strings.Join(patterns, ", "), err)
+	}
+	if packages.PrintErrors(pkgs) > 0 {
+		log.Fatalf("generate: %s has type errors", strings.Join(patterns, ", "))
+	}
+	packageCache[key] = pkgs
+	return pkgs
 }
 
 // stringValue extracts a string-constant's value, failing on a non-string enum
@@ -245,9 +283,9 @@ func stringValue(c *types.Const) string {
 }
 
 func header(buffer *bytes.Buffer, source string) {
-	buffer.WriteString("// Code generated by internal/seam/generate; DO NOT EDIT.\n")
-	fmt.Fprintf(buffer, "// Source of truth: %s, per C13.\n", source)
-	buffer.WriteString("// Regenerate with `make generate-seam` after changing the Go source.\n\n")
+	buffer.WriteString("// Code generated by cmd/generate; DO NOT EDIT.\n")
+	fmt.Fprintf(buffer, "// Source of truth: %s, per C13/C15.\n", source)
+	buffer.WriteString("// Regenerate with `make generate` after changing the Go source.\n\n")
 }
 
 // writeUnion emits `export type Name = "a" | "b" | ...;`, one member per line so

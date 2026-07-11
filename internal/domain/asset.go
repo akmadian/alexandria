@@ -1,3 +1,7 @@
+// The schema compiler (C15) projects the enums and shared models declared here
+// into the generated TS and the data dictionary. Regenerate after any change:
+//go:generate go run github.com/akmadian/alexandria/cmd/generate -out ../../frontend/src/_generated-types -docs ../../docs
+
 package domain
 
 import "time"

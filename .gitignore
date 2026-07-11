@@ -12,3 +12,4 @@ _assets/
 
 # Root binary from a bare `go build .` (wails build outputs to build/bin)
 /alexandria
+/generate

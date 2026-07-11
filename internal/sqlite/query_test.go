@@ -560,3 +560,35 @@ func TestQueryAssets_Pagination(t *testing.T) {
 func defaultArrangement() ast.Arrangement {
 	return ast.Arrangement{SortField: ast.SortIngestedAt, SortDir: ast.SortDesc}
 }
+
+// The AssetRow projection's newest columns (duration_secs, camera_model — D24)
+// must round-trip with real values: the assetRowColumns list and the scan's
+// variable order are a hand-maintained pairing (C15 rung 4), and fixtures that
+// leave both NULL would let a column swap pass silently.
+func TestQueryAssets_RoundTripsDurationAndCameraModel(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	repo := &sqlite.AssetRepo{DB: db}
+	ctx := context.Background()
+	src := testutil.NewTestSource(t, db, "s")
+	asset := testutil.NewTestAsset(t, db, src.ID, "clip.mp4")
+
+	if _, err := db.Exec(
+		`UPDATE assets SET duration_secs = 12.5, camera_model = 'A7 IV' WHERE id = ?`, asset.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, _, err := repo.QueryAssets(ctx, ast.Query{Version: ast.Version},
+		ast.Arrangement{SortField: ast.SortFilename, SortDir: ast.SortAsc}, ast.Page{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if rows[0].DurationSecs == nil || *rows[0].DurationSecs != 12.5 {
+		t.Fatalf("DurationSecs did not round-trip: %+v", rows[0].DurationSecs)
+	}
+	if rows[0].CameraModel == nil || *rows[0].CameraModel != "A7 IV" {
+		t.Fatalf("CameraModel did not round-trip: %+v", rows[0].CameraModel)
+	}
+}

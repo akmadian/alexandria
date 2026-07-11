@@ -6,24 +6,29 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 )
 
-// AssetRow is the slim grid-card projection (~15 fields). Full *domain.Asset
-// stays Get-only (seam/01).
+// AssetRow is the slim grid-card projection (~17 fields). Full *domain.Asset
+// stays Get-only (seam/01). The json tags ARE the wire contract: the schema
+// generator (cmd/generate) reflects this struct into the generated TS model,
+// and the seam adapter layers presentation fields (thumbURL, the kind
+// discriminator) on top — those are adapter concerns, not engine truth.
 type AssetRow struct {
-	ID           string
-	SourceID     string
-	Filename     string
-	FileType     domain.FileType
-	FileStatus   domain.FileStatus
-	Rating       *int
-	ColorLabel   *domain.ColorLabel
-	Flag         *domain.Flag
-	Width        *int
-	Height       *int
-	CapturedAt   *time.Time
-	IngestedAt   time.Time
-	ThumbnailAt  *time.Time
-	RelativePath string
-	SizeBytes    int64
+	ID           string             `json:"id"`
+	SourceID     string             `json:"sourceId"`
+	Filename     string             `json:"filename"`
+	FileType     domain.FileType    `json:"fileType"`
+	FileStatus   domain.FileStatus  `json:"fileStatus"`
+	Rating       *int               `json:"rating"`
+	ColorLabel   *domain.ColorLabel `json:"colorLabel"`
+	Flag         *domain.Flag       `json:"flag"`
+	Width        *int               `json:"width"`
+	Height       *int               `json:"height"`
+	DurationSecs *float64           `json:"durationSecs"`
+	CameraModel  *string            `json:"cameraModel"`
+	CapturedAt   *time.Time         `json:"capturedAt"`
+	IngestedAt   time.Time          `json:"ingestedAt"`
+	ThumbnailAt  *time.Time         `json:"thumbnailAt"`
+	RelativePath string             `json:"relativePath"`
+	SizeBytes    int64              `json:"sizeBytes"`
 }
 
 // TriageState is the prior-state projection undo captures: before-images for

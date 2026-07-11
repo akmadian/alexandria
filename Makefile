@@ -1,7 +1,7 @@
 # All checks live here — Go only operates at the module root, so there is no
 # pretending with per-directory Makefiles. Same checks CI runs: use
 # `make check` (or `make check-backend`) before pushing.
-.PHONY: check check-backend check-frontend check-app tidy-check-backend build-backend lint-backend vulncheck-backend test-backend cover-backend generate-seam check-generated
+.PHONY: check check-backend check-frontend check-app tidy-check-backend build-backend lint-backend vulncheck-backend test-backend cover-backend generate generate-seam check-generated
 
 # Ratchet up as areas gain tests; never down. Excludes cmd/dev + testutil (wiring
 # and test support by design). Measured 74.0% at gate creation (2026-07-09).
@@ -34,18 +34,22 @@ check:
 # Regenerate the frontend types (vocabulary.ts from internal/ast, enums.ts from
 # internal/domain). Run after changing the Go vocabulary or a domain enum; output
 # is committed and check-generated gates it. Webkit-free — pure Go, prints TS.
-generate-seam:
-	go run ./internal/seam/generate -out frontend/src/_generated-types
+generate:
+	go run ./cmd/generate -out frontend/src/_generated-types -docs docs
+
+# Back-compat alias — the generator moved from internal/seam/generate to
+# cmd/generate (C15: it projects domain+ast+seam, not just the seam).
+generate-seam: generate
 
 # Freshness gate: the committed generated TS must match the Go source of truth
 # (C13). Regenerate and fail if anything changed — i.e. someone edited the
 # vocabulary/enums and forgot `make generate-seam`. This runs on the backend path
 # (webkit-free), not check-app, because the person who causes drift is editing Go
 # in internal/ast or internal/domain, and must catch it without the app toolchain.
-check-generated: generate-seam
-	@git diff --exit-code -- frontend/src/_generated-types >/dev/null 2>&1 || { \
-		printf '\n\033[1;31m ✗ generated TS is stale — run `make generate-seam` and commit \033[0m\n\n'; \
-		git --no-pager diff -- frontend/src/_generated-types; \
+check-generated: generate
+	@git diff --exit-code -- frontend/src/_generated-types docs/data-dictionary.md >/dev/null 2>&1 || { \
+		printf '\n\033[1;31m ✗ generated output is stale — run `make generate` and commit \033[0m\n\n'; \
+		git --no-pager diff -- frontend/src/_generated-types docs/data-dictionary.md; \
 		exit 1; \
 	}
 
