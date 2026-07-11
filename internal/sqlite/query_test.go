@@ -82,7 +82,7 @@ func TestQueryAssets_SourceScope(t *testing.T) {
 
 	query := ast.Query{
 		Version: ast.Version,
-		Scope:   &ast.Scope{Kind: ast.ScopeSource, ID: src1.ID},
+		Scope:   &ast.Scope{Kind: ast.ScopeFolder, SourceID: src1.ID, Recursive: true},
 	}
 	rows, total, err := repo.QueryAssets(ctx, query, defaultArrangement(), ast.Page{Limit: 10})
 	if err != nil {
@@ -558,5 +558,5 @@ func TestQueryAssets_Pagination(t *testing.T) {
 // --- helpers ---
 
 func defaultArrangement() ast.Arrangement {
-	return ast.Arrangement{SortField: ast.SortAdded, SortDir: ast.SortDesc}
+	return ast.Arrangement{SortField: ast.SortIngestedAt, SortDir: ast.SortDesc}
 }

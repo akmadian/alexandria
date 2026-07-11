@@ -71,7 +71,7 @@ func renderVocabulary() []byte {
 	kindSet := map[ast.ValueKind]struct{}{}
 	for _, field := range fields {
 		spec, _ := ast.LookupField(field)
-		for _, operator := range spec.Operators {
+		for _, operator := range spec.Operators() {
 			operatorSet[operator] = struct{}{}
 		}
 		kindSet[spec.Kind] = struct{}{}
@@ -100,7 +100,7 @@ func renderVocabulary() []byte {
 		// TokenField vocabulary), so object keys need no quoting.
 		fmt.Fprintf(&buffer, "  %s: { operators: [%s], kind: %s, suggestable: %t },\n",
 			string(field),
-			operatorList(spec.Operators),
+			operatorList(spec.Operators()),
 			quote(string(spec.Kind)),
 			spec.Suggestable,
 		)

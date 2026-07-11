@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/akmadian/alexandria/internal/domain"
 )
@@ -62,11 +63,28 @@ func Validate(query Query) error {
 
 func validateScope(scope *Scope) error {
 	switch scope.Kind {
-	case ScopeAll:
+	case ScopeLibrary:
+		if scope.ID != "" || scope.SourceID != "" || scope.Path != "" {
+			return &ErrStructure{Message: "library scope carries no target"}
+		}
 		return nil
-	case ScopeCollection, ScopeSource, ScopeTag:
+	case ScopeFolder:
+		if scope.SourceID == "" {
+			return &ErrStructure{Message: "folder scope requires a sourceId"}
+		}
+		if scope.ID != "" {
+			return &ErrStructure{Message: "folder scope uses sourceId+path, not id"}
+		}
+		if strings.HasPrefix(scope.Path, "/") || strings.HasSuffix(scope.Path, "/") {
+			return &ErrStructure{Message: fmt.Sprintf("folder path %q must be relative with no trailing slash", scope.Path)}
+		}
+		return nil
+	case ScopeCollection, ScopeTag:
 		if scope.ID == "" {
 			return &ErrStructure{Message: fmt.Sprintf("scope %q requires an ID", scope.Kind)}
+		}
+		if scope.SourceID != "" || scope.Path != "" {
+			return &ErrStructure{Message: fmt.Sprintf("scope %q carries only an id", scope.Kind)}
 		}
 		return nil
 	default:
@@ -119,20 +137,11 @@ func validateLeaf(leaf Leaf) error {
 		return &ErrUnknownField{Field: leaf.Field}
 	}
 
-	if !operatorAllowed(spec, leaf.Cmp) {
+	if !spec.allowsOperator(leaf.Cmp) {
 		return &ErrInvalidOperator{Field: leaf.Field, Operator: leaf.Cmp}
 	}
 
 	return validateValue(leaf.Field, leaf.Cmp, leaf.Value, spec.Kind)
-}
-
-func operatorAllowed(spec fieldSpec, operator Operator) bool {
-	for _, allowed := range spec.Operators {
-		if allowed == operator {
-			return true
-		}
-	}
-	return false
 }
 
 func validateValue(field Field, operator Operator, value any, kind ValueKind) error {
@@ -160,9 +169,11 @@ func validateValue(field Field, operator Operator, value any, kind ValueKind) er
 	case KindEnum:
 		return validateEnumValue(field, operator, value)
 	case KindDateRange:
-		if _, ok := value.(DateValue); !ok {
+		dateValue, ok := value.(DateValue)
+		if !ok {
 			return &ErrInvalidValue{Field: field, Message: fmt.Sprintf("expected DateValue, got %T", value)}
 		}
+		return validateDateValue(field, &dateValue)
 	case KindTagReference:
 		if _, ok := value.(string); !ok {
 			return &ErrInvalidValue{Field: field, Message: fmt.Sprintf("expected string (tag ID), got %T", value)}
@@ -173,6 +184,25 @@ func validateValue(field Field, operator Operator, value any, kind ValueKind) er
 		if _, ok := value.(string); !ok {
 			return &ErrInvalidValue{Field: field, Message: fmt.Sprintf("expected string, got %T", value)}
 		}
+	}
+	return nil
+}
+
+// validateDateValue enforces the interval rules the wire codec also enforces,
+// so DateValues built as Go structs (not decoded from JSON) meet the same bar:
+// a non-zero duration whose components share one sign (the ISO wire form is a
+// single signed magnitude — mixed signs have no representation).
+func validateDateValue(field Field, value *DateValue) error {
+	duration := value.Duration
+	if duration.IsZero() {
+		return &ErrInvalidValue{Field: field, Message: "date duration must be non-zero"}
+	}
+	positive := duration.Years > 0 || duration.Months > 0 || duration.Days > 0 ||
+		duration.Hours > 0 || duration.Minutes > 0 || duration.Seconds > 0
+	negative := duration.Years < 0 || duration.Months < 0 || duration.Days < 0 ||
+		duration.Hours < 0 || duration.Minutes < 0 || duration.Seconds < 0
+	if positive && negative {
+		return &ErrInvalidValue{Field: field, Message: "date duration components must not mix signs"}
 	}
 	return nil
 }

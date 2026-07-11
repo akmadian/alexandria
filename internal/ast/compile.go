@@ -120,9 +120,9 @@ func CompileDistinctValues(field Field) (Statement, error) {
 	if !spec.Suggestable {
 		return Statement{}, fmt.Errorf("field %q is not suggestable", field)
 	}
-	column, ok := fieldToColumn[field]
-	if !ok {
-		return Statement{}, fmt.Errorf("no column mapping for field %q", field)
+	column := spec.column(field)
+	if column == "" {
+		return Statement{}, fmt.Errorf("field %q has no column (virtual)", field)
 	}
 	sql := fmt.Sprintf(
 		"SELECT DISTINCT %s FROM assets WHERE is_deleted = 0 AND %s IS NOT NULL ORDER BY %s",
@@ -169,7 +169,7 @@ func compileFullWhere(query Query, now time.Time) (string, []any, error) {
 	parts := []string{"is_deleted = 0"}
 	var args []any
 
-	if query.Scope != nil && query.Scope.Kind != ScopeAll {
+	if query.Scope != nil && query.Scope.Kind != ScopeLibrary {
 		scopeSQL, scopeArgs, err := compileScope(query.Scope)
 		if err != nil {
 			return "", nil, err
@@ -192,8 +192,8 @@ func compileFullWhere(query Query, now time.Time) (string, []any, error) {
 
 func compileScope(scope *Scope) (string, []any, error) {
 	switch scope.Kind {
-	case ScopeSource:
-		return "source_id = ?", []any{scope.ID}, nil
+	case ScopeFolder:
+		return compileFolderScope(scope)
 	case ScopeCollection:
 		return "id IN (SELECT asset_id FROM collection_assets WHERE collection_id = ?)", []any{scope.ID}, nil
 	case ScopeTag:
@@ -201,6 +201,25 @@ func compileScope(scope *Scope) (string, []any, error) {
 	default:
 		return "", nil, fmt.Errorf("unresolved scope kind %q", scope.Kind)
 	}
+}
+
+// compileFolderScope narrows to one directory within a source. Path "" is the
+// source root. Non-recursive means direct children only: paths under the
+// folder with no further separator.
+func compileFolderScope(scope *Scope) (string, []any, error) {
+	if scope.Path == "" {
+		if scope.Recursive {
+			return "source_id = ?", []any{scope.SourceID}, nil
+		}
+		return "source_id = ? AND relative_path NOT LIKE '%/%'", []any{scope.SourceID}, nil
+	}
+	prefix := escapeLike(scope.Path) + "/"
+	if scope.Recursive {
+		return "source_id = ? AND relative_path LIKE ? ESCAPE '\\'",
+			[]any{scope.SourceID, prefix + "%"}, nil
+	}
+	return "source_id = ? AND relative_path LIKE ? ESCAPE '\\' AND relative_path NOT LIKE ? ESCAPE '\\'",
+		[]any{scope.SourceID, prefix + "%", prefix + "%/%"}, nil
 }
 
 func compileNode(node Node, now time.Time) (string, []any, error) {
@@ -221,7 +240,11 @@ func compileGroup(group Group, now time.Time) (string, []any, error) {
 		if err != nil {
 			return "", nil, err
 		}
-		return "NOT (" + childSQL + ")", childArgs, nil
+		// NULL-negation policy (D-log 2026-07-10): negation includes absent.
+		// A positive predicate over a NULL column yields SQL NULL, and a bare
+		// NOT would propagate it (excluding the row). ifnull(…, 0) makes the
+		// child two-valued first, so NOT is a true set complement.
+		return "NOT ifnull((" + childSQL + "), 0)", childArgs, nil
 	case GroupAnd, GroupOr:
 		parts := make([]string, len(group.Children))
 		var args []any
@@ -243,167 +266,130 @@ func compileGroup(group Group, now time.Time) (string, []any, error) {
 	}
 }
 
-// --- Per-field compiler registry (C10) ---
+// --- Leaf compilation (kind-dispatched) ---
 
-type fieldCompiler func(leaf Leaf, now time.Time) (string, []any, error)
-
-var compilerRegistry = map[Field]fieldCompiler{
-	FieldFilename:    compileTextColumn("filename"),
-	FieldFileType:    compileEnumColumn("file_type"),
-	FieldRating:      compileNumericColumn("rating"),
-	FieldColorLabel:  compileEnumColumn("color_label"),
-	FieldFlag:        compileEnumColumn("flag"),
-	FieldTag:         compileTag,
-	FieldCapturedAt:  compileDateColumn("captured_at"),
-	FieldIngestedAt:  compileDateColumn("ingested_at"),
-	FieldSource:      compileEntityColumn("source_id"),
-	FieldWidth:       compileNumericColumn("width"),
-	FieldHeight:      compileNumericColumn("height"),
-	FieldCameraMake:  compileTextColumn("camera_make"),
-	FieldCameraModel: compileTextColumn("camera_model"),
-	FieldLensModel:   compileTextColumn("lens_model"),
-	FieldTitle:       compileTextColumn("title"),
-	FieldCaption:     compileTextColumn("caption"),
-	FieldCreator:     compileTextColumn("creator"),
-	FieldCopyright:   compileTextColumn("copyright"),
-	FieldFileStatus:  compileEnumColumn("file_status"),
-	FieldText:        compileFreeText,
-}
-
-// fieldToColumn maps fields to their SQL column name for direct-column
-// operations (distinct values, etc.).
-var fieldToColumn = map[Field]string{
-	FieldFilename:    "filename",
-	FieldFileType:    "file_type",
-	FieldRating:      "rating",
-	FieldColorLabel:  "color_label",
-	FieldFlag:        "flag",
-	FieldCapturedAt:  "captured_at",
-	FieldIngestedAt:  "ingested_at",
-	FieldSource:      "source_id",
-	FieldWidth:       "width",
-	FieldHeight:      "height",
-	FieldCameraMake:  "camera_make",
-	FieldCameraModel: "camera_model",
-	FieldLensModel:   "lens_model",
-	FieldTitle:       "title",
-	FieldCaption:     "caption",
-	FieldCreator:     "creator",
-	FieldCopyright:   "copyright",
-	FieldFileStatus:  "file_status",
-}
-
+// compileLeaf routes a leaf to its kind's compile strategy. The vocabulary is
+// the only authority: kind picks the strategy, the spec supplies the column
+// and nullability. There is no per-field compiler list to drift.
 func compileLeaf(leaf Leaf, now time.Time) (string, []any, error) {
-	compiler, ok := compilerRegistry[leaf.Field]
+	spec, ok := LookupField(leaf.Field)
 	if !ok {
-		return "", nil, fmt.Errorf("no compiler for field %q", leaf.Field)
+		return "", nil, fmt.Errorf("no vocabulary entry for field %q", leaf.Field)
 	}
-	return compiler(leaf, now)
-}
-
-// --- Compiler strategies ---
-
-func compileTextColumn(column string) fieldCompiler {
-	return func(leaf Leaf, _ time.Time) (string, []any, error) {
-		switch leaf.Cmp {
-		case OpEq:
-			return column + " = ?", []any{leaf.Value}, nil
-		case OpNeq:
-			return column + " != ?", []any{leaf.Value}, nil
-		case OpContains:
-			return column + " LIKE ? ESCAPE '\\'", []any{"%" + escapeLike(leaf.Value.(string)) + "%"}, nil
-		case OpStartsWith:
-			return column + " LIKE ? ESCAPE '\\'", []any{escapeLike(leaf.Value.(string)) + "%"}, nil
-		case OpEmpty:
-			return column + " IS NULL", nil, nil
-		case OpNotEmpty:
-			return column + " IS NOT NULL", nil, nil
-		default:
-			return "", nil, fmt.Errorf("unsupported text operator %q", leaf.Cmp)
-		}
+	column := spec.column(leaf.Field)
+	switch spec.Kind {
+	case KindText:
+		return compileTextColumn(column, spec.Nullable, leaf)
+	case KindNumeric:
+		return compileNumericColumn(column, spec.Nullable, leaf)
+	case KindEnum:
+		return compileEnumColumn(column, spec.Nullable, leaf)
+	case KindDateRange:
+		return compileDateColumn(column, spec.Nullable, leaf, now)
+	case KindEntityReference:
+		return compileEntityColumn(column, leaf)
+	case KindTagReference:
+		return compileTag(leaf)
+	case KindFreeText:
+		return compileFreeText(leaf)
+	default:
+		return "", nil, fmt.Errorf("no compile strategy for value kind %q", spec.Kind)
 	}
 }
 
-func compileNumericColumn(column string) fieldCompiler {
-	return func(leaf Leaf, _ time.Time) (string, []any, error) {
-		switch leaf.Cmp {
-		case OpEq:
-			return column + " = ?", []any{leaf.Value}, nil
-		case OpNeq:
-			return column + " != ?", []any{leaf.Value}, nil
-		case OpGte:
-			return column + " >= ?", []any{leaf.Value}, nil
-		case OpLte:
-			return column + " <= ?", []any{leaf.Value}, nil
-		case OpEmpty:
-			return column + " IS NULL", nil, nil
-		case OpNotEmpty:
-			return column + " IS NOT NULL", nil, nil
-		default:
-			return "", nil, fmt.Errorf("unsupported numeric operator %q", leaf.Cmp)
-		}
+// negationIncludesAbsent applies the NULL-negation policy (D-log 2026-07-10)
+// to a leaf-level negative operator on a nullable column: "not equal to x"
+// includes rows where the value is absent. SQL's three-valued logic would
+// silently exclude them (`col != ?` is NULL for NULL col).
+func negationIncludesAbsent(column, predicate string, nullable bool) string {
+	if !nullable {
+		return predicate
+	}
+	return "(" + predicate + " OR " + column + " IS NULL)"
+}
+
+// --- Compile strategies (one per value kind) ---
+
+func compileTextColumn(column string, nullable bool, leaf Leaf) (string, []any, error) {
+	switch leaf.Cmp {
+	case OpEq:
+		return column + " = ?", []any{leaf.Value}, nil
+	case OpNeq:
+		return negationIncludesAbsent(column, column+" != ?", nullable), []any{leaf.Value}, nil
+	case OpContains:
+		return column + " LIKE ? ESCAPE '\\'", []any{"%" + escapeLike(leaf.Value.(string)) + "%"}, nil
+	case OpStartsWith:
+		return column + " LIKE ? ESCAPE '\\'", []any{escapeLike(leaf.Value.(string)) + "%"}, nil
+	case OpEmpty:
+		return column + " IS NULL", nil, nil
+	case OpNotEmpty:
+		return column + " IS NOT NULL", nil, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported text operator %q", leaf.Cmp)
 	}
 }
 
-func compileEnumColumn(column string) fieldCompiler {
-	return func(leaf Leaf, _ time.Time) (string, []any, error) {
-		switch leaf.Cmp {
-		case OpIn:
-			values := leaf.Value.([]string)
-			placeholders := make([]string, len(values))
-			args := make([]any, len(values))
-			for i, v := range values {
-				placeholders[i] = "?"
-				args[i] = v
-			}
-			return column + " IN (" + strings.Join(placeholders, ",") + ")", args, nil
-		case OpNotIn:
-			values := leaf.Value.([]string)
-			placeholders := make([]string, len(values))
-			args := make([]any, len(values))
-			for i, v := range values {
-				placeholders[i] = "?"
-				args[i] = v
-			}
-			return "(" + column + " IS NULL OR " + column + " NOT IN (" + strings.Join(placeholders, ",") + "))", args, nil
-		case OpEmpty:
-			return column + " IS NULL", nil, nil
-		case OpNotEmpty:
-			return column + " IS NOT NULL", nil, nil
-		default:
-			return "", nil, fmt.Errorf("unsupported enum operator %q", leaf.Cmp)
-		}
+func compileNumericColumn(column string, nullable bool, leaf Leaf) (string, []any, error) {
+	switch leaf.Cmp {
+	case OpEq:
+		return column + " = ?", []any{leaf.Value}, nil
+	case OpNeq:
+		return negationIncludesAbsent(column, column+" != ?", nullable), []any{leaf.Value}, nil
+	case OpGte:
+		return column + " >= ?", []any{leaf.Value}, nil
+	case OpLte:
+		return column + " <= ?", []any{leaf.Value}, nil
+	case OpEmpty:
+		return column + " IS NULL", nil, nil
+	case OpNotEmpty:
+		return column + " IS NOT NULL", nil, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported numeric operator %q", leaf.Cmp)
 	}
 }
 
-func compileEntityColumn(column string) fieldCompiler {
-	return func(leaf Leaf, _ time.Time) (string, []any, error) {
-		switch leaf.Cmp {
-		case OpIn:
-			values := leaf.Value.([]string)
-			placeholders := make([]string, len(values))
-			args := make([]any, len(values))
-			for i, v := range values {
-				placeholders[i] = "?"
-				args[i] = v
-			}
-			return column + " IN (" + strings.Join(placeholders, ",") + ")", args, nil
-		case OpNotIn:
-			values := leaf.Value.([]string)
-			placeholders := make([]string, len(values))
-			args := make([]any, len(values))
-			for i, v := range values {
-				placeholders[i] = "?"
-				args[i] = v
-			}
-			return column + " NOT IN (" + strings.Join(placeholders, ",") + ")", args, nil
-		default:
-			return "", nil, fmt.Errorf("unsupported entity operator %q", leaf.Cmp)
-		}
+// inPlaceholders builds the "(?,?,…)" list and arg slice for IN/NOT IN.
+func inPlaceholders(values []string) (string, []any) {
+	placeholders := make([]string, len(values))
+	args := make([]any, len(values))
+	for i, v := range values {
+		placeholders[i] = "?"
+		args[i] = v
+	}
+	return "(" + strings.Join(placeholders, ",") + ")", args
+}
+
+func compileEnumColumn(column string, nullable bool, leaf Leaf) (string, []any, error) {
+	switch leaf.Cmp {
+	case OpIn:
+		list, args := inPlaceholders(leaf.Value.([]string))
+		return column + " IN " + list, args, nil
+	case OpNotIn:
+		list, args := inPlaceholders(leaf.Value.([]string))
+		return negationIncludesAbsent(column, column+" NOT IN "+list, nullable), args, nil
+	case OpEmpty:
+		return column + " IS NULL", nil, nil
+	case OpNotEmpty:
+		return column + " IS NOT NULL", nil, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported enum operator %q", leaf.Cmp)
 	}
 }
 
-func compileTag(leaf Leaf, _ time.Time) (string, []any, error) {
+func compileEntityColumn(column string, leaf Leaf) (string, []any, error) {
+	switch leaf.Cmp {
+	case OpIn:
+		list, args := inPlaceholders(leaf.Value.([]string))
+		return column + " IN " + list, args, nil
+	case OpNotIn:
+		list, args := inPlaceholders(leaf.Value.([]string))
+		return column + " NOT IN " + list, args, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported entity operator %q", leaf.Cmp)
+	}
+}
+
+func compileTag(leaf Leaf) (string, []any, error) {
 	switch leaf.Cmp {
 	case OpHas:
 		return "EXISTS (SELECT 1 FROM asset_tags WHERE asset_id = assets.id AND tag_id = ? AND removed_at IS NULL)", []any{leaf.Value}, nil
@@ -422,30 +408,28 @@ func compileTag(leaf Leaf, _ time.Time) (string, []any, error) {
 	}
 }
 
-func compileDateColumn(column string) fieldCompiler {
-	return func(leaf Leaf, now time.Time) (string, []any, error) {
-		switch leaf.Cmp {
-		case OpWithin:
-			dateValue := leaf.Value.(DateValue)
-			start, end := dateValue.Resolve(now)
-			return column + " >= ? AND " + column + " < ?",
-				[]any{formatTime(start), formatTime(end)}, nil
-		case OpNotWithin:
-			dateValue := leaf.Value.(DateValue)
-			start, end := dateValue.Resolve(now)
-			return "(" + column + " < ? OR " + column + " >= ?)",
-				[]any{formatTime(start), formatTime(end)}, nil
-		case OpEmpty:
-			return column + " IS NULL", nil, nil
-		case OpNotEmpty:
-			return column + " IS NOT NULL", nil, nil
-		default:
-			return "", nil, fmt.Errorf("unsupported date operator %q", leaf.Cmp)
-		}
+func compileDateColumn(column string, nullable bool, leaf Leaf, now time.Time) (string, []any, error) {
+	switch leaf.Cmp {
+	case OpWithin:
+		dateValue := leaf.Value.(DateValue)
+		start, end := dateValue.Resolve(now)
+		return "(" + column + " >= ? AND " + column + " < ?)",
+			[]any{formatTime(start), formatTime(end)}, nil
+	case OpNotWithin:
+		dateValue := leaf.Value.(DateValue)
+		start, end := dateValue.Resolve(now)
+		return negationIncludesAbsent(column, "("+column+" < ? OR "+column+" >= ?)", nullable),
+			[]any{formatTime(start), formatTime(end)}, nil
+	case OpEmpty:
+		return column + " IS NULL", nil, nil
+	case OpNotEmpty:
+		return column + " IS NOT NULL", nil, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported date operator %q", leaf.Cmp)
 	}
 }
 
-func compileFreeText(leaf Leaf, _ time.Time) (string, []any, error) {
+func compileFreeText(leaf Leaf) (string, []any, error) {
 	text := leaf.Value.(string)
 	return "id IN (SELECT asset_id FROM assets_fts WHERE assets_fts MATCH ?)",
 		[]any{quoteFTS(text)}, nil
@@ -454,11 +438,11 @@ func compileFreeText(leaf Leaf, _ time.Time) (string, []any, error) {
 // --- ORDER BY ---
 
 var sortFieldToSQL = map[SortField]string{
-	SortCaptured: "COALESCE(captured_at, mtime)",
-	SortAdded:    "ingested_at",
-	SortRating:   "rating",
-	SortFilename: "filename",
-	SortSize:     "size_bytes",
+	SortCapturedAt: "COALESCE(captured_at, mtime)",
+	SortIngestedAt: "ingested_at",
+	SortRating:     "rating",
+	SortFilename:   "filename",
+	SortSize:       "size_bytes",
 }
 
 func compileOrderBy(arrangement Arrangement) string {
@@ -470,8 +454,11 @@ func compileOrderBy(arrangement Arrangement) string {
 	if arrangement.SortDir == SortAsc {
 		dir = "ASC"
 	}
-	// Always append id as deterministic tiebreaker.
-	return column + " " + dir + ", id " + dir
+	// The id tiebreaker is ALWAYS ascending, regardless of direction — the
+	// seam contract (seam/01 §Additions #4) and the mock both promise
+	// `ORDER BY <field> <dir>, id ASC`; tied rows must not reorder when the
+	// user flips sort direction.
+	return column + " " + dir + ", id ASC"
 }
 
 // --- Helpers ---

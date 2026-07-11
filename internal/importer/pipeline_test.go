@@ -496,7 +496,7 @@ func TestFullProcessingInvariant_Cancel(t *testing.T) {
 	}
 	result, _ := ingester.Run(ctx, source, files) // cancellation returns context.Canceled
 
-	committedAssets, _, _ := assets.QueryAssets(context.Background(), ast.Query{Version: ast.Version}, ast.Arrangement{SortField: ast.SortAdded, SortDir: ast.SortDesc}, ast.Page{Limit: 10000})
+	committedAssets, _, _ := assets.QueryAssets(context.Background(), ast.Query{Version: ast.Version}, ast.Arrangement{SortField: ast.SortIngestedAt, SortDir: ast.SortDesc}, ast.Page{Limit: 10000})
 	if len(committedAssets) == 0 {
 		t.Skip("cancel raced ahead of the first commit; nothing to check")
 	}

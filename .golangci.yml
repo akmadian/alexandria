@@ -61,6 +61,9 @@ linters:
           allow:
             - "$gostd"
             - "github.com/google/uuid"
+            # Quasi-stdlib (Go-team maintained, pure algorithm): Unicode
+            # normalization for domain.PathKey. Not a purity breach.
+            - "golang.org/x/text/unicode/norm"
 
         ast-purity:
           files:

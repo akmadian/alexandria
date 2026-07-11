@@ -232,22 +232,6 @@ CREATE TABLE IF NOT EXISTS collection_assets (
 CREATE INDEX IF NOT EXISTS idx_collection_assets_collection ON collection_assets(collection_id, position);
 CREATE INDEX IF NOT EXISTS idx_collection_assets_asset      ON collection_assets(asset_id);
 
-CREATE TABLE IF NOT EXISTS asset_groups (
-    id              TEXT PRIMARY KEY,
-    origin          TEXT NOT NULL DEFAULT 'auto' CHECK(origin IN ('auto', 'manual')),  -- auto = derived, manual = judgment
-    cover_asset_id  TEXT REFERENCES assets(id) ON DELETE SET NULL,
-    created_at      TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS asset_group_members (
-    group_id    TEXT NOT NULL REFERENCES asset_groups(id) ON DELETE CASCADE,
-    asset_id    TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-    role        TEXT NOT NULL CHECK(role IN ('raw', 'jpeg_sidecar', 'source', 'export', 'member')),
-    PRIMARY KEY (group_id, asset_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_group_members_asset ON asset_group_members(asset_id);
-
 CREATE TABLE IF NOT EXISTS import_sessions (
     id                   TEXT PRIMARY KEY,
     source_id            TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,

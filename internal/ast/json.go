@@ -27,14 +27,23 @@ type queryJSON struct {
 }
 
 type scopeJSON struct {
-	Kind ScopeKind `json:"kind"`
-	ID   string    `json:"id,omitempty"`
+	Kind      ScopeKind `json:"kind"`
+	ID        string    `json:"id,omitempty"`
+	SourceID  string    `json:"sourceId,omitempty"`
+	Path      string    `json:"path,omitempty"`
+	Recursive bool      `json:"recursive,omitempty"`
 }
 
 func (q Query) MarshalJSON() ([]byte, error) {
 	out := queryJSON{Version: q.Version}
 	if q.Scope != nil {
-		out.Scope = &scopeJSON{Kind: q.Scope.Kind, ID: q.Scope.ID}
+		out.Scope = &scopeJSON{
+			Kind:      q.Scope.Kind,
+			ID:        q.Scope.ID,
+			SourceID:  q.Scope.SourceID,
+			Path:      q.Scope.Path,
+			Recursive: q.Scope.Recursive,
+		}
 	}
 	if q.Where != nil {
 		raw, err := marshalNode(q.Where)
@@ -63,7 +72,13 @@ func (q *Query) UnmarshalJSON(data []byte) error {
 	}
 	q.Version = raw.Version
 	if raw.Scope != nil {
-		q.Scope = &Scope{Kind: raw.Scope.Kind, ID: raw.Scope.ID}
+		q.Scope = &Scope{
+			Kind:      raw.Scope.Kind,
+			ID:        raw.Scope.ID,
+			SourceID:  raw.Scope.SourceID,
+			Path:      raw.Scope.Path,
+			Recursive: raw.Scope.Recursive,
+		}
 	}
 	if raw.Where != nil {
 		node, err := unmarshalNode(*raw.Where)
@@ -102,54 +117,47 @@ func marshalNode(node Node) ([]byte, error) {
 		}
 		return json.Marshal(groupJSON{Op: typed.Op, Children: children})
 	case Leaf:
-		val, err := marshalLeafValue(typed)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(leafJSON{Field: typed.Field, Cmp: typed.Cmp, Value: val})
+		return json.Marshal(leafJSON{Field: typed.Field, Cmp: typed.Cmp, Value: marshalLeafValue(typed)})
 	default:
 		return nil, fmt.Errorf("unknown node type %T", node)
 	}
 }
 
-func marshalLeafValue(leaf Leaf) (any, error) {
+func marshalLeafValue(leaf Leaf) any {
 	if leaf.Value == nil {
-		return nil, nil
+		return nil
 	}
 	switch v := leaf.Value.(type) {
 	case DateValue:
-		return marshalDateValue(v)
+		return marshalDateValue(&v)
 	default:
-		return v, nil
+		return v
 	}
 }
 
+// dateValueJSON is the wire form of DateValue (frontend/09 + the ISO 8601
+// decision, 2026-07-10): anchor is "now" | RFC 3339 timestamp | date-only
+// "2006-01-02" (local midnight); duration is an ISO 8601 duration string.
 type dateValueJSON struct {
-	Anchor   dateAnchorJSON   `json:"anchor"`
-	Duration dateDurationJSON `json:"duration"`
+	Anchor   string `json:"anchor"`
+	Duration string `json:"duration"`
 }
 
-type dateAnchorJSON struct {
-	Now  bool   `json:"now,omitempty"`
-	Date string `json:"date,omitempty"`
-}
+// anchorNow is the symbolic anchor resolved to `now` at compile time.
+const anchorNow = "now"
 
-type dateDurationJSON struct {
-	Years  int `json:"years,omitempty"`
-	Months int `json:"months,omitempty"`
-	Days   int `json:"days,omitempty"`
-}
+// dateOnlyLayout is the anchor's date-only form, interpreted as local
+// midnight ("today" means the user's today — value.go Resolve).
+const dateOnlyLayout = "2006-01-02"
 
-func marshalDateValue(date DateValue) (dateValueJSON, error) {
-	out := dateValueJSON{
-		Duration: dateDurationJSON{Years: date.Duration.Years, Months: date.Duration.Months, Days: date.Duration.Days},
-	}
+func marshalDateValue(date *DateValue) dateValueJSON {
+	out := dateValueJSON{Duration: FormatISODuration(date.Duration)}
 	if date.Anchor.Now {
-		out.Anchor.Now = true
+		out.Anchor = anchorNow
 	} else {
-		out.Anchor.Date = date.Anchor.Date.Format(time.RFC3339)
+		out.Anchor = date.Anchor.Date.Format(time.RFC3339)
 	}
-	return out, nil
+	return out
 }
 
 func unmarshalNode(data json.RawMessage) (Node, error) {
@@ -258,20 +266,33 @@ func coerceDateValue(raw any) (DateValue, error) {
 	}
 
 	var anchor DateAnchor
-	if decoded.Anchor.Now {
+	switch decoded.Anchor {
+	case anchorNow:
 		anchor.Now = true
-	} else if decoded.Anchor.Date != "" {
-		parsed, err := time.Parse(time.RFC3339, decoded.Anchor.Date)
+	case "":
+		return DateValue{}, fmt.Errorf("dateValue: missing anchor")
+	default:
+		parsed, err := parseAnchor(decoded.Anchor)
 		if err != nil {
 			return DateValue{}, fmt.Errorf("dateValue anchor: %w", err)
 		}
 		anchor.Date = parsed
 	}
 
-	return DateValue{
-		Anchor:   anchor,
-		Duration: DateDuration{Years: decoded.Duration.Years, Months: decoded.Duration.Months, Days: decoded.Duration.Days},
-	}, nil
+	duration, err := ParseISODuration(decoded.Duration)
+	if err != nil {
+		return DateValue{}, fmt.Errorf("dateValue: %w", err)
+	}
+	return DateValue{Anchor: anchor, Duration: duration}, nil
+}
+
+// parseAnchor accepts an RFC 3339 timestamp or a date-only form (local
+// midnight — day boundaries follow the machine's timezone).
+func parseAnchor(raw string) (time.Time, error) {
+	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+		return parsed, nil
+	}
+	return time.ParseInLocation(dateOnlyLayout, raw, time.Local)
 }
 
 func bytesReader(data []byte) io.Reader {

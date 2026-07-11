@@ -108,12 +108,14 @@ func TestCompile_AnchorNowRolling(t *testing.T) {
 	}
 }
 
-// Tiebreaker invariant: every compiled ORDER BY ends in ", id".
+// Tiebreaker invariant: every compiled ORDER BY ends in ", id ASC" regardless
+// of sort direction (seam/01 §Additions #4 — tied rows must not reorder when
+// the user flips direction).
 func TestCompile_TiebreakerInvariant(t *testing.T) {
 	now := fixedNow()
 	query := ast.Query{Version: ast.Version}
 
-	for _, sortField := range []ast.SortField{ast.SortCaptured, ast.SortAdded, ast.SortRating, ast.SortFilename, ast.SortSize} {
+	for _, sortField := range []ast.SortField{ast.SortCapturedAt, ast.SortIngestedAt, ast.SortRating, ast.SortFilename, ast.SortSize} {
 		for _, sortDir := range []ast.SortDir{ast.SortAsc, ast.SortDesc} {
 			arrangement := ast.Arrangement{SortField: sortField, SortDir: sortDir}
 			statement, err := ast.CompileSelect(query, arrangement, ast.Page{Limit: 10}, now)
@@ -121,9 +123,8 @@ func TestCompile_TiebreakerInvariant(t *testing.T) {
 				t.Fatalf("sort=%q dir=%q: %v", sortField, sortDir, err)
 			}
 			orderBy := extractOrderBy(statement.SQL)
-			expectedSuffix := ", id " + strings.ToUpper(string(sortDir))
-			if !strings.HasSuffix(orderBy, expectedSuffix) {
-				t.Errorf("sort=%q dir=%q: ORDER BY %q missing tiebreaker suffix %q", sortField, sortDir, orderBy, expectedSuffix)
+			if !strings.HasSuffix(orderBy, ", id ASC") {
+				t.Errorf("sort=%q dir=%q: ORDER BY %q missing invariant suffix %q", sortField, sortDir, orderBy, ", id ASC")
 			}
 		}
 	}
@@ -228,7 +229,7 @@ func TestCompile_AlwaysExcludesDeleted(t *testing.T) {
 func TestMergeScope(t *testing.T) {
 	outer := ast.Query{
 		Version: ast.Version,
-		Scope:   &ast.Scope{Kind: ast.ScopeSource, ID: "s1"},
+		Scope:   &ast.Scope{Kind: ast.ScopeFolder, SourceID: "s1", Recursive: true},
 		Where:   ast.Leaf{Field: ast.FieldRating, Cmp: ast.OpGte, Value: float64(3)},
 	}
 	stored := ast.Leaf{Field: ast.FieldFileType, Cmp: ast.OpIn, Value: []string{"raw"}}
@@ -291,7 +292,7 @@ func TestCompile_NestingSemantics(t *testing.T) {
 func TestCompile_CapturedAtSortUsesCoalesce(t *testing.T) {
 	now := fixedNow()
 	query := ast.Query{Version: ast.Version}
-	arrangement := ast.Arrangement{SortField: ast.SortCaptured, SortDir: ast.SortDesc}
+	arrangement := ast.Arrangement{SortField: ast.SortCapturedAt, SortDir: ast.SortDesc}
 	statement, err := ast.CompileSelect(query, arrangement, ast.Page{Limit: 10}, now)
 	if err != nil {
 		t.Fatalf("compile: %v", err)
@@ -309,7 +310,7 @@ func TestCompile_Scopes(t *testing.T) {
 		scope ast.Scope
 		want  string
 	}{
-		{"source", ast.Scope{Kind: ast.ScopeSource, ID: "s1"}, "source_id = ?"},
+		{"folder root recursive", ast.Scope{Kind: ast.ScopeFolder, SourceID: "s1", Recursive: true}, "source_id = ?"},
 		{"collection", ast.Scope{Kind: ast.ScopeCollection, ID: "c1"}, "collection_assets"},
 		{"tag", ast.Scope{Kind: ast.ScopeTag, ID: "t1"}, "asset_tags"},
 	}

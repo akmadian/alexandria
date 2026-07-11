@@ -11,7 +11,7 @@ func fixedNow() time.Time {
 }
 
 func defaultArrangement() ast.Arrangement {
-	return ast.Arrangement{SortField: ast.SortAdded, SortDir: ast.SortDesc}
+	return ast.Arrangement{SortField: ast.SortIngestedAt, SortDir: ast.SortDesc}
 }
 
 // syntheticValue returns a type-correct dummy value for a given field/operator

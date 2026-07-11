@@ -21,7 +21,7 @@ func TestJSONRoundTrip_SimpleLeaf(t *testing.T) {
 func TestJSONRoundTrip_NestedTree(t *testing.T) {
 	original := ast.Query{
 		Version: ast.Version,
-		Scope:   &ast.Scope{Kind: ast.ScopeSource, ID: "src-1"},
+		Scope:   &ast.Scope{Kind: ast.ScopeFolder, SourceID: "src-1", Path: "2026/07 Trips", Recursive: true},
 		Where: ast.Group{
 			Op: ast.GroupAnd,
 			Children: []ast.Node{

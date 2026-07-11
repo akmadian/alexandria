@@ -14,20 +14,29 @@ type Query struct {
 	Where   Node   // nil = no predicate (scope-only browse)
 }
 
-// ScopeKind identifies what the scope selects.
+// ScopeKind identifies what the scope selects. The alphabet is the
+// frontend/09 vocabulary (C1): library = everything; folder = a directory
+// subtree within a source; collection/tag = membership.
 type ScopeKind string
 
 const (
-	ScopeAll        ScopeKind = "all"
+	ScopeLibrary    ScopeKind = "library"
+	ScopeFolder     ScopeKind = "folder"
 	ScopeCollection ScopeKind = "collection"
-	ScopeSource     ScopeKind = "source"
 	ScopeTag        ScopeKind = "tag"
 )
 
-// Scope narrows the query to a specific container.
+// Scope narrows the query to a specific container. Kind decides which fields
+// are meaningful: collection/tag carry ID; folder carries SourceID + Path
+// (+ Recursive); library carries nothing.
 type Scope struct {
 	Kind ScopeKind
-	ID   string // empty for ScopeAll
+	ID   string // collection/tag only
+	// Folder scope: the source and the relative directory path within it.
+	// Path "" means the source root. Recursive false = direct children only.
+	SourceID  string
+	Path      string
+	Recursive bool
 }
 
 // Node is the sealed predicate-tree interface. Only Group and Leaf implement
@@ -61,15 +70,17 @@ type Leaf struct {
 
 func (Leaf) isNode() {}
 
-// SortField names the logical sort axis.
+// SortField names the logical sort axis. Members reuse the TokenField
+// spellings (capturedAt, ingestedAt, …) so the sort vocabulary and the filter
+// vocabulary are one language, not two.
 type SortField string
 
 const (
-	SortCaptured SortField = "captured"
-	SortAdded    SortField = "added"
-	SortRating   SortField = "rating"
-	SortFilename SortField = "filename"
-	SortSize     SortField = "size"
+	SortCapturedAt SortField = "capturedAt"
+	SortIngestedAt SortField = "ingestedAt"
+	SortRating     SortField = "rating"
+	SortFilename   SortField = "filename"
+	SortSize       SortField = "size"
 )
 
 // SortDir is ascending or descending.
