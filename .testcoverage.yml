@@ -1,0 +1,33 @@
+# Per-package coverage gates (go-test-coverage, invoked by `make cover-backend`).
+# Policy lives here, mechanism in the Makefile. Ratchet up, never down.
+#
+# The strict tier: packages whose correctness is contract-enforcement itself.
+# internal/ast is pure and deterministic by design — 100%, no excuses. Everything
+# else rides the default floor (measured 74.0% at gate creation, 2026-07-09).
+
+profile: coverage.out
+
+threshold:
+  total: 70
+  package: 0 # per-package floors come from the override list below
+
+# NOTE: go-test-coverage matches module-RELATIVE paths, not full package paths.
+override:
+  - path: ^internal/ast$
+    threshold: 100
+  - path: ^internal/domain$
+    threshold: 100
+  # The schema generator's correctness is enforced on its OUTPUT (determinism +
+  # shape tests, the check-generated freshness gate — which also executes
+  # main/write for real every run — and tsc over the emitted TS). The residue
+  # below this ratchet is main/write (0% under instrumentation, exercised by
+  # the gate) and log.Fatalf defensive branches (os.Exit — untestable
+  # in-process). Ratchet UP if emitter logic grows tests; never down.
+  - path: ^cmd/generate$
+    threshold: 89
+
+exclude:
+  paths:
+    # Dev harness and test support — wiring by design, not gated.
+    - ^cmd/dev
+    - ^internal/testutil

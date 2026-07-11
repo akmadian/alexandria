@@ -3,9 +3,8 @@
 # `make check` (or `make check-backend`) before pushing.
 .PHONY: check check-backend check-frontend check-app tidy-check-backend build-backend lint-backend vulncheck-backend test-backend cover-backend generate generate-seam check-generated
 
-# Ratchet up as areas gain tests; never down. Excludes cmd/dev + testutil (wiring
-# and test support by design). Measured 74.0% at gate creation (2026-07-09).
-COVERAGE_MIN := 70
+# Coverage policy lives in .testcoverage.yml (per-package tiers: ast/domain at
+# 100%, default floor 70). Ratchet up, never down.
 
 # The engine packages — everything the backend checks touch. Deliberately
 # excludes the root Wails app package (main.go/app.go/logging.go), which needs the
@@ -71,13 +70,8 @@ test-backend:
 	go test -race -coverprofile=coverage.out $(BACKEND_PKGS)
 
 cover-backend: test-backend
-	@grep -v -e '/cmd/dev/' -e '/internal/testutil/' coverage.out > coverage.filtered.out
-	@go tool cover -func=coverage.filtered.out | tail -1
-	@total=$$(go tool cover -func=coverage.filtered.out | tail -1 | awk '{gsub(/%/, ""); print $$3}'); \
-	rm -f coverage.out coverage.filtered.out; \
-	awk -v total="$$total" -v min="$(COVERAGE_MIN)" 'BEGIN { \
-		if (total + 0 < min) { printf "coverage %.1f%% is below the %d%% gate\n", total, min; exit 1 } \
-	}'
+	@go tool go-test-coverage --config=.testcoverage.yml
+	@rm -f coverage.out
 
 check-backend:
 	@if $(MAKE) --no-print-directory tidy-check-backend check-generated build-backend lint-backend vulncheck-backend cover-backend; then \

@@ -33,8 +33,11 @@ jobs:
               - "go.mod"
               - "go.sum"
               - ".golangci.yml"
+              - ".testcoverage.yml"
               - "Makefile"
               - "testdata/**"
+              - "docs/data-dictionary.md"
+              - "frontend/src/_generated-types/**"
               - ".github/workflows/ci.yml"
             frontend:
               - "frontend/**"
@@ -82,7 +85,7 @@ jobs:
       - name: Install external dependencies needed for tests
         run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
       # check-backend also runs the generated-TS freshness gate (webkit-free):
-      # a vocabulary/enum edit here that forgot `make generate-seam` fails.
+      # a vocabulary/enum edit here that forgot `make generate` fails.
       - name: Run make check-backend
         run: make check-backend
 
