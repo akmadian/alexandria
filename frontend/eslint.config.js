@@ -15,7 +15,11 @@ export default tseslint.config(
     jsxA11y.flatConfigs.recommended,
     {
         files: ["src/**/*.{ts,tsx}"],
-        languageOptions: { globals: { ...globals.browser } },
+        languageOptions: {
+            globals: { ...globals.browser },
+            // Type information for the type-aware rules below (exhaustive switches).
+            parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+        },
         // react-hooks 7.1.1 ships its plugins key as a legacy string array, which
         // eslint 9 flat config rejects — wire the plugin object ourselves.
         plugins: { "react-hooks": reactHooks },
@@ -38,6 +42,23 @@ export default tseslint.config(
             "no-restricted-imports": [
                 "error",
                 { patterns: [{ group: ["**/api/mock-api", "**/api/wails-api"], message: "Import backend access from @/api/queries hooks, not the impl." }] },
+            ],
+            // Every switch over a generated union handles every member (C10) —
+            // the lint-level twin of the `satisfies Record<Key, Entry>` gate,
+            // covering void switches the return-type trick can't reach.
+            // No default-clause escape hatch: a default would let a switch skip
+            // members silently, which is the exact failure this rule exists for.
+            "@typescript-eslint/switch-exhaustiveness-check": "error",
+            // Hand-written parallel definitions are extinct (C15): declaring a
+            // type whose name shadows a generated union is always a mistake —
+            // import it from @/_generated-types instead.
+            "no-restricted-syntax": [
+                "error",
+                {
+                    selector:
+                        "TSTypeAliasDeclaration[id.name=/^(TokenField|TokenOperator|ValueKind|ScopeKind|GroupOp|SortField|SortDir|FileType|ColorLabel|Flag|FileStatus|EventTopic|EventType|JobState|ApiErrorKind|ErrorCode)$/]",
+                    message: "This union is generated — import it from @/_generated-types, never redeclare it (C13/C15).",
+                },
             ],
         },
     },

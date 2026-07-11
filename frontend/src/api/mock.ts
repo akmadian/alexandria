@@ -6,7 +6,7 @@
 // ./client.ts.
 
 import type { ColorLabel, FileStatus, FileType, Flag } from "@/_generated-types/enums";
-import type { TokenField } from "@/_generated-types/vocabulary";
+import type { SortField, TokenField } from "@/_generated-types/vocabulary";
 import type { Arrangement, Leaf, Query, WhereNode } from "@/query-model/ast";
 import { isLeaf } from "@/query-model/ast";
 import type { AlexandriaAPI, AssetQueryResult, AssetRow } from "./contract";
@@ -18,14 +18,14 @@ interface MockAsset {
     filename: string;
     fileType: FileType;
     fileStatus: FileStatus;
-    rating: number;
+    rating: number | null; // null = unrated (NULL is the truth end to end)
     colorLabel: ColorLabel | null;
     flag: Flag | null;
-    width: number;
-    height: number;
+    width: number | null; // null = extraction absent (with capturedAt, on the "undated scan" seeds)
+    height: number | null;
     sizeBytes: number;
     durationSecs: number | null;
-    capturedAt: string; // ISO
+    capturedAt: string | null; // ISO; null = undated (scan with no EXIF)
     ingestedAt: string; // ISO
     cameraMake: string | null;
     cameraModel: string | null;
@@ -79,19 +79,23 @@ function seededAssets(count: number): MockAsset[] {
         const longEdge = 4000 + (i % 6) * 640;
         const camera = i % 6 === 5 ? null : CAMERAS[i % CAMERAS.length];
         const flag: Flag | null = i % 7 === 0 ? "pick" : i % 11 === 0 ? "reject" : null;
+        // "Undated scan" seeds: no EXIF at all — null capture date AND null
+        // dimensions — so absence-shaped grammar (empty/notWithin/dim guards)
+        // is exercisable against the mock.
+        const undatedScan = i % 9 === 4;
         assets.push({
             id: `mock-${String(i).padStart(4, "0")}`,
             filename: `${kind.temporal ? "CLIP" : "DSC"}_${String(4820 + i).padStart(5, "0")}.${kind.ext}`,
             fileType: kind.type,
             fileStatus: "online",
-            rating: [0, 0, 3, 5, 2, 4, 0, 1][i % 8],
+            rating: [null, null, 3, 5, 2, 4, null, 1][i % 8],
             colorLabel: LABELS[i % LABELS.length],
             flag,
-            width: longEdge,
-            height: Math.round((longEdge * rh) / rw),
+            width: undatedScan ? null : longEdge,
+            height: undatedScan ? null : Math.round((longEdge * rh) / rw),
             sizeBytes: (8 + (i % 20)) * 1024 * 1024,
             durationSecs: kind.temporal ? 12 + (i % 5) * 47 : null,
-            capturedAt: new Date(2025, i % 12, (i % 27) + 1, 9 + (i % 8), (i * 7) % 60).toISOString(),
+            capturedAt: undatedScan ? null : new Date(2025, i % 12, (i % 27) + 1, 9 + (i % 8), (i * 7) % 60).toISOString(),
             ingestedAt: new Date(2026, 5, (i % 27) + 1).toISOString(),
             cameraMake: camera?.[0] ?? null,
             cameraModel: camera?.[1] ?? null,
@@ -114,6 +118,7 @@ function toRow(asset: MockAsset): AssetRow {
     return {
         kind: "asset",
         id: asset.id,
+        sourceId: asset.sourceId,
         filename: asset.filename,
         fileType: asset.fileType,
         fileStatus: asset.fileStatus,
@@ -124,8 +129,11 @@ function toRow(asset: MockAsset): AssetRow {
         height: asset.height,
         sizeBytes: asset.sizeBytes,
         durationSecs: asset.durationSecs,
-        capturedAt: asset.capturedAt,
         cameraModel: asset.cameraModel,
+        capturedAt: asset.capturedAt,
+        ingestedAt: asset.ingestedAt,
+        thumbnailAt: null, // mock thumbs are data URIs, not generated files
+        relativePath: asset.filename,
         thumbURL: asset.thumbURL,
     };
 }
@@ -157,25 +165,37 @@ const FIELD: Record<TokenField, (asset: MockAsset) => unknown> = {
     width: (a) => a.width,
 } satisfies Record<TokenField, (asset: MockAsset) => unknown>;
 
-function isEmpty(field: TokenField, value: unknown): boolean {
-    if (field === "rating") return value === 0; // 0 = unrated
+function isEmpty(value: unknown): boolean {
     if (Array.isArray(value)) return value.length === 0;
     return value === null || value === undefined || value === "";
 }
 
 const asString = (value: unknown): string => (value == null ? "" : String(value)).toLowerCase();
 
-// Half-open date interval from an anchor + signed duration (frontend/09). Minimal
-// unit parser — full calendar-unit grammar arrives with the date editor (widen).
-// ponytail: d/w/m(30d)/y(365d) approximation; calendar-exact months land later.
+// Half-open date interval from an anchor + signed ISO 8601 duration — the
+// decided wire grammar (03-data-model, 2026-07-10): anchor "now" | RFC 3339 |
+// date-only; duration "-P30D" / "PT2H" / "P3M".
+// ponytail: month/year arithmetic approximates (30d/365d) where the backend is
+// calendar-exact via AddDate; exact-parity lands with the date editor if the
+// mock outlives the Wails bind.
+function parseISODurationMs(raw: string): number | null {
+    const match = /^([+-]?)P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(raw);
+    if (!match || raw.endsWith("P") || raw.endsWith("T")) return null;
+    const [, sign, years, months, weeks, days, hours, minutes, seconds] = match;
+    const dayTotal = Number(years ?? 0) * 365 + Number(months ?? 0) * 30 + Number(weeks ?? 0) * 7 + Number(days ?? 0);
+    const ms =
+        dayTotal * 86_400_000 + Number(hours ?? 0) * 3_600_000 + Number(minutes ?? 0) * 60_000 + Number(seconds ?? 0) * 1_000;
+    if (ms === 0) return null;
+    return sign === "-" ? -ms : ms;
+}
+
 function dateWithin(iso: string, value: unknown): boolean {
     if (typeof value !== "object" || value === null) return false;
     const { anchor, duration } = value as { anchor?: unknown; duration?: unknown };
     const anchorMs = anchor === "now" ? Date.now() : Date.parse(String(anchor));
-    const match = /^([+-]?\d+)([dwmy])$/.exec(String(duration));
-    if (Number.isNaN(anchorMs) || !match) return false;
-    const days = { d: 1, w: 7, m: 30, y: 365 }[match[2] as "d" | "w" | "m" | "y"];
-    const otherMs = anchorMs + Number(match[1]) * days * 86_400_000;
+    const offsetMs = parseISODurationMs(String(duration));
+    if (Number.isNaN(anchorMs) || offsetMs === null) return false;
+    const otherMs = anchorMs + offsetMs;
     const t = Date.parse(iso);
     return t >= Math.min(anchorMs, otherMs) && t < Math.max(anchorMs, otherMs);
 }
@@ -197,26 +217,34 @@ function evaluateLeaf(leaf: Leaf, asset: MockAsset): boolean {
         case "startsWith":
             return asString(value).startsWith(asString(leaf.value));
         case "matches":
+            // ponytail: substring over concatenated fields where the backend is
+            // FTS5 MATCH — different ranking/tokenization by design; the mock
+            // only needs plausible free-text narrowing.
             return asString(value).includes(asString(leaf.value));
         case "in":
             return arr !== null && arr.includes(value);
         case "notIn":
+            // NULL-negation policy: negation includes absent — a null value is
+            // "not in" any listed set (matches the compiled SQL's IS NULL arm).
             return arr === null || !arr.includes(value);
         case "empty":
-            return isEmpty(leaf.field, value);
+            return isEmpty(value);
         case "notEmpty":
-            return !isEmpty(leaf.field, value);
+            return !isEmpty(value);
         case "has":
             return Array.isArray(value) && value.includes(leaf.value);
         case "lacks":
         case "notUnder":
             return !(Array.isArray(value) && value.includes(leaf.value));
         case "under":
+            // ponytail: `under` evaluates as flat `has` — no tag tree exists in
+            // the mock. Subtree semantics land with the tag editor/browser slice.
             return Array.isArray(value) && value.includes(leaf.value);
         case "within":
             return typeof value === "string" && dateWithin(value, leaf.value);
         case "notWithin":
-            return typeof value === "string" && !dateWithin(value, leaf.value);
+            // NULL-negation policy: an absent date is "not within" any range.
+            return !(typeof value === "string" && dateWithin(value, leaf.value));
     }
 }
 
@@ -247,12 +275,27 @@ function inScope(query: Query, asset: MockAsset): boolean {
     }
 }
 
+// Sort accessors keyed by the GENERATED SortField union — the completeness
+// gate (C10): a new sort field fails to compile until it has an accessor.
+const SORT_ACCESSOR: Record<SortField, (a: MockAsset) => number | string | null> = {
+    // ponytail: backend COALESCEs captured_at to mtime; the mock has no mtime,
+    // so undated seeds sort nulls-first instead. Parity lands with the fixture
+    // work if the mock outlives the Wails bind (DEFERRED).
+    capturedAt: (a) => a.capturedAt,
+    ingestedAt: (a) => a.ingestedAt,
+    rating: (a) => a.rating,
+    filename: (a) => a.filename,
+    size: (a) => a.sizeBytes,
+} satisfies Record<SortField, (a: MockAsset) => number | string | null>;
+
 function compare(a: MockAsset, b: MockAsset, arrangement: Arrangement): number {
-    const field = arrangement.sortField;
-    const av = a[field];
-    const bv = b[field];
+    const accessor = SORT_ACCESSOR[arrangement.sortField];
+    const av = accessor(a);
+    const bv = accessor(b);
     let primary: number;
-    if (typeof av === "number" && typeof bv === "number") primary = av - bv;
+    // SQLite sorts NULLs smallest; match it so mock ordering equals compiled ordering.
+    if (av === null || bv === null) primary = av === bv ? 0 : av === null ? -1 : 1;
+    else if (typeof av === "number" && typeof bv === "number") primary = av - bv;
     else primary = String(av).localeCompare(String(bv));
     // Direction applies to the sort field ONLY; the id tiebreaker is always
     // ascending — matching SQL `ORDER BY <field> <dir>, id ASC` (seam/01 §Additions

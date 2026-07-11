@@ -65,7 +65,9 @@ export function GridCell({ asset, index, onSelect }: GridCellProps) {
                     <span className={s.name}>{asset.filename}</span>
                     <span className={s.badges}>
                         {asset.flag === "pick" && <span className={s.flag}>⚑</span>}
-                        {asset.rating > 0 && <span className={s.stars}>{"★".repeat(asset.rating)}</span>}
+                        {asset.rating !== null && asset.rating > 0 && (
+                            <span className={s.stars}>{"★".repeat(asset.rating)}</span>
+                        )}
                         {asset.colorLabel && (
                             <span className={s.chip} style={{ background: LABEL_SWATCH[asset.colorLabel] }} />
                         )}
@@ -74,12 +76,14 @@ export function GridCell({ asset, index, onSelect }: GridCellProps) {
                 {/* ponytail: "dim"/"cam" field labels are literals until the i18n key
                     catalog + per-field display registry land (widen); C14. */}
                 <div className={s.meta}>
-                    <span className={s.f}>
-                        <span className={s.k}>dim</span>
-                        <span className={s.v}>
-                            {formatNumber(asset.width)} × {formatNumber(asset.height)}
+                    {asset.width !== null && asset.height !== null && (
+                        <span className={s.f}>
+                            <span className={s.k}>dim</span>
+                            <span className={s.v}>
+                                {formatNumber(asset.width)} × {formatNumber(asset.height)}
+                            </span>
                         </span>
-                    </span>
+                    )}
                     {asset.cameraModel && (
                         <span className={s.f}>
                             <span className={s.k}>cam</span>

@@ -13,8 +13,8 @@
 // growth, one job envelope, bytes never cross the seam (thumbnails via URL on the
 // row), codes not strings (ApiError), forward-compatible enum handling.
 
-import type { ColorLabel, FileStatus, FileType, Flag } from "@/_generated-types/enums";
 import type { ApiErrorKind, ErrorCode } from "@/_generated-types/errors";
+import type { AssetRow as AssetRowModel } from "@/_generated-types/models";
 import type { Arrangement, Page, Query } from "@/query-model/ast";
 
 // Re-export the AST so consumers have one door for the query types.
@@ -22,27 +22,17 @@ export type { Arrangement, Page, Query };
 export type { Scope, WhereNode, GroupNode, Leaf } from "@/query-model/ast";
 
 /**
- * The slim grid-card projection (~15 fields, seam/01). Full `Asset` is `getAsset`
- * only (widen). `kind` is the discriminator that admits asset groups later.
- * `thumbURL` is content-addressed/immutable — the binary channel, never bytes.
+ * The slim grid-card projection (seam/01). The engine truth is the GENERATED
+ * AssetRow model (C13/C15 — reflected from catalog.AssetRow's json tags);
+ * the adapter layers two presentation facts on top: `kind` (the discriminator
+ * that admits asset groups later) and `thumbURL` (the binary channel — a URL
+ * derived from the asset id, never bytes). `rating: null` = unrated — NULL is
+ * the truth end to end (03-data-model); 0 is not a rating.
  */
-export interface AssetRow {
+export type AssetRow = AssetRowModel & {
     kind: "asset";
-    id: string;
-    filename: string;
-    fileType: FileType;
-    fileStatus: FileStatus;
-    rating: number; // 0 = unrated
-    colorLabel: ColorLabel | null;
-    flag: Flag | null;
-    width: number;
-    height: number;
-    sizeBytes: number;
-    durationSecs: number | null; // temporal media only
-    capturedAt: string; // ISO
-    cameraModel: string | null;
     thumbURL: string;
-}
+};
 
 export interface AssetQueryResult {
     items: AssetRow[];
