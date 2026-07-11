@@ -399,3 +399,60 @@ by impl/14). The seam is extensible by construction — each lands as one thin w
 
 **Revisit trigger:** each deferred row is pulled in by its named milestone; the per-entity split is
 revisited only if the service count or a cross-entity operation makes composition awkward.
+
+## D24 — The schema-compiler round: one grammar authority, C15 doctrine, canonical decisions (2026-07-10)
+
+The vocabulary/enforcement round (Ari + Claude, 2026-07-10) — full rationale in
+`docs/vocabulary.md` and CONSTANTS C15. The decisions:
+
+- **Operators derive from value kind + nullability; fields never enumerate them.**
+  `internal/ast/vocabulary.go` is one `FieldSpec` row per field (Kind, Nullable, Suggestable,
+  column override); `kindOperators` states each family once; `Nullable` appends the presence
+  pair. The per-field compiler registry and `fieldToColumn` dissolved into a kind switch +
+  mechanical camelCase→snake_case derivation (one exception: `source → source_id`). This fixed
+  real drift: text fields had inconsistent `neq`/`startsWith`; width/height lacked `neq` and
+  the presence pair.
+- **NULL-negation policy: negation includes absent.** "title ≠ x" matches untitled assets;
+  `notIn` matches unlabeled; `notWithin` matches undated; NOT groups compile as true set
+  complements (`NOT ifnull((child), 0)`). Leaf-level negatives on nullable columns compile an
+  `OR col IS NULL` arm. This is part of the query language's DEFINITION — never a user setting
+  (a toggle would make one saved smart collection mean two different things).
+- **Scope alphabet = frontend/09's:** `library | folder | collection | tag`; Go gained the
+  folder payload (`sourceId` + relative path prefix + recursive flag) and its compile. The old
+  `all`/`source` kinds retired pre-release (no persisted queries exist).
+- **Sort fields use TokenField spellings** (`capturedAt`, `ingestedAt`, `rating`, `filename`,
+  `size`) — one vocabulary for filtering and sorting. ORDER BY tiebreaker fixed to `id ASC`
+  always (was following sort direction, violating seam/01 §Additions #4).
+- **Unrated = NULL end to end.** The catalog stores NULL; the wire carries null; `empty` is the
+  query form for "unrated"; **0 is not a rating**. (The earlier "0 = unrated at the seam"
+  sketch in contract.ts is retired.)
+- **Datetime grammar: ISO 8601.** `DateValue` wire form is `{anchor: "now" | RFC 3339 |
+  date-only, duration: ISO 8601 duration string}` ("-P30D", "PT2H", "P3M"). Calendar-exact via
+  `time.AddDate`; time-of-day components (H/M/S) supported; weeks exclusive per the standard;
+  zero and mixed-sign durations rejected. Decided BEFORE any query is persisted or the date
+  editor exists — no migration, no retrofit.
+- **Path comparison: Unicode NFC via `domain.PathKey`.** "Compare keys, open bytes": NFC
+  normalization for equality/matching/dedup only; on-disk bytes stay the truth for I/O; no case
+  folding. (macOS NFD vs NFC is a phantom-identity minter otherwise — D20's trust rule.)
+- **AssetGroup deleted** (domain struct + schema tables — zero consumers, drifted stub). The
+  grouping design round (open question #7) re-derives the noun from scratch; the shape it will
+  likely take: GroupKind registry + writer-class membership + an assettype Grouping capability.
+
+**Also decided in this round, executed later (their own rounds):**
+
+- **`Source` splits into `Volume` + `Folder`** (identity/portability anchor keyed by filesystem
+  UUID + connectivity, vs. tracked root with sync scope; one volume, many folders). Resolves
+  DEFERRED §1's open sub-question in the direction the ledger leaned; LrC's
+  RootFolder/Folder/File split independently validates it. Owner: the source-management round
+  (next). The asset/file logical-physical split is evaluated in that round's design phase.
+- **Copies are REAL files, marked and linked — no LrC-style virtual copies.** A minted copy is
+  a new file on disk (in an explicit user-chosen location, never silently into a watched tree),
+  a new asset, plus a `derived_from` lineage edge. Kills the main driver for the asset/file
+  table split. The governing principle, refining D15's scope: **the app never mutates the
+  user's files except as the direct, explicit object of a user command** — explicit copy/move/
+  rename verbs are in-bounds (future rounds), silent mutation never is.
+
+**Revisit triggers:** NULL-policy — only with a stored-query migration plan (post-release it
+resemanticizes persisted smart collections). Scope/sort alphabets — frozen at first release.
+Volume/folder + copies — their design rounds may refine details but not the direction without
+reopening here.

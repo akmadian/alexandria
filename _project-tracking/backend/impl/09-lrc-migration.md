@@ -158,6 +158,12 @@ This feature's adoption *is* the trust question, so these are requirements, not 
 - **The field map is public.** What migrates cleanly, what flattens (smart collections), what's
   dropped (Develop history as editable state, face geometry) is documented up front — see the
   table above — not discovered after the fact.
+- **Smart-collection translation is feasible — upgrade from "flattens" when this builds (D24
+  note, 2026-07-10).** LrC stores smart-collection criteria as serialized Lua table literals
+  (in-catalog and as `.lrsmcol` files) — stable for years and trivially parseable. A crosswalk
+  from LrC criterion IDs (rating, label, keywords, captureDate, camera, …) onto our tokens
+  compiles most smart collections into our versioned AST directly; unmappable criteria degrade
+  loudly (skipped leaf + a line in the migration report), never silently.
 
 ## Open questions
 

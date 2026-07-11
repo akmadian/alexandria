@@ -64,7 +64,12 @@ rationale lives in `_project-tracking/backend/02-decision-log.md` and `03-data-m
 
 - IDs via `domain.NewID()` (UUIDv7), never inline `uuid.NewString()`.
 - Per-OS code = build-tagged files inside the owning package; no shared `platform` package.
-- No new third-party dependency where stdlib or an existing dep works.
+- Prefer stdlib/an existing dep, but a well-maintained dependency that carries real load is
+  welcome — the rule bans *redundant* dependencies, not dependencies.
+- Shared vocabularies/shapes are declared once in Go and generated everywhere (C15):
+  `cmd/generate` is the schema compiler (`make generate`); hand-written parallel definitions
+  are a defect. Concepts: `docs/vocabulary.md`; inventory: `docs/data-dictionary.md`;
+  extension recipes: `docs/guides/`.
 - Settings live in the three JSON files owned by `internal/settings` — never a DB table.
 
 ## Coding standards

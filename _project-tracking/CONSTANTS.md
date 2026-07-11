@@ -129,6 +129,32 @@ against this rule in writing.
 TS model types are *generated* (Wails bindings / tygo), never hand-maintained in parallel.
 `frontend/src/models/` retires when the bindings land.
 
+### C15. The schema doctrine: declared once in Go, compiled everywhere, 100% coverage (2026-07-10)
+
+C13 generalized from model types to **every shared vocabulary and shape**. The master lists live
+in Go — `internal/domain` (nouns, enums), `internal/ast` (the query grammar), `internal/seam`
+(errors, events, wire models) — and `cmd/generate` is their **schema compiler**: it projects them
+into the generated TS (`_generated-types/`), and the data dictionary (`docs/data-dictionary.md`),
+all committed + CI-freshness-gated. Rules:
+
+- **Registries are keyed by concern, not by noun.** A field participates in many concerns (query,
+  storage, sync, display); each concern owns its own table keyed by the shared vocabulary. One
+  God-table per noun is the anti-pattern (sparse rows, coupled subsystems).
+- **The projection ladder** — every crosswalk names its rung: (1) *derive* mechanically, (2)
+  *generate* across a medium, (3) *reference the source's types*, (4) *registry + completeness
+  test*, (5) hand-copy — **rung 5 is extinct** except for: external standards with no
+  machine-readable source (XMP property names), goldens (drift-detection is the job), frozen
+  snapshots (post-release migrations), and policy manifests (deciding ≠ copying).
+- **Hand-written parallel definitions are extinct as a category.** TS may only *import* shared
+  unions/shapes from `_generated-types` (lint-enforced); Go-internal crosswalks are pinned by the
+  crosswalk suite (`cmd/generate/crosswalks_test.go` — a registry of checks; new projection = new
+  row).
+- **A vocabulary is done when you can forget it**: every one has a mechanism (compile error, red
+  test, red lint, freshness gate) that fires before a mistake ships. No mechanism = not done.
+- Conceptual map: `docs/vocabulary.md`. Generated inventory: `docs/data-dictionary.md`.
+  Extension recipes: `docs/guides/`. Revisit an external schema language only if a third
+  non-Go/TS consumer appears (see D24).
+
 ---
 
 ## Code discipline (both sides)

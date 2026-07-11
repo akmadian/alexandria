@@ -5,7 +5,17 @@ human or Claude: it answers *what's next, right now*, and links down. Area track
 and why*. **Maintenance contract:** whoever completes (or reprioritizes) a frontier item updates
 this file in the same change — a stale head is worse than no head.
 
-**Last updated:** 2026-07-10.
+**Last updated:** 2026-07-11.
+
+> **2026-07-10/11 — the schema-compiler round (D24/C15) landed:** one derived grammar authority
+> in `internal/ast` (kind+nullable → operators; NULL-negation policy; frontend/09 scope alphabet
+> incl. folder-scope compile; TokenField sort spellings; ISO-8601 datetime grammar; unrated=NULL);
+> the generator moved to `cmd/generate` and now also emits the query-shape unions, `models.ts`
+> (AssetRow + event payloads, ahead of the DEFERRED §7 trigger), and `docs/data-dictionary.md`;
+> crosswalk completeness suite + per-package coverage gates (`.testcoverage.yml`, ast/domain at
+> 100%); frontend adopted the generated unions/models (hand-written parallels deleted, new ESLint
+> tripwires); AssetGroup deleted. New docs: `docs/vocabulary.md`, `docs/guides/`. **Decided, next
+> round: `Source` → `Volume` + `Folder` (D24; owns the asset/file-split + real-copies decisions).**
 
 **Layout:** `backend/` · `seam/` · `frontend/` (area trackers + specs) ·
 [`functional-requirements.md`](functional-requirements.md) (the backlog, P0–P4) · `design/`
@@ -38,7 +48,7 @@ With B and C done, the **seam round** is the frontier.
 [`seam/impl/14-bindings-and-generation.md`](seam/impl/14-bindings-and-generation.md) is now
 **✅ DONE (2026-07-09)** — Wails composition root at the repo root, `internal/seam` walking
 skeleton (`ListSources`) bound end to end, and the TS generation harness: Wails reflects struct
-models; a hand-rolled generator (`internal/seam/generate`) emits the `TokenField`/`TokenOperator`/
+models; a hand-rolled generator (now `cmd/generate` — the C15 schema compiler, D24) emits the `TokenField`/`TokenOperator`/
 `ValueKind` unions from `internal/ast` and the domain-enum unions *discovered by type-checking
 `internal/domain`* (no EnumBind, no hand-maintained lists — see the impl/14 status block for the
 two deviations). Enforced by a freshness gate on the backend path + three path-filtered CI jobs
@@ -99,6 +109,6 @@ per milestone).
 | Area | Status | Tracker |
 |---|---|---|
 | Backend | impl/01–06 + 11 + 13 done (06 core — caption/title + flag pending); impl/07 exiftool slice done; impl/10 consumer slice done | [`backend/00-START-HERE.md`](backend/00-START-HERE.md) |
-| Seam | **COMPLETE** — impl/14 DONE; impl/15 Phase 1 DONE (backed Go surface + ApiError + `errors.ts`); **impl/16 DONE** (2026-07-10 — event catalog + `Emit` choke point + `ImportService` + `catalog/changed` emits + `events.ts`). Deferred (documented, DEFERRED §7): unbacked impl/15 methods, event payload TS types, contract.ts reconciliation — all to the wails-dev pass / their engines | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
+| Seam | **COMPLETE** — impl/14 DONE; impl/15 Phase 1 DONE (backed Go surface + ApiError + `errors.ts`); **impl/16 DONE** (2026-07-10 — event catalog + `Emit` choke point + `ImportService` + `catalog/changed` emits + `events.ts`). **Event payload TS types + the AssetRow model: ✅ DONE EARLY** (D24 struct emitter → `models.ts`; contract.ts composes over it). Still deferred (DEFERRED §7): unbacked impl/15 methods, `wailsjs/` binding regen + event-pump wiring — the wails-dev pass / their engines | [`seam/00-START-HERE.md`](seam/00-START-HERE.md) |
 | Frontend | Design + architecture locked (`frontend/09`); **rebuild IMPLEMENTATION STARTED 2026-07-10** — foundation vertical landed (query-model + `AlexandriaAPI` contract + AST mock engine + catalog store + virtualized DS grid), then the **filter-bar widen slice** (RAC `components/` primitives incl. field; a generic pill + per-kind value-editor registry — enum/numeric/text; `query-model/assemble` + store filter actions/working-set echo); pre-rework `src/` deleted; remaining filter kinds (date, tag/source) + group editor next | [`frontend/00-START-HERE.md`](frontend/00-START-HERE.md) |
 | Ops / Testing | CI + backend hygiene BUILT (2026-07-09, `Makefile` + `ci.yml`); release, telemetry, testing-strategy specs still waiting in [`design/`](design/) | — |

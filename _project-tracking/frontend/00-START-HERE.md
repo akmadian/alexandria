@@ -64,6 +64,18 @@ dev`) via a **thin end-to-end vertical, then widen** strategy.
 This is the frontend-side of the seam `contract.ts` reconciliation the seam round deferred to the
 "wails-dev pass" (`../seam/01` ledger, `../backend/impl/DEFERRED.md §7`).
 
+**Schema-compiler round landed (2026-07-10/11, D24/C15):** the two hand-written↔Go forks the
+audit found are gone — `ScopeKind`/`GroupOp`/`SortField`/`SortDir` are now GENERATED unions
+(`query-model/ast.ts` imports them; the Scope payload table is completeness-gated per kind), and
+`contract.ts`'s `AssetRow` is a composition over the generated `models.ts` model (adapter adds
+`kind`+`thumbURL` only). Mock parity aligned with the compiled SQL: NULL-negation policy
+(negation includes absent), **unrated = null** (0 is not a rating), ISO-8601 durations, id-ASC
+tiebreaker both sides; deliberate gaps carry `ponytail:` markers (`under` ≡ flat `has`;
+`matches` = substring). New ESLint enforcement: `switch-exhaustiveness-check` + a tripwire
+forbidding redeclaration of generated union names. Grammar widened: presence operators + `neq`
+now uniform per kind (title/caption/etc. gained `neq`; width/height gained presence; sort gained
+`size`).
+
 **Filter-bar slice landed (2026-07-10), enum + numeric + text:** the query model is now
 *interactive* — the first widen vertical, built on the primitives/features split (RAC for chrome
 behavior, DS for look):

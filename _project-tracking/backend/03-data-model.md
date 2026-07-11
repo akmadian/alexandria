@@ -14,7 +14,7 @@ it, what wins in conflict, how it's backed up, and how it's repaired.
 
 Enforcement is structural: repositories expose **writer-scoped interfaces** (`impl/02`) so an
 observation writer has no method that touches a judgment column. When one table holds rows of
-different classes, the class is an explicit column (`asset_tags.source`, `asset_groups.origin`).
+different classes, the class is an explicit column (`asset_tags.source`).
 
 Class assignments by column group:
 
@@ -27,8 +27,9 @@ Class assignments by column group:
   tables (impl/11 — plain JSON files instead), so they carry no column-class here.
 - `asset_tags` = judgment or observation per-row (`source`: user|xmp|lr); `removed_at` (judgment
   tombstone — user deletion of an imported tag, respected over sync, D22/impl/10)
-- `asset_groups` = judgment or derived per-row (`origin`: manual|auto). Recompute may freely
-  destroy/rebuild `auto` rows; must NEVER touch `manual`.
+- ~~`asset_groups`~~ — DELETED (D24, 2026-07-10): drifted zero-consumer stub. The grouping
+  design round (open question #7) re-derives the noun; the class split it sketched (derived
+  `auto` rows freely rebuilt, `manual` never touched) carries forward as the design intent.
 - `sidecar_files` = observation, EXCEPT `attached_asset_id` = derived (grouping engine writes it)
 - `duplicates` = derived detections carrying judgment columns (`status`) → rebuild must UPSERT,
   never truncate
@@ -64,7 +65,7 @@ Special cases resolved by the classification:
 | `asset_tags` | (asset_id, tag_id) | both CASCADE | tag_id reverse **partial** `WHERE removed_at IS NULL` (D22/impl/10) |
 | `collections` | uuid | parent_id (CASCADE), cover (SET NULL) | parent_id |
 | `collection_assets` | (collection_id, asset_id) | both CASCADE | (collection_id, position) · asset_id reverse |
-| `asset_groups` / `_members` | uuid / (group_id, asset_id) | CASCADE | asset_id reverse · groups carry `origin` |
+| ~~`asset_groups` / `_members`~~ | — | — | DELETED (D24) — re-derived by the grouping round |
 | `duplicates` | uuid | asset ids (CASCADE) | status · UNIQUE(original, duplicate) |
 | `import_sessions` / `import_errors` | uuid | session_id (CASCADE) | started_at |
 | `assets_fts` | — | external-content on `assets` | trigger-maintained |
@@ -76,8 +77,7 @@ overrides, outside any catalog). The `settings` table that migration 0001 origin
 dropped in place when impl/11 lands (pre-1.0, edited-not-stacked). Dropped constraints: CHECKs on
 `color_label` and `file_type` (guaranteed to change: custom labels P2, new file types P3; SQLite
 CHECKs can't be altered without a 500k-row table rebuild — validation moves to `assettype.Classify`, the type registry — realized in impl/03).
-CHECKs KEPT on stable enums: flag, file_status, sort_dir, sources.kind, asset_tags.source,
-asset_groups.origin.
+CHECKs KEPT on stable enums: flag, file_status, sort_dir, sources.kind, asset_tags.source.
 
 ## 4. Column promotion rule (D11)
 
@@ -86,7 +86,25 @@ it — AND cross-format normalizable. Else → `extended_metadata` JSON keyed by
 Current first-class set: dimensions, duration, captured_at, camera make/model, lens, focal length,
 aperture, shutter, ISO, GPS lat/lon, color space, bit depth, size, mtime, hash, creator, copyright,
 **title, caption** (promoted this session). `aspect_ratio` = generated VIRTUAL column from
-width/height. Promotion later = ALTER + backfill from blob; never re-reads files.
+width/height. Promotion later = ALTER + backfill from blob; never re-reads files. The step-by-step recipe is
+[`docs/guides/promote-metadata-field.md`](../../docs/guides/promote-metadata-field.md) (D24/C15 —
+operators/column/compile all derive from one vocabulary row).
+
+### 4a. Unrated = NULL, end to end (D24)
+
+The catalog stores NULL for unrated; the wire carries `null`; the `empty` operator is the ONLY
+query form for "unrated". **0 is not a rating** — `rating eq 0` matches nothing (no 0 is ever
+stored). No layer coerces NULL→0.
+
+### 4b. Path comparison: compare keys, open bytes (D24)
+
+`domain.PathKey` (Unicode NFC, no case folding) is THE comparison form for path/filename
+equality, matching, and dedup — macOS emits NFD, everything else NFC, and byte comparison mints
+phantom identities. It is one-way: on-disk bytes stay the truth for file I/O and are never
+replaced by the normalized form. **Status:** the helper + tests exist (D24); threading it
+through the identity matrix, the scanner skip-map, and folder-scope path comparison is owned by
+the source-management round (DEFERRED §8 — likely needs a stored normalized key column, since
+normalizing only the query side of a LIKE breaks against NFD-stored rows).
 
 ## 5. FTS5 spec
 

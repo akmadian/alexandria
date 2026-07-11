@@ -130,9 +130,12 @@ ui (feature components)
 
 ## 5. Generated types (C13) — never hand-author models
 
-`src/_generated-types/` is generated from Go (`internal/seam/generate`): `vocabulary.ts`
-(TokenField/TokenOperator/ValueKind + `fieldGrammar`), `enums.ts`, `errors.ts`, `events.ts`. Never
-edit them; never hand-maintain a parallel model type. Build leaves through the registry's strict
+`src/_generated-types/` is generated from Go (`cmd/generate`, the C15 schema compiler; run
+`make generate` from the repo root): `vocabulary.ts` (TokenField/TokenOperator/ValueKind +
+`fieldGrammar` + the ScopeKind/GroupOp/SortField/SortDir query shapes), `enums.ts`, `errors.ts`,
+`events.ts`, and `models.ts` (AssetRow + event payload interfaces, reflected from the Go structs'
+json tags). Never edit them; never hand-maintain a parallel model type — redeclaring a generated
+union name is now an ESLint error, and switches over generated unions are lint-checked exhaustive. Build leaves through the registry's strict
 constructors — no bare field/operator string literals, no TS `enum` keyword (literal unions +
 `as const` / `satisfies Record<Key,Entry>` are the idiom, C10). One caveat you'll hit: the generated
 enums are **types-only** (no runtime value arrays), so when you need enum members at runtime (a value

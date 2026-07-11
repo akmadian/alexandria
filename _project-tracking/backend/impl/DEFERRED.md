@@ -129,10 +129,13 @@ a volume and import 30 loose files, and the next reconcile marks the *rest of th
 volume* missing. So loose files can NOT be modeled as "a source with a volume-wide
 `base_path`" — they need the per-file scope.
 
-**Open sub-question:** does `source` formally split into `volume` + `tracked_root`
-(cleanest, bigger schema change), or stay one table with a `scope: tree | file-set`
-attribute (smaller, reuses walk vs. per-file reconcile)? Decide with source
-management.
+**Open sub-question — ✅ RESOLVED (D24, 2026-07-10): the formal split.** `Source`
+splits into **`Volume`** (identity/portability anchor: filesystem UUID +
+connectivity) and **`Folder`** (tracked root: sync scope + sync_mode); one volume,
+many folders. LrC's RootFolder/Folder/File schema independently validates the shape.
+Executed by the source-management round (which also evaluates the asset/file
+logical-physical split and the real-copies lineage edge — see D24). Until it lands,
+"source" must not propagate into new surfaces.
 
 **The bug the source-scoping fix closes — ~~still live in code today~~ DISSOLVED by D20:**
 
@@ -402,36 +405,33 @@ the `ApiError` normalization layer + generated `errors.ts` code catalog.
 | `machine.json` exposure (worker pools, dependency paths) | settings engine exists, but no UI consumes it and machine scope is app-host-owned | the performance/settings UI milestone |
 
 **Also deferred to the `wails dev` pass (not an engine gap — a toolchain one):** the
-**contract.ts / `frontend/src/models/` reconciliation** (ledger #1–3/#8 TS side).
-Regenerating the `wailsjs/` bindings for the new services runs `wails generate`,
+**`wailsjs/` method-binding regeneration** half of the contract reconciliation.
+*(Narrowed 2026-07-11: the MODEL half — AssetRow + event payload interfaces — shipped
+early via the D24 struct emitter; see the DONE entry below. What remains here:)*
+regenerating the `wailsjs/` bindings for the new services runs `wails generate`,
 which needs the webkit toolchain and runs the app — impl/14 already ruled that out
 of the webkit-free backend gate (drift caught at the next `wails dev`/`build`). So
-the TS half of the ledger rows lands when the frontend rebuild runs under Wails,
-with the frontend types in hand (which is also when the `TriagePatchInput` raw-JSON
-wire encoding gets its final shape).
+the method-binding side lands when the frontend rebuild runs under Wails (which is
+also when the `TriagePatchInput` raw-JSON wire encoding gets its final shape).
 
-**Event PAYLOAD TypeScript types (impl/16, 2026-07-10) — deferred, intentionally,
-with a hard trigger.** impl/16 generates the C8 topic/type/`JobState` *unions* to
-`events.ts`, but NOT the payload interfaces (`CatalogChange`, `JobProgress`,
-`JobDone`, `HistoryState`, `SourceStatus`). Reasons: (1) the hand-rolled generator
-emits string-literal unions from Go consts — reflecting arbitrary structs to TS is a
-new capability (a mini-tygo) not worth building before a consumer needs it; (2) the
-real consumer is the frontend rebuild's event pump, which per frontend/09 owns the
-typed sinks; (3) full contract.ts reconciliation is already deferred to the same
-`wails dev` pass, so the payload types ride along with it for free.
-- **Mitigation (so this can't silently rot):** the Go structs in `internal/seam/events.go`
-  are shaped field-for-field to match the hand-written interfaces in
-  `frontend/src/api/contract.ts` today (json tags = the contract). JobProgress/JobDone
-  intentionally exceed contract.ts's older sketch — that is the C9 target, and contract.ts
-  is the thing being reconciled *away*.
-- **Trigger (concrete, not "someday"):** the frontend-rebuild event-pump work item —
-  the first task that subscribes to a topic and needs a typed payload. That task either
-  (a) extends the generator to reflect these five structs (preferred — keeps C13's
-  "generated, never hand-maintained" honest), or (b) hand-writes them in the rebuilt
-  `api/` against the Go structs as the spec. Either way it is a checklist item of the
-  event-pump task, and `01-queries-and-commands.md` ledger #7 + `seam/02` both point here.
-- **Owner of the reminder:** `frontend/09-ground-up-redesign-notes.md` §Event pump (the
-  pump's design) and this ledger row. When the rebuild's pump lands, delete this row.
+**Event PAYLOAD TypeScript types — ✅ DONE EARLY (2026-07-10, the D24 schema-compiler
+round).** The struct emitter landed ahead of its event-pump trigger: `cmd/generate`
+reflects `catalog.AssetRow` + the envelope/payload structs (json tags = the contract)
+into the generated `models.ts`, and `contract.ts`'s hand-written `AssetRow` is now a
+composition over the generated model (adapter adds `kind` + `thumbURL` only). The
+Go-side `AssetRow` gained `durationSecs`/`cameraModel` + camelCase json tags in the
+same change. **Still deferred to the `wails dev` pass:** regenerating the `wailsjs/`
+method bindings (webkit toolchain) and wiring the event pump itself (frontend/09
+§Event pump owns that).
+
+**Mock ⇄ SQL parity fixtures (golden vectors) — deferred (D24 round, 2026-07-10).**
+The mock engine and the SQL compiler are two evaluators of one AST. The D24 round
+aligned their semantics (NULL-negation policy, unrated-is-NULL, id-ASC tiebreaker,
+ISO-8601 durations) and marked the known deliberate gaps with `ponytail:` markers in
+`mock.ts` (`under` ≡ flat `has` until the tag browser; `matches` is substring, not
+FTS). A shared golden-vector fixture (query + dataset → expected ids, run by both Go
+and vitest) is only worth building **if the mock outlives the Wails bind** as a
+permanent dev backend. Trigger: the Wails adapter lands and the mock is kept.
 
 **Trigger (umbrella):** each row above is pulled in by its named milestone; none
 blocks impl/16 or the frontend rebuild's read path.
@@ -461,3 +461,25 @@ self-contained tuning knob, so they live as inline comments (harvest anytime wit
 
 *(Audit note: as of 2026-07-07 none of the 14 `ponytail:` markers were stale —
 nothing had been completed-but-left-commented, so none were removed.)*
+
+---
+
+## 8. `domain.PathKey` exists but is not yet wired into the identity paths
+
+**Surfaced:** the D24 schema-compiler round's pre-commit review (2026-07-11).
+
+D24 declared the policy — "compare keys, open bytes": `domain.PathKey` (Unicode NFC, no case
+folding) for every path/filename equality/match/dedup; on-disk bytes stay the I/O truth. The
+helper and its tests landed with D24, but **no production path calls it yet**: the importer/
+reconciler identity matrix, the scanner skip-map (`ListKnownFiles`), `FindBySourcePath`, and the
+new folder-scope compile all still compare raw bytes. The NFD phantom-identity risk D24 names
+(macOS-ingested name later matched against an NFC form → spurious new asset + review pair) is
+therefore still live.
+
+**Design note for the wiring:** normalizing only the query side is WRONG against NFD-stored
+rows — folder-scope `LIKE` and the path lookups likely need a stored normalized key column
+(derived, rebuildable) rather than per-query normalization, so the comparison happens
+key-to-key. Decide alongside the volume/folder schema change (one migration event).
+
+**Trigger:** the source-management round (owns the volume/folder split — same tables, same
+migration; D24 records the direction).
