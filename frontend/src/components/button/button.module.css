@@ -1,102 +1,98 @@
-/* Button primitive — ported from ds-reference/components-spec/Button.css.
- * Look is the DS spec verbatim (every token identical); behavior/ARIA/focus is
- * React Aria's. DS hover/active/focus/[disabled] selectors remap to RAC data-*. */
+/* Button — the first v3 primitive (design-constitution §4 prominence ladder,
+ * §7 register shifts, §17 hero register). Semantic tokens only. */
 
 .button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    height: var(--control-h);
-    padding: 0 10px;
-    font-family: var(--font-ui);
-    font-size: var(--fs-12);
-    font-weight: var(--fw-medium);
-    color: var(--text-1);
-    background: var(--control-bg);
-    background-image: var(--chrome-sheen);
-    box-shadow: var(--chrome-edge), var(--emboss);
-    border: 1px solid var(--border-control);
-    border-radius: var(--r-2);
+    height: var(--alx-control-md);
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--alx-r-control);
+    font-family: var(--alx-font-sans);
+    font-size: var(--alx-type-ui-12-size);
+    line-height: var(--alx-type-ui-12-lh);
+    font-weight: var(--alx-weight-medium);
+    color: var(--alx-ink-1);
+    background: none;
     cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
     transition:
-        background var(--t-instant) var(--ease-out),
-        box-shadow var(--t-instant) var(--ease-out);
-
-    &[data-hovered] {
-        background: var(--control-bg-hover);
-    }
-    &[data-pressed] {
-        background: var(--control-bg-active);
-        box-shadow: var(--deboss);
-    }
-    &[data-focus-visible] {
-        outline: 1px dotted var(--focus-ring);
-        outline-offset: 2px;
-    }
-    &[data-disabled] {
-        color: var(--text-disabled);
-        background: var(--control-bg);
-        opacity: 0.55;
-        cursor: default;
-    }
+        background var(--alx-dur-fast) var(--alx-ease-out),
+        border-color var(--alx-dur-fast) var(--alx-ease-out);
+}
+.button[data-focus-visible] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+.button[data-disabled] {
+    color: var(--alx-ink-4);
+    cursor: default;
 }
 
-.primary {
-    background: var(--control-primary-bg);
-    color: var(--control-primary-ink);
-    border-color: transparent;
+/* ── rungs (§4: dot → ghost → outline → tint → fill → hero) ─────────────── */
 
-    &[data-hovered] {
-        background: var(--control-primary-bg-hover);
-    }
-    &[data-pressed] {
-        background: var(--control-primary-bg);
-    }
+/* ghost — text-only; register shift on hover */
+.ghost[data-hovered] { background: var(--alx-surface-hover); }
+.ghost[data-pressed] { background: var(--alx-surface-pressed); }
+
+/* outline — the default control face */
+.outline { border-color: var(--alx-ink-hairline); }
+.outline[data-hovered] { background: var(--alx-surface-hover); }
+.outline[data-pressed] { background: var(--alx-surface-pressed); }
+
+/* tint — filled register (recessed well) */
+.tint { background: var(--alx-surface-field); }
+.tint[data-hovered] { background: var(--alx-surface-hover); }
+.tint[data-pressed] { background: var(--alx-surface-pressed); }
+
+/* fill — solid ink; the loudest achromatic rung */
+.fill { background: var(--alx-ink-1); color: var(--alx-surface-panel); }
+.fill[data-hovered] { background: color-mix(in oklch, var(--alx-ink-1) 88%, var(--alx-surface-panel)); }
+.fill[data-pressed] { background: color-mix(in oklch, var(--alx-ink-1) 80%, var(--alx-surface-panel)); }
+.fill[data-disabled] { background: var(--alx-surface-selected); color: var(--alx-ink-4); }
+
+/* hero — the light register (§17): flowing gradient under a frosted face.
+ * One per view; never adjacent to assets; static under reduced motion. */
+.hero {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: var(--alx-r-round);
+    color: white;
+    text-shadow: 0 1px 2px oklch(0 0 0 / 0.3);
+    box-shadow: var(--alx-shadow-occlusion);
+}
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--alx-light-gradient);
+    background-size: 300% 100%;
+    animation: alx-flow var(--alx-light-flow-duration) linear infinite alternate;
+}
+.hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    backdrop-filter: blur(var(--alx-light-glass-blur)) saturate(1.3);
+    box-shadow:
+        inset 0 1px 0 oklch(1 0 0 / 0.3),
+        inset 0 0 0 1px oklch(1 0 0 / 0.14);
+}
+@keyframes alx-flow { to { background-position: 300% 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .hero::before { animation: none; }
 }
 
-.ghost {
-    background: transparent;
-    background-image: none;
-    box-shadow: none;
-    border-color: transparent;
-    color: var(--text-2);
-
-    &[data-hovered] {
-        background: var(--hover-ground);
-        color: var(--text-1);
-    }
-    &[data-pressed] {
-        background: var(--control-bg-active);
-    }
-}
-
-.danger {
-    color: var(--data-danger);
-}
-
-.lg {
-    height: var(--control-h-lg);
-    padding: 0 14px;
-    font-size: var(--fs-13);
-}
-
+/* ── sizes ──────────────────────────────────────────────────────────────── */
 .sm {
-    height: 20px;
-    padding: 0 7px;
-    font-size: var(--fs-11);
+    height: var(--alx-control-sm);
+    padding: 0 8px;
+    font-size: var(--alx-type-ui-11-size);
+    line-height: var(--alx-type-ui-11-lh);
 }
-
-.icon {
-    padding: 0;
-    width: var(--control-h);
-
-    &.lg {
-        width: var(--control-h-lg);
-    }
-    &.sm {
-        width: 20px;
-    }
-}
+.icon { width: var(--alx-control-md); padding: 0; }
+.sm.icon { width: var(--alx-control-sm); }
