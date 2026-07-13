@@ -1,12 +1,23 @@
-/* App-level base only. The DS (alexandria-ds.css) owns box-sizing, body type,
- * colours, and ::selection; this file adds just the full-height app frame. The
- * shell owns all scrolling. */
-html,
-body,
-#root {
-    height: 100%;
+/* App base — fonts + body ground + full-height frame. Everything themed comes
+ * from the --alx-* variables injected by styles/tokens.ts; no values here. */
+
+@font-face { font-family: "Geist"; src: url("./fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Geist Mono"; src: url("./fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Geist Pixel"; src: url("./fonts/GeistPixel.woff2") format("woff2"); }
+@font-face { font-family: "Instrument Serif"; src: url("./fonts/InstrumentSerif-Italic.ttf") format("truetype"); font-style: italic; }
+
+* { box-sizing: border-box; margin: 0; }
+
+html, body, #root { height: 100%; }
+#root { overflow: hidden; }
+
+body {
+    font-family: var(--alx-font-sans);
+    font-size: var(--alx-type-ui-12-size);
+    line-height: var(--alx-type-ui-12-lh);
+    letter-spacing: var(--alx-type-ui-12-tracking);
+    color: var(--alx-ink-1);
+    background: var(--alx-surface-panel);
 }
 
-#root {
-    overflow: hidden;
-}
+code { font-family: var(--alx-font-mono); font-size: var(--alx-type-ui-11-size); }
