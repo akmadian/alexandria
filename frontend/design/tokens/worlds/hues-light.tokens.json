@@ -1,0 +1,77 @@
+{
+  "$description": "Light-world hue steps (Paper + Linen contexts). Ratified 2026-07-13 after the four-theme eyeball pass: tints strengthened from the first draft (C 0.04→0.058, L 0.955→0.945), lines strengthened (L 0.72→0.65). tint-ink is same-hue dark ink — the monochromatic chip idiom: on light ground the ink carries the hue identity (§4), verified ≥ Lc 60 on its tint. Values are per-hue literals so any hue can be re-tuned independently; the shared L/C is a starting symmetry, not a formula contract.",
+
+  "world": {
+    "register-step": { "$type": "number", "$value": 0.018, "$extensions": { "alx": { "role": "the light-world register quantum (ratified 2026-07-13): one perceptual step of ΔL. State deltas are authored and adjusted in multiples of this — 'one step quieter' is arithmetic, not taste archaeology. OKLCH L is perceptually uniform, so a fixed step feels the same anywhere on the ramp; dark worlds need a larger step (polarity)." } } }
+  },
+
+  "color": {
+    "$type": "color",
+    "red": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 25] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 25] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 25] } }
+    },
+    "peach": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 40] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 40] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 40] } }
+    },
+    "orange": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 65] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 65] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 65] } }
+    },
+    "amber": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 85] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 85] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 85] } }
+    },
+    "lime": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 120] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 120] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 120] } }
+    },
+    "green": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 150] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 150] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 150] } }
+    },
+    "teal": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 180] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 180] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 180] } }
+    },
+    "cyan": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 220] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 220] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 220] } }
+    },
+    "blue": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 252] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 252] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 252] } }
+    },
+    "indigo": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 280] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 280] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 280] } }
+    },
+    "purple": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 305] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 305] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 305] } }
+    },
+    "magenta": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0.058, 345] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0.14, 345] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0.12, 345] } }
+    },
+    "gray": {
+      "$description": "The 13th scale (ratified 2026-07-13): tags for people who don't color their tags. ONE neutral only — no shade family (contrast combinatorics stay managed). Excluded from the accent and attention pickers (registries.json): gray signal is no signal.",
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.945, 0, 0] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.42, 0, 0] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.65, 0, 0] } }
+    }
+  }
+}

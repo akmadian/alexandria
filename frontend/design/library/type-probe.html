@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Alexandria type probe — real Geist</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: oklch(0.90 0 0); font-family: Geist, sans-serif; padding: 24px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .card { background: oklch(0.975 0 0); border: 1px solid oklch(0.885 0 0); border-radius: 8px; padding: 16px; width: 430px; color: oklch(0.25 0 0); }
+  .card.dark { background: oklch(0.30 0 0); border-color: oklch(0.40 0 0); color: oklch(0.93 0 0); }
+  .note { font-size: 10px; color: oklch(0.56 0 0); font-family: "Geist Mono", monospace; margin: 2px 0 10px; }
+  .dark .note { color: oklch(0.685 0 0); }
+  h2 { font-size: 12px; font-weight: 600; line-height: 16px; }
+  .mono { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  /* jitter test: mixed sans/mono on one line, with baseline guides */
+  .jitter { position: relative; font-size: 12px; line-height: 16px; padding: 0 12px; height: 28px; display: flex; align-items: center; }
+  .jitter .guide { position: absolute; left: 0; right: 0; height: 16px; top: 6px; border-top: 1px solid oklch(0.7 0.15 25 / .5); border-bottom: 1px solid oklch(0.7 0.15 25 / .5); pointer-events: none; }
+  .big { font-size: 48px; line-height: 1; letter-spacing: 0; }
+
+  .row { display: flex; align-items: center; padding: 0 12px; font-size: 12px; line-height: 16px; }
+  .row .k { color: oklch(0.42 0 0); }
+  .dark .row .k { color: oklch(0.80 0 0); }
+  .row .v { margin-left: auto; }
+  .h24 { height: 24px; } .h28 { height: 28px; }
+  .h16 { height: 16px; font-size: 11px; letter-spacing: 0.01em; }
+  .hairline { border-bottom: 1px solid oklch(0.885 0 0); }
+  .dark .hairline { border-bottom-color: oklch(0.40 0 0); }
+  .head { height: 26px; display: flex; align-items: center; padding: 0 12px; font-size: 12px; line-height: 16px; }
+  .micro { font-size: 10px; line-height: 14px; letter-spacing: 0.015em; color: oklch(0.68 0 0); padding: 0 12px; }
+  .dark .micro { color: oklch(0.585 0 0); }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>1 · The matched-pair jitter test</h2>
+  <div class="note">sans label + mono value, one 12px line — red guides = the 16px line box. The §9 bet: no jitter, no size mismatch.</div>
+  <div class="jitter"><div class="guide"></div><span>Filename&nbsp;</span><span class="mono">_DSF4926.RAF</span><span>&nbsp;rated&nbsp;</span><span class="mono">★★★ 3/5</span><span>&nbsp;at&nbsp;</span><span class="mono">1/250s</span></div>
+  <div class="note" style="margin-top:8px">x-height comparison at 48px — do the pairs share a skeleton?</div>
+  <div class="big">axo0 <span class="mono">axo0</span></div>
+  <div class="note" style="margin-top:8px">tabular check — columns must not wobble:</div>
+  <div class="mono" style="font-size:12px;line-height:16px;padding:0 12px">11,111,111<br>20,308,406<br>98,765,432</div>
+</div>
+
+<div class="card">
+  <h2>2 · Head weight: 600 vs 700 (real Geist)</h2>
+  <div class="note">each head leads a dense row-text 16 section (label-sm + data-sm)</div>
+  <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">600</span></div>
+  <div class="row h16"><span class="k">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+  <div class="row h16"><span class="k">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+  <div class="row h16"><span class="k">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+  <div class="row h16"><span class="k">Bias</span><span class="v mono" style="font-size:11px">+0.3 EV</span></div>
+  <div class="head hairline" style="font-weight:700;margin-top:12px">Camera <span class="note" style="margin:0 0 0 auto">700</span></div>
+  <div class="row h16"><span class="k">Body</span><span class="v mono" style="font-size:11px">X-T5</span></div>
+  <div class="row h16"><span class="k">Lens</span><span class="v mono" style="font-size:11px">XF 23mm F1.4</span></div>
+  <div class="row h16"><span class="k">Firmware</span><span class="v mono" style="font-size:11px">v3.02</span></div>
+  <div style="margin-top:12px" class="micro">micro 10px ink.4 — cell index · edited 3 min ago · ⌘K — the whisper voice</div>
+</div>
+
+<div class="card dark">
+  <h2>3 · Same probes, Graphite</h2>
+  <div class="note">dense block + jitter line on the dark world</div>
+  <div class="jitter"><div class="guide"></div><span>Filename&nbsp;</span><span class="mono">_DSF4926.RAF</span><span>&nbsp;·&nbsp;</span><span class="mono">24.3 MP</span><span>&nbsp;·&nbsp;</span><span class="mono">f/8</span></div>
+  <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">600</span></div>
+  <div class="row h16"><span class="k">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+  <div class="row h16"><span class="k">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+  <div class="row h16"><span class="k">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+  <div class="head hairline" style="font-weight:700;margin-top:12px">Camera <span class="note" style="margin:0 0 0 auto">700</span></div>
+  <div class="row h16"><span class="k">Body</span><span class="v mono" style="font-size:11px">X-T5</span></div>
+  <div class="row h16"><span class="k">Lens</span><span class="v mono" style="font-size:11px">XF 23mm F1.4</span></div>
+  <div style="margin-top:12px" class="micro">micro 10px ink.4 on graphite — still a whisper?</div>
+</div>
+
+<div class="card">
+  <h2>4 · The full committed role ladder, real Geist</h2>
+  <div class="note">title / head / control / value / data / label / caption / data-sm / placeholder / micro</div>
+  <div style="font-size:13px;line-height:20px;font-weight:600">Import 214 photos?</div>
+  <div style="font-size:12px;line-height:16px;font-weight:600;margin-top:6px">Metadata</div>
+  <div style="font-size:12px;line-height:16px;font-weight:500;margin-top:6px">Save changes</div>
+  <div style="font-size:12px;line-height:16px;margin-top:6px">Dolomites — day three</div>
+  <div class="mono" style="font-size:12px;line-height:16px;margin-top:6px">_DSF4926.RAF · f/8 · 1/250 · ISO 400</div>
+  <div style="font-size:12px;line-height:16px;color:oklch(0.42 0 0);margin-top:6px">Focal length</div>
+  <div style="font-size:11px;line-height:16px;letter-spacing:0.01em;color:oklch(0.56 0 0);margin-top:6px">Edited 3 minutes ago</div>
+  <div class="mono" style="font-size:11px;line-height:16px;color:oklch(0.56 0 0);margin-top:6px">1,204</div>
+  <div style="font-size:12px;line-height:16px;color:oklch(0.68 0 0);margin-top:6px">Search or filter…</div>
+  <div class="micro" style="padding:0;margin-top:6px">index 042 · ⌘K to search</div>
+</div>
+
+<div class="card">
+  <h2>5 · Display tier — view-level voices</h2>
+  <div class="note">the module picker: whole-view choices. All same size; active = ink.1, inactive = ink.3. Candidates 16/24 and 20/28, semibold.</div>
+  <div style="display:flex;gap:20px;align-items:baseline;font-size:16px;line-height:24px;font-weight:600;letter-spacing:-0.005em;margin:4px 0 2px">
+    <span>Library</span><span style="color:oklch(0.56 0 0)">Import</span><span style="color:oklch(0.56 0 0)">Review</span><span style="color:oklch(0.56 0 0)">Settings</span>
+  </div>
+  <div class="note">display-16 (16/24)</div>
+  <div style="display:flex;gap:24px;align-items:baseline;font-size:20px;line-height:28px;font-weight:600;letter-spacing:-0.01em;margin:10px 0 2px">
+    <span>Library</span><span style="color:oklch(0.56 0 0)">Import</span><span style="color:oklch(0.56 0 0)">Review</span><span style="color:oklch(0.56 0 0)">Settings</span>
+  </div>
+  <div class="note">display-20 (20/28)</div>
+  <div style="margin-top:10px;font-size:13px;line-height:20px;font-weight:600">Import 214 photos? <span class="note" style="display:inline">← title 13, for scale</span></div>
+</div>
+
+<div class="card dark">
+  <h2>6 · Dark ink ramp A/B — do labels recede?</h2>
+  <div class="note">graphite: A ink.2 0.75 · B 0.70 · C = ink.3 0.655 — the COMMITTED label-sm mapping</div>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1">
+      <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">A ·75</span></div>
+      <div class="row h16"><span style="color:oklch(0.75 0 0)">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.75 0 0)">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+      <div class="row h16"><span style="color:oklch(0.75 0 0)">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+      <div class="row h16"><span style="color:oklch(0.75 0 0)">Bias</span><span class="v mono" style="font-size:11px">+0.3 EV</span></div>
+    </div>
+    <div style="flex:1">
+      <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">B ·70</span></div>
+      <div class="row h16"><span style="color:oklch(0.70 0 0)">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.70 0 0)">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+      <div class="row h16"><span style="color:oklch(0.70 0 0)">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+      <div class="row h16"><span style="color:oklch(0.70 0 0)">Bias</span><span class="v mono" style="font-size:11px">+0.3 EV</span></div>
+    </div>
+    <div style="flex:1">
+      <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">C = ink.3 ·65</span></div>
+      <div class="row h16"><span style="color:oklch(0.65 0 0)">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.65 0 0)">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+      <div class="row h16"><span style="color:oklch(0.65 0 0)">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+      <div class="row h16"><span style="color:oklch(0.65 0 0)">Bias</span><span class="v mono" style="font-size:11px">+0.3 EV</span></div>
+    </div>
+  </div>
+  <div class="note" style="margin-top:10px">carbon: A 0.74 · B 0.69 · C 0.64</div>
+  <div style="display:flex;gap:12px;background:oklch(0.215 0 0);border-radius:6px;padding:8px 0">
+    <div style="flex:1">
+      <div class="row h16"><span style="color:oklch(0.74 0 0)">Aperture</span><span class="v mono" style="font-size:11px;color:oklch(0.90 0 0)">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.74 0 0)">Shutter</span><span class="v mono" style="font-size:11px;color:oklch(0.90 0 0)">1/250s</span></div>
+    </div>
+    <div style="flex:1">
+      <div class="row h16"><span style="color:oklch(0.69 0 0)">Aperture</span><span class="v mono" style="font-size:11px;color:oklch(0.90 0 0)">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.69 0 0)">Shutter</span><span class="v mono" style="font-size:11px;color:oklch(0.90 0 0)">1/250s</span></div>
+    </div>
+    <div style="flex:1">
+      <div class="row h16"><span style="color:oklch(0.64 0 0)">Aperture</span><span class="v mono" style="font-size:11px;color:oklch(0.90 0 0)">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.64 0 0)">Shutter</span><span class="v mono" style="font-size:11px;color:oklch(0.90 0 0)">1/250s</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>7 · Light-world label recede — same idea on Paper</h2>
+  <div class="note">A ink.2 0.42 · B 0.47 · C = ink.3 0.56 — the COMMITTED label-sm mapping (role remap, not a ramp move)</div>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1">
+      <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">A ·42</span></div>
+      <div class="row h16"><span style="color:oklch(0.42 0 0)">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.42 0 0)">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+      <div class="row h16"><span style="color:oklch(0.42 0 0)">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+      <div class="row h16"><span style="color:oklch(0.42 0 0)">Bias</span><span class="v mono" style="font-size:11px">+0.3 EV</span></div>
+    </div>
+    <div style="flex:1">
+      <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">B ·47</span></div>
+      <div class="row h16"><span style="color:oklch(0.47 0 0)">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.47 0 0)">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+      <div class="row h16"><span style="color:oklch(0.47 0 0)">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+      <div class="row h16"><span style="color:oklch(0.47 0 0)">Bias</span><span class="v mono" style="font-size:11px">+0.3 EV</span></div>
+    </div>
+    <div style="flex:1">
+      <div class="head hairline" style="font-weight:600">Exposure <span class="note" style="margin:0 0 0 auto">C = ink.3 ·56</span></div>
+      <div class="row h16"><span style="color:oklch(0.56 0 0)">Aperture</span><span class="v mono" style="font-size:11px">f/8.0</span></div>
+      <div class="row h16"><span style="color:oklch(0.56 0 0)">Shutter</span><span class="v mono" style="font-size:11px">1/250s</span></div>
+      <div class="row h16"><span style="color:oklch(0.56 0 0)">ISO</span><span class="v mono" style="font-size:11px">400</span></div>
+      <div class="row h16"><span style="color:oklch(0.56 0 0)">Bias</span><span class="v mono" style="font-size:11px">+0.3 EV</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>8 · Control height: 24 default vs 28</h2>
+  <div class="note">the same toolbar at both heights, under a display-20 landmark for the hierarchy feel</div>
+  <div style="font-size:20px;line-height:28px;font-weight:600;letter-spacing:-0.01em;margin-bottom:8px">Library</div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+    <span style="display:inline-flex;align-items:center;height:24px;padding:0 12px;background:oklch(0.25 0 0);color:oklch(0.975 0 0);border-radius:4px;font-size:12px;font-weight:500">Import</span>
+    <span style="display:inline-flex;align-items:center;height:24px;padding:0 12px;border:1px solid oklch(0.885 0 0);border-radius:4px;font-size:12px;font-weight:500">Cancel</span>
+    <span style="flex:1;max-width:180px;background:oklch(0.955 0 0);border:1px solid oklch(0.885 0 0);border-radius:4px;height:24px;display:inline-flex;align-items:center;padding:0 8px;font-size:12px;color:oklch(0.68 0 0)">Search or filter…</span>
+  </div>
+  <div class="note">control 24 (proposed default)</div>
+  <div style="display:flex;gap:8px;align-items:center;margin:10px 0 4px">
+    <span style="display:inline-flex;align-items:center;height:28px;padding:0 12px;background:oklch(0.25 0 0);color:oklch(0.975 0 0);border-radius:4px;font-size:12px;font-weight:500">Import</span>
+    <span style="display:inline-flex;align-items:center;height:28px;padding:0 12px;border:1px solid oklch(0.885 0 0);border-radius:4px;font-size:12px;font-weight:500">Cancel</span>
+    <span style="flex:1;max-width:180px;background:oklch(0.955 0 0);border:1px solid oklch(0.885 0 0);border-radius:4px;height:28px;display:inline-flex;align-items:center;padding:0 8px;font-size:12px;color:oklch(0.68 0 0)">Search or filter…</span>
+  </div>
+  <div class="note">control 28 (current default; proposed control-lg — dialog CTAs, hero spots)</div>
+</div>
+
+</body>
+</html>

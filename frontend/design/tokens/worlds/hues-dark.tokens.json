@@ -1,0 +1,77 @@
+{
+  "$description": "Dark-world hue steps (Graphite + Carbon contexts). Ratified 2026-07-13, unchanged from the first eyeball pass (dark world read well immediately). tint sits only ΔL 0.02 above the Graphite panel — chroma carries the separation; verified by eye on both dark themes. tint-ink is same-hue light ink, ≥ Lc 60 on its tint.",
+
+  "world": {
+    "register-step": { "$type": "number", "$value": 0.035, "$extensions": { "alx": { "role": "the dark-world register quantum (ratified 2026-07-13); see hues-light for the doctrine — dark polarity needs roughly double the light step for the same felt change." } } }
+  },
+
+  "color": {
+    "$type": "color",
+    "red": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 25] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 25] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 25] } }
+    },
+    "peach": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 40] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 40] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 40] } }
+    },
+    "orange": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 65] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 65] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 65] } }
+    },
+    "amber": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 85] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 85] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 85] } }
+    },
+    "lime": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 120] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 120] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 120] } }
+    },
+    "green": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 150] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 150] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 150] } }
+    },
+    "teal": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 180] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 180] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 180] } }
+    },
+    "cyan": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 220] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 220] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 220] } }
+    },
+    "blue": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 252] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 252] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 252] } }
+    },
+    "indigo": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 280] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 280] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 280] } }
+    },
+    "purple": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 305] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 305] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 305] } }
+    },
+    "magenta": {
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0.06, 345] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0.1, 345] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0.11, 345] } }
+    },
+    "gray": {
+      "$description": "The 13th scale — see hues-light for the doctrine.",
+      "tint": { "$value": { "colorSpace": "oklch", "components": [0.32, 0, 0] } },
+      "tint-ink": { "$value": { "colorSpace": "oklch", "components": [0.84, 0, 0] } },
+      "line": { "$value": { "colorSpace": "oklch", "components": [0.48, 0, 0] } }
+    }
+  }
+}

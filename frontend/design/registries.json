@@ -1,0 +1,56 @@
+{
+  "$description": "Non-token system registries — dispatch tables the constitution names, kept beside the tokens (NOT DTCG data). Registries, not hierarchies: add a capability = add a row.",
+
+  "familyDirection": {
+    "$comment": "§7: direction is DERIVED from the invariant, never chosen freely. The validator checks monotonicity against the resolved direction per family × theme.",
+    "invariant": "interaction moves toward ink — fills darken on light themes, lighten on dark",
+    "exceptions": { "cell": "raise toward white on every theme (LrC matting; §7/§20)" },
+    "resolved": {
+      "chrome": { "paper": "recess", "linen": "recess", "graphite": "raise", "carbon": "raise" },
+      "cell": { "paper": "raise", "linen": "raise", "graphite": "raise", "carbon": "raise" }
+    }
+  },
+
+  "funSites": {
+    "$comment": "§17: the fun layer is injected ONLY at registered sites; one per view, area-capped, never adjacent to stage or cells, static under reduced motion.",
+    "sites": ["hero-cta", "marquee-progress", "joy-moment"]
+  },
+
+  "machinery": {
+    "$comment": "§14: domain state → dot-matrix loader (source: dot-matrix-animations.vercel.app, 60 loaders). Loader ids PIN pending selection (§30.8). Machinery is achromatic and visible only while working (§10).",
+    "map": [
+      { "state": "ingesting", "category": "progress", "loader": "PIN" },
+      { "state": "thumbnail-generating", "category": "spinner", "loader": "pulse-rings" },
+      { "state": "preview-building", "category": "spinner", "loader": "PIN" },
+      { "state": "watcher-ambient", "category": "ambient", "loader": "PIN" },
+      { "state": "reconciler-working", "category": "agent", "loader": "PIN" },
+      { "state": "sync-pending", "category": "status", "loader": "PIN" },
+      { "state": "import-session-marquee", "category": "progress", "loader": "fun light-bar (§17, not a dot loader)" }
+    ]
+  },
+
+  "tagRecipes": {
+    "$comment": "Tag/badge style recipes (ratified 2026-07-13): style → which hue-scale steps, identical grammar for all 12 hues. 'outline' is the surface hybrid (border + wash) — a pure 1px colored border cannot carry a chip on light chrome. The compiler emits per-hue variables from these; components never assemble chips ad hoc.",
+    "styles": {
+      "tint": { "background": "color.<hue>.tint", "ink": "color.<hue>.tint-ink" },
+      "outline": { "background": "color.<hue>.tint", "ink": "color.<hue>.tint-ink", "border": "color.<hue>.line" },
+      "dot": { "mark": "color.<hue>.solid", "ink": "ink.1", "border": "ink.hairline" },
+      "fill": { "background": "color.<hue>.solid", "ink": "color.<hue>.on-solid" }
+    },
+    "hues": ["red", "peach", "orange", "amber", "lime", "green", "teal", "cyan", "blue", "indigo", "purple", "magenta", "gray"]
+  },
+
+  "rowIntents": {
+    "$comment": "The row grammar (ratified 2026-07-13): each intent binds a height to the type roles allowed inside it — density and type step down TOGETHER or not at all (body type in a 16px row is zero-slack; dense type in a 28px row is limp). The validator lints role-in-row violations. Density switches at section boundaries only (§8); horizontal insets identical across all intents.",
+    "control": { "height": "size.row-control", "typeRoles": ["control", "value", "label", "placeholder"], "interactive": true },
+    "list": { "height": "size.row-list", "typeRoles": ["value", "data-sm", "caption"], "interactive": true },
+    "text": { "height": "size.row-text", "typeRoles": ["label-sm", "data-sm", "caption", "micro"], "interactive": false }
+  },
+
+  "hueEligibility": {
+    "$comment": "Capability rows (2026-07-13): which scales each user-pickable role may bind. Gray is tag-only (gray signal is no signal). Accent additionally gated by the ring contract per theme — a hue failing ring Lc on any theme is not offered.",
+    "tag": "all",
+    "accent": { "exclude": ["gray"], "default": "blue", "gate": "contracts.json ring" },
+    "attention": { "exclude": ["gray"], "default": "magenta", "gate": "contracts.json minHueDistanceDeg vs enabled labels" }
+  }
+}

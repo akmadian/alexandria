@@ -1,0 +1,31 @@
+{
+  "$description": "Graphite (§21, anchor L 0.30). Ramp ratified 2026-07-12; C=0 exactly (the old 0.004 hue-275 tint read as lavender and was removed). Dark world: chrome direction raises (interaction moves toward ink, §7); transient is a real raised step (§6), no longer a placeholder.",
+
+  "surface": {
+    "$type": "color",
+    "panel": { "$value": { "colorSpace": "oklch", "components": [0.3, 0, 0] } },
+    "field": { "$value": { "colorSpace": "oklch", "components": [0.272, 0, 0] } },
+    "hover": { "$value": { "colorSpace": "oklch", "components": [0.33, 0, 0] } },
+    "pressed": { "$value": { "colorSpace": "oklch", "components": [0.35, 0, 0] } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.405, 0, 0] }, "$extensions": { "alx": { "role": "+2 register steps (2026-07-13); sits ≈ hairline (0.40) — lawful, validator watch" } } },
+    "transient": { "$value": { "colorSpace": "oklch", "components": [0.34, 0, 0] }, "$extensions": { "alx": { "role": "raised above panel (§6): shadow alone does not read on dark chrome" } } }
+  },
+
+  "cell": {
+    "$type": "color",
+    "well": { "$value": { "colorSpace": "oklch", "components": [0.26, 0, 0] } },
+    "rest": { "$value": { "colorSpace": "oklch", "components": [0.3, 0, 0] } },
+    "hover": { "$value": { "colorSpace": "oklch", "components": [0.335, 0, 0] } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.375, 0, 0] } },
+    "active": { "$value": { "colorSpace": "oklch", "components": [0.42, 0, 0] }, "$extensions": { "alx": { "role": "family ceiling" } } }
+  },
+
+  "ink": {
+    "$type": "color",
+    "1": { "$value": { "colorSpace": "oklch", "components": [0.93, 0, 0] } },
+    "2": { "$value": { "colorSpace": "oklch", "components": [0.75, 0, 0] }, "$extensions": { "alx": { "role": "retuned 2026-07-13 (was 0.80): dark ramps were compressed at the top (gap 0.13 vs light's 0.17) and light-on-dark blooms — labels now recede behind values as on light themes. Verified in library/type-probe.html card 6." } } },
+    "3": { "$value": { "colorSpace": "oklch", "components": [0.655, 0, 0] }, "$extensions": { "alx": { "role": "retuned with ink.2 (was 0.685) to keep the ladder spaced" } } },
+    "4": { "$value": { "colorSpace": "oklch", "components": [0.585, 0, 0] } },
+    "hairline": { "$value": { "colorSpace": "oklch", "components": [0.4, 0, 0] } }
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "$description": "Tier 2 — decision tokens (constitution §22.2): the theme-INVARIANT roles. Theme-varying roles (surface/cell/ink families) live in themes/*.tokens.json under the same names. Every color here is a literal ONLY until the engineered palette lands in primitives — then each becomes an alias, and a literal color in this file becomes a defect. Colors are structured oklch per DTCG.",
+
+  "stage": {
+    "$type": "color",
+    "$description": "Theme-independent asset surround (§1). User-adjustable within [min, max]; contracts must hold across the whole range, not just the default (§23).",
+    "default": { "$value": { "colorSpace": "oklch", "components": [0.34, 0, 0] }, "$extensions": { "alx": { "pin": "hypothesis (§30.2)" } } },
+    "min": { "$value": { "colorSpace": "oklch", "components": [0.2, 0, 0] } },
+    "max": { "$value": { "colorSpace": "oklch", "components": [0.45, 0, 0] }, "$extensions": { "alx": { "role": "range cap: below the dead band so stage ink stays legible at every setting (§1)" } } }
+  },
+
+  "accent": {
+    "$type": "color",
+    "$value": "{color.blue.solid}",
+    "$extensions": { "alx": {
+      "role": "focus ring, drop-target fill, toggles-on, links (§5). Ratified 2026-07-13, closing §30.1: the accent is USER-SELECTABLE from the named scales at runtime (blue is the default binding) — accent stopped being a hue choice and became a role bound to a user-picked scale, like attention (§29). Eligibility is gated: every offered hue must pass ring contrast on all four themes (contracts.json ring); gray is excluded (registries.json). Sharing a hue with a label is lawful — accent and labels are style-disjoint (ring/link/toggle vs solid swatch), ratified same date."
+    } }
+  },
+
+  "attention": {
+    "$type": "color",
+    "$value": "{color.magenta.solid}",
+    "$extensions": { "alx": { "role": "default 'needs a human' hue (§10); user-picked from the tag palette at runtime (§29). Ratified 2026-07-13: magenta — 40° from both purple and red, passes the §23 hue-distance floor." } }
+  },
+
+  "error": {
+    "$type": "color",
+    "$value": "{color.red.solid}",
+    "$extensions": { "alx": { "role": "invalid input only (§25); independent of the attention choice. Unified onto the red scale 2026-07-13 — contexts (field hairline vs swatch) never collide." } }
+  },
+
+  "label": {
+    "$type": "color",
+    "$description": "LrC-compatible color labels (§5): the solids of the named scales (unified 2026-07-13 — LrC compatibility is the five NAMES, not exact hues). Solid swatch style only; user-toggleable off. 'yellow' is the amber scale.",
+    "red": { "$value": "{color.red.solid}" },
+    "yellow": { "$value": "{color.amber.solid}" },
+    "green": { "$value": "{color.green.solid}" },
+    "blue": { "$value": "{color.blue.solid}" },
+    "purple": { "$value": "{color.purple.solid}" }
+  },
+
+  "fun": {
+    "$description": "The fun layer (§17): an injected add-on at registered sites (see registries.json), never core chrome. Recipe values are §30.8 PIN.",
+    "gradient": {
+      "$type": "gradient",
+      "$value": [
+        { "color": { "colorSpace": "oklch", "components": [0.72, 0.16, 15] }, "position": 0 },
+        { "color": { "colorSpace": "oklch", "components": [0.8, 0.14, 95] }, "position": 0.2 },
+        { "color": { "colorSpace": "oklch", "components": [0.72, 0.14, 165] }, "position": 0.4 },
+        { "color": { "colorSpace": "oklch", "components": [0.68, 0.14, 255] }, "position": 0.6 },
+        { "color": { "colorSpace": "oklch", "components": [0.7, 0.15, 315] }, "position": 0.8 },
+        { "color": { "colorSpace": "oklch", "components": [0.72, 0.16, 15] }, "position": 1 }
+      ],
+      "$extensions": { "alx": { "pin": "hypothesis; becomes palette-indexed stops when the named hue scales land (§17)" } }
+    },
+    "gradient-angle": { "$type": "number", "$value": 100, "$extensions": { "alx": { "role": "degrees; gradient geometry (DTCG gradients are angle-free stop lists)" } } },
+    "flow-duration": { "$type": "duration", "$value": { "value": 7000, "unit": "ms" } },
+    "glass-blur": { "$type": "dimension", "$value": { "value": 14, "unit": "px" } },
+    "glass-saturate": { "$type": "number", "$value": 1.3 },
+    "glass-face-alpha": { "$type": "number", "$value": 0.5 },
+    "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [1, 0, 0] }, "$extensions": { "alx": { "role": "hero label on the polychrome face" } } },
+    "text-shadow": {
+      "$type": "shadow",
+      "$value": { "color": { "colorSpace": "oklch", "components": [0, 0, 0], "alpha": 0.3 }, "offsetX": { "value": 0, "unit": "px" }, "offsetY": { "value": 1, "unit": "px" }, "blur": { "value": 2, "unit": "px" }, "spread": { "value": 0, "unit": "px" } }
+    },
+    "face-inset": {
+      "$type": "shadow",
+      "$description": "Frosted face inset highlights; both layers inset (house extension flag — DTCG shadows have no inset field).",
+      "$value": [
+        { "color": { "colorSpace": "oklch", "components": [1, 0, 0], "alpha": 0.3 }, "offsetX": { "value": 0, "unit": "px" }, "offsetY": { "value": 1, "unit": "px" }, "blur": { "value": 0, "unit": "px" }, "spread": { "value": 0, "unit": "px" } },
+        { "color": { "colorSpace": "oklch", "components": [1, 0, 0], "alpha": 0.14 }, "offsetX": { "value": 0, "unit": "px" }, "offsetY": { "value": 0, "unit": "px" }, "blur": { "value": 0, "unit": "px" }, "spread": { "value": 1, "unit": "px" } }
+      ],
+      "$extensions": { "alx": { "inset": true } }
+    }
+  },
+
+  "type-role": {
+    "$description": "The §30.4 role ladder (committed 2026-07-13): concept → typography composite; the paired ink lives in $extensions.alx.ink. Two sizes do the work (12 default, 11 dense); weight + ink + mono make the hierarchy (§9); 13 exists only for dialog titles; 10 is the micro voice. disabled is NOT a role — it is the §4 unary operator (one ink step down on whatever role). VERIFIED with real Geist (library/type-probe.html, 2026-07-13): the matched pair holds — mono needs NO size compensation (baselines and x-heights align at same px; earlier 'mono reads larger' was a fallback-font artifact); head weight = semibold 600 (700 reads shouty over dense rows). Remaining §28 check: Windows ClearType at 1×.",
+    "$type": "typography",
+    "display": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 20, "unit": "px" }, "fontWeight": "{weight.semibold}", "lineHeight": { "value": 28, "unit": "px" }, "letterSpacing": "-0.01em" }, "$extensions": { "alx": { "ink": "ink.1", "role": "view-level landmark (ratified 2026-07-13): whole-view choices like the module picker. Both display rungs are in the system deliberately — exact assignments stay open until real views compose them." } } },
+    "display-sm": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 16, "unit": "px" }, "fontWeight": "{weight.semibold}", "lineHeight": { "value": 24, "unit": "px" }, "letterSpacing": "-0.005em" }, "$extensions": { "alx": { "ink": "ink.1", "role": "view-level page headings (Settings/Import screens) — between title and display" } } },
+    "title": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 13, "unit": "px" }, "fontWeight": "{weight.semibold}", "lineHeight": { "value": 20, "unit": "px" }, "letterSpacing": "0em" }, "$extensions": { "alx": { "ink": "ink.1", "role": "dialog titles only" } } },
+    "head": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 12, "unit": "px" }, "fontWeight": "{weight.semibold}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.005em" }, "$extensions": { "alx": { "ink": "ink.1", "role": "section heads: bold at body size (§9)" } } },
+    "control": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 12, "unit": "px" }, "fontWeight": "{weight.medium}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.005em" }, "$extensions": { "alx": { "ink": "ink.1", "role": "buttons, menu items, tabs" } } },
+    "value": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 12, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.005em" }, "$extensions": { "alx": { "ink": "ink.1", "role": "content: names, editable values" } } },
+    "data": { "$value": { "fontFamily": "{font.mono}", "fontSize": { "value": 12, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0em" }, "$extensions": { "alx": { "ink": "ink.1", "numerals": "tabular", "role": "the data voice: filenames, EXIF, counts (§9)" } } },
+    "label": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 12, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.005em" }, "$extensions": { "alx": { "ink": "ink.2", "role": "row labels, form labels" } } },
+    "label-sm": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 11, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.01em" }, "$extensions": { "alx": { "ink": "ink.3", "role": "labels inside row-text dense sections — pairs with data-sm. Remapped ink.2→ink.3 (2026-07-13): in the instrument voice the values speak and labels support; the 'C' preference from the probe A/B/C was literally the muted rung. Scoped here so regular `label` (form rows) keeps ink.2 — a role remap, never a ramp move." } } },
+    "caption": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 11, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.01em" }, "$extensions": { "alx": { "ink": "ink.3", "role": "cell captions, hints, meta" } } },
+    "data-sm": { "$value": { "fontFamily": "{font.mono}", "fontSize": { "value": 11, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0em" }, "$extensions": { "alx": { "ink": "ink.3", "numerals": "tabular", "role": "dense data: tree counts, indexes" } } },
+    "placeholder": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 12, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.005em" }, "$extensions": { "alx": { "ink": "ink.4", "role": "absent values (ratified 2026-07-13: ink.4, two full steps below the label — voice adjacency was the smell); disabled stays distinct via drained field fill" } } },
+    "micro": { "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 10, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 14, "unit": "px" }, "letterSpacing": "0.015em" }, "$extensions": { "alx": { "ink": "ink.4", "role": "the whisper: cell indexes, keyboard hints (non-essential only, §28 check pending)" } } }
+  },
+
+  "radius": {
+    "$type": "dimension",
+    "$description": "Radius by detachment (§24): docked = 0 (seams) → controls small → transients large. Three working values + the pill.",
+    "docked": { "$value": { "value": 0, "unit": "px" } },
+    "control": { "$value": { "value": 4, "unit": "px" }, "$extensions": { "alx": { "pin": "hypothesis (§30.6)" } } },
+    "transient": { "$value": { "value": 8, "unit": "px" } },
+    "round": { "$value": { "value": 999, "unit": "px" } }
+  },
+
+  "z": {
+    "$type": "number",
+    "$description": "The z-order registry (§24). There is no other elevation.",
+    "docked": { "$value": 0 },
+    "tunnel": { "$value": 1 },
+    "transient": { "$value": 100 },
+    "dialog": { "$value": 200 },
+    "toast": { "$value": 300 }
+  },
+
+  "shadow": {
+    "$description": "Exactly two recipes (§6).",
+    "occlusion": {
+      "$type": "shadow",
+      "$value": [
+        { "color": { "colorSpace": "oklch", "components": [0, 0, 0], "alpha": 0.16 }, "offsetX": { "value": 0, "unit": "px" }, "offsetY": { "value": 4, "unit": "px" }, "blur": { "value": 16, "unit": "px" }, "spread": { "value": 0, "unit": "px" } },
+        { "color": { "colorSpace": "oklch", "components": [0, 0, 0], "alpha": 0.1 }, "offsetX": { "value": 0, "unit": "px" }, "offsetY": { "value": 1, "unit": "px" }, "blur": { "value": 3, "unit": "px" }, "spread": { "value": 0, "unit": "px" } }
+      ]
+    },
+    "tunnel": {
+      "$type": "shadow",
+      "$value": { "color": { "colorSpace": "oklch", "components": [0, 0, 0], "alpha": 0.25 }, "offsetX": { "value": 0, "unit": "px" }, "offsetY": { "value": 6, "unit": "px" }, "blur": { "value": 8, "unit": "px" }, "spread": { "value": -6, "unit": "px" } },
+      "$extensions": { "alx": { "inset": true, "role": "scroll-linked, cast inward onto clipped content only (§6)" } }
+    }
+  },
+
+  "focus": {
+    "$type": "dimension",
+    "ring-width": { "$value": { "value": 2, "unit": "px" } },
+    "ring-offset": { "$value": { "value": 1, "unit": "px" } }
+  },
+
+  "size": {
+    "$type": "dimension",
+    "$description": "Chrome sizing quanta (§8): two control heights, one icon size, uniform row rhythm. All §30.5 PIN.",
+    "control": { "$value": { "value": 24, "unit": "px" }, "$extensions": { "alx": { "role": "THE default control height (ratified 2026-07-13, was control-sm): buttons, fields, toolbar chrome — the dense-tool default; = the hit-target floor. A 24 control inside a 28 row-control is the canonical field-row rhythm." } } },
+    "control-lg": { "$value": { "value": 28, "unit": "px" }, "$extensions": { "alx": { "role": "prominent controls only (was control-md, demoted from default 2026-07-13): dialog CTAs, hero spots" } } },
+    "row-control": { "$value": { "value": 28, "unit": "px" }, "$extensions": { "alx": { "role": "rows carrying interactive controls (fields, buttons) — controls breathe (ratified 2026-07-13)" } } },
+    "row-list": { "$value": { "value": 24, "unit": "px" }, "$extensions": { "alx": { "role": "interactive dense rows (source tree, list selections) — sits ON the hit-target floor; reuses the control-sm/hit-target quantum" } } },
+    "row-text": { "$value": { "value": 16, "unit": "px" }, "$extensions": { "alx": { "role": "read-only data rows (metadata, EXIF) — the instrument voice, ratified 2026-07-13: 16px row PAIRED with the small type roles (label-sm/data-sm; body type in a 16px row is zero-slack and banned — see registries.json rowIntents). Density is vertical only: insets stay at row-inset (§8 horizontal generosity). Non-interactive only. One line unit: lh 16 = row height." } } },
+    "row-inset": { "$value": { "value": 12, "unit": "px" }, "$extensions": { "alx": { "role": "identical generous side insets; text never touches an edge (§8)" } } },
+    "icon": { "$value": { "value": 16, "unit": "px" } },
+    "icon-stroke": { "$value": { "value": 1.5, "unit": "px" }, "$extensions": { "alx": { "pin": "hypothesis (§30.9) — in tension with the §8 1× floor; empirical check pending" } } },
+    "hit-target": { "$value": { "value": 24, "unit": "px" } },
+    "panel-left": { "$value": { "value": 260, "unit": "px" } },
+    "panel-left-min": { "$value": { "value": 200, "unit": "px" } },
+    "panel-right": { "$value": { "value": 300, "unit": "px" } },
+    "panel-right-min": { "$value": { "value": 240, "unit": "px" } },
+    "cell-pad": { "$value": { "value": 8, "unit": "px" }, "$extensions": { "alx": { "role": "interior cell padding — photos never touch (§19)" } } }
+  },
+
+  "thumb-hairline-alpha": { "$type": "number", "$value": 0.07, "$extensions": { "alx": { "role": "1px inner containment border on thumbnails (§19)" } } }
+}

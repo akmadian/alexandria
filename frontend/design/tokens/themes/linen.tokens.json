@@ -1,0 +1,31 @@
+{
+  "$description": "Linen (§21, anchor L 0.905). Ramp ratified 2026-07-12; C=0 exactly. Ceiling deliberately sub-white (0.958) — a pure-white active mat would cliff against the warm-dim panel.",
+
+  "surface": {
+    "$type": "color",
+    "panel": { "$value": { "colorSpace": "oklch", "components": [0.905, 0, 0] } },
+    "field": { "$value": { "colorSpace": "oklch", "components": [0.885, 0, 0] } },
+    "hover": { "$value": { "colorSpace": "oklch", "components": [0.883, 0, 0] } },
+    "pressed": { "$value": { "colorSpace": "oklch", "components": [0.869, 0, 0] } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.822, 0, 0] }, "$extensions": { "alx": { "role": "+2 register steps (2026-07-13)" } } },
+    "transient": { "$value": { "colorSpace": "oklch", "components": [0.905, 0, 0] }, "$extensions": { "alx": { "role": "equals panel on light themes (§6)" } } }
+  },
+
+  "cell": {
+    "$type": "color",
+    "well": { "$value": { "colorSpace": "oklch", "components": [0.888, 0, 0] } },
+    "rest": { "$value": { "colorSpace": "oklch", "components": [0.906, 0, 0] } },
+    "hover": { "$value": { "colorSpace": "oklch", "components": [0.923, 0, 0] } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.941, 0, 0] } },
+    "active": { "$value": { "colorSpace": "oklch", "components": [0.958, 0, 0] }, "$extensions": { "alx": { "role": "family ceiling (sub-white by design)" } } }
+  },
+
+  "ink": {
+    "$type": "color",
+    "1": { "$value": { "colorSpace": "oklch", "components": [0.23, 0, 0] } },
+    "2": { "$value": { "colorSpace": "oklch", "components": [0.39, 0, 0] } },
+    "3": { "$value": { "colorSpace": "oklch", "components": [0.52, 0, 0] } },
+    "4": { "$value": { "colorSpace": "oklch", "components": [0.63, 0, 0] } },
+    "hairline": { "$value": { "colorSpace": "oklch", "components": [0.815, 0, 0] } }
+  }
+}

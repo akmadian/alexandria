@@ -1,0 +1,34 @@
+{
+  "$description": "Paper — the default theme (§21). Ramp ratified 2026-07-12 (eyeball + contract pass): all adjacent register steps inside the ΔL band; grays are EXACTLY C=0 by ratification (the old 0.003–0.005 hue-275 tint read as lavender and was removed). Structure note, same date: the gray ramp is deliberately role-shaped rather than a numbered gray.N facade — with four hand-tuned themes the numbered tier adds indirection without generality; hue scales get numbered steps because twelve hues share one step grammar.",
+
+  "surface": {
+    "$type": "color",
+    "$description": "Chrome family. Direction: recess (derived — interaction moves toward ink, §7). Fields always recess; transient = panel on light themes (§6).",
+    "panel": { "$value": { "colorSpace": "oklch", "components": [0.975, 0, 0] }, "$extensions": { "alx": { "role": "rails, inspector, bars — the anchor" } } },
+    "field": { "$value": { "colorSpace": "oklch", "components": [0.955, 0, 0] }, "$extensions": { "alx": { "role": "input wells (recessed)" } } },
+    "hover": { "$value": { "colorSpace": "oklch", "components": [0.952, 0, 0] } },
+    "pressed": { "$value": { "colorSpace": "oklch", "components": [0.938, 0, 0] } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.888, 0, 0] }, "$extensions": { "alx": { "role": "bumped +2 register steps from the first hypothesis (ratified 2026-07-13: findable at a glance). Sits ≈ hairline (0.885) — lawful, seams never draw inside selected fills; validator watch." } } },
+    "transient": { "$value": { "colorSpace": "oklch", "components": [0.975, 0, 0] }, "$extensions": { "alx": { "role": "popover/menu/dialog surface (§6): equals panel on light themes" } } }
+  },
+
+  "cell": {
+    "$type": "color",
+    "$description": "Asset-cell family: always raises toward the ceiling (§7 exception, §20). Even 0.014 spacing — every state one perceivable step apart (fixed 2026-07-12; the old upper steps were sub-threshold).",
+    "well": { "$value": { "colorSpace": "oklch", "components": [0.944, 0, 0] }, "$extensions": { "alx": { "role": "grid well (family base)" } } },
+    "rest": { "$value": { "colorSpace": "oklch", "components": [0.958, 0, 0] } },
+    "hover": { "$value": { "colorSpace": "oklch", "components": [0.972, 0, 0] } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.986, 0, 0] } },
+    "active": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] }, "$extensions": { "alx": { "role": "family ceiling (pure white) + 1px ink hairline frame (§20)" } } }
+  },
+
+  "ink": {
+    "$type": "color",
+    "$description": "4-step ink ramp + hairline (§3), pure neutral. Ordinal names pending the type-roles round.",
+    "1": { "$value": { "colorSpace": "oklch", "components": [0.25, 0, 0] }, "$extensions": { "alx": { "role": "primary: values, names" } } },
+    "2": { "$value": { "colorSpace": "oklch", "components": [0.42, 0, 0] }, "$extensions": { "alx": { "role": "secondary: labels" } } },
+    "3": { "$value": { "colorSpace": "oklch", "components": [0.56, 0, 0] }, "$extensions": { "alx": { "role": "muted: placeholders, counts" } } },
+    "4": { "$value": { "colorSpace": "oklch", "components": [0.68, 0, 0] }, "$extensions": { "alx": { "role": "disabled" } } },
+    "hairline": { "$value": { "colorSpace": "oklch", "components": [0.885, 0, 0] }, "$extensions": { "alx": { "role": "seams, separators (§3); Δ0.09 from panel" } } }
+  }
+}

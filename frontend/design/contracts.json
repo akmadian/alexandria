@@ -1,0 +1,56 @@
+{
+  "$description": "Validator input (design-constitution §23) — NOT tokens; deliberately outside the DTCG files. The validator (built when the compiler lands, Phase C) fails `make check` when the system contradicts its own reasoning. minLc per APCA-W3. Every check runs per theme; stage checks run across the stage's full adjustable range.",
+
+  "text": {
+    "$comment": "Every declared ink/surface pair meets its promised Lc at the smallest declared text size. Targets are §23 PIN hypotheses.",
+    "pairs": [
+      { "ink": "ink.1", "on": ["surface.panel", "surface.field", "surface.transient", "cell.rest", "cell.active"], "minLc": 75 },
+      { "ink": "ink.2", "on": ["surface.panel", "surface.field", "surface.transient"], "minLc": 60 },
+      { "ink": "ink.3", "on": ["surface.panel"], "minLc": 40 },
+      { "ink": "ink.4", "on": ["surface.panel"], "minLc": 25 }
+    ]
+  },
+
+  "separation": {
+    "$comment": "§3/§7/§23: EVERY adjacent step in EVERY register family sits inside the band — above the perceivability floor AND below the delta cap (spot-checking two pairs proved insufficient). ΔL is the instrument because APCA clamps sub-threshold contrast to 0. KNOWN FAILURES on 2026-07-12 hypothesis values: paper cell hover→selected (0.009) and selected→active (0.007) — re-tuned in the palette round.",
+    "deltaLBand": [0.012, 0.06],
+    "families": {
+      "surface": { "stepOrder": ["panel", "hover", "pressed", "selected"] },
+      "cell": { "stepOrder": ["well", "rest", "hover", "selected", "active"] }
+    },
+    "hairline": { "pair": ["ink.hairline", "surface.panel"], "deltaLBand": [0.05, 0.14], "$comment": "seams: visible but quiet" }
+  },
+
+  "structure": [
+    "state deltas are authored and adjusted in multiples of the per-world register-step token (worlds/*.tokens.json); ad-hoc L nudges are drift",
+    "register families are monotonic in their declared direction (registries.json familyDirection)",
+    "every spacing/size value is a quantum multiple (strokes, icon-stroke, and type details are registered sub-grid exceptions)",
+    "the attention hue keeps >= minHueDistanceDeg from every enabled label hue (inequality alone passes hues indistinguishable at swatch scale)",
+    "chrome chroma ~ 0 outside the hue ledger rows",
+    "no theme surface sits in the dead band L 0.45-0.65 (§1)",
+    "text contracts hold across the stage adjustable range [stage.min, stage.max], not just stage.default"
+  ],
+
+  "ring": {
+    "$comment": "Accent eligibility gate (2026-07-13): every hue offered in the accent picker must pass focus-ring contrast against every theme's panel. Non-text target; PIN hypothesis.",
+    "pairs": [{ "ink": "color.<hue>.solid", "on": "surface.panel", "minLc": 45, "perTheme": true }]
+  },
+
+  "selected-text": {
+    "$comment": "Text carried by the strengthened selected fill (2026-07-13, +2 register steps): row text must survive on it. PIN — validator adjudicates; if ink.2 fails, either selected caps at +1 or counts promote one ink step on selected rows.",
+    "pairs": [
+      { "ink": "ink.1", "on": "surface.selected", "minLc": 75 },
+      { "ink": "ink.2", "on": "surface.selected", "minLc": 60 }
+    ]
+  },
+
+  "tag": {
+    "$comment": "Per hue × per world (ratified 2026-07-13): chip-internal legibility for every recipe in registries.json tagRecipes.",
+    "pairs": [
+      { "ink": "color.<hue>.tint-ink", "on": "color.<hue>.tint", "minLc": 60 },
+      { "ink": "color.<hue>.on-solid", "on": "color.<hue>.solid", "minLc": 60 }
+    ]
+  },
+
+  "minHueDistanceDeg": { "value": 30, "$comment": "§23 PIN hypothesis. Passing as of 2026-07-13: attention = magenta (345), 40° from purple (305) and red (25)." }
+}

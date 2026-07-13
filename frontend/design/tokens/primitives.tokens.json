@@ -1,0 +1,143 @@
+{
+  "$description": "Tier 1 — option tokens (constitution §22.1): raw scales with no meaning attached. Semantic roles alias into this tier; components never consume it directly (sanctioned exception: the space scale, §8). The engineered gray ramps and named hue scales land here in the palette round — their absence is the known hole this structure exists to receive.",
+
+  "color": {
+    "$type": "color",
+    "$description": "The named hue scales (ratified 2026-07-13, replacing the parametric tag formula). Each hue is INDIVIDUALLY placed — per-hue L/C, no formula. Solids are world-independent (tag identity stable across themes); on-solid ink is a property of the HUE (amber + lime are the bright inversion set: dark text, the Radix lesson). World-varying steps (tint, tint-ink, line) live in ../worlds/hues-{light,dark}.tokens.json. Interaction states for chips: derived per §4 when a hoverable chip component exists — not pre-authored.",
+    "red": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.58, 0.2, 25] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "peach": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.645, 0.165, 40] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "orange": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.665, 0.18, 65] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "amber": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.78, 0.16, 85] }, "$extensions": { "alx": { "inversion": true } } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [0.22, 0.06, 85] } }
+    },
+    "lime": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.79, 0.19, 120] }, "$extensions": { "alx": { "inversion": true } } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [0.22, 0.06, 120] } }
+    },
+    "green": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.63, 0.15, 150] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "teal": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.61, 0.12, 180] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "cyan": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.63, 0.13, 220] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "blue": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.56, 0.195, 252] }, "$extensions": { "alx": { "note": "anchored in the Vercel-blue neighborhood by taste (2026-07-12)" } } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "indigo": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.54, 0.18, 280] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "purple": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.56, 0.18, 305] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "magenta": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.6, 0.19, 345] } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] } }
+    },
+    "gray": {
+      "solid": { "$value": { "colorSpace": "oklch", "components": [0.45, 0, 0] }, "$extensions": { "alx": { "pin": "hypothesis — validator confirms on-solid Lc" } } },
+      "on-solid": { "$value": { "colorSpace": "oklch", "components": [0.97, 0, 0] } }
+    }
+  },
+
+  "space": {
+    "$type": "dimension",
+    "$description": "Quantum multiples (§8): the name IS the multiple count (space.3 = 3 × 4px). The one primitive components consume directly, for all gaps/padding/margins. 2px is NOT a step — sub-quantum values are optical detail (see stroke), not spacing.",
+    "1": { "$value": { "value": 4, "unit": "px" } },
+    "2": { "$value": { "value": 8, "unit": "px" } },
+    "3": { "$value": { "value": 12, "unit": "px" } },
+    "4": { "$value": { "value": 16, "unit": "px" } },
+    "6": { "$value": { "value": 24, "unit": "px" } },
+    "8": { "$value": { "value": 32, "unit": "px" } },
+    "12": { "$value": { "value": 48, "unit": "px" } }
+  },
+
+  "font": {
+    "$type": "fontFamily",
+    "$description": "The cast (§9). All bundled; identical on every platform.",
+    "sans": { "$value": ["Geist", "system-ui", "sans-serif"] },
+    "mono": { "$value": ["Geist Mono", "ui-monospace", "monospace"] },
+    "joy-serif": { "$value": ["Instrument Serif", "serif"], "$extensions": { "alx": { "role": "joy register ONLY (§16); banned from working chrome" } } },
+    "joy-pixel": { "$value": ["Geist Pixel", "monospace"], "$extensions": { "alx": { "role": "dot voice in type; rarest register (§16)" } } }
+  },
+
+  "weight": {
+    "$type": "fontWeight",
+    "regular": { "$value": 400 },
+    "medium": { "$value": 500 },
+    "semibold": { "$value": 600 }
+  },
+
+  "type-scale": {
+    "$description": "The UI scale as typography composites (§9): size + line-height + tracking are ONE token so they can never drift apart. Weight here is the regular default; semantic type ROLES (concept → composite + weight + ink, the §30.4 pinning work) land in semantic.tokens.json in the type round. House deviations from DTCG, both deliberate: lineHeight is a px dimension (px-locked chrome §8; the spec's unitless number invites rounding drift) and letterSpacing is an em string (spec wants px/rem; note the values are sub-pixel at 1× — §8's garnish clause — the type round decides whether tracking survives at all).",
+    "ui-16": {
+      "$type": "typography",
+      "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 16, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 24, "unit": "px" }, "letterSpacing": "-0.005em" },
+      "$extensions": { "alx": { "role": "display tier (ratified 2026-07-13): view-level chrome only, never body UI" } }
+    },
+    "ui-20": {
+      "$type": "typography",
+      "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 20, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 28, "unit": "px" }, "letterSpacing": "-0.01em" },
+      "$extensions": { "alx": { "role": "display tier (ratified 2026-07-13): the largest chrome voice" } }
+    },
+    "ui-10": {
+      "$type": "typography",
+      "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 10, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 14, "unit": "px" }, "letterSpacing": "0.015em" },
+      "$extensions": { "alx": { "pin": "ratified 2026-07-13 as the micro voice; below the 11px floor hypothesis — NON-ESSENTIAL text only (cell indexes, keyboard hints, timestamp garnish); 1×/Windows check pending (§28)" } }
+    },
+    "ui-11": {
+      "$type": "typography",
+      "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 11, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.01em" },
+      "$extensions": { "alx": { "pin": "hypothesis (§30.4; Windows 11px check pending §28)", "role": "dense metadata, counts, cell captions" } }
+    },
+    "ui-12": {
+      "$type": "typography",
+      "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 12, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 16, "unit": "px" }, "letterSpacing": "0.005em" },
+      "$extensions": { "alx": { "pin": "hypothesis (§30.4)", "role": "default row/control text; body" } }
+    },
+    "ui-13": {
+      "$type": "typography",
+      "$value": { "fontFamily": "{font.sans}", "fontSize": { "value": 13, "unit": "px" }, "fontWeight": "{weight.regular}", "lineHeight": { "value": 20, "unit": "px" }, "letterSpacing": "0em" },
+      "$extensions": { "alx": { "pin": "hypothesis (§30.4) — NOTE §9 says section heads are bold at BODY size; whether a 13px rung survives the type round is open", "role": "dialogs; the largest chrome text" } }
+    }
+  },
+
+  "duration": {
+    "$type": "duration",
+    "$description": "§26: register shifts ≤ fast; transients base; the one hero transition slow.",
+    "fast": { "$value": { "value": 80, "unit": "ms" } },
+    "base": { "$value": { "value": 160, "unit": "ms" } },
+    "slow": { "$value": { "value": 240, "unit": "ms" } }
+  },
+
+  "easing": {
+    "$type": "cubicBezier",
+    "out": { "$value": [0.16, 1, 0.3, 1], "$extensions": { "alx": { "role": "the working default (§24)" } } },
+    "in-out": { "$value": [0.65, 0, 0.35, 1] }
+  },
+
+  "stroke": {
+    "$type": "dimension",
+    "$description": "Line weights (§3, §8): deliberately NOT on the 4px grid — the quantum governs layout, never stroke width.",
+    "hairline": { "$value": { "value": 1, "unit": "px" }, "$extensions": { "alx": { "role": "seams, control borders, separators" } } },
+    "thick": { "$value": { "value": 2, "unit": "px" }, "$extensions": { "alx": { "role": "emphasis stroke: hover underline, focus ring" } } }
+  }
+}

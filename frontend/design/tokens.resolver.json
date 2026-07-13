@@ -1,0 +1,26 @@
+{
+  "$schema": "https://www.designtokens.org/schemas/2025.10/resolver.json",
+  "name": "alexandria",
+  "description": "Entry point for the Alexandria token source (design-constitution §22). Themes are modifier contexts over theme-invariant token names; last source in resolutionOrder wins. Compiled by our generator (C15) into CSS variables, TS types, docs, and validator input.",
+  "sets": {
+    "primitives": { "sources": [{ "$ref": "tokens/primitives.tokens.json" }] },
+    "semantic": { "sources": [{ "$ref": "tokens/semantic.tokens.json" }] }
+  },
+  "modifiers": {
+    "theme": {
+      "description": "A theme is a re-assignment of values to the same roles (§21), shipped only if it passes every contract in contracts.json.",
+      "contexts": {
+        "paper": [{ "$ref": "tokens/worlds/hues-light.tokens.json" }, { "$ref": "tokens/themes/paper.tokens.json" }],
+        "linen": [{ "$ref": "tokens/worlds/hues-light.tokens.json" }, { "$ref": "tokens/themes/linen.tokens.json" }],
+        "graphite": [{ "$ref": "tokens/worlds/hues-dark.tokens.json" }, { "$ref": "tokens/themes/graphite.tokens.json" }],
+        "carbon": [{ "$ref": "tokens/worlds/hues-dark.tokens.json" }, { "$ref": "tokens/themes/carbon.tokens.json" }]
+      },
+      "default": "paper"
+    }
+  },
+  "resolutionOrder": [
+    { "$ref": "#/sets/primitives" },
+    { "$ref": "#/sets/semantic" },
+    { "$ref": "#/modifiers/theme" }
+  ]
+}
