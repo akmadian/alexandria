@@ -1,7 +1,8 @@
 # Culling and Signals
 
-**Status:** design locked 2026-07-07 (C11). This doc is the UX; the engine side (ENRICH stage,
-enrichment jobs, priority queue) lives in `backend-enrichment.md`.
+Design locked 2026-07-07 (C11). This doc is the UX; the engine side is D28
+(`docs/decisions.md`) — enrichment engine, job-kind registry, viewport priority — with
+tasks 18–22 as the build queue.
 
 ## Cull view mode
 
@@ -38,10 +39,10 @@ driving hidden behavior.
 | Face count / face quality | heavy | on-device |
 | Embeddings (semantic) | heavy | MobileCLIP2 per `_project-tracking/design/local-ai.md` (P4) |
 
-Cheap signals ride ingest (the ENRICH stage), so **the signals that make culling fast are simply
-there when the user sits down** — culling starts after import completes. Heavy signals trickle in
-as background jobs, attention-prioritized. Architecture and rationale:
-`backend-enrichment.md`.
+Cheap signals are fast enrichment jobs ordered right behind thumbnail generation (D25/D28), so
+**the signals that make culling fast are effectively there when the user sits down**. Heavy
+signals trickle in as background jobs, attention-prioritized. Architecture and rationale: D28
+(`docs/decisions.md`); build queue: tasks 18–22.
 
 **The UI never pretends** (locked): filtering on a still-computing signal annotates the pill —
 "sharpness > 0.5 · **214 not yet scored**" — with results streaming in as jobs land. Users

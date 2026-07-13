@@ -4,13 +4,16 @@ A local-first, cross-platform Digital Asset Manager for creative professionals.
 
 Alexandria is named after the Library of Alexandria — the ancient world's greatest archive of human knowledge. It is also, appropriately, a reminder of why backups matter.
 
-## What it is
+## Ethical Tenets
+- Alexandria is free, in terms of both freedom and money (if you choose), forever. Features will never be paywalled.
+- Your work is yours. Alexandria does not collect your data, it does not train AI models on your work. Files remain in your posession ONLY. No walled gardens where you lose your work if you stop paying.
+- Telemetry is inherently opt-in and always transparent. Alexandria can be completely cut off from the internet, and you will notice no difference. Your data (should you choose to share it) guides our roadmap - we don't want to waste time building features you don't need or want.
 
-Alexandria is a catalog-first reference DAM. It indexes your creative assets wherever they live — local drives, external drives, network shares — and gives you a single, fast, beautiful place to browse, search, tag, and organise them. It does not move or copy your files. It does not require cloud storage. It works when your NAS is offline.
 
-It is designed for solo creative professionals: photographers, designers, videographers, and anyone who has ever lost an hour searching for a file they know they have somewhere.
+## Features
 
-## What it is not
+
+### What We Do Not Support, And Why
 
 - A photo editor
 - A cloud sync tool

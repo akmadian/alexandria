@@ -35,7 +35,10 @@ normal — the answer for a missing number lives in `docs/decisions.md` or git h
     *startup floor* (backup-before-migration + startup integrity check) is owned by the app-host
     milestone (impl/12); the *backup feature proper* — scheduling, retention policy, destinations,
     restore UX, health-dashboard integration — is its own design round. Becomes urgent the moment
-    migrations stack on real user catalogs (= first release).
+    migrations stack on real user catalogs (= first release). Lane note from D28: the schedule
+    itself is config (overdue-ness is derivable — convergent-shaped), but retry-with-backoff
+    against a flaky destination (sleeping NAS, unplugged drive) is intent-shaped — that round
+    should evaluate the D28 intent lane (River) for the destination-write half.
 
 ## Empirical tests needed (cheap, do during relevant milestone)
 

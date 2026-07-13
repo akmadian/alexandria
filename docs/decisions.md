@@ -223,6 +223,12 @@ against modernc.org/sqlite — our exact driver; experimental status: pin versio
 contract job envelope. Backfills (phash, etc.) need no queue at all: `WHERE phash IS NULL` IS the
 queue.
 
+> **River clause refined by D28 (2026-07-12).** Adoption is *intent-lane only* (export,
+> conversion, transcode — user commands no scan can reconstruct). The examples this entry
+> named (thumb rebuild at scale, transcription-as-enrichment) are convergent-lane work and
+> never queue durably — D25/D28's derived-completeness doctrine covers them. The
+> `riversqlite` maturity re-check (open question #9) remains the adoption gate.
+
 ## D18 — Ignore list mechanism lands early (P0/P1, not P2)
 
 Checked at two chokepoints: scanner front door AND watcher hint intake (a `.tmp` storm never even
@@ -578,3 +584,122 @@ queue" — to documentation:
 GitHub issues as the work-item store — the system's species boundaries port cleanly. If NN
 ordering fights the blocked-by DAG (parallel tracks), add explicit priority prose to
 00-START-HERE rather than renumbering.
+
+## D28 — The enrichment engine: two lanes, artifact state machines, no workflow engine (2026-07-12)
+
+The enrichment design round (Ari + Claude), closing `epics/backend-enrichment.md` per D25's
+"the enrichment-system design round owns the details." Tasks 18–22 are the mint.
+
+**The formal model: artifact state machines, not workflow runs.** Each (asset, artifact) pair
+walks `missing → queued → running → present | failed(n)`. Three of those states are *derived*
+(no artifact / artifact exists / DLQ row) and only queued/running are transient, in-memory.
+The dependency graph is nothing but the unlock rule between artifact machines ("sharpness may
+leave `missing` once thumbnail is `present`"). Workflow engines model *runs* as state machines;
+we model *artifacts* — the run, and all its durable orchestration state, is the thing D25
+refused to create. The right analogy is a build system (target exists ⇒ done), not a scheduler.
+
+**Two lanes, one system.** Background work divides by whether its existence is derivable:
+
+- **Convergent lane** (enrichment, integrity/verify scans, staleness): work is derived from
+  missing/mismatched artifacts by a scan; no job rows, no run identity; crash recovery = rescan.
+- **Intent lane** (export, conversion, transcode, batch rename — all P3): user commands that no
+  scan can reconstruct; these get durable rows, retries, resume. **River adopted for this lane
+  only, when its first feature lands** (adoption gate: the open-questions #9 `riversqlite`
+  maturity re-check). This refines D17's River clause — see the dated note there. The backup round (open question #16) should evaluate the intent lane for
+  retry-against-flaky-destination; the schedule itself stays config (overdue-ness is derivable).
+
+Integration is at every layer *above* the state model: one C9 job envelope, one worker budget,
+one job-kind registry, one debug surface. Merging the state models was considered and rejected —
+a durable queue for derived data is a second source of truth to reconcile forever (the exact
+reason River was declined for enrichment despite being welcome tooling for intent).
+
+**No DAG scheduler / workflow engine — with the reach documented.** Airflow/Temporal-class
+tools manage execution state; our doctrine derives it, so they'd force the job journal D25
+forbids, plus a server process a local-first desktop app must not ship. The legitimate wants
+behind the reach are met natively, as four **legibility commitments** binding on tasks 18/22:
+
+1. **One registry file is the whole graph** — every job kind (both lanes) is a row: kind, lane,
+   applicability (via the `assettype` registry's capabilities), prerequisite artifacts, pool
+   default, timeout policy, priority class, producer ref. Reading one file = knowing everything
+   that can happen to an asset. (Registries stay the *storage*; hierarchy is the *presentation* —
+   the rendered graph reads as a tree per asset type.)
+2. **The graph is renderable** — `cmd/dev jobs graph` emits DOT + ASCII, per asset type.
+3. **Boot-time validation** — `MustValidate` topo-sorts the registry: cycles, dangling
+   prerequisites, kinds applicable to no type fail the suite (C10 pattern).
+4. **A live, domain-vocabulary debug surface** — one snapshot endpoint (queue depths, in-flight,
+   budget gauges, DLQ counts) consumed by a dev-harness page now and an in-app dev corner later.
+   Anti-goal, learned from pprof: never generic dumps; always asset/kind/artifact vocabulary.
+
+**Execution shape.** One dispatcher goroutine + per-kind worker pools (settings-owned counts,
+`machine.json`, mirroring `Workers.Ingest`). Two admission-control layers above the pools:
+
+- **A global weighted CPU budget** (semaphore): per-kind pools shape fairness, the budget caps
+  the *sum* — import and enrichment running together cannot oversubscribe the machine. Heavy
+  decodes acquire weight proportional to estimated size, bounding peak memory by construction.
+  Exposed as a user-facing **effort dial** (paused/low/normal/full) — the trust lever; Go cannot
+  nice a goroutine, so admission control is the only throttle, which is why it must exist.
+- **Per-device I/O tokens**: spinning media gets depth ~2, SSD/NVMe gets dozens; backlog reads
+  ordered by path to reduce seeks. (Batching jobs for dispatch overhead was examined and
+  declined: a channel send is ~100ns against ~100µs+ of real work — batch only where the fixed
+  cost rivals the work, i.e. the WRITE fsync and the exiftool daemon spawn, both already done.)
+
+**Timeouts are policy functions, not constants**: per-kind `f(size, type) → budget` (base +
+per-byte rate), and long-running subprocess kinds (transcode-class) use a progress-resettable
+stall watchdog instead of a wall clock. External tools stay behind the `dependency` package;
+RAW preview extraction delegates to the exiftool daemon permanently (the per-camera quirk table
+is exiftool's twenty-year moat — owning it is anti-scope).
+
+**Catalog write path.** A third writer class, **`derived`** — named for the column class it may
+touch (data-model.md's observation/judgment/derived taxonomy), not its first consumer. It may
+write derived columns only; structurally cannot touch judgment or observation. All enrichment
+results flow through **one batched writer goroutine** (the one-cook rule; SQLite serializes
+writers regardless, so two orderly writer goroutines — ingest's and enrichment's — take turns
+at the WAL lock rather than contending chaotically).
+
+**Job right-sizing: one kind = one artifact = one DLQ row = one registry row.** Thumbnail is
+its own kind; the cheap signals (sharpness, clipping, phash) are separate kinds whose
+prerequisite is the thumbnail *artifact on disk* (re-decoding a 512px thumb costs single-digit
+ms — the price of per-artifact atomicity, paid knowingly; fusing is a later optimization that
+must arrive with measurements). Heavy signals (faces, blink, embeddings) mint nothing now: each
+is a future registry row at its P3/P4 milestone.
+
+**Priority: hot lane / cold backlog, hints never truth.** The dispatcher's in-memory pending
+queue is the *only* place priority exists (no DB priority column). Viewport hints replace the
+hot lane wholesale (latest wins; frontend debounces ~150ms); the cold backlog orders by import
+recency. When heavy kinds land (P3/P4), within-set ordering by cheap signals — sharpest first,
+likely keepers get heavy scores first — refines the hot lane; the FR's signals block carries
+that promise. In-flight jobs are never preempted. A confused queue degrades to suboptimal *ordering*,
+never incorrectness — that is the invariant that keeps UI state safely coupled to the engine.
+
+**Per-asset visibility: pull-decorated, never event-streamed.** Transient queued/running state
+lives in an in-memory tracker (`map[assetID]bitmask`, RWMutex); seam asset responses are
+decorated with the in-flight bitmask; the frontend derives done/running/pending per artifact
+from (data present / bit set / neither). Events stay aggregates (C9 progress ticks with queue
+depth, batched `catalog/changed` invalidations) — thousands of state transitions per second are
+bit-flips, not envelopes. Write ordering: DB write → clear bit → emit; so an invalidation never
+races the frontend into stale reads.
+
+**Cancel dissolves into pause.** Enrichment has no run identity, so there is nothing to cancel:
+**pause** (global or per-kind) stops dispatching, in-flight jobs finish, the backlog sits;
+resume = dispatch again; app quit = pause. Rollback never exists (per-artifact idempotence,
+D25). Per-asset cancellation exists only as a consequence of asset deletion (context cancel).
+
+**Staleness is a transition, not a state.** The only legitimate byte-change moment is reimport
+(`actionReimport`, same-path edit; watcher edits funnel there). That verdict's transaction also
+**clears the asset's derived columns** — derived state instantly reads "missing," the next scan
+re-enqueues. No stale flag, no generation counters, no per-artifact provenance stamps (rejected
+as bookkeeping bloat unless a real gap appears). UX nicety: clear `thumbnail_at` but keep the
+thumbnail file — the grid shows the outdated-but-real thumb while regeneration is pending; the
+content-addressed URL cache-busts on completion.
+
+**The enrichment DLQ is its own table** — `enrichment_errors(asset_id, kind, reason_code,
+message, attempts, last_attempt_at)`. Not an `import_errors` extension: import failures are
+path-keyed (pre-identity), enrichment failures are (asset, kind)-keyed (post-identity);
+different natural keys, different tables, same D13 pattern. The missing-artifact scan skips
+attempt-exhausted rows; the UI renders failed, never an eternal spinner.
+
+**Revisit triggers:** a workflow/DAG engine only if a lane appears whose state is *neither*
+derivable *nor* simple intent rows (none is foreseen); job fusion only with profiler evidence
+that thumbnail re-decode dominates a signal's cost; per-artifact provenance stamps only if
+clear-on-reimport proves too coarse in practice; the effort dial's shape (token counts per
+level) is implementation detail, tune freely.

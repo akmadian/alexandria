@@ -1,4 +1,9 @@
+## What we do and don't do
 - At what point do we just say that "yes, a specific external dependency is required for the app to work properly"? Exiftool is probably one of these. We can still offer to make fetching and install easy for the user, but the endless game of graceful degradation into a useless product seems like a bit of a fool's errand. There's a line between AI assisted enrichment and culling recommendations and basic file metadata handling.
+- If we can reasonably and effectively do something within alexandria, we probably should. An example is maybe text file editing, markdown rendering, etc.
+
+
+## Other
 - Asset groups - this can probably be a background job once importer completes. It's basically a matching problem, same as the importer matcher, just on a full set of files from the import, over the db connection. Right?
 
 AST
@@ -20,6 +25,7 @@ Docs
 
 
 Dev Window for Wails
+- Should open as a separate window that can be seen alongside the app content, should not cover app content. App should be fully interactive and such while the dev window is open.
 - Events
     - Manually fire events from backend to trigger frontend events
     - Monitor events stream with differentiation between natural and injected events
@@ -35,7 +41,6 @@ Dev Window for Wails
 
 ### Job Tracking
 - For active jobs tracking - have a skeumorphic folder tab aesthetic thing where multiple jobs stack like the folder tabs would stack but offset naturally yknow? Could maybe display progress indicator or something on the tab, tab is clickable to slide the item with tab motif up into view for more details. https://www.cosmos.so/e/1108369543
-- Visualize queue depth per enrichment stage so user can see distribution of active tasks across the pipeline. Visually mark/ check off stages that are completed.
 
 ### Grid
 - I think the grid is the hardest thing to nail. It feels like there's a clash between the intended clean, dense but spacious language of the other parts of the UI, and the comparatively cluttered grid piece.
@@ -43,3 +48,5 @@ Dev Window for Wails
 
 ## Marketing Site UI Thingies
 - Scroll from hero reveals a mess of file types and such, lines from each of them lead down into some other element that represents the idea of Alexandria bringing them all together. Kinda like https://www.cosmos.so/e/939600872 but iverted?
+- A thing with the hero - "Dare I say, the most {WORD} digital asset manager out there." where word scrolls between things like "performant, private, modern, customizable, user friendly, capable, respectful, free, well designed" etc. Maybe some cheeky ones like "anti-adobe"
+- "And the best part, it's free (if you want)." - leads in to the pay what you want UX.
