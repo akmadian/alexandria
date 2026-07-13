@@ -11,8 +11,9 @@
         "test:watch": "vitest",
         "coverage": "vitest run --coverage",
         "lint": "eslint src",
+        "lint:css": "stylelint \"src/**/*.css\"",
         "typecheck": "tsc -b --noEmit",
-        "check": "tsc -b --noEmit && eslint src && vitest run"
+        "check": "tsc -b --noEmit && eslint src && stylelint \"src/**/*.css\" && vitest run"
     },
     "dependencies": {
         "@tanstack/react-query": "^5.101.2",
@@ -43,9 +44,12 @@
         "globals": "^17.7.0",
         "happy-dom": "^20.10.6",
         "prettier": "^3.8.1",
+        "stylelint": "^17.14.0",
+        "stylelint-declaration-strict-value": "^1.11.1",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.53.1",
         "vite": "^8.0.2",
+        "vite-plugin-stylelint": "^6.3.0",
         "vitest": "^4.1.9"
     }
 }

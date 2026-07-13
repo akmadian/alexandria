@@ -1,5 +1,9 @@
-/* App base — fonts + body ground + full-height frame. Everything themed comes
- * from the --alx-* variables injected by styles/tokens.ts; no values here. */
+/* App base — fonts + body ground + full-height frame. No values here: everything
+ * themed consumes --alx-* variables, which arrive when the Phase C compiler emits
+ * them from design/tokens/ (D29). Until then these vars are intentionally
+ * unresolved — the src tree is a construction site. The fragmented
+ * --alx-type-ui-* names below are old pre-role plumbing; the code round replaces
+ * them with compiled type-role units (design/tokens/semantic §type-role). */
 
 @font-face { font-family: "Geist"; src: url("./fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
 @font-face { font-family: "Geist Mono"; src: url("./fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }

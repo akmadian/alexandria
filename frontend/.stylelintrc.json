@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/stylelintrc",
+  "plugins": ["stylelint-declaration-strict-value"],
+  "rules": {
+    "color-no-hex": true,
+    "color-named": "never",
+    "scale-unlimited/declaration-strict-value": [
+      [
+        "/color/",
+        "fill",
+        "stroke",
+        "background",
+        "background-color",
+        "box-shadow",
+        "text-shadow",
+        "gap",
+        "column-gap",
+        "row-gap",
+        "/^padding/",
+        "/^margin/",
+        "font-size",
+        "line-height",
+        "border-radius",
+        "text-underline-offset",
+        "text-decoration-thickness"
+      ],
+      {
+        "ignoreValues": ["transparent", "currentColor", "inherit", "initial", "unset", "none", "auto", "0"],
+        "disableFix": true,
+        "message": "Design value must be a token — use var(--alx-*), never a raw literal (design-constitution §23)."
+      }
+    ],
+    "declaration-property-value-disallowed-list": {
+      "/^border/": ["/[0-9]+(px)/"]
+    }
+  }
+}
