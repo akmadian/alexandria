@@ -9,7 +9,9 @@ from this round live in `frontend/CLAUDE.md` (repo side).
 
 **Founding decision:** nothing in `frontend/src/` is sacred — the existing code predates the
 2026-07-07 design round and its UI system is not carried forward. Everything is re-derived from
-the functional requirements, CONSTANTS, the seam design, and `08-design-language.md`. This
+the functional requirements, CONSTANTS, the seam design, and the visual authority (originally
+`08-design-language.md`; since 2026-07-12 that role belongs wholly to
+`docs/design-constitution.md` + the token source `frontend/design/` — D29). This
 supersedes the EVOLVE verdicts in `07-code-disposition.md` (amended accordingly); *patterns*
 called out below are re-derived on their merits, not preserved code.
 

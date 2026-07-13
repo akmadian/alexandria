@@ -18,6 +18,11 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
    `internal/xmp/README.md` for sidecar sync). Where code and current specs conflict, specs
    win. `frontend/src/` predating the ground-up redesign (2026-07-08, the frontend-redesign
    epic) was disposable by decision; the rebuild now underway replaces it.
+6. **Anything visual:** `docs/design-constitution.md` is the design law (§1–§30), and the
+   token source `frontend/design/` is the product it governs (D29). Design sessions start at
+   `frontend/design/CLAUDE.md`; code consumes the system per `frontend/CLAUDE.md` §3. The
+   rendered app currently serves a frozen legacy token snapshot — never learn design values
+   from running code.
 
 ## Commands
 

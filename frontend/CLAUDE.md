@@ -1,235 +1,130 @@
 # Alexandria Frontend — agent orientation
 
-React 19 + TypeScript + Vite desktop UI for the Alexandria DAM. Talks to a Go engine through a
-typed seam (Wails v2, locked 2026-07-07); until the backend binds it runs entirely against an
-in-memory mock (`bun run dev`, no Wails/Go).
+React 19 + TypeScript + Vite desktop UI for the Alexandria DAM. Talks to a Go engine
+through a typed seam (Wails v2, locked 2026-07-07); until the backend binds it runs
+entirely against an in-memory mock (`bun run dev`, no Wails/Go).
 
-**This file is your map.** It says what to load into your head, which docs to read and why, and how
-to build UI here (the design-system ↔ React Aria reconciliation). The deep specs are the source of
-truth — this orients you to them and encodes the operational know-how that isn't written elsewhere.
-Don't start building until §1–§4 are in your head.
+**Rebuild status (read this honestly):** the frontend is mid-ground-up-rebuild on the
+`frontend-design-v3` line. The design system was redesigned from scratch (2026-07-12/13,
+D29); `src/` contains a partial rebuild — **the tree is the status; don't trust prose
+for it**, and expect `make check-frontend` to be broken between rounds on WIP branches.
+Anything in `src/` predating the rebuild is disposable by decision.
 
-> **The ground-up rebuild strategy** (architecture LOCKED 2026-07-08:
-> `../docs/frontend-architecture.md`): built **in isolation** against a contract-faithful mock
-> (`bun run dev`, no Wails/Go), thin-vertical-then-widen — a full end-to-end vertical first
-> (query-model → api/mock → store → grid), then widen slice by slice (filter kinds, editors,
-> views). What exists is what `src/` contains — the tree is the status; don't trust prose for it.
+## 1. Read before you build — in dependency order
 
----
-
-## 1. Read before you build — the map, in dependency order
-
-These decide things; don't reinvent them. Read top-down — each assumes the ones above. You don't
-need the whole corpus every time; always load CONSTANTS + the architecture record, then the doc
-your feature lives in.
-
-| Doc | Why you need it |
+| Doc | Why |
 |---|---|
-| `../docs/CONSTANTS.md` (C1–C15) | The cross-cutting invariants every surface obeys — vocabulary, the state equation, query-model-is-the-AST, registries, generated-types, i18n. About to contradict one? You're wrong; stop. |
-| `../docs/frontend-architecture.md` | **The architecture record (LOCKED).** State planes, the store shape + action vocabulary + invariants, seam integration, fetch/perf/retry policy, the token/AST contract, optimistic-mutation discipline. Wins over the rest of the corpus for architecture; §6 below is its enforcement summary. |
-| `frontend-state-model` · `frontend-search-filter-ux` (the frontend epic corpus — `ls` the epics directory under project tracking) | The state glossary (scope/filter/query/selection/cursor/arrangement/view-mode) and the filter-bar/pill/search-tier UX. Read before touching the store or the filter bar. |
-| the rest of the frontend epic corpus (`frontend-flows-and-views` · `frontend-keyboard-actions` · `frontend-culling-signals` · `frontend-review` · `frontend-design-language`) | Flows/views · keyboard+actions+palette · culling+signals · Review · **design language** (the visual authority: neutral chrome, canvas, flat construction). Read the one your feature is in. |
-| `../docs/seam-contract.md` | The engine↔UI contract: the query AST, the workhorse methods (`queryAssets`/`updateAssets`/`assetIdSlice`/`indexOfAsset`/`distinctValues`), the event/job envelopes. The mock implements this; the Wails adapter will too. |
-| `src/styles/ds-reference/CLAUDE.md` + `PORTING.md` | How to consume the design system: golden rules (semantic tokens, hue-free chrome, flat construction), the token vocabulary, the component-port recipe. `components-spec/*.css` are per-component **visual specs** — read to port, never import. |
+| `../docs/CONSTANTS.md` (C1–C15) | Cross-cutting invariants. About to contradict one? You're wrong; stop. |
+| `../docs/frontend-architecture.md` | **The architecture record (LOCKED):** state planes, store shape, seam integration, fetch/retry policy, optimistic-mutation discipline. |
+| `../docs/design-constitution.md` + `design/CLAUDE.md` | The design law + the token source map. Load these when work touches look, spacing, type, or color — for pure logic work the §3 contract below suffices. |
+| The frontend epic corpus (`ls` the epics directory under project tracking) | State glossary, filter-bar UX, flows/views, keyboard, culling, Review. Read the one your feature lives in. |
+| `../docs/seam-contract.md` | The engine↔UI contract the mock implements. |
 
-**React Aria is documented live** — use the React Aria MCP server (`list_react_aria_pages`,
-`get_react_aria_page`, `get_react_aria_page_info`) as your reference. Don't guess RAC APIs or invent
-props. Before porting a primitive, read that component's RAC page — its composition (which
-sub-components nest) and its `data-*` state model.
+React Aria is documented live — use the React Aria MCP server; don't guess RAC APIs.
 
-## 2. The mental model to hold
+## 2. The mental model
 
-- **The state equation (C2):** `view state = viewMode(query + arrangement, selection + cursor)`.
-  Everything on screen derives from these five. View modes are pure renderers over shared state;
-  switching is instant and stateless.
-- **Three state planes, never blurred** (rules in §6): catalog view-state → the one Zustand store;
-  server state → TanStack Query; pre-paint chrome prefs → localStorage. **The store never holds
-  borrowed server state.**
-- **The query model is the AST (C6).** Every predicate over assets is a `Query{scope, where}` tree
-  of `Leaf{field, cmp, value}`, where `field`/`cmp` are the generated unions. A new filter
-  capability is a new *token*, never a new query method (C7). Never hand-write a flat filter object
-  — that shape is retired.
-- **Primitives vs features** — the distinction that decides where code goes (§3).
-- **Three layers own three things:** the **design system** owns *look* (tokens + the `.css`
-  specs), **React Aria** owns *behavior/structure* (ARIA, focus, keyboard, interaction), and **the
-  store/seam** own *state/data*. You compose them; you reinvent none of them.
+- **The state equation (C2):** `view state = viewMode(query + arrangement, selection +
+  cursor)`. View modes are pure renderers over shared state.
+- **Three state planes, never blurred:** catalog view-state → the one Zustand store;
+  server state → TanStack Query; pre-paint chrome prefs → localStorage. The store never
+  holds borrowed server state.
+- **The query model is the AST (C6/C7):** every predicate is a `Query{scope, where}`
+  tree with generated unions. A new filter capability is a new token, never a new method.
+- **Three layers own three things:** the design system owns *look* (tokens), React Aria
+  owns *behavior* (ARIA, focus, keyboard), the store/seam own *state/data*.
 
-## 3. Building UI — reconcile the Design System with React Aria
+## 3. The design-system contract for code (the short version)
 
-This is the core skill. The DS ships each component as a `.css` **visual spec**
-(`src/styles/ds-reference/components-spec/<Name>.css`) plus a token layer already vendored into
-`src/styles/alexandria-ds.css`. You do **not** ship the DS's `.jsx` or its `.ax-*` classes — you
-re-express each spec as a colocated CSS Module driven by a React Aria primitive.
+Truth lives in `design/` (constitution + token source; see `design/CLAUDE.md` for the
+full map). What code must know:
 
-**Read the `.css` as a spec for LOOK — be critical of its STRUCTURE.** The DS is built as a
-standalone library, so it bakes behavior into its markup: hand-rolled `position:fixed` menus, its
-own `data-active`/`data-open` attributes, monolithic components that fuse a control with its
-dropdown. That decomposition is *not* automatically right for us. React Aria already solves
-positioning, focus containment, dismiss, keyboard, and ARIA — take those from RAC and drop the DS's
-hand-rolled versions. Port the rule *bodies* (every `var(--…)` is already correct — both sides share
-the tokens); restructure the *composition* the RAC way. (Worked example: the DS `FilterPill.css`
-bakes an entire fixed-position operator menu into the pill; we dropped it and used the `menu`
-primitive, porting only the segment look.)
-
-**The three-move port** (full recipe + state table in `PORTING.md`):
-1. **Mount the RAC primitive** — look up the DS→RAC mapping in `PORTING.md`, then read its React
-   Aria page. It brings ARIA/focus/keyboard for free.
-2. **Class → module class:** `.ax-btn {…}` → `.button {…}`, applied via `cx(s.button, …)`. Copy rule
-   bodies verbatim.
-3. **Remap state selectors** to RAC `data-*`: `:hover`→`&[data-hovered]`, `:active`→`&[data-pressed]`,
-   `:focus-visible`→`&[data-focus-visible]`, trigger-open→`&[aria-expanded="true"]`,
-   `[disabled]`→`&[data-disabled]`, selected→`&[data-selected]`.
-
-RAC primitives are imported aliased `Aria*` (`import { Button as AriaButton }`).
-
-**Primitives vs features — where code goes:**
-- A **primitive** (`components/<name>/`) is domain-blind chrome: it knows nothing about assets or
-  queries. A thin RAC wrapper + a DS-ported module, reusable everywhere. Built so far:
-  `components/button`, `components/popover`, `components/menu` — **study these as the template.** The
-  glass *surface* lives once on `popover`; menus/selects mount inside it (never re-port the surface
-  into each dropdown).
-- A **feature** (`features/<name>/`) composes primitives **plus domain context** — which token,
-  which operators are legal, how a value formats, what action dispatches. `features/filter-bar/` is
-  the worked reference: it composes `menu`/`button` with the query-model registry. Its pill
-  *segment* look is feature-local (a capsule isn't a shared primitive), but every interactive
-  segment is still a RAC `Button`/`MenuTrigger` underneath — **even inside a feature, interactive
-  bits use RAC as the behavioral base.**
-- **Content surfaces are bespoke, NOT RAC:** grid, loupe, cull, compare, filmstrip render on
-  `tanstack-virtual` with store-owned selection. RAC's collection/Virtualizer components own
-  selection — wrong tool here. Their *look* still ports from the DS `.css`; only behavior is
-  hand-built. `features/grid/` is the reference.
-
-Decide with: "domain-blind and reusable?" → primitive. "encodes how the user drives
-assets/queries?" → feature. In doubt, build it feature-local; promote to a primitive when a second
-feature needs it.
+- **Semantic variables only.** Components consume `--alx-*` CSS variables; never raw
+  colors/sizes, never primitives, never values copied from rendered CSS.
+- **The grammar exists — compose it, don't freelance:** type roles are units (size +
+  line-height + tracking + weight together — setting `font-size` alone is a defect);
+  row intents bind heights to permitted type roles (control 28 / list 24 / text 16);
+  spacing is quantum multiples via `--alx-space-N`; radius encodes detachment; the
+  accent is never the sole signal for a state.
+- **Interim reality:** there is deliberately NO token plumbing in `src/` right now —
+  the interim runtime generator and its frozen snapshot were removed (D29) so nobody
+  builds on them. `--alx-*` variables arrive when the Phase C compiler emits them from
+  `design/tokens/`; until then src CSS references intentionally-unresolved vars and
+  the tree does not compile. Building the compiler is the code round's first task.
+- **Assets are sacred (§11):** no CSS filters/blends/opacity on content pixels;
+  selection shades the cell mat, never the photo; thumbnails fit, never crop.
 
 ## 4. The data-flow spine
 
 ```
-ui (feature components)
-  ├─ read  ──→ feature hook ──→ TanStack Query ──→ api/ (contract → mock | wails) ──→ engine
-  └─ write ──→ store.dispatch(action)                       [the C2 view state]
+ui → feature hook → TanStack Query → api/ (contract → mock | wails) → engine
+ui → store.dispatch(action)                    [the C2 view state]
 ```
 
-- **All I/O lives in `api/`** — `contract.ts` (the `AlexandriaAPI` interface), `mock.ts` (the
-  in-memory AST query engine standing in for SQL), `client.ts` (the one-line swap point),
-  `queries.ts` (TanStack hooks). Components → feature hooks → TanStack → `api/`. Never import a
-  concrete adapter or the Wails runtime outside `api/`.
-- **`query-model/` is pure** (no I/O, no React): `ast.ts` types · `registry.ts` (token dictionary
-  seeded from the generated `fieldGrammar`, strict `leaf()` + the `validate()` gate) · `serialize.ts`
-  (the stable cache key) · `assemble.ts` (tree edits behind the pill row).
-- **`stores/` is the C2 view state:** `catalog-store.ts` (Zustand, one reducer-style `dispatch`,
-  `{ids}|{all}` selection, curated selector hooks). The store never fetches, never holds server
-  state; the canonical query + key + counts are memoized *derivations*, never stored.
-- **The swap is one line.** The mock is a faithful `AlexandriaAPI` implementation, so when the Wails
-  adapter lands, `client.ts` points at it and nothing else changes.
+- **All I/O lives in `api/`** (`contract.ts`, `mock.ts`, `client.ts` swap point,
+  `queries.ts`). Never import a concrete adapter outside `api/`.
+- **`query-model/` is pure** (no I/O, no React); leaves via the registry's strict
+  constructors — no bare field/operator literals.
+- **`stores/`**: one reducer-style `dispatch`; curated selector hooks only; derive,
+  don't store (canonical query/key/counts are memoized derivations).
+- Mutations carry absolute values (idempotent); optimistic discipline per the
+  architecture record; reads `retry: false` by default; every consumer renders an
+  explicit error state.
 
 ## 5. Generated types (C13) — never hand-author models
 
-`src/_generated-types/` is generated from Go (`cmd/generate`, the C15 schema compiler; run
-`make generate` from the repo root): `vocabulary.ts` (TokenField/TokenOperator/ValueKind +
-`fieldGrammar` + the ScopeKind/GroupOp/SortField/SortDir query shapes), `enums.ts`, `errors.ts`,
-`events.ts`, and `models.ts` (AssetRow + event payload interfaces, reflected from the Go structs'
-json tags). Never edit them; never hand-maintain a parallel model type — redeclaring a generated
-union name is now an ESLint error, and switches over generated unions are lint-checked exhaustive. Build leaves through the registry's strict
-constructors — no bare field/operator string literals, no TS `enum` keyword (literal unions +
-`as const` / `satisfies Record<Key,Entry>` are the idiom, C10). One caveat you'll hit: the generated
-enums are **types-only** (no runtime value arrays), so when you need enum members at runtime (a value
-picker), bridge with the completeness trick — a `Record<TheEnum, …>`-keyed literal whose keys you
-read back — so a newly generated member breaks the build until handled. See
-`features/filter-bar/enum-fields.ts`.
+`src/_generated-types/` comes from Go (`make generate` at repo root): vocabulary,
+enums, errors, events, models. Never edit; never mirror. Literal unions + `as const` /
+`satisfies Record<Key, Entry>` completeness idioms (C10); generated enums are
+types-only — bridge to runtime with the completeness trick.
 
-## 6. Coding standards (the rebuild rules, rationale in the architecture record)
+## 6. Building UI
 
-### State — three planes
-- Catalog view state → the one Zustand store (single reducer-style `dispatch`; the action
-  vocabulary is the app's internal API). Server state → TanStack Query only. Pre-paint chrome prefs
-  (theme, pane widths, density, view mode) → localStorage.
-- **The store never holds borrowed server state.** If the backend returned it, it lives in the query
-  cache and is read there at render.
-- Components never write inline store selectors: `stores/` exports curated selector hooks
-  (`useCursorId()`, `useIsSelected(id)`, …); store internals stay private (convention — see §7).
-  Selectors return primitives or stable references.
-- Derive, don't store (C2): the canonical query, query key, and counts are memoized derivations —
-  never `set` anywhere.
+- **RAC for chrome** (menus, dialogs, trees, popovers, forms), imported aliased
+  (`Button as AriaButton`); state via RAC `data-*` attributes in CSS Modules.
+- **Content surfaces are bespoke** (grid, loupe, cull, compare, filmstrip): bare
+  `tanstack-virtual` + store-owned selection. Never RAC collections there.
+- **Primitives vs features:** `components/<name>/` is domain-blind chrome;
+  `features/<name>/` composes primitives + domain context; features never import
+  other features. In doubt, build feature-local, promote later.
+- **Build method (ratified):** one primitive at a time, leaves first (Button →
+  ToggleButton → Checkbox → Switch), container + item type as one unit, composites
+  last. Every primitive lands its matrix in the design-library route
+  (`#/design-library`) — specimens and product share one implementation.
+- No hardcoded display text (C14): i18n keys, display registries, `Intl` via
+  `lib/format.ts`. Logging through `lib/logger.ts` — milestones at Info, detail at
+  Debug. Motion: CSS-first, `transform`/`opacity` only, `prefers-reduced-motion` by
+  construction.
 
-### Seam and data
-- Long `staleTime` + event-driven invalidation (the engine pushes C8 events — we own the freshness
-  signal). `refetchOnWindowFocus` / `refetchOnReconnect` off.
-- **Mutation payloads carry absolute values, never deltas** — idempotent by construction.
-- Optimistic discipline (per the architecture record §Optimistic mutation): cancel-on-mutate + invalidation gate while
-  catalog-editing mutations are in flight; ONE ordered lane for mutations + undo/redo; undo/redo
-  render pessimistically; optimism only for ids-shaped targets; failure = revert + toast, loud never
-  silent.
-- Reads: `retry: false` by default; named transient codes opt in (1–2 retries, capped backoff).
-  Every query consumer renders an explicit error state — nothing spins forever.
-
-### Structure
-- bulletproof-react layout; kebab-case files; import boundaries: **shared → features → app, and
-  features never import other features** (shared code moves down instead).
-- Registries dispatch, conditionals don't (C10): `satisfies Record<Key, Entry>` completeness +
-  `never`-checked switches; nil capability = one fallback path at the dispatch point.
-
-### UI
-- **RAC for chrome** (menus, dialogs, trees, popovers, palette, forms), aliased `Aria*`. **Content
-  surfaces are bespoke** (grid, loupe, cull, compare, filmstrip — bare virtualizer, store-owned
-  selection).
-- CSS Modules + **semantic tokens only** (never raw hex or a primitive `--n-*`/`--grey-*` in a
-  component). Chrome is hue-free; the accent is optional enhancement, never the sole signal — every
-  state must read with `--accent` unset. `08-design-language.md` is the visual authority.
-- Motion: CSS-first; animate `transform`/`opacity` only; per-frame content mutation goes through a
-  `useRafLoop` (auto-cancel on unmount); gate ambient motion behind `useMotion()`
-  (`prefers-reduced-motion` degrades to instant swaps).
-- **No hardcoded display text (C14):** every string is an i18n key; enums map through display
-  registries; dates/numbers/sizes through `Intl` (`lib/format.ts`).
-- Comprehensive logging through the frontend logger bridge (`lib/logger.ts`): milestones/results at
-  Info, per-item detail at Debug — not error-only.
-
-## 7. What the machine enforces vs what you hold yourself
-
-`make check` (from `frontend/`) runs `tsc -b --noEmit && eslint src && vitest run`. It catches:
-- **Type completeness (tsc):** generated-type exhaustiveness, `satisfies Record<Key,Entry>` registry
-  completeness, strict constructors.
-- **jsx-a11y** recommended, **react-hooks** (rules-of-hooks, exhaustive-deps, set-state-in-effect).
-- **One import boundary:** only `api/` may import a concrete backend impl.
-
-It does **not** yet mechanically catch (hold these by discipline + review — the linter won't stop
-you, the pre-commit review will): semantic-tokens-only, features-never-import-features,
-store-internals-only-through-curated-hooks, no-hardcoded-display-strings. Treat a violation as a
-defect, not a style nit.
-
-## 8. Commands · where things live
+## 7. Commands · layout
 
 ```bash
-make check      # tsc + eslint + vitest — must pass before commit (run from frontend/)
-make lint       # eslint only          make test   # vitest only
-bun run dev     # vite dev server (mock catalog)    bun run test:watch
+make check      # tsc + eslint (+ stylelint when restored) + vitest — from frontend/
+bun run dev     # vite dev server (mock catalog)
 ```
-From the repo root: `make check-frontend`.
 
 ```
-src/_generated-types/  Go-generated types (never edit): vocabulary, enums, errors, events
-    api/               the seam: contract, mock engine, client swap, TanStack hooks, ApiError
-    query-model/       pure AST: types, token registry, serializer, assembler (no I/O, no React)
-    stores/            catalog view-state store + ids; curated selector hooks
-    components/         PRIMITIVES — RAC behavior + DS-ported look (button, popover, menu, …)
-    features/           grid, filter-bar, … — primitives + domain context; never import each other
+src/_generated-types/  Go-generated (never edit)
+    api/               seam: contract, mock, client swap, TanStack hooks
+    query-model/       pure AST: types, registry, serializer, assembler
+    stores/            catalog view-state (Zustand) + curated hooks
+    components/        PRIMITIVES — RAC behavior + token look
+    features/          domain compositions; never import each other
     app/               shell, providers, boot
-    styles/            alexandria-ds.css (vendored tokens+fonts) · ds-reference/ (specs + PORTING) · app-base
-    lib/               cx, format (Intl), logger, theme
-    i18n/              i18next init + locales/en.json
+    styles/            app-base.css · fonts (token vars arrive with the Phase C compiler)
+    lib/  i18n/        cx, format, logger, theme · i18next
+design/                THE DESIGN SOURCE — see design/CLAUDE.md
 ```
 
-## 9. Gotchas
+## 8. Gotchas
 
-- **Tokens must resolve.** If a `var(--control-bg)` renders unstyled, you referenced a token not in
-  `alexandria-ds.css` — grep it before porting a rule that uses it.
-- Don't resolve semantic tokens down to primitives or hex; the theme + material system depend on the
-  semantic layer.
-- Don't reach for a RAC collection just to get virtualization — content surfaces are bespoke on
-  `tanstack-virtual`, selection from the store.
-- `cx` is at `@/lib/cx` — use it (matches every existing component).
-- Chrome is hue-free and every state must read with `--accent` unset — test selection/focus/hover
-  with no accent set.
-- Verify interactive work in the browser (`bun run dev`), not just via tests — RAC overlays/portals
-  and DS glass are hard to assert in happy-dom; drive the real flow.
+- Until the compiler lands, ALL `var(--alx-…)` references are intentionally
+  unresolved — that's the construction-site state, not a bug to patch around
+  (and never by hardcoding a value).
+- Restart the dev server after touching `vite.config.ts` or generated sources
+  (HMR serves stale modules). The browser pane's console keeps a stale error
+  backlog for deleted files — trust `make check-frontend` and the DOM, not that
+  console.
+- Verify interactive work in the real browser (`bun run dev`) — RAC portals and
+  overlays are hard to assert in happy-dom.
+- `cx` is at `@/lib/cx`. Chrome is hue-free; test every state with the accent unset.

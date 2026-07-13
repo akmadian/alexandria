@@ -703,3 +703,38 @@ derivable *nor* simple intent rows (none is foreseen); job fusion only with prof
 that thumbnail re-decode dominates a signal's cost; per-artifact provenance stamps only if
 clear-on-reimport proves too coarse in practice; the effort dial's shape (token counts per
 level) is implementation detail, tune freely.
+
+## D29 — The design system rebuilt as a token-source product (2026-07-12/13)
+
+**The token source is the product; everything visual is downstream of it.** The design
+system was rebuilt ground-up across 2026-07-12/13: `docs/design-constitution.md` (§1–§30) is
+the design law, and `frontend/design/` is the source of truth it governs —
+`tokens.resolver.json` + `tokens/{primitives,semantic}.tokens.json` +
+`tokens/worlds/hues-{light,dark}.tokens.json` + `tokens/themes/*.tokens.json` (DTCG 2025.10 +
+Resolver Module: structured values, aliases, themes as modifier contexts), with
+`contracts.json` (validator input) and `registries.json` (dispatch tables) beside it — never
+inside it. Individual design ratifications are recorded **in the constitution** (§29, dated;
+§30 worksheet carries tombstones for closed pins) — this entry deliberately does not
+duplicate them (D27).
+
+**No frozen legacy:** the interim runtime generator, its frozen `tokens.json` snapshot, and
+the old swatch library were deleted once they went stale — a runtime injector is not what we
+would build (the pipeline is build-time), and a tool rendering outdated values
+authoritatively poisons future sessions. `frontend/src` therefore has no token plumbing and
+does not compile, deliberately. Phase C is the code round's first task: one compiler emitting
+CSS variables + TS types + docs from `tokens/`, and a validator in `make check` executing
+`contracts.json` (APCA per theme, ΔL bands per adjacent register step, hue-distance floors,
+quantum membership, ledger exhaustiveness).
+
+**Method ratified for design work:** design sessions ship tokens + constitution amendments,
+never implementation code; every value is rendered (library probe pages with real fonts /
+live-APCA widgets) and eyeballed before ratification; changes land at the lowest sufficient
+tier — role remap before ramp move, register-step multiples for state nudges, a registry row
+for a new capability. Orientation: `frontend/design/CLAUDE.md`.
+
+**Superseded and removed:** the 2026-07-08 visual-language epic and its design-handoff
+bundle — fully absorbed by the constitution — were deleted from the tracking tree (D27
+fold-and-delete); the pointers to them in `docs/frontend-architecture.md` and the
+flows-and-views epic were repaired. `frontend/CLAUDE.md` rewritten (the old one taught the
+deleted ds-reference system); `frontend/design/CLAUDE.md` added (proximity-loaded design
+orientation).
