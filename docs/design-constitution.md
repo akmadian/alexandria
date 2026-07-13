@@ -21,10 +21,14 @@ numbers; the pinning worksheet is §30.
 The app is two worlds with different physics:
 
 - **Chrome** — every panel, rail, bar, and the grid well. Theme-following,
-  achromatic (OKLCH C ≈ 0), needs only *consistency*, not color accuracy.
+  achromatic — OKLCH C = 0 **exactly** in the gray system (ratified 2026-07-12;
+  a hint of chroma at panel scale reads as a color cast — a tinted gray would be
+  a doctrine amendment, not a tuning choice). Needs only *consistency*, not
+  color accuracy.
 - **The stage** — the surface behind assets in loupe/compare/survey. Theme-
   **independent**, neutral, dark (default **PIN** ~OKLCH L 0.30–0.38), user-adjustable
-  (photographers expect it; LrC precedent). Carries almost no text.
+  (photographers expect it; LrC precedent) with the range capped below the dead band
+  (max L 0.45) so stage ink stays legible at every setting. Carries almost no text.
 
 Text never sits in the dead band (~L 0.45–0.65): no theme places chrome there (§21),
 and the stage carries only minimal, small, light ink. This is the resolution of the
@@ -46,6 +50,7 @@ above perception threshold. Separate by the cheapest sufficient means, always th
 highest rung that works:
 
 > alignment → whitespace → value/fill → hairline → enclosure → shadow
+> (the shadow rung is reachable only by transient layers — §6)
 
 Cheap separation funds generous rhythm: dense and calm are cause and effect. Bevels,
 borders-on-borders, and decorative shadow are contrast spent on non-information —
@@ -61,7 +66,8 @@ Three orthogonal channels, each owning one job, for every element in the app:
   never chroma. Direction is per-family (§7).
 - **Style rung = prominence.** The escalating ink ladder:
   `dot → ghost → outline → tint → fill → hero`. How loudly something speaks,
-  orthogonal to what it says.
+  orthogonal to what it says. (Hero is not a new ink: it is the fill rung with
+  the fun layer injected on top, §17.)
 
 One unary operator: **disabled = chroma drained + one ink step down.** Read-only is
 NOT disabled (§25).
@@ -74,11 +80,11 @@ collision review. The ledger:
 | Hue | Meaning | Where | Constraint |
 |---|---|---|---|
 | Label hues ×5 (LrC-compatible: red/yellow/green/blue/purple) | User judgment: color label | Cell slot, filter bar, inspector | Solid swatch style only; user-toggleable off (hidden option) — rows conditional |
-| Tag palette ×~12 **PIN** | User meaning: tags | Tinted chips with text | Fixed L/C, engineered light+dark variants; users pick from palette only |
-| Accent **PIN** | Functional signal: focus ring, drop-target fill, toggles-on, links | Outline-first; drop-target is its only large fill | Must pass ring contrast on all themes (§21); not user-swappable |
+| Tag palette ×12 (named scales; ratified 2026-07-13) | User meaning: tags | Chips in four recipes: tint / outline (border + wash) / dot / fill | Per-hue engineered steps × two worlds (no formula); solids world-independent with per-hue on-solid ink; users pick from palette only |
+| Accent (user-picked from the named scales; default blue — ratified 2026-07-13) | Functional signal: focus ring, drop-target fill, toggles-on, links | Outline-first; drop-target is its only large fill | Every offered hue must pass ring contrast on all four themes (validator-gated picker); gray excluded; hue-sharing with a label is lawful — accent and labels are style-disjoint |
 | Attention (user-picked from tag palette; default **PIN**) | "Needs a human decision" (§10) | Dot/outline (advisory) → tint/fill (blocking) | One hue for ALL attention states; identity via glyph + word, never hue |
 | Error red | Invalid input (forms, chips) | Field hairline + message row | Conventional; independent of attention choice |
-| Polychrome light | Hero register (§17) | Primary CTA, marquee progress | One per view, area-capped, never adjacent to stage/cells |
+| Fun layer (§17) | Delight: an injected overlay, not core chrome | Registered sites only: hero CTA, marquee progress, joy moments (§16) | One per view, area-capped, never adjacent to stage/cells |
 
 Hue-as-state is budgeted, not banned; small, critically evaluated doses enter as rows.
 
@@ -94,21 +100,26 @@ Exactly two lawful shadows:
 
 Docked chrome is flat: seams (one hairline) + register steps, no shadow, ever.
 Transients are **theme-following** (light popovers on light chrome), distinguished by
-occlusion shadow + hairline + the roundest radius rung (§24). One fixed-dark
+occlusion shadow + hairline + the roundest radius rung (§24). Transients sit on a
+dedicated surface role: equal to panel on light themes, a raised step above panel on
+dark themes — shadow alone does not read against dark chrome. One fixed-dark
 exception: **tooltips and keyboard hints** — labels, not surfaces (genre convention;
 every tooltip in the reference set).
 
 ### §7 Register shifts (interaction states)
 
-Interaction states are luminance steps within a surface family. Each family declares
-one field in the token source — `direction: recess | raise`:
+Interaction states are luminance steps within a surface family. The invariant behind
+direction: **interaction moves toward ink** — fills darken on light themes, lighten
+on dark. The `direction: recess | raise` field per family × theme in the token
+source is derived from this invariant plus one declared exception, never chosen
+freely:
 
-- **Chrome families recess** (hover/selected fills darken on light themes) — the
-  reference-set grammar: a field you can type in is a slightly darker well; a hovered
-  row darkens; an open dropdown gains a border.
-- **The asset-cell family raises** toward white (LrC matting): a selected cell must
-  never put a dark surround beside a photograph; lighter mats are the print
-  convention.
+- **Chrome families follow the invariant** (hover/selected fills darken on light
+  themes, lighten on dark) — the reference-set grammar: a field you can type in is a
+  slightly darker well; a hovered row darkens; an open dropdown gains a border.
+- **The asset-cell family raises** toward white on every theme (the declared
+  exception; LrC matting): a selected cell must never put a dark surround beside a
+  photograph; lighter mats are the print convention.
 
 The validator checks per-family monotonicity in the declared direction. Discrete
 pinned steps, not alpha overlays (checkable contracts beat computed composites).
@@ -126,6 +137,22 @@ pinned steps, not alpha overlays (checkable contracts beat computed composites).
 - **Two control heights** in chrome (**PIN**, hypothesis 24/28px), one icon size
   (16px) in ≥24px hit targets, uniform row heights per surface. Ragged heights read
   cramped at any density; uniform rhythm reads calm at almost any density.
+- **Row density is an intent, not a number** (ratified 2026-07-13; values closed
+  same date): `row-control` 28 (controls breathe) · `row-list` 24 (interactive
+  dense — the tree; sits ON the hit-target floor) · `row-text` 16 (read-only
+  metadata — the instrument voice: precision measurements, not UI copy). Density
+  and type step down TOGETHER: `row-text` pairs with the small roles (label-sm/
+  data-sm) — body type in a 16px row is zero-slack and banned; the pairing is a
+  registered grammar (registries `rowIntents`), validator-lintable. One exception
+  to the 24px hit-target floor: full-width *read-only* rows may pack below it;
+  anything interactive keeps 24. Density is vertical only — insets are identical
+  across intents — and switches at section boundaries, never row-by-row. Where we
+  cramp and where we breathe is a first-class design decision, taken deliberately
+  per surface.
+- **The register-step quantum:** one perceptual step of ΔL, tokenized per world
+  (light 0.018, dark ~2×). State deltas are authored and adjusted in multiples of
+  it — OKLCH's perceptually uniform L is what makes "one step" mean the same thing
+  everywhere on the ramp.
 - **px-locked, no rem.** Pro-tool convention: chrome does not scale with OS font
   settings. App zoom is out of scope for v1; content zoom (loupe) is a view feature.
 - **The 1× floor:** if a hairline and the smallest text are crisp on a 1080p 1×
@@ -145,8 +172,10 @@ license-ineligible off Apple platforms):
 - **Instrument Serif Italic** — the joy voice (§16 only). Banned from working chrome.
 - **Geist Pixel** — the dot voice in type. Rarest register (§16).
 
-Rules: hierarchy by **weight and ink, never size** within a surface; UI sizes live in
-the 11–13px band (**PIN** exact scale); tabular numerals everywhere numbers align;
+Rules: hierarchy by **weight and ink, never size** within a surface; body UI sizes
+live in the 10–13px band, plus a **display tier** (16/24 and 20/28, semibold —
+ratified 2026-07-13) reserved for view-level chrome: the module picker, view page
+headings — never body UI; tabular numerals everywhere numbers align;
 sentence case; no uppercase micro-labels. Section heads are sentence-case bold at
 body size (the reference-set move). Windows 11px rasterization: verification pending
 (§28).
@@ -176,10 +205,10 @@ States grouped by author, systematized by the axis algebra (§4):
   ICC) and baked to one canonical space — **sRGB for v1**; untagged = assumed sRGB;
   P3 re-bake later is a registered rebuild, not a migration. Monitor calibration is
   the OS's job once content is tagged; ours is never to emit an untagged or
-  twice-converted pixel. (Backend residue: `_project-tracking/ideation/color-space-observation.md`.)
+  twice-converted pixel. (The engine-side color-space work sits in the tracking queue.)
 - Color-critical *editing* is out of scope forever: "Open in external editor" is the
   escape hatch. No soft-proofing, no render intents.
-- Grain, prism, dither, and the light register never sit adjacent to the stage or
+- Grain, prism, dither, and the fun layer never sit adjacent to the stage or
   cells.
 
 ### §12 Structure (the zones)
@@ -265,17 +294,22 @@ of dots; the photographic print vernacular. Rules:
 - Empty states are invitations to act (§18), with the art as setting, not message.
 - Everything respects `prefers-reduced-motion` by construction.
 
-### §17 The light register (hero)
+### §17 The fun layer (ratified 2026-07-12; supersedes "the light register")
 
-The prismatic thread from the reference set: a moving polychrome gradient refracting
-through frosted glass (prototype: `GlassFlowButton`). The top prominence rung.
+The prismatic thread from the reference set — moving polychrome gradient, glow, and
+frosted glass (prototype: `GlassFlowButton`) — is an **add-on overlay category, not
+a core part of the system**. It is injected selectively at registered sites for
+delight; chrome works identically with the layer stripped. Its ledger row (§5) is
+the site registry, which closes the hue-accounting question: fun is one budgeted
+row, not a per-effect debate.
 
-- **Permitted meanings:** primary call-to-action; marquee progress (the one long job
-  the user is actively awaiting). Dots remain the *ambient* progress voice; the
-  light-bar is the marquee only — one sentence, two progress languages prevented.
+- **Registered sites:** primary call-to-action (the hero rung = fill + fun overlay,
+  §4); marquee progress (the one long job the user is actively awaiting); joy
+  moments (§16). Dots remain the *ambient* progress voice; the light-bar is the
+  marquee only — one sentence, two progress languages prevented.
 - One per view, area-capped, never adjacent to stage or cells (§11), static under
   reduced motion. Glass is lawful only here and on transients ("glass = transient or
-  hero").
+  fun").
 - Tokens: the palette-indexed gradient, flow duration/easing, glass face recipe
   (blur/saturate/face-alpha/inset highlights), glow halo (**PIN** values).
 
@@ -354,15 +388,22 @@ Three tiers, industry-standard shape:
 2. **Semantic roles** — where all doctrine lives: surfaces (per family, with
    `direction`), inks, stage, accent/attention/error, radius rungs, z-layers,
    motion tokens. Components consume roles, exclusively.
-3. **No hand-authored component tier.** Tokens name axes and operators, never
-   combinations (`button-tinted-hover-bg` must not exist). Exceptions require a
-   doctrine amendment, not a one-off value. Capability tables cap the state matrix
-   per element.
+3. **No component tier yet; combination names never** (amended 2026-07-12 from a
+   flat ban). Tokens name axes and operators — a token naming a combination
+   (`button-tinted-hover-bg`) is a defect, because the axis algebra (§4) already
+   expresses it. A component tier (per-component override tokens that alias
+   semantic roles) is not banned on principle: it is the override API a design
+   system grows the day it ships to consumers outside this app, and adding it
+   later is purely additive. Until that day, components consume semantic roles
+   directly. Capability tables cap the state matrix per element.
 
 **Pipeline (C15 applied to design):** one declarative token source (W3C DTCG-format
 JSON) compiled by our generator into CSS custom properties, TypeScript types, the
 docs table, and the contract validator. Hand-written parallel definitions are a
-defect.
+defect. The source is `frontend/design/tokens.resolver.json` + `tokens/`
+(primitives / semantic / per-theme bindings, themes as resolver modifier contexts),
+with `contracts.json` (validator input) and `registries.json` (dispatch tables)
+beside it — never inside it.
 
 ### §23 Contracts and enforcement
 
@@ -371,13 +412,18 @@ reasoning — internal consistency first, usage-linting second:
 
 - Every declared ink/surface pair meets its promised APCA Lc (**PIN** targets;
   working hypothesis: primary ink ≥ Lc 75, secondary ≥ Lc 60, hairlines Lc 10–20,
-  at the smallest declared text size) — re-checked per theme, per family.
-- Register families are monotonic in their declared direction; steps within family
-  ≤ the declared delta cap.
+  at the smallest declared text size) — re-checked per theme, per family, and for
+  the stage across its full adjustable range, not just the default.
+- Register families are monotonic in their declared direction; **every adjacent
+  step in every family** sits within the declared band — above the perceivability
+  floor AND below the delta cap. (A step below threshold is a state users cannot
+  see; spot-checking two pairs proved insufficient.)
 - Every spacing/size value is a quantum multiple; radius/z/shadow values come from
   registered rungs only.
-- The hue ledger is the exhaustive list of chroma in chrome; the attention hue may
-  not equal an enabled label hue.
+- The hue ledger is the exhaustive list of chroma in chrome; the attention hue keeps
+  a minimum hue distance (**PIN**, working hypothesis ≥ 30° OKLCH) from every
+  enabled label hue — inequality alone passes hues that are indistinguishable at
+  swatch scale.
 - Usage layer: no raw color/size literals in components (stylelint); tokens only.
 
 ### §24 Registered scales (shape decided, values PIN)
@@ -425,7 +471,7 @@ Text-scramble and other flavor effects are joy-register only, never working chro
 
 Where a platform convention exists (selection bindings §15, truncation §13, tooltip
 polarity §6, scrollbars §13), adopt it unmodified. Our originality budget is spent on
-the dot voice, the light register, and the two-world luminance architecture — never
+the dot voice, the fun layer, and the two-world luminance architecture — never
 on re-inventing mechanics users already know.
 
 ### §28 Platform honesty list (open empirical checks)
@@ -434,7 +480,7 @@ on re-inventing mechanics users already know.
 - WKWebView (macOS) vs WebView2 (Windows) divergence: everything tagged sRGB behaves
   identically; exotic content is where they fork — another argument for §11's
   conservative canonical space.
-- P3 display headroom for the tag palette and light register: optional refinement,
+- P3 display headroom for the tag palette and fun layer: optional refinement,
   OKLCH makes it expressible when wanted.
 
 ### §29 Scope ratifications (decided, dated 2026-07-12)
@@ -444,6 +490,16 @@ on re-inventing mechanics users already know.
   users beg). Dark mode = the Graphite/Carbon themes, not a separate system.
   Labels user-toggleable. Attention hue user-picked from the palette. Tooltips
   fixed-dark (the one polarity exception). User photos never used as joy content.
+- Reviewed against the Figma-ish reference set (2026-07-12) and deliberately NOT
+  adopted from it: uppercase micro-labels (the references' column heads; sentence
+  case stays law, §9) and fixed-dark popovers on light chrome (tooltips remain the
+  only polarity exception, §6). The fun layer re-scoped as an injected add-on, not
+  core chrome (§17).
+- Ratified 2026-07-13: accent user-selectable from the named scales (blue default,
+  ring-contract-gated picker). One gray scale in the tag palette (no shade family);
+  gray excluded from accent and attention. Selected register = +2 steps (findable
+  at a glance). Placeholder ink = ink.4 (two steps below its label). Row intents
+  `row-control`/`row-text` (§8). Register-step quantum tokenized per world.
 
 ---
 
@@ -453,18 +509,23 @@ Open values, each constrained by written contracts and closed by running the
 validator + the 1× eyeball test on the Library-view mock (with the
 `Alexandria Photos Slice` as content):
 
-1. **The accent hue** — the only genuinely open *choice*. Criteria: passes ring
-   contrast on all four themes; not confusable with a label hue at swatch scale;
-   distinct from the attention default; P3 headroom welcome.
+1. *(closed 2026-07-13 — the accent is a user-selectable binding over the named
+   scales, blue default; ring contract gates the picker; label hue-sharing ratified
+   lawful via style-disjointness)*
 2. Surface family values: 5 steps × (chrome families + cell family) × 4 themes +
-   dark-world duals; stage default + adjustment range.
+   dark-world duals; stage default + adjustment range (max capped at L 0.45, §1);
+   the transient surface role (raised above panel on dark themes, §6).
 3. Ink ramp: 4 steps + hairline, per world, APCA-verified at the type floor.
-4. Type scale: exact sizes/weights/line-heights (sans + mono) in the 11–13px band.
+4. Type roles: committed 2026-07-13 (eleven roles incl. label-sm, two working
+   sizes + micro 10px + title 13px, placeholder = ink.4). Verified with real Geist
+   same date (library/type-probe.html): matched pair holds, no mono compensation;
+   head = semibold 600. Still open: the Windows ClearType 1× check (10–12px).
 5. Quanta: control heights, row heights per surface, panel default/min widths.
 6. Radius (3), shadows (2 recipes), motion tokens (durations + easings).
-7. Tag palette (~12 hues × 2 worlds), label hue values (LrC-compatible), attention
-   default, error red.
-8. Light-register recipe values; dot-matrix loader mapping table (domain state →
+7. *(closed 2026-07-13 — the twelve named hue scales, labels-as-solids, attention =
+   magenta, error = red scale all live in the token source; survives only as
+   validator re-checks)*
+8. Fun-layer recipe values; dot-matrix loader mapping table (domain state →
    loader).
 9. Icon stroke constant; focus-ring width/offset.
 
