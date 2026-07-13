@@ -1,43 +1,40 @@
-/* Three-row desktop shell. Header and status are chrome (opaque --panel, seamed
- * with --border-strong); the main region is the --canvas well the grid sits on. */
+/* Three-row desktop shell, v3: header and status are docked chrome (panel +
+ * hairline seams, §6); the main region is the grid well (§2). */
 .shell {
     height: 100%;
     display: grid;
-    /* header · filter bar (self-sized) · canvas well · status bar */
-    grid-template-rows: var(--titlebar-h) auto 1fr var(--statusbar-h);
-    background: var(--panel);
+    grid-template-rows: 44px auto 1fr 28px;
+    background: var(--alx-surface-panel);
 }
 
 .header {
     display: flex;
     align-items: center;
-    gap: var(--sp-4);
-    padding: 0 var(--sp-5);
-    border-bottom: 1px solid var(--border-strong);
+    gap: 16px;
+    padding: 0 var(--alx-row-inset);
+    border-bottom: 1px solid var(--alx-ink-hairline);
 }
 
 .title {
-    font-family: var(--font-ui);
-    font-size: var(--fs-13);
-    font-weight: var(--fw-semibold);
-    color: var(--text-1);
+    font-size: var(--alx-type-ui-13-size);
+    font-weight: var(--alx-weight-semibold);
 }
 
 .main {
     min-height: 0;
-    background: var(--canvas);
+    background: var(--alx-cell-well);
 }
 
 .status {
     display: flex;
     align-items: center;
-    padding: 0 var(--sp-5);
-    border-top: 1px solid var(--border-strong);
+    padding: 0 var(--alx-row-inset);
+    border-top: 1px solid var(--alx-ink-hairline);
 }
 
 .metric {
-    font-family: var(--font-mono);
-    font-feature-settings: var(--mono-settings);
-    font-size: var(--fs-11);
-    color: var(--text-2);
+    font-family: var(--alx-font-mono);
+    font-size: var(--alx-type-ui-11-size);
+    color: var(--alx-ink-3);
+    font-variant-numeric: tabular-nums;
 }

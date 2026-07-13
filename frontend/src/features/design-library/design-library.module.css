@@ -1,0 +1,108 @@
+/* Design library page chrome — semantic tokens only (it is the system's first
+ * in-app customer). Layout-only raw values. */
+
+.page {
+    height: 100%;
+    overflow-y: auto;
+    padding: 24px 32px 48px;
+    background: var(--alx-surface-panel);
+}
+
+.head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--alx-ink-hairline);
+}
+
+.title {
+    font-size: 20px;
+    font-weight: var(--alx-weight-semibold);
+    letter-spacing: -0.01em;
+}
+
+.sub {
+    color: var(--alx-ink-2);
+    margin-top: 4px;
+    max-width: 64ch;
+}
+
+.themeControl {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--alx-ink-2);
+}
+.popoverSpecimen {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    margin-top: 16px;
+}
+.popoverSpecimen > div:first-child {
+    width: 180px;
+}
+.specimenNote {
+    color: var(--alx-ink-2);
+    font-size: var(--alx-type-ui-12-size);
+    line-height: var(--alx-type-ui-12-lh);
+    max-width: 48ch;
+}
+.specimenNote code {
+    font-family: var(--alx-font-mono);
+    color: var(--alx-ink-3);
+}
+
+.sectionTitle {
+    font-size: var(--alx-type-ui-13-size);
+    font-weight: var(--alx-weight-semibold);
+    margin: 24px 0 12px;
+}
+.ref {
+    color: var(--alx-ink-3);
+    font-weight: var(--alx-weight-regular);
+    font-family: var(--alx-font-mono);
+    font-size: var(--alx-type-ui-11-size);
+}
+
+.matrix { border-collapse: collapse; }
+.matrix th {
+    text-align: left;
+    color: var(--alx-ink-2);
+    font-weight: var(--alx-weight-medium);
+    font-size: var(--alx-type-ui-11-size);
+    padding: 6px 16px 6px 0;
+}
+.matrix td {
+    padding: 8px 16px 8px 0;
+    border-top: 1px solid var(--alx-ink-hairline);
+    vertical-align: middle;
+}
+.rowLabel code { color: var(--alx-ink-3); }
+
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px; }
+.swatch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 32px;
+    padding: 0 var(--alx-row-inset);
+    border: 0;
+    border-radius: var(--alx-r-control);
+    background: none;
+    font: inherit;
+    color: var(--alx-ink-1);
+    cursor: copy;
+    text-align: left;
+}
+.swatch:hover { background: var(--alx-surface-hover); }
+.chip {
+    width: 28px;
+    height: 20px;
+    border-radius: var(--alx-r-control);
+    border: 1px solid var(--alx-ink-hairline);
+    flex: none;
+}

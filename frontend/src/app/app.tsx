@@ -7,13 +7,27 @@
 // now — they become i18n keys (C14) when the shell adopts the i18n scaffolding.
 // Data values (counts) already go through Intl.
 
+import { useSyncExternalStore } from "react";
 import { useQueryAssets } from "@/api/queries";
+import { DesignLibrary } from "@/features/design-library/design-library";
 import { FilterBar } from "@/features/filter-bar/filter-bar";
 import { Grid } from "@/features/grid/grid";
 import { formatNumber } from "@/lib/format";
 import { useCatalogQuery, useSelectionCount } from "@/stores/catalog-store";
 import s from "./app.module.css";
 import { Providers } from "./providers";
+
+// ponytail: hash check instead of a router — one alternate page doesn't justify
+// a routing dep; revisit when the app grows real routes.
+function useHash(): string {
+    return useSyncExternalStore(
+        (notify) => {
+            window.addEventListener("hashchange", notify);
+            return () => window.removeEventListener("hashchange", notify);
+        },
+        () => window.location.hash,
+    );
+}
 
 function Shell() {
     const { query, arrangement } = useCatalogQuery();
@@ -39,9 +53,10 @@ function Shell() {
 }
 
 export function App() {
+    const hash = useHash();
     return (
         <Providers>
-            <Shell />
+            {hash.startsWith("#/design-library") ? <DesignLibrary /> : <Shell />}
         </Providers>
     );
 }
