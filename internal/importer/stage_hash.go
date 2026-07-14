@@ -17,8 +17,10 @@ import (
 
 func (pipe *pipeline) hash(ctx context.Context, in <-chan *pipelineItem, out chan<- *pipelineItem) error {
 	for item := range in {
+		_, span := pipe.importer.Tracer.Start(item.ctx, "import.hash")
 		hash, head, err := hashAndHead(pipe.fsys, &item.scanned)
 		if err != nil {
+			span.Fail(err)
 			item.rejected = true
 			item.addError("hash", "read_failed", err.Error())
 		} else {
@@ -29,6 +31,7 @@ func (pipe *pipeline) hash(ctx context.Context, in <-chan *pipelineItem, out cha
 				item.head = nil // sniff done; don't carry the buffer downstream
 			}
 		}
+		span.End() // before emit, so the gap to the next stage span IS the queue time
 		if err := pipe.emit(ctx, out, item); err != nil {
 			return err
 		}

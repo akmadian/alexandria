@@ -15,6 +15,7 @@ import (
 	_ "expvar" // registers /debug/vars on http.DefaultServeMux
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof" //nolint:gosec // dev-only profiling endpoint
 	"os"
@@ -32,6 +33,8 @@ import (
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/akmadian/alexandria/internal/watcher"
+	"github.com/akmadian/gospan"
+	gospansqlite "github.com/akmadian/gospan/sqlite"
 	"github.com/charmbracelet/log"
 	_ "modernc.org/sqlite"
 )
@@ -81,6 +84,7 @@ func usage() {
 usage:
   dev import <path>   [--catalog <dir|:memory:>] [--debug [--debug-addr <addr>]]
                       [--hash-workers N] [--extract-workers N] [--thumb-workers N]
+                      [--trace=false]
   dev reconcile <path> [--catalog <dir>]           mark missing/restored files
   dev watch     <path> [--catalog <dir>]           live-watch a tree until Ctrl-C
   dev errors          [--catalog <dir>]            dump the latest session's DLQ
@@ -110,6 +114,14 @@ debug web UI (--debug, import only):
     dev import ~/Photos --catalog ./cat --debug --debug-addr :6000
   /debug/pprof/goroutine?debug=1 is the live pipeline picture (who's blocked on which
   channel); /debug/vars is runtime + GC stats. Ctrl-C exits once the import is done.
+
+tracing (import; on by default, --trace=false to disable):
+  Every run writes a gospan trace file to <catalog>/traces/ — per-stage spans,
+  queue gaps, batch commits — and prints its path at the end. Analyze it with the
+  script library in cmd/dev/sql/:
+    sqlite3 -box <catalog>/traces/gospan-<run>.sqlite < cmd/dev/sql/trace-report.sql
+    sqlite3 -box <catalog>/traces/gospan-<run>.sqlite < cmd/dev/sql/trace-asset.sql
+  Catalog scripts live there too (catalog-stats.sql, catalog-wipe.sql for a fresh slate).
 `)
 }
 
@@ -274,6 +286,7 @@ func cmdImport(args []string) error {
 	catalogPath := flags.String("catalog", ":memory:", "catalog dir or :memory:")
 	debug := flags.Bool("debug", false, "serve pprof+expvar web UI while importing")
 	debugAddr := flags.String("debug-addr", "localhost:6060", "address for the --debug server")
+	trace := flags.Bool("trace", true, "write a gospan trace file for this run (--trace=false for A/B overhead runs)")
 	hashWorkers := flags.Int("hash-workers", 0, "HASH pool size (0 = engine default; I/O-bound)")
 	extractWorkers := flags.Int("extract-workers", cpuBoundWorkers(), "EXTRACT pool size (CPU-bound; 0 = conservative engine default)")
 	thumbWorkers := flags.Int("thumb-workers", cpuBoundWorkers(), "THUMB pool size (CPU-bound, ~1 image in RAM each; 0 = engine default)")
@@ -301,7 +314,34 @@ func cmdImport(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// Tracing is on by default in the harness (~360ns/span): one SQLite trace
+	// file per run, browsable/queryable like the catalog itself. The complaints
+	// channel is the debug logger; span rows never enter the log flow. A nil
+	// tracer (--trace=false) turns the whole instrument off.
+	var tracer *gospan.Tracer
+	var traceSink *gospansqlite.Sink
+	if *trace {
+		traceDir := filepath.Join(os.TempDir(), "alexandria-dev-traces")
+		if *catalogPath != ":memory:" {
+			traceDir = filepath.Join(*catalogPath, "traces")
+		}
+		traceSink, err = gospansqlite.New(traceDir)
+		if err != nil {
+			return err
+		}
+		tracer, err = gospan.New(
+			traceSink,
+			gospan.WithLogger(slog.New(log.Default())),
+			gospan.WithOverheadSampling(1))
+		if err != nil {
+			return err
+		}
+		defer tracer.Close(context.Background()) // safety net for early returns; Close is idempotent — the reporting Close runs below
+	}
+
 	ingester := newIngester(catalog)
+	ingester.Tracer = tracer
 	// Worker counts come from machine.json (via newIngester); the dev flags override
 	// per stage when >0 (extract/thumb default to cpuBoundWorkers for fast local imports).
 	if *hashWorkers > 0 {
@@ -360,6 +400,23 @@ func cmdImport(args []string) error {
 		fmt.Printf("  settings:   %s  (settings.json, machine.json, keybindings.json — created with defaults)\n", catalog.settingsDir)
 	} else {
 		fmt.Println("  catalog db: in-memory (nothing to browse — use --catalog <dir> for a real file)")
+	}
+
+	// Close drains the buffer and finishes the trace file; stats read after so
+	// Written is final. Dropped > 0 means the event buffer needs WithBufferSize.
+	if tracer != nil {
+		if err := tracer.Close(context.Background()); err != nil {
+			fmt.Fprintln(os.Stderr, "  (trace close:", err, ")")
+		}
+		traceStats := tracer.Stats()
+		// Started/Completed count spans; Written/Dropped count queue EVENTS
+		// (start + end + attr updates — roughly 2–3 per span). overhead/span is
+		// exact, not sampled: WithOverheadSampling(1) times every span. It is a
+		// process-lifetime rolling average and lives here, not in the trace file.
+		fmt.Printf("  trace db:   %s\n", traceSink.Path())
+		fmt.Printf("  tracing:    spans=%d events=%d dropped=%d writeErrors=%d overhead/span=%s (exact)\n",
+			traceStats.Completed, traceStats.Written, traceStats.Dropped, traceStats.WriteErrors, traceStats.OverheadPerSpan)
+		fmt.Printf("              analyze: sqlite3 -box <trace db> < cmd/dev/sql/trace-report.sql\n")
 	}
 
 	// Hold open so the debug UI is reachable even after a fast run (a sub-second

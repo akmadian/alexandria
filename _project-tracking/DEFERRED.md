@@ -496,6 +496,12 @@ already gives the live pipeline picture. Deferred: **statsviz** (live charts), a
 **`/state`** JSON snapshot (pipeline stage depths, session counters), the `go:embed` HTML
 dashboard, and `--json` output for scripting.
 
+*(2026-07-13, gospan round: the calculus changed. `dev import` now writes a per-run gospan
+trace file — per-stage percentiles, queue-time gaps, and batch analysis are one SQL query
+against a closed file, which covers most of what the `/state` snapshot and statsviz wanted
+post-hoc. What remains genuinely deferred here is the LIVE surface; task 22's enrichment
+snapshot endpoint is its likely first real consumer.)*
+
 **Trigger:** a real workload the stdlib surface can't diagnose — chasing a throughput regression
 or a stuck-stage bug where watching queue depths over time would have answered it faster.
 

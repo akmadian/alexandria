@@ -116,6 +116,37 @@ the DB yet, but it's in the map.
   unreachable at start) return an error.
 - **Mint IDs via `domain.NewID`** (UUIDv7), never inline.
 
+## Tracing (gospan)
+
+The pipeline is instrumented with [gospan](https://github.com/akmadian/gospan)
+spans when `Importer.Tracer` is set (nil = off; every call on a nil tracer is a
+~4ns no-op — the entire test suite runs untraced). The span vocabulary:
+
+- `import.run` — the root; every other span in a run nests under it. Attrs:
+  source, session, final counts. A canceled run reads status `canceled`.
+- `import.scan` — the walk. Its duration includes SCAN-channel backpressure —
+  honest: that is what the walk spends its time on.
+- `import.asset` / `import.sidecar` — one trace root per item (distinct names so
+  aggregates never mix their timings). The span rides the item (`pipelineItem.ctx`),
+  starts at SCAN emit, and ends after WRITE commits — so an item still in flight
+  at cancel/crash shows as an incomplete span (`end_ns IS NULL`), by design.
+- `import.hash` / `import.match` / `import.extract` / `import.thumb` — per-stage
+  child spans, ended **before** the downstream send, so the gap between one
+  stage's end and the next stage's start *is* the queue time. No work = no span
+  (sidecars have no match/extract/thumb spans). A stage failure `Fail`s its span;
+  the DLQ row remains the durable record.
+- `import.await-commit` — WRITE arrival → commit: the batching latency made
+  queryable (batch fill + lull + transaction).
+- `import.write-batch` — each commit is its own tiny trace (a batch serving N
+  item traces belongs to none of them); items and batch share a `batch_seq` attr.
+
+The dev harness traces by default (`--trace=false` for A/B runs) into
+`<catalog>/traces/`, one plain-SQLite file per run — query it directly or drop
+it on the gospan viewer. The trace file is observational exhaust, never catalog
+state: deleting it loses diagnostics, nothing else. Measured cost on the
+throughput fixture: ~2–3% at ~2,000 files/s (small-file worst case), zero
+dropped events at the default buffer.
+
 ## Bookkeeping: sessions, the DLQ, and jobs
 
 - Each run opens an `import_sessions` row (counts + per-extension skip tallies).

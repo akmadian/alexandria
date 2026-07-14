@@ -1,5 +1,9 @@
 git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 h1:N3IGoHHp9pb6mj1cbXbuaSXV/UMKwmbKLf53nQmtqMA=
 git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3/go.mod h1:QtOLZGz8olr4qH2vWK0QH0w0O4T9fEIjMuWpKUsH7nc=
+github.com/akmadian/gospan v0.0.1 h1:tS7wFV31QX5R2EvzjiQH/RooEG95lUQR0vaAp8MAL3I=
+github.com/akmadian/gospan v0.0.1/go.mod h1:Gn9wZqGogOb8U5gUQ0OpBjd9IQX13tk+IRpYV/vjKQ0=
+github.com/akmadian/gospan/sqlite v0.0.0-20260714003428-850e1dda9d99 h1:egnBZQU5nQAe3WZVBKw3GRClYjhyET3mxBE+4cEFl38=
+github.com/akmadian/gospan/sqlite v0.0.0-20260714003428-850e1dda9d99/go.mod h1:2NxrPSVgT9w4T4tRp+m94ryXbHCTaTH8AaGVHyyzxrM=
 github.com/alexflint/go-arg v1.6.0 h1:wPP9TwTPO54fUVQl4nZoxbFfKCcy5E6HBCumj1XVRSo=
 github.com/alexflint/go-arg v1.6.0/go.mod h1:A7vTJzvjoaSTypg4biM5uYNTkJ27SkNTArtYXnlqVO8=
 github.com/alexflint/go-scalar v1.2.0 h1:WR7JPKkeNpnYIOfHRa7ivM21aWAdHD0gEWHCx+WQBRw=

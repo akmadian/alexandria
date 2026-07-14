@@ -7,8 +7,11 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -21,6 +24,7 @@ import (
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/testutil"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
+	"github.com/akmadian/gospan"
 	"github.com/charmbracelet/log"
 )
 
@@ -515,6 +519,152 @@ func TestFullProcessingInvariant_Cancel(t *testing.T) {
 	}
 }
 
+// --- Tracing: gospan spans cover the pipeline ---
+
+// TestTracing_SpansCoverThePipeline runs a fixture import with a live tracer
+// and asserts the span vocabulary lands: the run root, the walk span, one
+// trace per item (asset/sidecar names kept distinct), per-stage child spans,
+// the await-commit wait span, the write-batch fan-in trace, and error status
+// on a corrupt file's failing stage. Every OTHER test in this file runs with a
+// nil Tracer — the nil-is-off contract, exercised for free.
+func TestTracing_SpansCoverThePipeline(t *testing.T) {
+	ingester, source, _, _ := newPipelineImporter(t, t.TempDir())
+	tracer, err := gospan.New(gospan.SlogSink(slog.New(slog.DiscardHandler)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingester.Tracer = tracer
+
+	result, err := ingester.Run(context.Background(), source, fstest.MapFS{
+		"trip/one.jpg":    {Data: jpegBytes(1)},
+		"trip/two.jpg":    {Data: jpegBytes(2)},
+		"trip/one.xmp":    {Data: []byte("<xmp>sidecar</xmp>")},
+		"trip/broken.jpg": {Data: jpegBytes(3)[:20]}, // valid magic, undecodable → thumb fails, still commits
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Added != 3 {
+		t.Fatalf("added=%d, want 3", result.Added)
+	}
+	if err := tracer.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	summary := tracer.Summary()
+	wantCounts := map[string]uint64{
+		"import.run":          1,
+		"import.scan":         1,
+		"import.asset":        3,
+		"import.sidecar":      1,
+		"import.hash":         4, // sidecars hash too
+		"import.match":        3, // sidecars skip the matrix
+		"import.extract":      3,
+		"import.thumb":        3,
+		"import.await-commit": 4,
+	}
+	for name, want := range wantCounts {
+		if got := summary[name].Count; got != want {
+			t.Errorf("span %q: count=%d, want %d", name, got, want)
+		}
+	}
+	if summary["import.write-batch"].Count == 0 {
+		t.Error("no write-batch trace recorded")
+	}
+	if summary["import.thumb"].Errors == 0 {
+		t.Error("corrupt file should fail its thumb span (status=error)")
+	}
+	if summary["import.asset"].Max <= 0 {
+		t.Error("asset root spans should carry real durations")
+	}
+}
+
+// TestTracing_BatchFailureFailsItemTraces forces a whole-batch transaction
+// failure (a poison trigger on the assets table) and asserts the fan-in
+// tracing on the failure path: the write-batch span fails, and every item
+// root span in the doomed batch fails with it. This is the one place a failed
+// commit must mark both sides of the fan-in.
+func TestTracing_BatchFailureFailsItemTraces(t *testing.T) {
+	ingester, source, assets, _ := newPipelineImporter(t, "")
+	if _, err := assets.DB.ExecContext(context.Background(), `CREATE TRIGGER poison_batch BEFORE INSERT ON assets
+		WHEN NEW.filename = 'poison.jpg' BEGIN SELECT RAISE(ABORT, 'poisoned batch'); END`); err != nil {
+		t.Fatal(err)
+	}
+	tracer, err := gospan.New(gospan.SlogSink(slog.New(slog.DiscardHandler)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingester.Tracer = tracer
+
+	// Three files, one batch (< batch size): the poison row aborts the tx, so
+	// the whole batch — innocent files included — fails together.
+	result, err := ingester.Run(context.Background(), source, fstest.MapFS{
+		"a.jpg":      {Data: jpegBytes(1)},
+		"b.jpg":      {Data: jpegBytes(2)},
+		"poison.jpg": {Data: jpegBytes(3)},
+	})
+	if err != nil {
+		t.Fatalf("a poisoned batch must not abort the run (idempotency is the recovery): %v", err)
+	}
+	if len(result.Errors) != 3 {
+		t.Fatalf("all 3 items of the poisoned batch should be errored, got %d", len(result.Errors))
+	}
+	if err := tracer.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	summary := tracer.Summary()
+	if got := summary["import.write-batch"].Errors; got != 1 {
+		t.Errorf("write-batch spans errored: %d, want 1 (the poisoned commit)", got)
+	}
+	if got := summary["import.asset"].Errors; got != 3 {
+		t.Errorf("asset root spans errored: %d, want 3 (the whole batch fails together)", got)
+	}
+	if got := summary["import.asset"].Count; got != 3 {
+		t.Errorf("asset root spans still End on the failure path: count=%d, want 3", got)
+	}
+}
+
+// TestTracing_CanceledRunClassifiesRunSpan cancels an import mid-run with a
+// LIVE tracer and asserts the run span lands as canceled, not error — the
+// errors.Is classification inside Fail, exercised against a real span (the
+// sacred cancel test runs untraced, so it cannot see this).
+func TestTracing_CanceledRunClassifiesRunSpan(t *testing.T) {
+	ingester, source, _, _ := newPipelineImporter(t, t.TempDir())
+	tracer, err := gospan.New(gospan.SlogSink(slog.New(slog.DiscardHandler)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ingester.Tracer = tracer
+
+	const fileCount = 300
+	files := fstest.MapFS{}
+	for i := 0; i < fileCount; i++ {
+		files[filepath.Join("shoot", fmtInt(i)+".jpg")] = &fstest.MapFile{Data: jpegBytes(i)}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	ingester.OnProgress = func(progress importer.Progress) {
+		if progress.Done > 0 {
+			cancel() // cancel once at least one batch has committed
+		}
+	}
+	_, runErr := ingester.Run(ctx, source, files)
+	if runErr == nil {
+		t.Skip("run outpaced the cancel; nothing to classify") // same tolerance as the sacred test
+	}
+	if err := tracer.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	runSummary := tracer.Summary()["import.run"]
+	if runSummary.Canceled != 1 {
+		t.Errorf("run span canceled=%d, want 1 (Fail must classify context.Canceled)", runSummary.Canceled)
+	}
+	if runSummary.Errors != 0 {
+		t.Errorf("run span errors=%d, want 0 (canceled is not an error)", runSummary.Errors)
+	}
+}
+
 // --- Throughput sanity (NFR-2): a runnable benchmark, no flaky timing assert ---
 
 func BenchmarkPipeline_JPEGThroughput(b *testing.B) {
@@ -539,6 +689,81 @@ func BenchmarkPipeline_JPEGThroughput(b *testing.B) {
 		if _, err := ingester.Run(context.Background(), source, files); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// --- Pre-count: progress determinate from the first event ---
+
+// TestPreCount_TotalKnownFromFirstEvent proves the pre-count pass makes Total
+// known before any work commits — the first progress event carries the true
+// count, not "?". Without it, Total only settles at walk end (SCAN blocks on
+// backpressure), leaving the UI showing "N / ?" for nearly the whole import.
+func TestPreCount_TotalKnownFromFirstEvent(t *testing.T) {
+	ingester, source, _, _ := newPipelineImporter(t, "")
+
+	const fileCount = 30
+	files := fstest.MapFS{}
+	for i := 0; i < fileCount; i++ {
+		files[fmtInt(i)+".mp4"] = &fstest.MapFile{Data: []byte("clip-" + fmtInt(i))}
+	}
+
+	var seen bool
+	var firstTotalKnown bool
+	var firstTotal int
+	ingester.OnProgress = func(progress importer.Progress) {
+		if !seen {
+			seen = true
+			firstTotalKnown = progress.TotalKnown
+			firstTotal = progress.Total
+		}
+	}
+	if _, err := ingester.Run(context.Background(), source, files); err != nil {
+		t.Fatal(err)
+	}
+	if !firstTotalKnown {
+		t.Fatal("first progress event should already have TotalKnown=true (pre-count ran before the pipeline)")
+	}
+	if firstTotal != fileCount {
+		t.Fatalf("pre-count Total=%d, want %d", firstTotal, fileCount)
+	}
+}
+
+// --- Permissions: an unreadable root fails fast, and never marks assets missing ---
+
+// deniedFS is a filesystem whose root read is refused — the shape macOS TCC
+// produces for a protected or removable/network volume (EPERM surfaces as
+// fs.ErrPermission through io/fs).
+type deniedFS struct{}
+
+func (deniedFS) Open(name string) (fs.File, error) {
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
+}
+func (deniedFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrPermission}
+}
+
+func TestPreflight_PermissionDeniedIsActionable(t *testing.T) {
+	ingester, source, assets, _ := newPipelineImporter(t, "")
+	ctx := context.Background()
+
+	// Seed one online asset, so we can prove a denied rescan doesn't mark it missing.
+	if _, err := ingester.Run(ctx, source, fstest.MapFS{"keep.mp4": {Data: []byte("keep-me")}}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ingester.Run(ctx, source, deniedFS{})
+	if err == nil {
+		t.Fatal("a permission-denied root must fail the import, not silently scan nothing")
+	}
+	if !strings.Contains(err.Error(), "permission") {
+		t.Fatalf("error should name the permission problem so the user can act, got: %v", err)
+	}
+
+	// The safety property: because preflight aborts before the empty walk, the
+	// walk-end diff never runs, so the existing asset is untouched (not marked missing).
+	kept, _ := assets.FindBySourcePath(ctx, source.ID, "keep.mp4")
+	if kept == nil || kept.FileStatus != domain.FileStatusOnline {
+		t.Fatalf("a denied rescan must not mark known assets missing: got %v", kept)
 	}
 }
 

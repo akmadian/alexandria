@@ -3,6 +3,8 @@ module github.com/akmadian/alexandria
 go 1.26.5
 
 require (
+	github.com/akmadian/gospan v0.0.1
+	github.com/akmadian/gospan/sqlite v0.0.0-20260714003428-850e1dda9d99
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/charmbracelet/log v1.0.0
 	github.com/dsoprea/go-exif/v3 v3.0.1
