@@ -37,11 +37,13 @@ point: the session that wrote the code reviews it leniently.
    - **docs** — `_project-tracking/`, `docs/`, READMEs, CLAUDE.md/AGENTS.md
 3. **Right-size the review — token economy is a design constraint.** Every subagent pays a
    fixed cost re-reading the rulebook, so match the machinery to the diff:
-   - **Tiny, mechanical diff** (roughly <50 changed lines, no new logic — a rename, a doc
-     date-fix, a config row): skip the dispatch. Walk the relevant [checklists.md](checklists.md)
-     sections yourself and include the same per-item coverage lines in your report (item —
-     clean/finding/n-a, with what you inspected) — an inline review still shows its work. If
-     walking the checklist reveals the diff *does* contain new logic, it wasn't tiny; dispatch.
+   - **Low-blast-radius diff** (under ~150 changed lines of Go AND adding no catalog-write /
+     identity-matrix / `internal/ast` / seam-contract logic — renames, doc rounds, config rows,
+     additive instrumentation): skip the dispatch. Walk the relevant
+     [checklists.md](checklists.md) sections yourself and include the same per-item coverage
+     lines in your report (item — clean/finding/n-a, with what you inspected) — an inline
+     review still shows its work. Blast radius, not line count, is the test: if the walk
+     reveals sacred-path logic, dispatch regardless of size.
    - **Normal round** (the default): dispatch ONE reviewer subagent (general-purpose). Build
      its prompt from [reviewer.md](reviewer.md): fill in the work summary, the spec path, the
      binding C/D numbers from your task-pickup report, the touched areas, and the diff scope.
@@ -49,10 +51,16 @@ point: the session that wrote the code reviews it leniently.
    - **Unusually large round** (several thousand diff lines across areas): one reviewer per
      area in parallel — same template, one area each. Never default to parallel.
 
-   **Model:** pass `model: "sonnet"` for routine rounds (checklist-driven review doesn't need
-   the frontier model, and findings get verified by you anyway); omit the param — inheriting
-   this session's model — when the round touches architecture invariants (writer classes, the
-   matrix, the query authority, the seam contract) or spans multiple areas.
+   **Model:** default to `model: "sonnet"` — checklist-driven review doesn't need the frontier
+   model, and findings get verified by the dispatcher anyway. Inherit this session's model
+   (omit the param) ONLY when the diff itself touches sacred code: writer classes, the identity
+   matrix, `internal/ast`, or the seam contract. Docs riding along never upgrades the model —
+   D27 puts docs in every proper round, so "multi-area" is not a signal (that trigger once made
+   the expensive model the de-facto default; it is deliberately gone).
+
+   **Dispatch in the background** and continue close-out work that cannot contaminate the
+   review while it runs — memory updates, drafting the presentation, sibling-repo docs; never
+   edits to files under review. Collect the report before presenting.
 4. **Receive findings with rigor — no performative agreement.** First check the review is
    valid: a READY verdict without a completed Test evidence section (per-function coverage,
    what the tests actually execute) is void — re-dispatch, don't accept it. For each finding,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -90,6 +91,7 @@ type pipeline struct {
 	// WRITE-owned.
 	addedCount, updatedCount, movedCount, duplicateCount, errorCount int
 	missingCount                                                     int
+	batchSeq                                                         int // commit counter; tags batch traces + item spans (fan-in)
 
 	// cross-goroutine progress (atomics).
 	total        atomic.Int64 // asset items emitted by SCAN
@@ -125,6 +127,11 @@ func (imp *Importer) RunJob(ctx context.Context, jobID string, source *domain.So
 	if imp.Store == nil || imp.Imports == nil {
 		panic("importer: Store and Imports must be set for the pipeline path")
 	}
+	// Fail fast on an unreadable root (macOS TCC on a /Volumes path) before opening
+	// a session — and before the empty walk would mark every known asset missing.
+	if err := preflightReadable(fsys, source.BasePath); err != nil {
+		return ImportResult{}, err
+	}
 	known, err := imp.Reader.ListKnownFiles(ctx, source.ID)
 	if err != nil {
 		return ImportResult{}, err
@@ -134,8 +141,25 @@ func (imp *Importer) RunJob(ctx context.Context, jobID string, source *domain.So
 		return ImportResult{}, err
 	}
 	pipe := newPipeline(imp, source, fsys, known, sessionID, jobID)
+	// The run root span: every item trace and the SCAN walk span nest under it,
+	// so one import run reads as one waterfall. Ends after the session finalizes.
+	ctx, runSpan := imp.Tracer.Start(ctx, "import.run",
+		slog.String("source", source.Name), slog.String("session", sessionID))
 	imp.Log.Info("import started", "source", source.Name, "known", len(known), "session", sessionID,
 		"pools", fmt.Sprintf("hash=%d extract=%d thumb=%d", pipe.pools.hash, pipe.pools.extract, pipe.pools.thumb))
+
+	// Pre-count the tree so progress is determinate from the first event. On
+	// success the count owns Total and SCAN stops incrementing it (walkDone gates
+	// that); if the count fails, walkDone stays false and SCAN falls back to the
+	// climbing "N / ?" denominator.
+	if count, err := pipe.countAssets(ctx); err != nil {
+		imp.Log.Warn("pre-count walk failed; progress total stays indeterminate until walk end", "err", err)
+	} else {
+		pipe.total.Store(count)
+		pipe.walkDone.Store(true)
+		pipe.emitProgress("scan")
+		imp.Log.Info("pre-count complete", "source", source.Name, "assets", count)
+	}
 
 	runErr := pipe.run(ctx)
 
@@ -155,6 +179,14 @@ func (imp *Importer) RunJob(ctx context.Context, jobID string, source *domain.So
 	if err := imp.Imports.Finish(context.WithoutCancel(ctx), sessionID, pipe.sessionSnapshot()); err != nil {
 		imp.Log.Warn("finalize session failed", "session", sessionID, "err", err)
 	}
+
+	runSpan.SetAttrs(slog.Int("added", result.Added), slog.Int("updated", result.Updated),
+		slog.Int("skipped", result.Skipped), slog.Int("dups", result.Dups),
+		slog.Int("missing", result.Missing), slog.Int("errors", pipe.errorCount))
+	if runErr != nil {
+		runSpan.Fail(runErr) // auto-classifies a canceled run as canceled, not error
+	}
+	runSpan.End()
 
 	imp.Log.Info("import finished", "source", source.Name, "session", sessionID,
 		"added", result.Added, "updated", result.Updated, "moved", result.Moved,

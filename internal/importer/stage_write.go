@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/sqlite"
+	"github.com/akmadian/gospan"
 	"github.com/charmbracelet/log"
 )
 
@@ -41,6 +43,9 @@ func (pipe *pipeline) write(ctx context.Context, incoming <-chan *pipelineItem) 
 			if !ok {
 				return flush()
 			}
+			// The write-wait span: arrival → commit. Its duration is the batching
+			// latency (fill time + lull + tx), ended in endItemTrace.
+			_, item.awaitCommitSpan = pipe.importer.Tracer.Start(item.ctx, "import.await-commit")
 			if len(batch) == 0 {
 				timer.Reset(writeLull)
 			}
@@ -66,6 +71,12 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 	if len(batch) == 0 {
 		return nil
 	}
+	// The batch is its own tiny trace (fan-in recipe): a commit serving N item
+	// traces belongs to none of them, so the many-to-one lives in the shared
+	// batch_seq attribute, never in span structure.
+	pipe.batchSeq++
+	_, batchSpan := pipe.importer.Tracer.Start(context.Background(), "import.write-batch",
+		slog.Int("items", len(batch)), slog.Int("batch_seq", pipe.batchSeq))
 	err := pipe.importer.Store.InTx(ctx, func(repos sqlite.Repos) error {
 		for _, item := range batch {
 			if err := pipe.writeItem(ctx, repos, item); err != nil {
@@ -75,6 +86,10 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		return nil
 	})
 	if err != nil {
+		batchSpan.Fail(err)
+	}
+	batchSpan.End()
+	if err != nil {
 		// The tx is poisoned by the first failing statement, so per-item isolation
 		// isn't free here. Log loudly, count the batch as errored, continue — the
 		// work is skip-gated / re-driven next run (idempotency is the recovery).
@@ -83,6 +98,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		pipe.importer.Log.Error("batch commit failed", "items", len(batch), "err", err)
 		for _, item := range batch {
 			pipe.addItemError(item, "write", err)
+			pipe.endItemTrace(item, err)
 		}
 		pipe.errorCount += len(batch)
 		return nil
@@ -91,6 +107,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 	var committed int
 	for _, item := range batch {
 		pipe.tally(item)
+		pipe.endItemTrace(item, nil)
 		if !item.isSidecar && !item.rejected {
 			committed++
 			if pipe.importer.OnAssetCommitted != nil {
@@ -101,6 +118,28 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 	pipe.done.Add(int64(committed))
 	pipe.postCommit(ctx)
 	return nil
+}
+
+// endItemTrace closes the item's await-commit span and its root span, both
+// tagged with the batch that carried them. The root records the verdict (for
+// per-verdict SQL) and whether the item was rejected upstream; a failed commit
+// fails the root, and a rejected item's error lives on the failed STAGE span +
+// the DLQ row — the root's status stays the commit outcome.
+func (pipe *pipeline) endItemTrace(item *pipelineItem, commitErr error) {
+	batchAttr := slog.Int("batch_seq", pipe.batchSeq)
+	item.awaitCommitSpan.SetAttrs(batchAttr)
+	item.awaitCommitSpan.End()
+
+	root := gospan.FromContext(item.ctx)
+	if !item.isSidecar && !item.rejected {
+		root.SetAttrs(batchAttr, slog.String("verdict", item.verdict.String()))
+	} else {
+		root.SetAttrs(batchAttr, slog.Bool("rejected", item.rejected))
+	}
+	if commitErr != nil {
+		root.Fail(commitErr)
+	}
+	root.End()
 }
 
 // writeItem applies one item's mutations via the tx-bound repos. Uses only the

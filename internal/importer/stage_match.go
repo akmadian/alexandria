@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/charmbracelet/log"
@@ -22,11 +23,14 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 			}
 			continue
 		}
+		_, span := pipe.importer.Tracer.Start(item.ctx, "import.match")
 		verdict, existing, err := pipe.importer.classify(ctx, pipe.source, &item.scanned, item.hash, inRunHashes, item.logger)
 		if err != nil {
+			span.Fail(err)
 			item.rejected = true
 			item.addError("match", "match_failed", err.Error())
 		} else {
+			span.SetAttrs(slog.String("verdict", verdict.String()))
 			item.verdict, item.existing = verdict, existing
 			switch verdict {
 			case actionNew:
@@ -38,6 +42,7 @@ func (pipe *pipeline) match(ctx context.Context, in <-chan *pipelineItem, out ch
 				item.assetID = existing.ID
 			}
 		}
+		span.End()
 		if err := pipe.emit(ctx, out, item); err != nil {
 			return err
 		}

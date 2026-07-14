@@ -1,10 +1,12 @@
 package importer
 
 import (
+	"context"
 	"time"
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
+	"github.com/akmadian/gospan"
 	"github.com/charmbracelet/log"
 )
 
@@ -34,7 +36,17 @@ func (a action) String() string {
 // fields. It is the shared state the six stage files (stage_*.go) read and write
 // as it flows SCAN → HASH → MATCH → EXTRACT → THUMB → WRITE.
 type pipelineItem struct {
-	logger            *log.Logger // child logger with "asset" key baked in
+	logger *log.Logger // child logger with "asset" key baked in
+
+	// ctx carries the item's root trace span across stage goroutines (the gospan
+	// pipeline recipe: the span rides the item, not the call stack). It is never
+	// used for cancellation — stages keep the run ctx for that. Set at SCAN emit;
+	// the root span ends after WRITE commits the item.
+	ctx context.Context
+	// awaitCommitSpan is the item's write-wait span (the fan-in recipe): started
+	// by WRITE when the item arrives, ended at commit, tagged with batch_seq.
+	awaitCommitSpan *gospan.Span
+
 	scanned           scannedFile
 	isSidecar         bool
 	head              []byte // first ≤64KB, held only across HASH (for Sniff), then released

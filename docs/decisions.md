@@ -703,3 +703,58 @@ derivable *nor* simple intent rows (none is foreseen); job fusion only with prof
 that thumbnail re-decode dominates a signal's cost; per-artifact provenance stamps only if
 clear-on-reimport proves too coarse in practice; the effort dial's shape (token counts per
 level) is implementation detail, tune freely.
+
+## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
+
+The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —
+Ari's embedded span tracer, designed with this pipeline as its motivating workload — was wired
+into the import pipeline and validated against real and synthetic imports. It stays.
+
+**What was adopted.** `Importer.Tracer *gospan.Tracer` (nil = off, ~4ns; the entire test suite
+runs untraced, which IS the nil-off proof). One span vocabulary, dotted per area:
+`import.run` (root) / `import.scan` / `import.asset` + `import.sidecar` (one trace root per
+item, riding the item as `pipelineItem.ctx` — the gospan pipeline recipe) / per-stage child
+spans ended **before** the downstream send (gap = queue time) / `import.await-commit` (write
+wait, deliberate: spans are cheap and it saves a query) / `import.write-batch` (each commit its
+own tiny trace; items and batch share a `batch_seq` attr — fan-in stays flat, never structural).
+Enrichment (task 18) gets `enrichment.<kind>` from birth on the same tracer.
+
+**Doctrine placement.** A trace file is **observational exhaust** — below derived state: the
+program never reads it back, deleting it loses diagnostics and nothing else, so it carries no
+rebuild path and never enters the catalog (no writer-class or one-cook implications; gospan owns
+its own file). The dev harness traces by default (`--trace=false` for A/B); the shipped app
+constructs no tracer until the app-host round decides otherwise — nil-is-off makes that a
+composition-root choice, not a code path. Analysis is plain SQL: the script library in
+`cmd/dev/sql/` (trace-report, trace-asset, catalog-stats, catalog-wipe) is the standard kit.
+
+**Validation evidence (why it stays).** 2,000-file A/B: ~2.5% throughput cost at ~2,000
+files/s (small-file worst case), 26,775 events written, zero dropped at the default buffer,
+self-reported overhead <1µs/span. A real 1,330-photo import produced the round's headline: the
+parallelism query showed `import.thumb` at 5.98x on a 6-worker pool — 437s of 460s total work —
+i.e. **the run time IS thumb time ÷ pool size, measured**: D25's "thumbnails leave ingest" now
+has its empirical justification, and task 19 can diff before/after trace files as its receipt.
+A SIGTERM mid-run left exactly the in-flight items as incomplete spans with the run span
+auto-classified `canceled` (the insert-at-start bet, confirmed). The traces also surfaced a
+real pipeline gap on day one (duplicate-verdict items skip EXTRACT → assets with thumbnails but
+no metadata; flagged as its own work item).
+
+**Reading discipline (folded into the importer README + trace-report header):** aggregates
+convict, waterfalls narrate. A bounded-channel pipeline parks items at whatever upstream seam
+has buffer room, so a single item's biggest gap points wherever it happened to queue; the
+per-name parallelism view (pool pinned at its size) names the true bottleneck.
+
+**Rejected/deferred:** injecting a shared DB handle into the sqlite sink (breaks the sink's
+schema/pragma/one-file-per-run ownership and would put exhaust inside backed-up state; the
+live-read want is met by opening a read-only handle on `Sink.Path()` — WAL readers never block
+the writer). Instrumenting inside `internal/metadata`/subprocess leaves — the extract span
+covers it; add leaf spans when a real diagnosis wants them. RAM/CPU sampling is a gospan-side
+design round (its DEFERRED "gauge samples table" trigger has now fired; first consumer is
+calibrating D28's weighted-budget size estimates against measured heap).
+
+**Revisit triggers:** `Stats().Dropped > 0` on a real workload → tune `WithBufferSize`;
+app-host round decides the shipped-app tracer (and whether the D28 debug surface embeds
+`Summary()`); the gospan viewer landing replaces hand-rolled waterfall queries. Standing
+appointment: a fully-instrumented enrichment engine + concurrent import projects 30–50k
+spans/sec against a ~100–150k/sec sink ceiling at typical attr counts — re-run the sink
+benchmark against task-18's real span rate before the enrichment engine ships (gospan's
+DEFERRED "write-throughput ladder" holds the pre-planned moves, multi-row inserts first).

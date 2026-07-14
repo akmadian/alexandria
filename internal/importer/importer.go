@@ -10,6 +10,7 @@ import (
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
+	"github.com/akmadian/gospan"
 	"github.com/charmbracelet/log"
 )
 
@@ -37,6 +38,13 @@ type Importer struct {
 	Store     *sqlite.Store      // batched-write transaction boundary (pipeline WRITE)
 	Imports   *sqlite.ImportRepo // session lifecycle (Start/Finish outside the batch txns)
 	Log       *log.Logger
+
+	// Tracer, if set, instruments the pipeline path with gospan spans: one run
+	// root, one trace per item (import.asset / import.sidecar) with per-stage
+	// child spans, and one tiny trace per WRITE batch (the fan-in recipe). Nil is
+	// off — every call on a nil tracer is a ~4ns no-op, so untraced runs pay
+	// nothing. The trace file is observational exhaust, never catalog state.
+	Tracer *gospan.Tracer
 
 	// Settings is the catalog's settings snapshot, injected by the composition root.
 	// SCAN consults it for the D18 ignore list (Settings.MatchIgnore) and the WRITE

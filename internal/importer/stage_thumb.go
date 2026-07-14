@@ -16,7 +16,11 @@ import (
 func (pipe *pipeline) thumb(ctx context.Context, in <-chan *pipelineItem, out chan<- *pipelineItem) error {
 	for item := range in {
 		if !item.isSidecar && !item.rejected && pipe.importer.Thumbnail != nil {
-			pipe.thumbnailOne(item)
+			_, span := pipe.importer.Tracer.Start(item.ctx, "import.thumb")
+			if err := pipe.thumbnailOne(item); err != nil {
+				span.Fail(err)
+			}
+			span.End()
 		}
 		if err := pipe.emit(ctx, out, item); err != nil {
 			return err
@@ -25,25 +29,26 @@ func (pipe *pipeline) thumb(ctx context.Context, in <-chan *pipelineItem, out ch
 	return nil
 }
 
-func (pipe *pipeline) thumbnailOne(item *pipelineItem) {
+func (pipe *pipeline) thumbnailOne(item *pipelineItem) error {
 	reader, closeReader, err := openSeeker(pipe.fsys, item.scanned.relPath)
 	if err != nil {
 		item.logger.Warn("thumbnail: open failed", "path", item.scanned.relPath, "err", err)
 		item.addError("thumb", "read_failed", err.Error())
-		return
+		return err
 	}
 	defer closeReader()
 	generated, err := pipe.importer.Thumbnail.Generate(item.scanned.handler.Thumb, reader, item.assetID)
 	if err != nil {
 		item.logger.Warn("thumbnail generation failed", "path", item.scanned.relPath, "err", err)
 		item.addError("thumb", "decode_failed", err.Error())
-		return
+		return err
 	}
 	if generated {
 		now := time.Now().UTC()
 		item.thumbnailedAt = &now
 		item.logger.Debug("thumbnailed", "path", item.scanned.relPath, "assetID", item.assetID)
 	}
+	return nil
 }
 
 // thumbnail generates the thumbnail for a freshly written asset and records

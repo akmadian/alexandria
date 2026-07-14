@@ -13,3 +13,7 @@ _assets/
 # Root binary from a bare `go build .` (wails build outputs to build/bin)
 /alexandria
 /generate
+
+# Local Go workspace (gospan validation loop — CI resolves gospan from GitHub)
+/go.work
+/go.work.sum
