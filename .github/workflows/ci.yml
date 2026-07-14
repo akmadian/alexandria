@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       # Install the pinned binary only; `make lint-backend` is the single, scoped
@@ -118,7 +118,7 @@ jobs:
     # webkit2gtk-4.1 only → the Makefile builds with -tags webkit2_41.
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install webkit build dependencies
