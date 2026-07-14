@@ -3,6 +3,10 @@
 - If we can reasonably and effectively do something within alexandria, we probably should. An example is maybe text file editing, markdown rendering, etc.
 
 
+## Backend Quick Items
+- Probably pull default settings sets out into a defaults.go instead of having them in settings.go. Settings.go should be machinery, probably not cluttered with data that isn't actually core to its function
+
+
 ## Other
 - Asset groups - this can probably be a background job once importer completes. It's basically a matching problem, same as the importer matcher, just on a full set of files from the import, over the db connection. Right?
 
@@ -14,16 +18,6 @@ Sweeps/ Audits
 - Ideally, everything in coding guidelines should be enforced by linter checks. We should check the doc against the existing rules - when we have an enforced rule, the doc section about it is redundant and should be removed. Goal is to interrogate every rule and convention to the point where we completely empty the coding guidelines doc. Some things are too large conceptually for a linter (it's hard to write a linter rule for "good testability"), and that's fine. We probably won't completely empty it, but we should pare it down significantly and have it only discuss real invariants and ideas. Anything testable/lintable should be tested and linted automatically.
 - Look around deeply, identify opportunities and pathways for integration tests
 
-Settings
-- Probably pull default settings sets out into a defaults.go instead of having them in settings.go. Settings.go should be machinery, probably not cluttered with data that isn't actually core to its function
-
-- FEAT: Maybe want to support annotations? Like users can click on an image to point to a specific thing, then take notes on that thing?
-
-Docs
-- Write a contributing guide when we're getting ready to open up to contributions. This should come with issue and PR templates, branch protection, etc.
-- Write feature add runbooks where standard shape exists (add new filetype, promote field from json extraMetadata blob to db column)
-
-
 Dev Window for Wails
 - Should open as a separate window that can be seen alongside the app content, should not cover app content. App should be fully interactive and such while the dev window is open.
 - Events
@@ -34,6 +28,8 @@ Dev Window for Wails
 
 
 ## App UI Thingies
+
+- FEAT: Maybe want to support annotations? Like users can click on an image to point to a specific thing, then take notes on that thing?
 
 ### Aesthetic
 - Frosted glass aesthetic doesn't necessarily require the whole app background to be glass-on-gradient. Pieces that sit on top of flat background can be, within themselves, glass-on-gradient with content on top. 
