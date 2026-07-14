@@ -19,7 +19,10 @@ becomes the first real enrichment kind on the task-18 engine.
   scan remains the authority).
 - **Clear-on-reimport staleness (D28):** the `actionReimport` transaction clears derived
   columns (including `thumbnail_at`) — but keeps the thumbnail file on disk so the grid shows
-  the outdated-but-real thumb until regeneration overwrites it.
+  the outdated-but-real thumb until regeneration overwrites it. The same transaction clears
+  the asset's `enrichment_errors` rows: exhaustion described the OLD bytes, and new bytes must
+  get fresh attempts (surfaced by the task-18 review — without this, a repaired file stays
+  terminally "failed").
 - **Re-derive the impl/04 cancel invariant:** "committed = fully processed" becomes
   "committed = identity + observation complete; enrichment converges." Rewrite the pipeline
   tests that assert thumbnails exist at commit; add the convergence-after-cancel test (cancel

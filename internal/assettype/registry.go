@@ -106,6 +106,16 @@ func IsSupported(ext string) bool {
 	return ok
 }
 
+// All returns a copy of the full handler table. The enrichment job-kind
+// registry evaluates each kind's applicability predicate over this set to
+// derive the extension list its missing-artifact scan filters on — capability
+// truth stays here, in the one table (C10), never duplicated as a second list.
+func All() []Handler {
+	handlers := make([]Handler, len(registry))
+	copy(handlers, registry)
+	return handlers
+}
+
 // sidecarExts are companion files tracked but never treated as assets. v1 parses
 // only .xmp; the rest are tracked for future features (Apple edits, camera
 // thumbnails, GoPro proxies, other editors' sidecars).

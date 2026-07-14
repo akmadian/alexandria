@@ -47,7 +47,9 @@ rationale lives in `docs/decisions.md` and `docs/data-model.md`.
   `internal/ast` (`ast.Query` → the `Compile*` family). Never hand-write asset WHERE/ORDER BY
   fragments in repos; a new filterable capability is a new vocabulary field + compiler entry,
   never a new query method (C7). `ast` stays pure — no I/O, `now` is a parameter, and it
-  imports `domain` only for enum membership (validate/compile only).
+  imports `domain` only for enum membership (validate/compile only). This governs USER
+  predicates; engine-internal plumbing (the enrichment missing-artifact scan in
+  `sqlite.EnrichmentRepo`) is a sanctioned separate lane — see the D28 dated note.
 - **Events are hints, not facts:** a file event means "go re-examine this path"; truth is
   re-derived from the filesystem via the identity matrix.
 - **Derived state carries a rebuild path:** anything computed (FTS, thumbnails, auto-groups,

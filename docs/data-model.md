@@ -36,6 +36,9 @@ Class assignments by column group:
 - `assets_fts`, thumbnails-on-disk = derived · smart-collection membership = derived-unmaterialized
   (computed at query time; the best kind)
 - `import_sessions`/`import_errors` = system log (importer writes; losable)
+- `enrichment_errors` = system log (the enrichment DLQ, D28 — the engine's writer goroutine
+  writes it; losable: a lost row costs one wasted retry, nothing else). Keyed (asset_id, kind) —
+  post-identity, which is why it is not an `import_errors` extension (that DLQ is path-keyed)
 
 Special cases resolved by the classification:
 
@@ -68,6 +71,7 @@ Special cases resolved by the classification:
 | ~~`asset_groups` / `_members`~~ | — | — | DELETED (D24) — re-derived by the grouping round |
 | `duplicates` | uuid | asset ids (CASCADE) | status · UNIQUE(original, duplicate) |
 | `import_sessions` / `import_errors` | uuid | session_id (CASCADE) | started_at |
+| `enrichment_errors` | (asset_id, kind) | asset_id (CASCADE) | kind · attempts gate the missing-artifact scan (D28) |
 | `assets_fts` | — | external-content on `assets` | trigger-maintained |
 
 **No `settings` or `keybindings` table** (impl/11, supersedes D16's storage mechanism). Both are

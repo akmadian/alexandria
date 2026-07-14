@@ -14,7 +14,9 @@ The seam face of the engine: how the frontend sees enrichment without per-asset 
   state: data present = ready, bit set = enriching, DLQ = failed, neither = pending. Stage
   constants + the field flow through `cmd/generate` (C15) — no hand-written TS.
 - **Failed state**: expose per-asset enrichment errors (kind, reason, attempts) through the
-  existing error/detail read path — decide shape in-task; no new event type.
+  existing error/detail read path — decide shape in-task; no new event type. Derive a
+  **blocked** presentation for descendants of a failed prerequisite (thumbnail exhausted ⇒
+  sharpness reads blocked, not an eternal pending) — surfaced in the task-18 design round.
 - **Aggregate events only** (C9): enrichment progress rides `jobs/progress` with a queue-depth
   payload extension (throttled ticks); completion batches ride `catalog/changed`. Write
   ordering (DB → clear bit → emit) means an invalidation never yields a stale re-fetch.

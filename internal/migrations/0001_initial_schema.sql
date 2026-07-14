@@ -263,6 +263,25 @@ CREATE TABLE IF NOT EXISTS import_errors (
 
 CREATE INDEX IF NOT EXISTS idx_import_errors_session ON import_errors(session_id);
 
+-- The enrichment DLQ (D28): one row per (asset, kind) failure. Deliberately NOT
+-- an import_errors extension — import failures are path-keyed (pre-identity),
+-- enrichment failures are (asset, kind)-keyed (post-identity). "Absence is
+-- ambiguous" is why this table exists: a missing artifact means "not yet"
+-- UNLESS a row here says "tried and failed"; the missing-artifact scan skips
+-- attempt-exhausted rows so a corrupt file never spins forever, and the UI
+-- renders failed instead of an eternal spinner.
+CREATE TABLE IF NOT EXISTS enrichment_errors (
+    asset_id        TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL,          -- job-kind registry key, e.g. 'thumbnail'
+    reason_code     TEXT NOT NULL,          -- machine-readable taxonomy, e.g. 'decode_failed'
+    message         TEXT NOT NULL,          -- raw error
+    attempts        INTEGER NOT NULL DEFAULT 1,
+    last_attempt_at TEXT NOT NULL,
+    PRIMARY KEY (asset_id, kind)
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrichment_errors_kind ON enrichment_errors(kind);
+
 -- Settings are NOT stored in the catalog DB. They live as plain JSON files
 -- (settings.json in the catalog dir, machine.json/keybindings.json in the app
 -- config dir) — see internal/settings and impl/11. The old `settings` KV table

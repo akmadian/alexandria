@@ -520,3 +520,22 @@ fetch requires explicit consent + checksum verification).
 
 **Trigger:** the first feature that needs a second external tool (video thumbnails/metadata →
 ffmpeg is the likely first), or the packaging round deciding to bundle/offer managed installs.
+
+---
+
+## 11. Per-device I/O awareness — enrichment I/O tokens are per-source, no path-ordered reads
+
+**Surfaced:** task 18 build round (2026-07-13, Ari + Claude), simplifying D28's "per-device I/O
+tokens: HDD depth ~2, SSD dozens; backlog reads path-ordered."
+
+`internal/enrichment` caps concurrent producer reads with **one token pool per source**
+(`machine.json` `enrichment.ioTokens`, default 4) — a source approximates a device well enough
+for v1. What was deliberately NOT built: real device detection (spinning vs solid state — and
+beyond that the connection-type swamp: SATA vs SAS vs Thunderbolt 3/5 vs USB 2/3, network mounts;
+per-OS IOKit/sysfs code with no stdlib path), a path→device mapping, and path-ordered backlog
+reads (a seek optimization that only pays on spinning media, so it defers with the detection that
+would justify it — the cold backlog orders by import recency, per the same D28).
+
+**Trigger:** real-hardware evidence that enrichment scans crawl on spinning or external media —
+a user report or a trace file showing producer read-wait dominating on an HDD source. Then build
+detection + depth policy as its own layer; the token seam it feeds already exists.

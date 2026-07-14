@@ -36,6 +36,7 @@ type Settings struct {
 // Machine is machine-scoped, at <app-config-dir>/machine.json.
 type Machine struct {
 	Workers         WorkerCounts      `json:"workers"`
+	Enrichment      EnrichmentConfig  `json:"enrichment"`
 	DependencyPaths map[string]string `json:"dependencyPaths,omitempty"`
 	OpenInApps      map[string]string `json:"openInApps,omitempty"`
 }
@@ -43,6 +44,10 @@ type Machine struct {
 // WorkerCounts nests per pipeline — the nesting IS the "Ingest" prefix, for free.
 type WorkerCounts struct {
 	Ingest IngestWorkers `json:"ingest"`
+	// Enrichment is keyed by job-kind registry name (D28: "Workers.Enrichment.<kind>").
+	// The kind set is open — task 19/20 add rows — so this is a map, not a struct.
+	// A missing or non-positive entry falls back to the registry row's default.
+	Enrichment map[string]int `json:"enrichment,omitempty"`
 }
 
 type IngestWorkers struct {
@@ -50,6 +55,27 @@ type IngestWorkers struct {
 	Extract int `json:"extract"`
 	Thumb   int `json:"thumb"`
 }
+
+// EnrichmentConfig is the machine-scoped enrichment engine tuning (D28).
+type EnrichmentConfig struct {
+	// Effort is the user-facing trust lever: paused | low | normal | full.
+	// It maps to CPU-budget token counts inside internal/enrichment; admission
+	// control is the only throttle Go offers (you cannot nice a goroutine).
+	Effort string `json:"effort"`
+	// IOTokens caps concurrent producer reads per source. ponytail: per-SOURCE,
+	// not per-device — real device awareness (spinning vs solid state, SATA vs
+	// Thunderbolt vs USB…) is a detection layer of its own, deferred until slow
+	// scans on real hardware ask for it (DEFERRED §11).
+	IOTokens int `json:"ioTokens"`
+}
+
+// Effort dial levels (validated by sanitizeMachine; consumed by internal/enrichment).
+const (
+	EffortPaused = "paused"
+	EffortLow    = "low"
+	EffortNormal = "normal"
+	EffortFull   = "full"
+)
 
 // Keybindings is user-scoped, at <app-config-dir>/keybindings.json. Overrides
 // only — the backend never interprets a commandID or chord, that vocabulary is
@@ -71,8 +97,13 @@ func DefaultSettings() Settings {
 }
 
 // DefaultMachine — worker defaults mirror importer.defaultPools (hash=4/extract=2/thumb=2).
+// Enrichment worker counts deliberately have NO defaults here: the job-kind
+// registry row owns each kind's default, and this map only overrides it.
 func DefaultMachine() Machine {
-	return Machine{Workers: WorkerCounts{Ingest: IngestWorkers{Hash: 4, Extract: 2, Thumb: 2}}}
+	return Machine{
+		Workers:    WorkerCounts{Ingest: IngestWorkers{Hash: 4, Extract: 2, Thumb: 2}},
+		Enrichment: EnrichmentConfig{Effort: EffortNormal, IOTokens: 4},
+	}
 }
 
 // Service is the composition root's single handle onto all three files.
@@ -162,5 +193,25 @@ func sanitizeMachine(machine Machine, logger *log.Logger) Machine {
 	clamp("workers.ingest.hash", &ingest.Hash, defaults.Hash)
 	clamp("workers.ingest.extract", &ingest.Extract, defaults.Extract)
 	clamp("workers.ingest.thumb", &ingest.Thumb, defaults.Thumb)
+
+	enrichmentDefaults := DefaultMachine().Enrichment
+	switch machine.Enrichment.Effort {
+	case EffortPaused, EffortLow, EffortNormal, EffortFull:
+	default:
+		if machine.Enrichment.Effort != "" {
+			logger.Debug("machine: unknown enrichment effort, using default", "got", machine.Enrichment.Effort)
+		}
+		machine.Enrichment.Effort = enrichmentDefaults.Effort
+	}
+	clamp("enrichment.ioTokens", &machine.Enrichment.IOTokens, enrichmentDefaults.IOTokens)
+	// Per-kind worker overrides: a non-positive override means "unset" — drop it
+	// so the registry row's default applies (same convention as the clamps above,
+	// but the fallback lives in the registry, not here).
+	for kind, count := range machine.Workers.Enrichment {
+		if count <= 0 {
+			logger.Debug("machine: non-positive enrichment worker count, using registry default", "kind", kind, "got", count)
+			delete(machine.Workers.Enrichment, kind)
+		}
+	}
 	return machine
 }

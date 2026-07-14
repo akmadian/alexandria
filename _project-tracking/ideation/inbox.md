@@ -5,7 +5,7 @@
 
 ## Backend Quick Items
 - Probably pull default settings sets out into a defaults.go instead of having them in settings.go. Settings.go should be machinery, probably not cluttered with data that isn't actually core to its function
-
+- Refactor *_errors tables to *_errors_dlq? to be clear it's a dlq
 
 ## Other
 - Asset groups - this can probably be a background job once importer completes. It's basically a matching problem, same as the importer matcher, just on a full set of files from the import, over the db connection. Right?
@@ -30,6 +30,11 @@ Dev Window for Wails
 ## App UI Thingies
 
 - FEAT: Maybe want to support annotations? Like users can click on an image to point to a specific thing, then take notes on that thing?
+
+
+### Experience References
+- Photos: LrC
+- Fonts: MacOS FontBook
 
 ### Aesthetic
 - Frosted glass aesthetic doesn't necessarily require the whole app background to be glass-on-gradient. Pieces that sit on top of flat background can be, within themselves, glass-on-gradient with content on top. 

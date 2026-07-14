@@ -704,6 +704,36 @@ that thumbnail re-decode dominates a signal's cost; per-artifact provenance stam
 clear-on-reimport proves too coarse in practice; the effort dial's shape (token counts per
 level) is implementation detail, tune freely.
 
+*(2026-07-13, task-18 build round — the engine landed as specced; three in-round calls worth
+recording. **Engine scans are a different lane than the query authority:** the missing-artifact
+scan and eligibility probe are hand-written SQL in `sqlite.EnrichmentRepo`, deliberately NOT
+routed through `internal/ast` — the AST is the user-predicate contract between frontend and
+catalog; engine plumbing (DLQ anti-joins, artifact-column probes) must never leak into that
+grammar, and the AST must never care about engine internals. The artifact-column allowlist in
+that repo is what stands between registry data and the SQL. **I/O tokens shipped per-source,
+not per-device** — device detection is its own layer (DEFERRED §11 has the trigger); path-
+ordered backlog reads deferred with it. **Jumbo weights clamp to the dialed capacity**, so an
+over-budget job serializes against everything rather than deadlocking against tokens the
+effort level will never release; the effort→token mapping (full/half/quarter of NumCPU) is a
+stated assumption awaiting the gospan samples-table calibration (D30).)*
+
+*(2026-07-14, the naming-and-structure round (Ari) — the engine re-grounded in its own graph
+model before anything shipped on it. **Vocabulary:** the registry row is a `JobDefinition`
+(node); a `job` is one execution (its identity `JobKey{AssetID, Kind}` — the operand is the
+ASSET; "artifact" vocabulary stays on the catalog side, where the artifact actually lives);
+queues hold jobs; workers run them; `KindSet` replaces the pipeline-borrowed "Stage" for the
+tracker bitmask. **Structure:** the hand-rolled hot/cold lists (steal flags, husk discard,
+served-dedup — a bespoke reimplementation of heap.Fix) were replaced with one
+`container/heap` per node whose `Less` is the composite key (hinted band, hint order, import
+recency) — §7's use-the-stdlib rule, enforced late; the pre-commit checklist now flags
+bespoke stdlib-container reimplementations. **Edge emission:** an applied completion enqueues
+the node's dependents directly (inheriting the asset's live hint priority — the fast track
+carries through the graph at every step); scans demote to authority, cold start, and refill.
+**Artifact handoff:** producers' outputs never ride queues (retained memory outside admission
+control, and edges are claims — rescan recovery needs the disk path regardless); when the
+fusion trigger's measurements arrive, the sanctioned shapes are a bounded lookaside cache or
+decode fusion.)*
+
 ## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
 
 The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —
