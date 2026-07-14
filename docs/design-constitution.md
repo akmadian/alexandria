@@ -84,7 +84,7 @@ collision review. The ledger:
 | Accent (user-picked from the named scales; default blue — ratified 2026-07-13) | Functional signal: focus ring, drop-target fill, toggles-on, links | Outline-first; drop-target is its only large fill | Every offered hue must pass ring contrast on all four themes (validator-gated picker); gray excluded; hue-sharing with a label is lawful — accent and labels are style-disjoint |
 | Attention (user-picked from tag palette; default **PIN**) | "Needs a human decision" (§10) | Dot/outline (advisory) → tint/fill (blocking) | One hue for ALL attention states; identity via glyph + word, never hue |
 | Error red | Invalid input (forms, chips) | Field hairline + message row | Conventional; independent of attention choice |
-| Fun layer (§17) | Delight: an injected overlay, not core chrome | Registered sites only: hero CTA, marquee progress, joy moments (§16) | One per view, area-capped, never adjacent to stage/cells |
+| Fun layer (§17) | Delight: an injected overlay, not core chrome | Registered sites only (the `funSites` registry; admission by the wit rule, §17) | One per view, area-capped, never adjacent to stage/cells |
 
 Hue-as-state is budgeted, not banned; small, critically evaluated doses enter as rows.
 
@@ -289,7 +289,13 @@ of dots; the photographic print vernacular. Rules:
 
 - Joy lives in **the voids**: empty states, first-run, long-operation moments,
   completion, about. Never on the working surface mid-task; one joy moment at a time.
-- Media: generative dot/halftone art, Instrument Serif italic, Geist Pixel.
+- Media (extended 2026-07-13): generative dot/halftone art; **public-domain
+  classical art passed through the dot screen** (dithered/halftone — the reference
+  must be earned by the moment, §17's wit rule: the handoff hands at handoff time);
+  **interactive dot art** (voids that respond to the cursor — alive, not animated);
+  **illustrative modern skeuomorphism** (the archive's physical hardware — drives,
+  discs, circuit boards — as portraits inside joy sites and About/Storage, never as
+  interactive chrome); Instrument Serif italic; Geist Pixel.
   **Never the user's own photos** (custody: dithering their work is modifying it).
 - Empty states are invitations to act (§18), with the art as setting, not message.
 - Everything respects `prefers-reduced-motion` by construction.
@@ -303,15 +309,41 @@ delight; chrome works identically with the layer stripped. Its ledger row (§5) 
 the site registry, which closes the hue-accounting question: fun is one budgeted
 row, not a per-effect debate.
 
-- **Registered sites:** primary call-to-action (the hero rung = fill + fun overlay,
-  §4); marquee progress (the one long job the user is actively awaiting); joy
-  moments (§16). Dots remain the *ambient* progress voice; the light-bar is the
-  marquee only — one sentence, two progress languages prevented.
+**The wit rule (ratified 2026-07-13) — the admission test for every fun moment:
+the moment must reference its own meaning.** The art knows what is happening: the
+lighthouse sweeps while the app searches; the handoff painting appears at handoff
+time; scramble text runs while something indexes. Decoration that doesn't know
+what's happening — a gradient because gradients are nice — fails the gate
+regardless of beauty. Because moments are tied to real events, reality itself
+rations them: the UI can never become a grab bag of effects.
+
+- **Registered sites** (the `funSites` registry rows; populated 2026-07-13):
+  - *boot-splash* — the flagship: the Pharos greeting whose beam sweep IS the
+    progress indicator (the lighthouse searching for your files). **The art never
+    costs a millisecond**: duration = actual load, a fast catalog gets a glimpse,
+    instant = skipped. Designed for the 500th launch, not the first; the full
+    theatrical form belongs to naturally-slow moments (first-run, cold start).
+  - *hero-cta* — the primary call-to-action (the hero rung = fill + fun overlay,
+    §4), **including its press payoff**: a one-shot bloom that hands off visibly
+    to the marquee. One firework at the launch pad, not sparklers on every
+    switch; ordinary chrome stays dry.
+  - *marquee-progress* — the one long job the user is actively awaiting. Dots
+    remain the *ambient* progress voice; the light-bar is the marquee only — one
+    sentence, two progress languages prevented.
+  - *announcement-sweep* — "something new exists here": one transient lap of
+    gradient around the thing's outline, then settled and gone. The fun layer's
+    answer to a notification — runs once, never loops, never nags.
+  - *slide-commit* — deliberate commitment rendered physically: the glass tray +
+    puck slid to start a heavyweight or irreversible operation. Safety pattern
+    and fun moment in one body; reserved for actions whose weight warrants
+    friction.
+  - *joy-moment* — the §16 voids (empty states, first-run, completion, about).
 - One per view, area-capped, never adjacent to stage or cells (§11), static under
   reduced motion. Glass is lawful only here and on transients ("glass = transient or
   fun").
 - Tokens: the palette-indexed gradient, flow duration/easing, glass face recipe
-  (blur/saturate/face-alpha/inset highlights), glow halo (**PIN** values).
+  (blur/saturate/face-alpha/inset highlights), glow halo (**PIN** values — the
+  fun-layer probe page is the pinning instrument).
 
 ### §18 Writing
 
@@ -500,6 +532,13 @@ on re-inventing mechanics users already know.
   gray excluded from accent and attention. Selected register = +2 steps (findable
   at a glance). Placeholder ink = ink.4 (two steps below its label). Row intents
   `row-control`/`row-text` (§8). Register-step quantum tokenized per world.
+- Ratified 2026-07-13 (the art-and-joy round): the wit rule as §17's admission
+  test. The fun-site registry populated: boot-splash (the Pharos, chosen as the
+  mark; art never costs a millisecond), hero-cta press payoff, announcement-sweep,
+  slide-commit, marquee light-bar. §16 media extended: dithered public-domain
+  classical art, interactive dot art, illustrative modern skeuomorphism (never
+  interactive chrome). Decorated/hued icons deferred to the iconography round
+  carrying the hypothesis: display-scale choice moments only, never working rows.
 
 ---
 
@@ -525,8 +564,10 @@ validator + the 1× eyeball test on the Library-view mock (with the
 7. *(closed 2026-07-13 — the twelve named hue scales, labels-as-solids, attention =
    magenta, error = red scale all live in the token source; survives only as
    validator re-checks)*
-8. Fun-layer recipe values; dot-matrix loader mapping table (domain state →
-   loader).
+8. Fun-layer recipe values (the scenario/site registry closed 2026-07-13 — the
+   wit rule and six sites are law; the RECIPES are the open half:
+   gradient palette-indexing, glass, glow halo — `library/fun-probe.html` is the
+   pinning instrument); dot-matrix loader mapping table (domain state → loader).
 9. Icon stroke constant; focus-ring width/offset.
 
 Empirical gates before values freeze: the white-vs-dark well A/B on the mock; the

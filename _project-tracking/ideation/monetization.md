@@ -8,6 +8,7 @@ How?
 
 Payment processors
 - Lemon Squeezy probably best
+- Github sponsors?
 
 Ethical Tenets
 - No DRM, no "phone home" license checking. No paywall gated features, no subsidization via training AI models with your data.

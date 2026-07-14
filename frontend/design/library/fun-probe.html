@@ -1,0 +1,300 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Alexandria fun-layer probe — §17/§30.8 pinning instrument</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Pixel"; src: url("fonts/GeistPixel.woff2") format("woff2"); }
+  @font-face { font-family: "Instrument Serif"; src: url("fonts/InstrumentSerif-Italic.ttf") format("truetype"); font-style: italic; }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: oklch(0.90 0 0); font-family: Geist, sans-serif; padding: 24px; display: flex; gap: 16px; flex-wrap: wrap; align-content: flex-start; }
+  .card { background: oklch(0.975 0 0); border: 1px solid oklch(0.885 0 0); border-radius: 8px; padding: 16px; width: 430px; color: oklch(0.25 0 0); }
+  .card.dark { background: oklch(0.215 0 0); border-color: oklch(0.32 0 0); color: oklch(0.90 0 0); }
+  .card.void { background: oklch(0.13 0 0); border-color: oklch(0.26 0 0); color: oklch(0.90 0 0); }
+  h2 { font-size: 12px; font-weight: 600; line-height: 16px; }
+  .note { font-size: 10px; color: oklch(0.56 0 0); font-family: "Geist Mono", monospace; margin: 2px 0 10px; line-height: 14px; }
+  .dark .note, .void .note { color: oklch(0.635 0 0); }
+  .mono { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  /* ---------- hero CTA: gradient + glass + glow ---------- */
+  .cta { position: relative; display: inline-flex; align-items: center; justify-content: center;
+    height: 28px; padding: 0 16px; border: none; border-radius: 999px; cursor: pointer;
+    font: 500 12px/16px Geist, sans-serif; color: oklch(0.22 0 0); overflow: visible; isolation: isolate; }
+  .cta .flow { position: absolute; inset: 0; border-radius: inherit; z-index: -2; background-size: 300% 100%;
+    animation: flow 7s linear infinite; }
+  .cta .face { position: absolute; inset: 0; border-radius: inherit; z-index: -1;
+    backdrop-filter: blur(10px) saturate(1.3); background: oklch(1 0 0 / 0.30);
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.3), inset 0 0 0 1px oklch(1 0 0 / 0.14); }
+  .cta.A .flow { background-image: linear-gradient(100deg, oklch(0.80 0.12 305), oklch(0.84 0.11 20), oklch(0.83 0.13 65), oklch(0.80 0.12 305)); }
+  .cta.A { box-shadow: 0 2px 16px oklch(0.78 0.12 340 / 0.45); }
+  .cta.B .flow { background-image: linear-gradient(100deg, oklch(0.72 0.16 15), oklch(0.80 0.14 95), oklch(0.72 0.14 165), oklch(0.68 0.14 255), oklch(0.70 0.15 315), oklch(0.72 0.16 15)); }
+  .cta.B { box-shadow: 0 2px 16px oklch(0.70 0.14 285 / 0.45); }
+  .cta:hover { filter: brightness(1.02); }
+  .cta:hover.A { box-shadow: 0 2px 22px oklch(0.78 0.12 340 / 0.60); }
+  .cta:hover.B { box-shadow: 0 2px 22px oklch(0.70 0.14 285 / 0.60); }
+  .cta.bare { color: oklch(1 0 0); text-shadow: 0 1px 2px oklch(0 0 0 / 0.3); }
+  .cta.bare .face { display: none; }
+  .cta.bare.A { color: oklch(0.25 0 0); text-shadow: none; } /* pastel face = the amber/lime inversion lesson: dark on-solid */
+  @keyframes flow { to { background-position: 300% 0; } }
+
+  /* press payoff: one-shot bloom, then hand off to the mini marquee */
+  .cta.payoff { animation: press 480ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .cta.payoff::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; z-index: -3;
+    animation: bloom 640ms cubic-bezier(0.16, 1, 0.3, 1) forwards; box-shadow: 0 0 0 oklch(0.78 0.13 320 / 0.7); }
+  @keyframes press { 0% { transform: scale(1); } 30% { transform: scale(0.97); } 100% { transform: scale(1); } }
+  @keyframes bloom { 0% { box-shadow: 0 0 8px 2px oklch(0.78 0.13 320 / 0.7); opacity: 1; }
+    100% { box-shadow: 0 0 36px 14px oklch(0.78 0.13 320 / 0); opacity: 0; } }
+  .relay { display: inline-flex; align-items: center; gap: 8px; margin-left: 14px; opacity: 0; transition: opacity 240ms; vertical-align: middle; }
+  .relay.on { opacity: 1; }
+
+  /* ---------- marquee light-bar ---------- */
+  .ticks { display: flex; justify-content: space-between; font: 10px/14px "Geist Mono", monospace; color: oklch(0.56 0 0); padding: 0 2px; }
+  .track { position: relative; height: 12px; border-radius: 999px; background: oklch(0.30 0 0); overflow: visible; }
+  .card:not(.dark):not(.void) .track { background: oklch(0.885 0 0); }
+  .bar { position: absolute; inset: 2px auto 2px 2px; width: 40%; border-radius: 999px; }
+  .bar.white { background: oklch(0.99 0 0); box-shadow: 0 0 10px 1px oklch(0.99 0 0 / 0.9), 0 0 28px 6px oklch(0.99 0 0 / 0.45); }
+  .bar.grad { background: linear-gradient(90deg, oklch(0.72 0.16 15), oklch(0.80 0.14 95), oklch(0.72 0.14 165)); background-size: 300% 100%; animation: flow 7s linear infinite;
+    box-shadow: 0 0 10px 1px oklch(0.75 0.14 60 / 0.8), 0 0 28px 6px oklch(0.75 0.14 60 / 0.4); }
+  .bar.anim { animation: fill 6s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+  .bar.grad.anim { animation: fill 6s cubic-bezier(0.16, 1, 0.3, 1) infinite, flow 7s linear infinite; }
+  @keyframes fill { 0% { width: 4%; } 70% { width: 82%; } 92% { width: 96%; } 100% { width: 96%; } }
+  .readout { display: flex; justify-content: space-between; font: 11px/16px "Geist Mono", monospace; margin-top: 6px; }
+
+  /* ---------- announcement sweep ---------- */
+  @property --sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+  .sweepable { position: relative; border-radius: 4px; padding: 1px; background: oklch(0.885 0 0); }
+  .dark .sweepable { background: oklch(0.38 0 0); }
+  .sweepable.go { animation: sweepfade 1400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    background: conic-gradient(from var(--sweep),
+      transparent 0turn, transparent 0.62turn,
+      oklch(0.72 0.16 15) 0.70turn, oklch(0.80 0.14 95) 0.78turn, oklch(0.70 0.14 210) 0.86turn, oklch(0.70 0.15 315) 0.94turn,
+      transparent 1turn); }
+  @keyframes sweepfade { 0% { --sweep: 0deg; } 75% { --sweep: 360deg; } 100% { --sweep: 360deg; } }
+  .sweep-inner { border-radius: 3px; background: oklch(0.975 0 0); display: flex; align-items: center; height: 28px; padding: 0 12px; font-size: 12px; line-height: 16px; gap: 8px; }
+  .dark .sweep-inner { background: oklch(0.215 0 0); }
+  .replay { font: 11px/16px "Geist Mono", monospace; color: oklch(0.45 0 0); background: none; border: 1px solid oklch(0.80 0 0); border-radius: 4px; padding: 2px 8px; cursor: pointer; margin-top: 10px; }
+  .dark .replay, .void .replay { color: oklch(0.74 0 0); border-color: oklch(0.42 0 0); }
+
+  /* ---------- slide-commit ---------- */
+  .tray { position: relative; width: 280px; height: 40px; border-radius: 999px;
+    background: oklch(0.93 0 0 / 0.55); backdrop-filter: blur(8px);
+    box-shadow: inset 0 2px 6px oklch(0 0 0 / 0.16), inset 0 -1px 0 oklch(1 0 0 / 0.7), 0 1px 0 oklch(1 0 0 / 0.6);
+    user-select: none; touch-action: none; }
+  .chev { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: "Geist Pixel", monospace; font-size: 14px; letter-spacing: 6px; color: oklch(0.68 0 0);
+    padding-left: 40px; transition: opacity 200ms; }
+  .puck { position: absolute; top: 4px; left: 4px; width: 32px; height: 32px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, oklch(1 0 0), oklch(0.93 0 0));
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.25), 0 4px 10px oklch(0 0 0 / 0.12), inset 0 -1px 2px oklch(0 0 0 / 0.08);
+    cursor: grab; }
+  .puck:active { cursor: grabbing; }
+  .tray.done .chev { opacity: 0; }
+  .tray.done { animation: traybloom 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  @keyframes traybloom { 0% { box-shadow: inset 0 2px 6px oklch(0 0 0 / 0.16), 0 0 0 oklch(0.78 0.13 320 / 0); }
+    30% { box-shadow: inset 0 2px 6px oklch(0 0 0 / 0.10), 0 0 26px 6px oklch(0.78 0.13 320 / 0.5); }
+    100% { box-shadow: inset 0 2px 6px oklch(0 0 0 / 0.16), 0 0 0 oklch(0.78 0.13 320 / 0); } }
+  .tray-label { font-size: 12px; line-height: 16px; margin-top: 10px; color: oklch(0.42 0 0); min-height: 16px; }
+
+  /* ---------- boot splash ---------- */
+  .splash { position: relative; border-radius: 6px; overflow: hidden; background: #060608; height: 230px; }
+  .splash iframe { width: 900px; height: 560px; border: 0; display: block; pointer-events: none;
+    margin: -130px 0 0 -251px; } /* crop the artifact's own dev panel; show the tower */
+  .splash .veil { position: absolute; inset: auto 0 0 0; padding: 14px 16px 12px; background: linear-gradient(transparent, #060608 55%); }
+  .wordmark { font: italic 400 26px/30px "Instrument Serif", serif; color: oklch(0.93 0 0); letter-spacing: 0.01em; }
+  .boot-line { display: flex; justify-content: space-between; font: 10px/14px "Geist Mono", monospace; color: oklch(0.635 0 0); margin: 6px 0 6px; }
+  .boot-track { height: 4px; border-radius: 999px; background: oklch(0.30 0 0); position: relative; }
+  .boot-bar { position: absolute; inset: 0 auto 0 0; width: 8%; border-radius: 999px; background: oklch(0.99 0 0);
+    box-shadow: 0 0 8px 1px oklch(0.99 0 0 / 0.8); transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+  /* ---------- interactive dot void ---------- */
+  canvas.void-art { display: block; width: 100%; height: 190px; border-radius: 6px; background: oklch(0.13 0 0); }
+  .void-caption { text-align: center; margin-top: 10px; }
+  .void-caption .serif { font: italic 400 16px/22px "Instrument Serif", serif; color: oklch(0.88 0 0); }
+  .void-caption .pixel { font-family: "Geist Pixel", monospace; font-size: 10px; color: oklch(0.56 0 0); margin-top: 4px; letter-spacing: 0.08em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cta .flow, .bar, .tray.done, .cta.payoff, .cta.payoff::after { animation: none !important; }
+    .sweepable.go { animation: none !important; background: oklch(0.885 0 0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>1 · Hero CTA — gradient + glass + glow</h2>
+  <div class="note">RECIPE · ONE PALETTE FEEDS ALL THREE — A: prev-iteration pastel (milky, hue-clipped) · B: palette-indexed full lap (tokens.fun.gradient hypothesis). CLICK = the press payoff: one-shot bloom, visible relay to the marquee.</div>
+  <div style="display:flex;align-items:center;margin:14px 0">
+    <button class="cta A payoffable">Import 1,204 assets</button>
+    <span class="relay"><span style="position:relative;display:inline-block;width:90px;height:8px;border-radius:999px;background:oklch(0.885 0 0)"><span class="bar white anim" style="inset:1px auto 1px 1px"></span></span><span class="mono" style="font-size:10px;color:oklch(0.56 0 0)">ingesting…</span></span>
+  </div>
+  <div style="display:flex;align-items:center;margin:14px 0">
+    <button class="cta B payoffable">Import 1,204 assets</button>
+  </div>
+  <div class="note" style="margin-top:12px">same two, glass face stripped (the bare fill+flow rung underneath):</div>
+  <div style="display:flex;gap:12px;margin-top:8px">
+    <button class="cta A bare">Begin import</button>
+    <button class="cta B bare">Begin import</button>
+  </div>
+</div>
+
+<div class="card dark">
+  <h2>1b · Hero CTA on Carbon</h2>
+  <div class="note">the same recipes against the dark world — does the glow read as light, not smear?</div>
+  <div style="display:flex;gap:12px;margin:14px 0">
+    <button class="cta A payoffable">Import 1,204 assets</button>
+  </div>
+  <div style="display:flex;gap:12px;margin:14px 0">
+    <button class="cta B payoffable">Import 1,204 assets</button>
+  </div>
+  <div style="display:flex;gap:12px;margin-top:12px">
+    <button class="cta A bare">Begin import</button>
+    <button class="cta B bare">Begin import</button>
+  </div>
+</div>
+
+<div class="card dark">
+  <h2>2 · Marquee light-bar — the one long job</h2>
+  <div class="note">GLOW = INDICATOR LIGHT, NOT DECORATION — white bar (charging-widget voice) vs palette bar. Mono instrument scale above, truth readout below.</div>
+  <div class="ticks"><span>0</span><span>50</span><span>100</span></div>
+  <div class="track"><div class="bar white anim"></div></div>
+  <div class="readout"><span>ingesting · 4,981 / 12,041</span><span>41%</span></div>
+  <div style="height:14px"></div>
+  <div class="ticks"><span>0</span><span>50</span><span>100</span></div>
+  <div class="track"><div class="bar grad anim"></div></div>
+  <div class="readout"><span>ingesting · 4,981 / 12,041</span><span>41%</span></div>
+</div>
+
+<div class="card">
+  <h2>3 · Announcement sweep — “something new exists here”</h2>
+  <div class="note">one gradient lap around the outline, then settled and gone. runs once, never loops, never nags.</div>
+  <div class="sweepable" id="sweep1"><div class="sweep-inner"><span style="font-weight:500">Dolomites import</span><span class="mono" style="margin-left:auto;font-size:11px;color:oklch(0.56 0 0)">1,204 added</span></div></div>
+  <button class="replay" onclick="replaySweep('sweep1')">replay</button>
+</div>
+
+<div class="card dark">
+  <h2>3b · Announcement sweep, Carbon</h2>
+  <div class="note">the same lap on the dark world.</div>
+  <div class="sweepable" id="sweep2"><div class="sweep-inner"><span style="font-weight:500">Reconciliation finished</span><span class="mono" style="margin-left:auto;font-size:11px;color:oklch(0.685 0 0)">3 to review</span></div></div>
+  <button class="replay" onclick="replaySweep('sweep2')">replay</button>
+</div>
+
+<div class="card">
+  <h2>4 · Slide-commit — weight rendered physically</h2>
+  <div class="note">glass concave tray + marble puck + pixel chevrons. drag the puck to the end to start; commitment blooms once.</div>
+  <div class="tray" id="tray">
+    <div class="chev">›&nbsp;›&nbsp;›</div>
+    <div class="puck" id="puck"></div>
+  </div>
+  <div class="tray-label" id="trayLabel">Slide to import 12,041 assets</div>
+  <button class="replay" onclick="resetTray()">reset</button>
+</div>
+
+<div class="card void">
+  <h2>5 · Boot splash — the Pharos greeting</h2>
+  <div class="note">positioning mock around the proven art (assets/pharos.html, refinement run pending). the beam searches; the instrument line tells the truth; the bar is honest.</div>
+  <div class="splash">
+    <iframe src="assets/pharos.html" scrolling="no"></iframe>
+    <div class="veil">
+      <div class="wordmark">Alexandria</div>
+      <div class="boot-line"><span id="bootMsg">opening catalog</span><span class="mono" id="bootPct">0%</span></div>
+      <div class="boot-track"><div class="boot-bar" id="bootBar"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card void">
+  <h2>6 · The interactive void — dot art that notices you</h2>
+  <div class="note">alive, not animated: the dots respond to the cursor (Basedash idiom). media slot for the dithered classical piece goes through the same screen.</div>
+  <canvas class="void-art" id="voidArt"></canvas>
+  <div class="void-caption">
+    <div class="serif">Your library is empty</div>
+    <div class="pixel">DROP A FOLDER · OR CMD+I TO IMPORT</div>
+  </div>
+</div>
+
+<script>
+  // press payoff + relay
+  document.querySelectorAll(".payoffable").forEach(function (b) {
+    b.addEventListener("click", function () {
+      b.classList.remove("payoff"); void b.offsetWidth; b.classList.add("payoff");
+      var relay = b.parentElement.querySelector(".relay");
+      if (relay) { relay.classList.add("on"); setTimeout(function () { relay.classList.remove("on"); }, 5200); }
+    });
+  });
+
+  // announcement sweep — one lap, then SETTLE back to the plain hairline
+  function replaySweep(id) {
+    var el = document.getElementById(id);
+    el.classList.remove("go"); void el.offsetWidth; el.classList.add("go");
+  }
+  document.querySelectorAll(".sweepable").forEach(function (el) {
+    el.addEventListener("animationend", function () { el.classList.remove("go"); });
+  });
+  replaySweep("sweep1"); replaySweep("sweep2");
+
+  // slide-commit
+  var tray = document.getElementById("tray"), puck = document.getElementById("puck"), trayLabel = document.getElementById("trayLabel");
+  var dragging = false, max = 280 - 32 - 8;
+  puck.addEventListener("pointerdown", function (e) { if (tray.classList.contains("done")) return; dragging = true; puck.setPointerCapture(e.pointerId); });
+  puck.addEventListener("pointermove", function (e) {
+    if (!dragging) return;
+    var x = Math.min(max, Math.max(0, e.clientX - tray.getBoundingClientRect().left - 20));
+    puck.style.transform = "translateX(" + x + "px)";
+    if (x >= max - 2) { dragging = false; tray.classList.add("done"); puck.style.transform = "translateX(" + max + "px)"; trayLabel.textContent = "Import started — 12,041 assets queued"; }
+  });
+  puck.addEventListener("pointerup", function () {
+    if (!tray.classList.contains("done")) { dragging = false; puck.style.transition = "transform 300ms cubic-bezier(0.16,1,0.3,1)"; puck.style.transform = "translateX(0)"; setTimeout(function () { puck.style.transition = ""; }, 320); }
+  });
+  function resetTray() { tray.classList.remove("done"); puck.style.transform = "translateX(0)"; trayLabel.textContent = "Slide to import 12,041 assets"; }
+
+  // boot splash honest-progress mock
+  var stages = [["opening catalog", 18], ["mounting volumes", 42], ["indexing 12,041 assets", 78], ["warming previews", 96], ["ready", 100]];
+  var si = 0;
+  (function boot() {
+    var s = stages[si % stages.length];
+    document.getElementById("bootMsg").textContent = s[0];
+    document.getElementById("bootPct").textContent = s[1] + "%";
+    document.getElementById("bootBar").style.width = s[1] + "%";
+    si++; setTimeout(boot, s[1] === 100 ? 2600 : 1100);
+  })();
+
+  // interactive dot void — halftone arch that repels around the cursor
+  var cv = document.getElementById("voidArt"), ctx = cv.getContext("2d");
+  var W, H, dots = [], mouse = { x: -999, y: -999 };
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function buildVoid() {
+    W = cv.clientWidth; H = cv.clientHeight; cv.width = W * 2; cv.height = H * 2; ctx.scale(2, 2);
+    dots = [];
+    var step = 7;
+    for (var y = step / 2; y < H; y += step) for (var x = step / 2; x < W; x += step) {
+      // scene: a soft arch (two columns + lintel glow) — luminance drives dot radius
+      var cx = W / 2, l = 0;
+      var dArchL = Math.abs(x - (cx - 52)), dArchR = Math.abs(x - (cx + 52));
+      if (y > 52 && (dArchL < 9 || dArchR < 9)) l = 0.9 - Math.abs(y - 120) / 220;
+      if (y > 38 && y < 56 && Math.abs(x - cx) < 66) l = 0.85;
+      var beam = 1 - Math.hypot(x - cx, y - 26) / 90; if (beam > l) l = beam;
+      if (l > 0.08) dots.push({ x: x, y: y, r: l * 2.6 });
+    }
+  }
+  cv.addEventListener("pointermove", function (e) { var b = cv.getBoundingClientRect(); mouse.x = e.clientX - b.left; mouse.y = e.clientY - b.top; });
+  cv.addEventListener("pointerleave", function () { mouse.x = -999; mouse.y = -999; });
+  function drawVoid() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "oklch(0.88 0 0)";
+    for (var i = 0; i < dots.length; i++) {
+      var d = dots[i], ox = 0, oy = 0;
+      if (!reduced) {
+        var dx = d.x - mouse.x, dy = d.y - mouse.y, dist = Math.hypot(dx, dy);
+        if (dist < 44 && dist > 0.01) { var f = (44 - dist) / 44 * 10; ox = dx / dist * f; oy = dy / dist * f; }
+      }
+      ctx.beginPath(); ctx.arc(d.x + ox, d.y + oy, Math.min(d.r, 3), 0, 6.2832); ctx.fill();
+    }
+    requestAnimationFrame(drawVoid);
+  }
+  buildVoid(); drawVoid();
+  addEventListener("resize", buildVoid);
+</script>
+</body>
+</html>

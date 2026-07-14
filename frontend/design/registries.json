@@ -12,8 +12,15 @@
   },
 
   "funSites": {
-    "$comment": "§17: the fun layer is injected ONLY at registered sites; one per view, area-capped, never adjacent to stage or cells, static under reduced motion.",
-    "sites": ["hero-cta", "marquee-progress", "joy-moment"]
+    "$comment": "§17: the fun layer is injected ONLY at registered sites; one per view, area-capped, never adjacent to stage or cells, static under reduced motion. ADMISSION = the wit rule (ratified 2026-07-13): the moment must reference its own meaning — art that doesn't know what's happening fails regardless of beauty. Recipe values are §30.8 PIN; library/fun-probe.html is the pinning instrument.",
+    "sites": {
+      "boot-splash": { "meaning": "the Pharos greeting — the beam sweep IS the progress indicator (the lighthouse searching for your files)", "constraint": "art never costs a millisecond: duration = actual load; instant = skipped; full theatrical form only in naturally-slow moments (first-run, cold start)" },
+      "hero-cta": { "meaning": "the primary call-to-action (hero rung = fill + fun overlay, §4)", "constraint": "includes the press payoff: a one-shot bloom handing off visibly to the marquee; ordinary chrome stays dry" },
+      "marquee-progress": { "meaning": "the one long job the user is actively awaiting", "constraint": "the light-bar is the marquee only; dots stay the ambient progress voice" },
+      "announcement-sweep": { "meaning": "something new exists here: one transient gradient lap around the thing's outline, then gone", "constraint": "runs once, never loops, never nags" },
+      "slide-commit": { "meaning": "deliberate commitment rendered physically: the glass tray + puck slid to start a heavyweight/irreversible operation", "constraint": "reserved for operations whose weight warrants friction" },
+      "joy-moment": { "meaning": "the §16 voids: empty states, first-run, completion, about", "constraint": "media per §16 (incl. dithered public-domain classical art, interactive dot art, illustrative skeuomorphism); never the user's photos" }
+    }
   },
 
   "machinery": {

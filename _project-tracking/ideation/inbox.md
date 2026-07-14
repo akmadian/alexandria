@@ -50,3 +50,4 @@ Dev Window for Wails
 - Scroll from hero reveals a mess of file types and such, lines from each of them lead down into some other element that represents the idea of Alexandria bringing them all together. Kinda like https://www.cosmos.so/e/939600872 but iverted?
 - A thing with the hero - "Dare I say, the most {WORD} digital asset manager out there." where word scrolls between things like "performant, private, modern, customizable, user friendly, capable, respectful, free, well designed" etc. Maybe some cheeky ones like "anti-adobe"
 - "And the best part, it's free (if you want)." - leads in to the pay what you want UX.
+- Can (and should) host with github pages. Dedicated dir in this package with dedicated CI/CD, should be pretty straight forward. Lemon Squeezy works for static sites.
