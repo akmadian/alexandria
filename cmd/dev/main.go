@@ -2,10 +2,11 @@
 // and exposes its state, with full access to internal/*. It is the manual rig
 // for the impl acceptance criteria (impl/08), not a shipped entrypoint.
 //
-// ponytail: stdlib flag, one file, subcommands only. The --debug HTTP server
-// (pprof/expvar/statsviz/state dashboard) from impl/08 is deferred — the
-// pipeline's acceptance is met with `import` + `errors` + `sessions` over a
-// fixture tree; add the debug server when profiling a real workload needs it.
+// ponytail: stdlib flag, subcommands only. The --debug HTTP server serves Go's
+// pprof/expvar plus the enrichment observability surface (task 22, in
+// observability.go): a live asset/kind/artifact/queue page over the engine
+// snapshot, and its JSON feed. The remaining impl/08 wants (statsviz, a general
+// pipeline /state dashboard, --json) stay deferred — DEFERRED §9.
 package main
 
 import (
@@ -71,6 +72,8 @@ func main() {
 		err = cmdSessions(args)
 	case "rebuild":
 		err = cmdRebuild(args)
+	case "jobs":
+		err = cmdJobs(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -93,6 +96,7 @@ usage:
   dev errors          [--catalog <dir>]            dump the latest session's DLQ
   dev sessions        [--catalog <dir>]            list recent import sessions
   dev rebuild fts     [--catalog <dir>]            rebuild the FTS index
+  dev jobs graph      [--format dot|ascii]         render the enrichment job graph
 
 worker pools (import):
   EXTRACT and the thumbnail enrichment pool (CPU-bound) default to ~75% of your
@@ -113,12 +117,19 @@ catalog storage (--catalog):
                         prints the exact path on completion.
 
 debug web UI (--debug, import only):
-  Serves Go's pprof + expvar at http://localhost:6060/ during (and, so you can browse a
-  fast run, after) the import. Override the address with --debug-addr, e.g.
+  Serves Go's pprof + expvar AND the live enrichment page at http://localhost:6060/
+  during (and, so you can browse a fast run, after) the import. Override the address
+  with --debug-addr, e.g.
     dev import ~/Photos --catalog ./cat --debug
     dev import ~/Photos --catalog ./cat --debug --debug-addr :6000
-  /debug/pprof/goroutine?debug=1 is the live pipeline picture (who's blocked on which
-  channel); /debug/vars is runtime + GC stats. Ctrl-C exits once the import is done.
+  /enrichment is the live asset/kind/artifact/queue view (depths, budget, in-flight,
+  DLQ, matrix; /enrichment/snapshot.json is the raw feed) with Pause/Resume controls.
+  /debug/pprof/goroutine?debug=1 is the pipeline picture; /debug/vars is runtime + GC
+  stats. Ctrl-C exits when done.
+
+  --pause-enrichment starts the engine paused (implies --debug): the import commits and
+  the backlog fills the page, but nothing enriches until you click Resume — the
+  inspect-then-approve gate.
 
 tracing (import; on by default, --trace=false to disable):
   Every run writes a gospan trace file to <catalog>/traces/ — per-stage spans,
@@ -396,6 +407,7 @@ func cmdImport(args []string) error {
 	hashWorkers := flags.Int("hash-workers", 0, "HASH pool size (0 = engine default; I/O-bound)")
 	extractWorkers := flags.Int("extract-workers", cpuBoundWorkers(), "EXTRACT pool size (CPU-bound; 0 = conservative engine default)")
 	thumbnailWorkers := flags.Int("thumbnail-workers", cpuBoundWorkers(), "thumbnail enrichment pool size (CPU-bound, ~1 image in RAM each; 0 = registry default)")
+	pauseEnrichment := flags.Bool("pause-enrichment", false, "start enrichment paused — inspect the /enrichment page, then click Resume (implies --debug)")
 	path, ok := parsePathAndFlags(flags, args)
 	if !ok {
 		return fmt.Errorf("usage: dev import <path> [--catalog <dir|:memory:>] [--debug] [--thumbnail-workers N]")
@@ -404,16 +416,15 @@ func cmdImport(args []string) error {
 	if err != nil {
 		return err
 	}
+	if *pauseEnrichment {
+		*debug = true // the Resume control lives on the debug page
+	}
 
 	catalog, err := openCatalog(*catalogPath)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = catalog.close() }()
-
-	if *debug {
-		startDebugServer(*debugAddr)
-	}
 
 	ctx := context.Background()
 	source, err := ensureSource(ctx, catalog, absolutePath)
@@ -457,6 +468,23 @@ func cmdImport(args []string) error {
 	rig, err := startEnrichment(ctx, catalog, tracer, *thumbnailWorkers)
 	if err != nil {
 		return err
+	}
+
+	// --pause-enrichment holds the engine before any dispatch: the import still
+	// commits assets and the scan still enqueues them (scanning is not
+	// dispatching), so the backlog accumulates fully visible on the page, and
+	// nothing runs until the user clicks Resume. This is the inspect-then-approve
+	// gate — the existing PauseAll (task 21), driven from the debug page.
+	if *pauseEnrichment {
+		rig.engine.PauseAll()
+	}
+
+	// The debug surface mounts now the engine exists: the enrichment page + JSON
+	// feed on the same server as pprof/expvar. Started before the import runs so
+	// depths can be watched draining from the first commit.
+	if *debug {
+		mountEnrichmentDebug(rig, catalog)
+		startDebugServer(*debugAddr)
 	}
 	ingester := newIngester(catalog)
 	ingester.Tracer = tracer
@@ -524,12 +552,22 @@ func cmdImport(args []string) error {
 	// its queues with it, so waiting here is what makes `dev import` end with a
 	// fully-thumbnailed catalog (a canceled import skips the wait; the next run's
 	// on-open scan converges the committed remainder, which is the D25 model).
-	if runErr == nil {
+	// Paused (the inspect gate) has nothing to await — the user drives it from the
+	// page; converging here would hang forever on a backlog that can't dispatch.
+	switch {
+	case *pauseEnrichment:
+		fmt.Printf("  enrichment: PAUSED — open http://%s/enrichment to inspect, then click Resume\n", *debugAddr)
+	case runErr == nil:
 		if err := awaitConvergence(ctx, rig, signals); err != nil {
 			fmt.Fprintln(os.Stderr, "  (enrichment convergence:", err, ")")
 		}
 	}
-	rig.stop()
+	// Under --debug keep the engine alive through the hold below, so the live page
+	// shows a running (converged, idle) engine rather than an empty stopped one;
+	// otherwise stop now. printEnrichmentFailures reads the DB either way.
+	if !*debug {
+		rig.stop()
+	}
 	printEnrichmentFailures(ctx, catalog)
 
 	// Close drains the buffer and finishes the trace file; stats read after so
@@ -556,6 +594,7 @@ func cmdImport(args []string) error {
 		hold := make(chan os.Signal, 1)
 		signal.Notify(hold, os.Interrupt, syscall.SIGTERM)
 		<-hold
+		rig.stop() // deferred from above so the page stayed live during the hold
 	}
 	return nil
 }
@@ -633,6 +672,7 @@ func startDebugServer(addr string) {
 const debugIndexHTML = `<!doctype html><meta charset=utf-8><title>Alexandria dev</title>
 <h1>Alexandria engine — debug</h1>
 <ul>
+  <li><a href="/enrichment">/enrichment</a> — live enrichment: queues, budget, in-flight, DLQ, asset×kind matrix (<a href="/enrichment/snapshot.json">snapshot.json</a>)</li>
   <li><a href="/debug/pprof/">/debug/pprof/</a> — profiles index</li>
   <li><a href="/debug/pprof/goroutine?debug=1">goroutine dump</a> — the live pipeline picture (who's blocked on which channel)</li>
   <li><a href="/debug/pprof/heap?debug=1">heap</a> · <a href="/debug/pprof/profile?seconds=5">30s CPU profile</a></li>

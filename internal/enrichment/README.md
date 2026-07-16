@@ -46,6 +46,8 @@ artifact IS the queue" (D17, generalized).
 | Budget | `budget.go` | Weighted CPU semaphore above the pools — caps the SUM (admission control is Go's only throttle). The effort dial (paused/low/normal/full, `machine.json`) resizes it by *reservation*; jumbo weights clamp to the dialed capacity — they serialize, never deadlock. Per-SOURCE I/O tokens cap concurrent reads (per-device awareness deferred, DEFERRED §11). |
 | In-flight tracker | `tracker.go` | `map[assetID]KindSet` under RWMutex — the transient queued/running truth the seam decorates from (task 21). Process restart empties it, and that is correct. |
 | Seam read surface | `visibility.go` | The engine's kind-name view for the seam (task 21): `RunningKinds` (tracker → `[]domain.EnrichmentKind`, one lock per page, bit reverse kept internal), `FailedKinds` (attempt-exhausted DLQ rows), `QueueDepths` (per-kind backlog, dispatcher-answered). Never leaks the `KindSet` bitmask — the wire vocabulary is kind names. |
+| Debug snapshot | `snapshot.go` + `Engine.Snapshot` | The live operational surface (task 22, D28 commitment #4): per-kind queue depths (hot/cold/running/workers/paused/more), in-flight jobs (asset, kind, in-flight-since), the budget gauge (capacity/usable/in-use), and the DLQ rolled up by (kind, reason). Dispatcher builds its scheduling half on its own goroutine; the engine fills the effort dial, the budget atomics, and the DLQ query. Gauges only — distributions are gospan's job (D30), DEFERRED §14. |
+| Graph renderer | `graph.go` | The flat registry as a per-asset-type hierarchy (D28 commitment #2): `RenderGraphDOT` / `RenderGraphASCII`, pure functions over `Definitions(nil,nil)` + `assettype.All()` (asset types with the same applicable-kind set collapse to one sub-graph). `cmd/dev jobs graph` renders it. |
 | Writer | `writer.go` | The engine's ONE catalog mutator (one-cook): batched transactions (50 items / 500ms lull), applies results through `catalog.AssetDerivedWriter` — judgment/observation columns are unreachable by type. Ordering contract: **DB write → clear bit → emit.** Its completion reports drive edge emission. |
 | DLQ | `sqlite/enrichment_repo.go` | `enrichment_errors(asset_id, kind, …)` — absence is ambiguous, so failure is durable. Exhaustion (5 attempts) is terminal for scans AND hints; success deletes the row. The scan SQL is engine-internal by decision — never routed through `internal/ast` (see the D28 dated note). |
 
@@ -91,6 +93,26 @@ hinted, tokens, size, outcome, batch_seq) with an `enrichment.produce` child —
 the gap after produce ends is await-commit time, same reading recipe as
 import — plus `enrichment.scan` passes and `enrichment.write-batch` fan-in
 traces. Nil tracer = off, ~4ns.
+
+## Debug surface (task 22)
+
+Two legibility commitments made concrete. `cmd/dev jobs graph` renders the
+registry (`--format dot` pipes to `dot -Tsvg`; `--format ascii` is the terminal
+tree). `dev import --debug` mounts a live page at `/enrichment` (plus its raw
+feed at `/enrichment/snapshot.json`) over `Engine.Snapshot`: queues, budget,
+in-flight, DLQ-by-reason, and an asset × kind matrix (done / running / failed /
+pending per cell — "queued" collapses into pending, since the missing artifact
+IS the queue and the per-kind depth is shown as an aggregate). The page also
+carries **Pause/Resume** controls — debug-mode convenience actions over the
+existing engine verbs (task 21's `PauseAll`/`ResumeAll`), POST-only + redirect.
+`--pause-enrichment` starts the engine paused so the backlog fills the page and
+nothing dispatches until Resume: the inspect-then-approve gate, built from the
+existing pause, not a new control path (the shipped controls go through the seam,
+never this HTTP surface). Everything is
+harvested from state the engine already holds — never a generic dump, always
+asset / kind / artifact / queue vocabulary (the pprof anti-lesson). The JSON is
+the contract the in-app dev corner will consume later; this page is its first
+reader.
 
 ## Tests
 

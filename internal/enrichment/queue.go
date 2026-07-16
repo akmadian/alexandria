@@ -27,6 +27,7 @@ type pendingJob struct {
 	ingestedAt time.Time // import recency — newest first within the normal band
 	heapIndex  int
 	running    bool
+	startedAt  time.Time // when dequeued to a worker — the in-flight-since gauge (task 22)
 }
 
 // jobQueue implements heap.Interface over pendingJob pointers.
@@ -81,6 +82,7 @@ func (q *jobQueue) dequeue() *pendingJob {
 	}
 	pending := heap.Pop(q).(*pendingJob) //nolint:forcetypeassert // heap holds only *pendingJob
 	pending.running = true
+	pending.startedAt = time.Now()
 	return pending
 }
 

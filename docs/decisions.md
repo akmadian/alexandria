@@ -805,6 +805,29 @@ read (error reason codes) and the `blocked` derivation (a kind whose prerequisit
 with the loupe/inspector that renders them (DEFERRED §13) — the grid's three D25 states
 (enriching/ready/failed) are complete without them.)*
 
+*(2026-07-16, task-22 build round (Ari + Claude) — the visibility half: commitments #2 and #4
+made concrete. **The snapshot is gauges, harvested for free; distributions are gospan's.** One
+`Engine.Snapshot` — the dispatcher builds its scheduling half on its own goroutine (per-kind
+queue depths split hot/cold/running, in-flight jobs, pause state — one pass over the ledger,
+no lock), the engine fills the effort dial, the budget gauge (a new `inUse` atomic on the
+weighted semaphore; the reservation manager bypasses it, so `InUse ≤ Capacity` always), and the
+DLQ rolled up by (kind, reason) via one grouped query. Everything reads state the engine already
+holds; the round explicitly refused per-kind duration histograms + per-(kind, asset) token cost
+(new per-job instrumentation duplicating gospan's spans — the trace file answers distributions by
+SQL, D30), DEFERRED §14 holds the line and its trigger. **The JSON shape IS the contract** (json
+tags, `internal/enrichment`), served raw at `/enrichment/snapshot.json` for the future in-app dev
+corner; its TS types get generated when that second consumer lands (C15), not before — the
+snapshot is an operational debug feed, NOT the seam's frontend contract (task 21's services), so
+it lives on the engine and the harness serves it, no seam involvement. **The matrix collapses
+queued into pending:** the dev page's asset × kind cells read done / running / failed / pending —
+"queued" is a transient in-memory scheduling optimization with no durable per-artifact meaning
+(the missing artifact IS the queue), so dumping the ledger per-asset is the transient-dump
+anti-pattern; queued stays visible as an aggregate per-kind depth instead. **The graph renderer
+is pure** (`RenderGraphDOT`/`RenderGraphASCII` over `Definitions(nil,nil)` + the assettype table,
+asset types with identical applicable-kind sets collapsed to one sub-graph); `dev jobs graph`
+renders it, `dot -Tsvg`-clean. The dev-harness page is hand-rolled HTML + meta-refresh poll,
+stdlib only (DEFERRED §9's constraint stands; the import-pipeline `/state` half stays deferred).)*
+
 ## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
 
 The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —

@@ -29,6 +29,7 @@ type cpuBudget struct {
 	semaphore *semaphore.Weighted
 	capacity  int64
 	usable    atomic.Int64 // tokensFor(current level); what acquire clamps to
+	inUse     atomic.Int64 // tokens held by running jobs — the debug gauge (task 22)
 	levels    chan string  // effort-level changes, latest wins
 	log       *log.Logger
 }
@@ -62,11 +63,21 @@ func (b *cpuBudget) acquire(ctx context.Context, tokens int64) (int64, error) {
 	if err := b.semaphore.Acquire(ctx, tokens); err != nil {
 		return 0, err
 	}
+	b.inUse.Add(tokens)
 	return tokens, nil
 }
 
 func (b *cpuBudget) release(tokens int64) {
+	b.inUse.Add(-tokens)
 	b.semaphore.Release(tokens)
+}
+
+// gauge is the budget's live position for the debug snapshot (task 22). InUse
+// counts only JOB holds (the reservation manager bypasses acquire/release), so
+// InUse ≤ Capacity always and settles to ≤ Usable as running jobs finish after a
+// dial-down.
+func (b *cpuBudget) gauge() BudgetGauge {
+	return BudgetGauge{Capacity: b.capacity, Usable: b.usable.Load(), InUse: b.inUse.Load()}
 }
 
 // setLevel requests an effort level; the newest request wins (an unread older

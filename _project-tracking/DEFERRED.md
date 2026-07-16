@@ -502,6 +502,14 @@ against a closed file, which covers most of what the `/state` snapshot and stats
 post-hoc. What remains genuinely deferred here is the LIVE surface; task 22's enrichment
 snapshot endpoint is its likely first real consumer.)*
 
+*(2026-07-16, task 22: the ENRICHMENT slice of this landed — `dev import --debug` now also
+mounts a live `/enrichment` page + `/enrichment/snapshot.json` over `Engine.Snapshot` (queues,
+budget, in-flight, DLQ-by-reason, asset × kind matrix), and `dev jobs graph` renders the
+registry. Still deferred: the same for the IMPORT pipeline (a general `/state` over stage
+depths), statsviz live charts, the `go:embed` dashboard, and `--json` scripting output. The
+enrichment page is hand-rolled HTML with a meta-refresh poll — the stdlib-only constraint
+stands until this entry's own trigger fires.)*
+
 **Trigger:** a real workload the stdlib surface can't diagnose — chasing a throughput regression
 or a stuck-stage bug where watching queue depths over time would have answered it faster.
 
@@ -603,3 +611,30 @@ What was NOT built, each with no consumer yet:
 wants to show reason codes or distinguish blocked-vs-pending per artifact. Add the
 seam detail method (+ `EnrichmentError` wire projection) and `Engine.BlockedKinds`
 then; both build onto reads that already exist.
+
+---
+
+## 14. Enrichment snapshot: distributions & per-job cost — gospan's territory
+
+**Surfaced:** task 22 build round (2026-07-16, Ari + Claude). `Engine.Snapshot` ships the
+live debug surface as **gauges** — everything harvested for free from state the engine already
+holds (queue depths hot/cold, in-flight jobs, budget capacity/usable/in-use, DLQ by reason,
+per-kind pool size + paused + more-backlog). Deliberately narrower than the task's snapshot
+bullet, which also listed histograms and per-job cost.
+
+What was NOT built, because it needs new per-job instrumentation with no live consumer:
+
+- **Per-kind duration histograms** and **per-(kind, asset) token cost** — distributions, not
+  current-state. gospan already captures these: every job is an `enrichment.<kind>` span with
+  `tokens`/`size_bytes` attrs and timing (D30), and per-kind percentiles are one SQL query
+  against the trace file. Building in-memory ring-buffer histograms would duplicate that.
+- **Per-kind budget holds** and **per-job tokens-held** — the aggregate `Budget.InUse` covers
+  the "in-use ≤ capacity" question; a per-kind breakdown needs the budget to account by kind,
+  and a worker→dispatcher token-feedback path for per-job, neither worth it for a dev view.
+
+The doctrinal line: **live gauges in the snapshot; distributions in the gospan trace file.**
+
+**Trigger:** the in-app dev corner (the second consumer of the snapshot JSON — at which point
+its TS types get generated, C15), or a live perf diagnosis the gauges can't answer and the
+post-hoc trace file can't either. Add the histogram/cost fields to `Snapshot` then, backed by
+whatever accounting the diagnosis actually needs.

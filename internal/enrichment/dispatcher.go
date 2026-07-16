@@ -111,6 +111,8 @@ func (e *Engine) runDispatcher(ctx context.Context) error {
 			state.handleCompletions(ctx, completions)
 		case reply := <-e.depthRequests:
 			reply <- state.snapshotDepths()
+		case reply := <-e.snapshotRequests:
+			reply <- state.snapshot()
 		}
 	}
 }
@@ -130,6 +132,48 @@ func (d *dispatcherState) snapshotDepths() map[string]int {
 		}
 	}
 	return depths
+}
+
+// snapshot builds the dispatcher-owned half of the debug Snapshot (task 22) on
+// the dispatcher goroutine, so it reads scheduling state without a lock and never
+// races a queue mutation. The engine fills the rest (effort level, budget gauge,
+// DLQ) from state it owns directly. One pass over the ledger classifies every
+// job — running, hinted-and-queued (hot), or cold-and-queued — and collects the
+// in-flight list (bounded by the budget, so it never rivals catalog size).
+func (d *dispatcherState) snapshot() Snapshot {
+	hot := make(map[string]int, len(d.engine.scanOrder))
+	cold := make(map[string]int, len(d.engine.scanOrder))
+	running := make(map[string]int, len(d.engine.scanOrder))
+	var inFlight []InFlightJob
+	for key, pending := range d.ledger {
+		switch {
+		case pending.running:
+			running[key.Kind]++
+			inFlight = append(inFlight, InFlightJob{
+				AssetID: key.AssetID,
+				Kind:    key.Kind,
+				Started: pending.startedAt,
+				Hinted:  pending.priority == priorityHinted,
+			})
+		case pending.priority == priorityHinted:
+			hot[key.Kind]++
+		default:
+			cold[key.Kind]++
+		}
+	}
+	kinds := make([]KindGauge, 0, len(d.engine.scanOrder))
+	for _, kind := range d.engine.scanOrder {
+		kinds = append(kinds, KindGauge{
+			Kind:       kind,
+			QueuedHot:  hot[kind],
+			QueuedCold: cold[kind],
+			Running:    running[kind],
+			Workers:    d.engine.workerCounts[kind],
+			Paused:     d.pausedKinds[kind],
+			More:       d.moreToScan[kind],
+		})
+	}
+	return Snapshot{Paused: d.pausedGlobal, Kinds: kinds, InFlight: inFlight}
 }
 
 // enqueue records and queues a job for a node unless the ledger already holds

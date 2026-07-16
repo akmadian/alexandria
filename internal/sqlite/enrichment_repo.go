@@ -266,6 +266,30 @@ func (r *EnrichmentRepo) ExhaustedKinds(ctx context.Context, assetIDs []string, 
 	return result, rows.Err()
 }
 
+// FailureCounts rolls the DLQ up by (kind, reason_code) for the debug snapshot
+// (task 22): Count rows per bucket, Exhausted of them attempt-exhausted. One
+// grouped query; maxAttempts is passed in (the threshold lives in the enrichment
+// package, which this layer must not import). An empty DLQ yields no rows.
+func (r *EnrichmentRepo) FailureCounts(ctx context.Context, maxAttempts int) ([]domain.EnrichmentFailureCount, error) {
+	rows, err := r.DB.QueryContext(ctx,
+		`SELECT kind, reason_code, COUNT(*), COALESCE(SUM(attempts >= ?), 0)
+			FROM enrichment_errors GROUP BY kind, reason_code ORDER BY kind, reason_code`, maxAttempts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var counts []domain.EnrichmentFailureCount
+	for rows.Next() {
+		var count domain.EnrichmentFailureCount
+		if err := rows.Scan(&count.Kind, &count.Reason, &count.Count, &count.Exhausted); err != nil {
+			return nil, err
+		}
+		counts = append(counts, count)
+	}
+	return counts, rows.Err()
+}
+
 func validateArtifactColumns(artifactColumn string, prerequisiteColumns []string) error {
 	if !derivedArtifactColumns[artifactColumn] {
 		return fmt.Errorf("enrichment: %q is not a derived artifact column", artifactColumn)

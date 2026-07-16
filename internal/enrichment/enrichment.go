@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"sync/atomic"
 
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/settings"
@@ -103,18 +104,20 @@ type Engine struct {
 	dependentsByKind    map[string][]string // outgoing edges: kind → kinds listing it as prerequisite
 	workerCounts        map[string]int
 	initialEffort       string
+	currentEffort       atomic.Value // string: the live dial level, for the debug snapshot (task 22)
 
 	tracker    *InFlightTracker
 	budget     *cpuBudget
 	readTokens *sourceReadTokens
 
-	requests      chan workRequest
-	results       chan *jobResult
-	hints         chan []string
-	pauses        chan pauseChange
-	scanRequests  chan struct{}
-	completions   chan []completion
-	depthRequests chan chan map[string]int // seam queue-depth reads (task 21)
+	requests         chan workRequest
+	results          chan *jobResult
+	hints            chan []string
+	pauses           chan pauseChange
+	scanRequests     chan struct{}
+	completions      chan []completion
+	depthRequests    chan chan map[string]int // seam queue-depth reads (task 21)
+	snapshotRequests chan chan Snapshot       // debug-surface state reads (task 22)
 
 	runCtx context.Context
 	stop   context.CancelFunc
@@ -165,7 +168,9 @@ func New(config *Config) (*Engine, error) {
 		scanRequests:        make(chan struct{}, 1),
 		completions:         make(chan []completion, 64),
 		depthRequests:       make(chan chan map[string]int),
+		snapshotRequests:    make(chan chan Snapshot),
 	}
+	engine.currentEffort.Store(initialEffort)
 
 	definitions := make([]JobDefinition, len(config.Definitions))
 	copy(definitions, config.Definitions)
@@ -301,6 +306,7 @@ func (e *Engine) SetEffort(level string) {
 		e.log.Warn("enrichment: unknown effort level ignored", "level", level)
 		return
 	}
+	e.currentEffort.Store(level) // the live dial, for the debug snapshot (task 22)
 	paused := level == settings.EffortPaused
 	e.sendPause(pauseChange{effort: true, paused: paused})
 	if !paused {
@@ -325,6 +331,38 @@ func (e *Engine) QueueDepths() map[string]int {
 	case <-e.runCtx.Done():
 		return map[string]int{}
 	}
+}
+
+// Snapshot returns the live debug-surface state (D28 commitment #4, task 22):
+// the dispatcher builds its scheduling half on its own goroutine (queue depths,
+// in-flight, pause state), and the engine fills the effort dial, the budget gauge
+// (from atomics), and the DLQ rollup (one catalog query). After Stop the
+// dispatcher no longer answers, so the scheduling half comes back empty while the
+// budget and DLQ — which need no dispatcher — still report.
+func (e *Engine) Snapshot(ctx context.Context) (Snapshot, error) {
+	e.mustBeStarted("Snapshot")
+	reply := make(chan Snapshot, 1)
+	var snapshot Snapshot
+	select {
+	case e.snapshotRequests <- reply:
+		snapshot = <-reply
+	case <-e.runCtx.Done():
+	}
+	snapshot.Effort = e.effortLevel()
+	snapshot.Budget = e.budget.gauge()
+	dlq, err := e.enrichmentRepo.FailureCounts(ctx, MaxAttempts)
+	if err != nil {
+		return snapshot, err
+	}
+	snapshot.DLQ = dlq
+	return snapshot, nil
+}
+
+// effortLevel reads the live dial level set by SetEffort (initialized to the
+// engine's starting effort).
+func (e *Engine) effortLevel() string {
+	level, _ := e.currentEffort.Load().(string)
+	return level
 }
 
 // KindBit returns the tracker bit assigned to a definition (zero for unknown

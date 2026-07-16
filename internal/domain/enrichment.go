@@ -31,3 +31,17 @@ type EnrichmentError struct {
 	Attempts      int
 	LastAttemptAt time.Time
 }
+
+// EnrichmentFailureCount is the DLQ rolled up by (kind, reason) for the debug
+// snapshot (D28 commitment #4, task 22): Count rows total, Exhausted of them
+// attempt-exhausted (terminally failed — the state the grid renders). It lives
+// here, not in enrichment or sqlite, because the repo produces it and the engine
+// serves it and neither may import the other (sqlite has no enrichment import;
+// enrichment imports sqlite). Carries json tags — it is part of the snapshot
+// wire contract.
+type EnrichmentFailureCount struct {
+	Kind      string `json:"kind"`
+	Reason    string `json:"reason"`
+	Count     int    `json:"count"`
+	Exhausted int    `json:"exhausted"`
+}
