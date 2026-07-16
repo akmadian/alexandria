@@ -62,12 +62,11 @@ func TestBadFieldDoesNotZeroGoodFields(t *testing.T) {
 	m := DefaultMachine()
 	m.Workers.Ingest.Hash = -3 // bad
 	m.Workers.Ingest.Extract = 5
-	m.Workers.Ingest.Thumb = 6
 	got := sanitizeMachine(m, testLogger())
 	if got.Workers.Ingest.Hash != DefaultMachine().Workers.Ingest.Hash {
 		t.Fatalf("bad hash count should clamp to default, got %d", got.Workers.Ingest.Hash)
 	}
-	if got.Workers.Ingest.Extract != 5 || got.Workers.Ingest.Thumb != 6 {
+	if got.Workers.Ingest.Extract != 5 {
 		t.Fatal("good fields must survive a single bad field")
 	}
 }
@@ -128,12 +127,12 @@ func TestSaveRoundTrips(t *testing.T) {
 				c, _ := OpenMachine(dir, testLogger())
 				defer c.Close()
 				want := DefaultMachine()
-				want.Workers.Ingest.Thumb = 8
+				want.Workers.Enrichment = map[string]int{"thumbnail": 8}
 				if err := c.Save(want); err != nil {
 					t.Fatal(err)
 				}
 				got := loadJSON(filepath.Join(dir, "machine.json"), DefaultMachine(), testLogger())
-				if got.Workers.Ingest.Thumb != 8 {
+				if got.Workers.Enrichment["thumbnail"] != 8 {
 					t.Fatalf("machine round-trip mismatch: %+v", got)
 				}
 			case "keybindings":

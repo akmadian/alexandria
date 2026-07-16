@@ -52,6 +52,58 @@ func TestEnrichmentRepo_DLQLifecycle(t *testing.T) {
 	}
 }
 
+// TestEnrichmentRepo_ReimportStalenessClear pins the two D28 staleness-clear
+// primitives: ClearDerived nulls every allowlisted derived column (and only
+// those), and ClearFailures wipes ALL of an asset's DLQ rows across kinds.
+func TestEnrichmentRepo_ReimportStalenessClear(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	source := testutil.NewTestSource(t, db, "staleness")
+	edited := testutil.NewTestAsset(t, db, source.ID, "edited.jpg")
+	untouched := testutil.NewTestAsset(t, db, source.ID, "untouched.jpg")
+	assets := &sqlite.AssetRepo{DB: db}
+	repo := &sqlite.EnrichmentRepo{DB: db}
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	for _, id := range []string{edited.ID, untouched.ID} {
+		if err := assets.SetThumbnailAt(ctx, id, now); err != nil {
+			t.Fatalf("SetThumbnailAt: %v", err)
+		}
+	}
+	mustExec(t, db, "UPDATE assets SET rating = 5 WHERE id = ?", edited.ID)
+	if err := repo.LogFailure(ctx, edited.ID, "thumbnail", "decode_failed", "old bytes"); err != nil {
+		t.Fatalf("LogFailure: %v", err)
+	}
+	if err := repo.LogFailure(ctx, edited.ID, "sharpness", "timeout", "old bytes"); err != nil {
+		t.Fatalf("LogFailure: %v", err)
+	}
+
+	if err := assets.ClearDerived(ctx, edited.ID); err != nil {
+		t.Fatalf("ClearDerived: %v", err)
+	}
+	if err := repo.ClearFailures(ctx, edited.ID); err != nil {
+		t.Fatalf("ClearFailures: %v", err)
+	}
+
+	reloaded, err := assets.Get(ctx, edited.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.ThumbnailAt != nil {
+		t.Fatalf("ClearDerived left thumbnail_at = %v", reloaded.ThumbnailAt)
+	}
+	if reloaded.Rating == nil || *reloaded.Rating != 5 {
+		t.Fatalf("ClearDerived must not touch judgment columns: rating = %v", reloaded.Rating)
+	}
+	if failures, _ := repo.ListFailures(ctx, edited.ID); len(failures) != 0 {
+		t.Fatalf("ClearFailures left %d rows (must clear across ALL kinds)", len(failures))
+	}
+	neighbor, _ := assets.Get(ctx, untouched.ID)
+	if neighbor.ThumbnailAt == nil {
+		t.Fatal("ClearDerived leaked onto a different asset")
+	}
+}
+
 func TestEnrichmentRepo_ListMissingArtifacts(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	source := testutil.NewTestSource(t, db, "scan")

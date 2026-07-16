@@ -9,6 +9,7 @@ import (
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/sqlite"
+	"github.com/akmadian/alexandria/internal/thumbnailer"
 )
 
 // This file is the job-definition registry: ONE file that is the whole graph
@@ -101,12 +102,27 @@ type JobDefinition struct {
 	Produce ProduceFunc
 }
 
-// Definitions returns the canonical registry. Empty until task 19 lands the
-// first real row (thumbnail); tasks 20+ append theirs. Tests inject their own
-// rows through Config.Definitions — the canonical table and a test's fakes
-// flow through identical validation and dispatch.
-func Definitions() []JobDefinition {
-	return nil
+// Definitions returns the canonical registry, wired with the runtime
+// dependencies its producers need. Tasks 20+ append their rows here. Tests
+// inject their own rows through Config.Definitions — the canonical table and a
+// test's fakes flow through identical validation and dispatch.
+func Definitions(thumbnails *thumbnailer.Thumbnailer, sources SourceResolver) []JobDefinition {
+	return []JobDefinition{
+		{
+			Kind: "thumbnail",
+			Lane: LaneConvergent,
+			// Capability truth stays in the assettype table: a row has a thumbnail
+			// strategy or it does not (decode vs. RAW embedded preview is the
+			// strategy's business, invisible here).
+			Applicable:     func(handler assettype.Handler) bool { return handler.Thumb != nil },
+			ArtifactColumn: "thumbnail_at",
+			DefaultWorkers: 2, // the old ingest thumb pool's default; machine.json overrides
+			TimeoutPolicy:  thumbnailTimeout,
+			Priority:       0, // thumbnails first, always — every signal kind gates on them (task 20)
+			Weight:         thumbnailWeight,
+			Produce:        thumbnailProducer(thumbnails, sources),
+		},
+	}
 }
 
 // maxDefinitions bounds the registry because the in-flight tracker is a

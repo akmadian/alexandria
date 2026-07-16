@@ -1,6 +1,6 @@
 # 20 — Cheap signals: sharpness, clipping, phash as enrichment kinds
 
-**Areas:** backend. **Blocked by:** 19-backend-enrichment-thumbnails.md.
+**Areas:** backend.
 **References:** D28, C11 (signals are metadata columns, never verdicts), C7/C15 (new
 filterable field = vocabulary row + compiler entry, generated everywhere),
 `docs/data-model.md` §2 (column criteria), `epics/frontend-culling-signals.md` residue in

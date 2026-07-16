@@ -17,6 +17,7 @@ import (
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/testutil"
+	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/charmbracelet/log"
 )
 
@@ -238,8 +239,10 @@ func TestMustValidatePanics(t *testing.T) {
 
 func TestCanonicalRegistryValidates(t *testing.T) {
 	// The boot-time sweep as a table test (C10): the canonical rows must
-	// always pass. Empty today; task 19 gives this test its first real row.
-	if err := enrichment.Validate(enrichment.Definitions()); err != nil {
+	// always pass. The dependencies are placeholders — validation exercises
+	// applicability and shape, never the producers.
+	definitions := enrichment.Definitions(thumbnailer.New(t.TempDir()), &sqlite.SourceRepo{})
+	if err := enrichment.Validate(definitions); err != nil {
 		t.Fatalf("canonical registry invalid: %v", err)
 	}
 }

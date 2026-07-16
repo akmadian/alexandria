@@ -19,6 +19,7 @@ import (
 	"github.com/akmadian/alexandria/internal/ast"
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/enrichment"
 	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/akmadian/alexandria/internal/migrations"
 	"github.com/akmadian/alexandria/internal/sqlite"
@@ -29,8 +30,8 @@ import (
 )
 
 // newPipelineImporter is like newImporter but returns the import repo (so tests
-// can read DLQ/session rows) and optionally wires a real thumbnailer.
-func newPipelineImporter(t *testing.T, thumbnailDir string) (*importer.Importer, *domain.Source, *sqlite.AssetRepo, *sqlite.ImportRepo) {
+// can read DLQ/session rows).
+func newPipelineImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.AssetRepo, *sqlite.ImportRepo) {
 	t.Helper()
 	database := testutil.NewTestDB(t)
 	source := testutil.NewTestSource(t, database, "photos")
@@ -39,16 +40,101 @@ func newPipelineImporter(t *testing.T, thumbnailDir string) (*importer.Importer,
 	ingester := &importer.Importer{
 		Reader:  assets,
 		Obs:     assets,
-		Derived: assets,
 		Dups:    &sqlite.DuplicateRepo{DB: database},
 		Store:   sqlite.NewStore(database),
 		Imports: imports,
 		Log:     log.New(io.Discard),
 	}
-	if thumbnailDir != "" {
-		ingester.Thumbnail = thumbnailer.New(thumbnailDir)
-	}
 	return ingester, source, assets, imports
+}
+
+// diskImporter builds an importer over REAL files in a temp dir — the shape the
+// enrichment convergence tests need, because the enrichment producer reads the
+// asset's bytes from disk by absolute path (source base path + relative path),
+// which a fstest.MapFS never has.
+func diskImporter(t *testing.T) (*importer.Importer, *domain.Source, string, *sql.DB) {
+	t.Helper()
+	sourceDir := t.TempDir()
+	database := testutil.NewTestDB(t)
+	now := time.Now().UTC()
+	source := &domain.Source{
+		ID: domain.NewID(), Name: "disk", Kind: domain.SourceKindLocal,
+		BasePath: sourceDir, ScanRecursively: true, Enabled: true,
+		Connectivity: domain.SourceOnline, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := (&sqlite.SourceRepo{DB: database}).Create(context.Background(), source); err != nil {
+		t.Fatal(err)
+	}
+	assets := &sqlite.AssetRepo{DB: database}
+	ingester := &importer.Importer{
+		Reader:  assets,
+		Obs:     assets,
+		Dups:    &sqlite.DuplicateRepo{DB: database},
+		Store:   sqlite.NewStore(database),
+		Imports: &sqlite.ImportRepo{DB: database},
+		Log:     log.New(io.Discard),
+	}
+	return ingester, source, sourceDir, database
+}
+
+// startEnrichmentEngine runs the real engine — canonical registry, real
+// thumbnailer — over the test catalog, exactly as the composition root wires
+// it. Its first act is the on-open missing-artifact scan (D25: crash recovery
+// = rescan), which is what these tests lean on.
+func startEnrichmentEngine(t *testing.T, database *sql.DB, thumbnailDir string) *enrichment.Engine {
+	t.Helper()
+	engine, err := enrichment.New(&enrichment.Config{
+		Definitions: enrichment.Definitions(thumbnailer.New(thumbnailDir), &sqlite.SourceRepo{DB: database}),
+		Reader:      &sqlite.AssetRepo{DB: database},
+		Store:       sqlite.NewStore(database),
+		Enrichment:  &sqlite.EnrichmentRepo{DB: database},
+		Log:         log.New(io.Discard),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine.Start(context.Background())
+	t.Cleanup(engine.Stop)
+	return engine
+}
+
+// awaitThumbnails polls until want assets carry thumbnail_at — the convergence
+// the engine promises — or fails at the deadline.
+func awaitThumbnails(t *testing.T, database *sql.DB, want int) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var thumbnailed int
+		if err := database.QueryRowContext(context.Background(),
+			"SELECT COUNT(*) FROM assets WHERE thumbnail_at IS NOT NULL").Scan(&thumbnailed); err != nil {
+			t.Fatal(err)
+		}
+		if thumbnailed >= want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("enrichment did not converge: %d/%d thumbnailed", thumbnailed, want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// writeJPEGFiles writes count distinct decodable JPEGs under dir and returns
+// their relative paths.
+func writeJPEGFiles(t *testing.T, dir string, count int) []string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "shoot"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	paths := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		relative := filepath.Join("shoot", fmtInt(i)+".jpg")
+		if err := os.WriteFile(filepath.Join(dir, relative), jpegBytes(i), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, relative)
+	}
+	return paths
 }
 
 // jpegBytes returns a small, valid, decodable JPEG whose bytes vary by seed, so
@@ -66,7 +152,7 @@ func jpegBytes(seed int) []byte {
 // --- Matrix: the five verdicts ---
 
 func TestMatrix_NewReimportDuplicate(t *testing.T) {
-	ingester, source, _, _ := newPipelineImporter(t, "")
+	ingester, source, _, _ := newPipelineImporter(t)
 	ctx := context.Background()
 
 	// (5) New.
@@ -103,7 +189,7 @@ func TestMatrix_NewReimportDuplicate(t *testing.T) {
 func TestMatrix_InRunDuplicatePair(t *testing.T) {
 	// A copy exists BEFORE the original is committed: the in-run hash map must
 	// catch it (FindByHash can't — the original isn't committed yet).
-	ingester, source, assets, _ := newPipelineImporter(t, "")
+	ingester, source, assets, _ := newPipelineImporter(t)
 	ctx := context.Background()
 
 	content := []byte("burst-frame-identical-bytes")
@@ -286,7 +372,7 @@ func TestCopyThenDeleteMove_RecordedForReview(t *testing.T) {
 // --- Sidecars: tracked, not indexed ---
 
 func TestSidecar_TrackedNotIndexed(t *testing.T) {
-	ingester, source, assets, _ := newPipelineImporter(t, "")
+	ingester, source, assets, _ := newPipelineImporter(t)
 	ctx := context.Background()
 
 	result, err := ingester.Run(ctx, source, fstest.MapFS{
@@ -318,7 +404,7 @@ func TestSidecar_TrackedNotIndexed(t *testing.T) {
 // --- Sniff mismatch (D7): a .png that is really a JPEG ---
 
 func TestMismatch_TrustsContent(t *testing.T) {
-	ingester, source, assets, imports := newPipelineImporter(t, "")
+	ingester, source, assets, imports := newPipelineImporter(t)
 	ctx := context.Background()
 
 	result, err := ingester.Run(ctx, source, fstest.MapFS{"mislabeled.png": {Data: jpegBytes(1)}})
@@ -343,51 +429,155 @@ func TestMismatch_TrustsContent(t *testing.T) {
 	}
 }
 
-// --- Corrupt file → DLQ, then heal (D13 self-heal) ---
+// --- Corrupt file → DLQ, then heal (D13 self-heal, post-D25 shape) ---
 
+// TestCorruptFile_DLQThenHeal walks the full self-heal loop across BOTH
+// engines. Post-D25 ingest never decodes pixels, so a corrupt-but-valid-magic
+// file indexes with no import error at all; the corruption is discovered by
+// the first pixel consumer — the thumbnail job — and recorded in the
+// ENRICHMENT DLQ. Fixing the file is a reimport, whose staleness clear wipes
+// that DLQ row, and the next scan converges the asset to thumbnailed. "Import
+// again" is still the repair; the ledger just moved to the engine that does
+// the decoding.
 func TestCorruptFile_DLQThenHeal(t *testing.T) {
-	thumbnailDir := t.TempDir()
-	ingester, source, assets, imports := newPipelineImporter(t, thumbnailDir)
+	ingester, source, sourceDir, database := diskImporter(t)
 	ctx := context.Background()
-
-	// Truncated JPEG: valid magic (so it indexes) but undecodable.
-	truncated := jpegBytes(2)[:20]
-	result, err := ingester.Run(ctx, source, fstest.MapFS{"broken.jpg": {Data: truncated}})
-	if err != nil {
+	brokenPath := filepath.Join(sourceDir, "broken.jpg")
+	if err := os.WriteFile(brokenPath, jpegBytes(2)[:20], 0o600); err != nil { // valid magic, undecodable
 		t.Fatal(err)
 	}
-	if result.Added != 1 {
-		t.Fatalf("corrupt file should still mint an identity: added=%d", result.Added)
+
+	result, err := ingester.Run(ctx, source, os.DirFS(sourceDir))
+	if err != nil || result.Added != 1 {
+		t.Fatalf("corrupt file should still mint an identity: added=%d err=%v", result.Added, err)
 	}
+	assets := &sqlite.AssetRepo{DB: database}
 	asset, _ := assets.FindBySourcePath(ctx, source.ID, "broken.jpg")
-	if asset.Width != nil || asset.ThumbnailAt != nil {
-		t.Fatalf("corrupt file should have no dims/thumbnail: w=%v thumb=%v", asset.Width, asset.ThumbnailAt)
-	}
-	if dlqRows, _ := imports.ListErrors(ctx, result.SessionID); !hasReason(dlqRows, "decode_failed") {
-		t.Fatalf("want a decode_failed DLQ row, got %v", dlqRows)
+	if asset.Width != nil {
+		t.Fatalf("corrupt file should have no dims: w=%v", asset.Width)
 	}
 
-	// Fix the file: full valid bytes (larger → changed size → reimported).
-	healedResult, err := ingester.Run(ctx, source, fstest.MapFS{"broken.jpg": {Data: jpegBytes(2)}})
-	if err != nil {
+	// The engine discovers the corruption: a durable decode_failed DLQ row.
+	engine := startEnrichmentEngine(t, database, t.TempDir())
+	// The production wiring: ingest's post-commit hook nudges the dispatcher
+	// (the composition root chains OnAssetCommitted → RequestScan) — without it
+	// the healed reimport would sit unscanned until the next catalog open.
+	ingester.OnAssetCommitted = func(context.Context, *domain.Source, string, string) {
+		engine.RequestScan()
+	}
+	enrichmentRepo := &sqlite.EnrichmentRepo{DB: database}
+	awaitEnrichmentFailure(t, enrichmentRepo, asset.ID, "decode_failed")
+
+	// Fix the file (larger → changed size → reimported): the reimport's
+	// staleness clear wipes the DLQ row, and the scan re-derives the work.
+	if err := os.WriteFile(brokenPath, jpegBytes(2), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if healedResult.Updated != 1 {
-		t.Fatalf("heal: updated=%d, want 1", healedResult.Updated)
+	healedResult, err := ingester.Run(ctx, source, os.DirFS(sourceDir))
+	if err != nil || healedResult.Updated != 1 {
+		t.Fatalf("heal: updated=%d err=%v, want 1/nil", healedResult.Updated, err)
 	}
 	asset, _ = assets.FindBySourcePath(ctx, source.ID, "broken.jpg")
-	if asset.Width == nil || *asset.Width != 16 || asset.ThumbnailAt == nil {
-		t.Fatalf("healed asset should carry dims + thumbnail: w=%v thumb=%v", asset.Width, asset.ThumbnailAt)
+	if asset.Width == nil || *asset.Width != 16 {
+		t.Fatalf("healed asset should carry dims: w=%v", asset.Width)
 	}
-	if healedRows, _ := imports.ListErrors(ctx, healedResult.SessionID); hasReason(healedRows, "decode_failed") {
-		t.Fatalf("healed run should have no decode_failed rows, got %v", healedRows)
+	awaitThumbnails(t, database, 1)
+	if failures, _ := enrichmentRepo.ListFailures(ctx, asset.ID); len(failures) != 0 {
+		t.Fatalf("healed asset should have no enrichment failures left, got %+v", failures)
+	}
+}
+
+// awaitEnrichmentFailure polls for a durable (asset, kind) enrichment DLQ row
+// with the given reason.
+func awaitEnrichmentFailure(t *testing.T, enrichmentRepo *sqlite.EnrichmentRepo, assetID, wantReason string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		failures, err := enrichmentRepo.ListFailures(context.Background(), assetID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(failures) > 0 && failures[0].ReasonCode == wantReason {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no %s enrichment failure recorded for %s, got %+v", wantReason, assetID, failures)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestReimport_ClearsDerivedAndEnrichmentDLQ pins the D28 staleness transition
+// on BOTH write paths (the batched pipeline and the single-file watcher path):
+// a reimport's transaction nulls the derived columns (the artifact instantly
+// reads "missing") and deletes the asset's enrichment DLQ rows (exhaustion
+// described the old bytes) — while the thumbnail FILE survives on disk, so the
+// grid shows the outdated-but-real thumb until regeneration overwrites it.
+func TestReimport_ClearsDerivedAndEnrichmentDLQ(t *testing.T) {
+	reimportVia := map[string]func(t *testing.T, ingester *importer.Importer, source *domain.Source, files fstest.MapFS){
+		"pipeline": func(t *testing.T, ingester *importer.Importer, source *domain.Source, files fstest.MapFS) {
+			t.Helper()
+			result, err := ingester.Run(context.Background(), source, files)
+			if err != nil || result.Updated != 1 {
+				t.Fatalf("reimport run: updated=%d err=%v, want 1/nil", result.Updated, err)
+			}
+		},
+		"single-file": func(t *testing.T, ingester *importer.Importer, source *domain.Source, files fstest.MapFS) {
+			t.Helper()
+			if err := ingester.IngestFile(context.Background(), source, files, "edited.jpg"); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	for name, reimport := range reimportVia {
+		t.Run(name, func(t *testing.T) {
+			ingester, source, assets, _ := newPipelineImporter(t)
+			ctx := context.Background()
+			if _, err := ingester.Run(ctx, source, fstest.MapFS{"edited.jpg": {Data: jpegBytes(1)}}); err != nil {
+				t.Fatal(err)
+			}
+			asset, _ := assets.FindBySourcePath(ctx, source.ID, "edited.jpg")
+
+			// Simulate enrichment residue describing the ORIGINAL bytes: the
+			// artifact column set, a DLQ row, and the thumbnail file on disk.
+			if err := assets.SetThumbnailAt(ctx, asset.ID, time.Now().UTC()); err != nil {
+				t.Fatal(err)
+			}
+			enrichmentRepo := &sqlite.EnrichmentRepo{DB: assets.DB}
+			if err := enrichmentRepo.LogFailure(ctx, asset.ID, "sharpness", "decode_failed", "old bytes"); err != nil {
+				t.Fatal(err)
+			}
+			thumbnails := thumbnailer.New(t.TempDir())
+			thumbnailPath := thumbnails.Path(asset.ID, 512)
+			if err := os.MkdirAll(filepath.Dir(thumbnailPath), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(thumbnailPath, []byte("old-thumb-bytes"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			// Same path, changed bytes → reimport.
+			reimport(t, ingester, source, fstest.MapFS{"edited.jpg": {Data: jpegBytes(2)}})
+
+			reloaded, _ := assets.FindBySourcePath(ctx, source.ID, "edited.jpg")
+			if reloaded.ThumbnailAt != nil {
+				t.Fatalf("reimport must clear derived columns, thumbnail_at=%v", reloaded.ThumbnailAt)
+			}
+			failures, _ := enrichmentRepo.ListFailures(ctx, asset.ID)
+			if len(failures) != 0 {
+				t.Fatalf("reimport must clear the asset's enrichment DLQ rows, got %d", len(failures))
+			}
+			if _, err := os.Stat(thumbnailPath); err != nil {
+				t.Fatalf("the stale thumbnail FILE must survive the reimport: %v", err)
+			}
+		})
 	}
 }
 
 // --- Batch visibility: OnProgress Done matches committed rows ---
 
 func TestBatchVisibility(t *testing.T) {
-	ingester, source, _, _ := newPipelineImporter(t, "")
+	ingester, source, _, _ := newPipelineImporter(t)
 	ctx := context.Background()
 
 	const fileCount = 120 // > 2 batches at 50/txn
@@ -427,7 +617,7 @@ func TestBatchVisibility(t *testing.T) {
 // sees progress. The OnProgress hook fires right after each batch's count flush, so
 // reading the session there captures the mid-flight persisted count.
 func TestMidImportCountsPersist(t *testing.T) {
-	ingester, source, _, imports := newPipelineImporter(t, "")
+	ingester, source, _, imports := newPipelineImporter(t)
 	ctx := context.Background()
 
 	const fileCount = 120 // > 2 batches at 50/txn
@@ -480,17 +670,59 @@ func TestMidImportCountsPersist(t *testing.T) {
 	}
 }
 
-// --- Full-processing invariant (the sacred LrC-trauma test) ---
+// --- The commit invariant (the sacred LrC-trauma test, re-derived for D25) ---
+//
+// impl/04's "committed = fully processed" becomes "committed = identity +
+// observation complete; enrichment CONVERGES." The trauma the old invariant
+// guarded against was DISHONEST placeholders — cells that could mean loading,
+// broken, or never. The honest replacement: an asset commits with no thumbnail
+// and a NULL thumbnail_at (the missing artifact IS the pending state), and the
+// enrichment engine converges every eligible asset to thumbnailed — or to a
+// durable DLQ row — with no re-import.
 
-func TestFullProcessingInvariant_Cancel(t *testing.T) {
-	thumbnailDir := t.TempDir()
-	ingester, source, assets, imports := newPipelineImporter(t, thumbnailDir)
+// TestEnrichment_ConvergesAfterImport is acceptance #1: a fixture import
+// commits assets with NO thumbnails; the engine's on-open scan then converges
+// every eligible asset.
+func TestEnrichment_ConvergesAfterImport(t *testing.T) {
+	ingester, source, sourceDir, database := diskImporter(t)
+	const fileCount = 12
+	writeJPEGFiles(t, sourceDir, fileCount)
 
-	const fileCount = 300
-	files := fstest.MapFS{}
-	for i := 0; i < fileCount; i++ {
-		files[filepath.Join("shoot", fmtInt(i)+".jpg")] = &fstest.MapFile{Data: jpegBytes(i)}
+	result, err := ingester.Run(context.Background(), source, os.DirFS(sourceDir))
+	if err != nil || result.Added != fileCount {
+		t.Fatalf("import: added=%d err=%v, want %d/nil", result.Added, err, fileCount)
 	}
+	var thumbnailed int
+	if err := database.QueryRowContext(context.Background(),
+		"SELECT COUNT(*) FROM assets WHERE thumbnail_at IS NOT NULL").Scan(&thumbnailed); err != nil {
+		t.Fatal(err)
+	}
+	if thumbnailed != 0 {
+		t.Fatalf("D25: assets must commit WITHOUT thumbnails, got %d thumbnailed at commit", thumbnailed)
+	}
+
+	thumbnailDir := t.TempDir()
+	startEnrichmentEngine(t, database, thumbnailDir) // on-open scan = the whole trigger
+	awaitThumbnails(t, database, fileCount)
+
+	// The artifact is real: a file on disk for every flagged asset.
+	thumbnails := thumbnailer.New(thumbnailDir)
+	assets := &sqlite.AssetRepo{DB: database}
+	committedAssets, _, _ := assets.QueryAssets(context.Background(), ast.Query{Version: ast.Version},
+		ast.Arrangement{SortField: ast.SortIngestedAt, SortDir: ast.SortDesc}, ast.Page{Limit: 100})
+	for _, asset := range committedAssets {
+		if _, err := os.Stat(thumbnails.Path(asset.ID, 512)); err != nil {
+			t.Fatalf("asset %s flagged thumbnailed but no file at %s", asset.ID, thumbnails.Path(asset.ID, 512))
+		}
+	}
+}
+
+// TestEnrichment_ConvergesAfterCancel is the convergence-after-cancel half:
+// cancel an import mid-run; the already-committed assets get thumbnails via
+// the scan alone — no re-import, no repair step, no half-imported state.
+func TestEnrichment_ConvergesAfterCancel(t *testing.T) {
+	ingester, source, sourceDir, database := diskImporter(t)
+	writeJPEGFiles(t, sourceDir, 300)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ingester.OnProgress = func(progress importer.Progress) {
@@ -498,25 +730,47 @@ func TestFullProcessingInvariant_Cancel(t *testing.T) {
 			cancel() // cancel once at least one batch has committed
 		}
 	}
-	result, _ := ingester.Run(ctx, source, files) // cancellation returns context.Canceled
+	_, _ = ingester.Run(ctx, source, os.DirFS(sourceDir)) // cancellation returns context.Canceled
 
-	committedAssets, _, _ := assets.QueryAssets(context.Background(), ast.Query{Version: ast.Version}, ast.Arrangement{SortField: ast.SortIngestedAt, SortDir: ast.SortDesc}, ast.Page{Limit: 10000})
-	if len(committedAssets) == 0 {
+	var committed int
+	if err := database.QueryRowContext(context.Background(),
+		"SELECT COUNT(*) FROM assets WHERE is_deleted=0").Scan(&committed); err != nil {
+		t.Fatal(err)
+	}
+	if committed == 0 {
 		t.Skip("cancel raced ahead of the first commit; nothing to check")
 	}
-	dlqRows, _ := imports.ListErrors(context.Background(), result.SessionID)
-	thumbnails := thumbnailer.New(thumbnailDir)
-	for _, asset := range committedAssets {
-		if asset.ThumbnailAt != nil {
-			if _, err := os.Stat(thumbnails.Path(asset.ID, 512)); err != nil {
-				t.Fatalf("asset %s flagged thumbnailed but no file at %s", asset.ID, thumbnails.Path(asset.ID, 512))
-			}
-			continue
-		}
-		if !pathHasError(dlqRows, asset.RelativePath) {
-			t.Fatalf("committed asset %s is half-processed: no thumbnail, no error row", asset.RelativePath)
-		}
+
+	startEnrichmentEngine(t, database, t.TempDir())
+	awaitThumbnails(t, database, committed)
+}
+
+// TestEnrichment_FailureIsDurableAndAssetBrowsable is the D13 half of the
+// acceptance: a thumbnail failure (undecodable bytes) becomes an
+// enrichment_errors row while the asset stays committed and browsable — the
+// failed state is durable, never an eternal spinner.
+func TestEnrichment_FailureIsDurableAndAssetBrowsable(t *testing.T) {
+	ingester, source, sourceDir, database := diskImporter(t)
+	writeJPEGFiles(t, sourceDir, 2)
+	// Valid magic, undecodable body: indexes fine, thumbnails never.
+	if err := os.WriteFile(filepath.Join(sourceDir, "shoot", "broken.jpg"), jpegBytes(9)[:20], 0o600); err != nil {
+		t.Fatal(err)
 	}
+
+	result, err := ingester.Run(context.Background(), source, os.DirFS(sourceDir))
+	if err != nil || result.Added != 3 {
+		t.Fatalf("import: added=%d err=%v, want 3/nil", result.Added, err)
+	}
+
+	startEnrichmentEngine(t, database, t.TempDir())
+	awaitThumbnails(t, database, 2) // the two decodable files converge
+
+	assets := &sqlite.AssetRepo{DB: database}
+	broken, _ := assets.FindBySourcePath(context.Background(), source.ID, "shoot/broken.jpg")
+	if broken == nil || broken.IsDeleted {
+		t.Fatal("the failing asset must stay committed and browsable (D13)")
+	}
+	awaitEnrichmentFailure(t, &sqlite.EnrichmentRepo{DB: database}, broken.ID, "decode_failed")
 }
 
 // --- Tracing: gospan spans cover the pipeline ---
@@ -528,7 +782,7 @@ func TestFullProcessingInvariant_Cancel(t *testing.T) {
 // on a corrupt file's failing stage. Every OTHER test in this file runs with a
 // nil Tracer — the nil-is-off contract, exercised for free.
 func TestTracing_SpansCoverThePipeline(t *testing.T) {
-	ingester, source, _, _ := newPipelineImporter(t, t.TempDir())
+	ingester, source, _, _ := newPipelineImporter(t)
 	tracer, err := gospan.New(gospan.SlogSink(slog.New(slog.DiscardHandler)))
 	if err != nil {
 		t.Fatal(err)
@@ -539,7 +793,7 @@ func TestTracing_SpansCoverThePipeline(t *testing.T) {
 		"trip/one.jpg":    {Data: jpegBytes(1)},
 		"trip/two.jpg":    {Data: jpegBytes(2)},
 		"trip/one.xmp":    {Data: []byte("<xmp>sidecar</xmp>")},
-		"trip/broken.jpg": {Data: jpegBytes(3)[:20]}, // valid magic, undecodable → thumb fails, still commits
+		"trip/broken.jpg": {Data: jpegBytes(3)[:20]}, // valid magic, undecodable — commits clean; the enrichment engine owns discovering that
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -560,7 +814,6 @@ func TestTracing_SpansCoverThePipeline(t *testing.T) {
 		"import.hash":         4, // sidecars hash too
 		"import.match":        3, // sidecars skip the matrix
 		"import.extract":      3,
-		"import.thumb":        3,
 		"import.await-commit": 4,
 	}
 	for name, want := range wantCounts {
@@ -571,9 +824,9 @@ func TestTracing_SpansCoverThePipeline(t *testing.T) {
 	if summary["import.write-batch"].Count == 0 {
 		t.Error("no write-batch trace recorded")
 	}
-	if summary["import.thumb"].Errors == 0 {
-		t.Error("corrupt file should fail its thumb span (status=error)")
-	}
+	// Stage-span error status on a failed commit is covered by
+	// TestTracing_BatchFailureFailsItemTraces; ingest itself no longer decodes
+	// pixels, so a corrupt file produces no failing stage span here.
 	if summary["import.asset"].Max <= 0 {
 		t.Error("asset root spans should carry real durations")
 	}
@@ -585,7 +838,7 @@ func TestTracing_SpansCoverThePipeline(t *testing.T) {
 // root span in the doomed batch fails with it. This is the one place a failed
 // commit must mark both sides of the fan-in.
 func TestTracing_BatchFailureFailsItemTraces(t *testing.T) {
-	ingester, source, assets, _ := newPipelineImporter(t, "")
+	ingester, source, assets, _ := newPipelineImporter(t)
 	if _, err := assets.DB.ExecContext(context.Background(), `CREATE TRIGGER poison_batch BEFORE INSERT ON assets
 		WHEN NEW.filename = 'poison.jpg' BEGIN SELECT RAISE(ABORT, 'poisoned batch'); END`); err != nil {
 		t.Fatal(err)
@@ -630,7 +883,7 @@ func TestTracing_BatchFailureFailsItemTraces(t *testing.T) {
 // errors.Is classification inside Fail, exercised against a real span (the
 // sacred cancel test runs untraced, so it cannot see this).
 func TestTracing_CanceledRunClassifiesRunSpan(t *testing.T) {
-	ingester, source, _, _ := newPipelineImporter(t, t.TempDir())
+	ingester, source, _, _ := newPipelineImporter(t)
 	tracer, err := gospan.New(gospan.SlogSink(slog.New(slog.DiscardHandler)))
 	if err != nil {
 		t.Fatal(err)
@@ -667,8 +920,10 @@ func TestTracing_CanceledRunClassifiesRunSpan(t *testing.T) {
 
 // --- Throughput sanity (NFR-2): a runnable benchmark, no flaky timing assert ---
 
+// BenchmarkPipeline_JPEGThroughput measures ingest alone — post-D25 the
+// pipeline pays no decode cost (thumbnails are enrichment work), so this is
+// the "ingest sheds its slowest stage" number.
 func BenchmarkPipeline_JPEGThroughput(b *testing.B) {
-	thumbnailDir := b.TempDir()
 	files := fstest.MapFS{}
 	for i := 0; i < 500; i++ {
 		files[fmtInt(i)+".jpg"] = &fstest.MapFile{Data: jpegBytes(i)}
@@ -678,12 +933,11 @@ func BenchmarkPipeline_JPEGThroughput(b *testing.B) {
 		database := benchDB(b)
 		assets := &sqlite.AssetRepo{DB: database}
 		ingester := &importer.Importer{
-			Reader: assets, Obs: assets, Derived: assets,
-			Dups:      &sqlite.DuplicateRepo{DB: database},
-			Store:     sqlite.NewStore(database),
-			Imports:   &sqlite.ImportRepo{DB: database},
-			Thumbnail: thumbnailer.New(thumbnailDir),
-			Log:       log.New(io.Discard),
+			Reader: assets, Obs: assets,
+			Dups:    &sqlite.DuplicateRepo{DB: database},
+			Store:   sqlite.NewStore(database),
+			Imports: &sqlite.ImportRepo{DB: database},
+			Log:     log.New(io.Discard),
 		}
 		source := benchSource(b, database)
 		if _, err := ingester.Run(context.Background(), source, files); err != nil {
@@ -699,7 +953,7 @@ func BenchmarkPipeline_JPEGThroughput(b *testing.B) {
 // count, not "?". Without it, Total only settles at walk end (SCAN blocks on
 // backpressure), leaving the UI showing "N / ?" for nearly the whole import.
 func TestPreCount_TotalKnownFromFirstEvent(t *testing.T) {
-	ingester, source, _, _ := newPipelineImporter(t, "")
+	ingester, source, _, _ := newPipelineImporter(t)
 
 	const fileCount = 30
 	files := fstest.MapFS{}
@@ -743,7 +997,7 @@ func (deniedFS) ReadDir(name string) ([]fs.DirEntry, error) {
 }
 
 func TestPreflight_PermissionDeniedIsActionable(t *testing.T) {
-	ingester, source, assets, _ := newPipelineImporter(t, "")
+	ingester, source, assets, _ := newPipelineImporter(t)
 	ctx := context.Background()
 
 	// Seed one online asset, so we can prove a denied rescan doesn't mark it missing.
@@ -800,15 +1054,6 @@ func benchSource(b *testing.B, database *sql.DB) *domain.Source {
 func hasReason(dlqRows []*domain.ImportError, reason string) bool {
 	for _, row := range dlqRows {
 		if row.ReasonCode == reason {
-			return true
-		}
-	}
-	return false
-}
-
-func pathHasError(dlqRows []*domain.ImportError, path string) bool {
-	for _, row := range dlqRows {
-		if row.Path == path {
 			return true
 		}
 	}

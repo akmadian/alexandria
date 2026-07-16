@@ -1,0 +1,1 @@
+./dev import /Users/ari/Pictures/\[00\]\[NOT\ BACKED\ UP\]\ Working\ Photos/June\ Tide\ Pooling/ --catalog ./cat

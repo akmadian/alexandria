@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,6 +36,17 @@ var derivedArtifactColumns = map[string]bool{
 // named assets column. The job-kind registry validates its rows against this
 // at boot (C10: fail first boot, never a user session).
 func IsDerivedArtifactColumn(name string) bool { return derivedArtifactColumns[name] }
+
+// sortedDerivedArtifactColumns returns the allowlist in deterministic order,
+// for SQL builders (AssetRepo.ClearDerived).
+func sortedDerivedArtifactColumns() []string {
+	columns := make([]string, 0, len(derivedArtifactColumns))
+	for column := range derivedArtifactColumns {
+		columns = append(columns, column)
+	}
+	sort.Strings(columns)
+	return columns
+}
 
 // MissingArtifactScan parameterizes one cold-backlog scan pass for one job kind.
 type MissingArtifactScan struct {
@@ -172,6 +184,16 @@ func (r *EnrichmentRepo) LogFailure(ctx context.Context, assetID, kind, reasonCo
 func (r *EnrichmentRepo) ClearFailure(ctx context.Context, assetID, kind string) error {
 	_, err := r.DB.ExecContext(ctx,
 		"DELETE FROM enrichment_errors WHERE asset_id = ? AND kind = ?", assetID, kind)
+	return err
+}
+
+// ClearFailures removes ALL of an asset's DLQ rows — the reimport half of the
+// D28 staleness transition: exhaustion described the OLD bytes, and new bytes
+// must get fresh attempts (without this, a repaired file stays terminally
+// "failed"). Runs in the same transaction as AssetRepo.ClearDerived.
+func (r *EnrichmentRepo) ClearFailures(ctx context.Context, assetID string) error {
+	_, err := r.DB.ExecContext(ctx,
+		"DELETE FROM enrichment_errors WHERE asset_id = ?", assetID)
 	return err
 }
 

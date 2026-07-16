@@ -2,7 +2,6 @@ package importer
 
 import (
 	"context"
-	"time"
 
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
@@ -33,8 +32,8 @@ func (a action) String() string {
 }
 
 // pipelineItem threads one file through the pipeline; each stage fills in its own
-// fields. It is the shared state the six stage files (stage_*.go) read and write
-// as it flows SCAN → HASH → MATCH → EXTRACT → THUMB → WRITE.
+// fields. It is the shared state the five stage files (stage_*.go) read and write
+// as it flows SCAN → HASH → MATCH → EXTRACT → WRITE.
 type pipelineItem struct {
 	logger *log.Logger // child logger with "asset" key baked in
 
@@ -56,7 +55,6 @@ type pipelineItem struct {
 	existing          *domain.Asset
 	assetID           string
 	extractedMetadata metadata.Metadata
-	thumbnailedAt     *time.Time
 	mismatchMarker    map[string]any // extension_mismatch marker → extended_metadata
 	stageErrors       []stageError
 }

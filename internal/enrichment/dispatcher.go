@@ -288,7 +288,7 @@ func (d *dispatcherState) scan(ctx context.Context, kind string) {
 		ArtifactColumn:      definition.ArtifactColumn,
 		PrerequisiteColumns: engine.prerequisiteColumns[kind],
 		Extensions:          engine.extensionsByKind[kind],
-		MaxAttempts:         maxAttempts,
+		MaxAttempts:         MaxAttempts,
 		Limit:               scanPageSize,
 	})
 	if err != nil {

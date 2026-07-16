@@ -164,45 +164,59 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 		if err := repos.Assets.ApplyFilePatch(ctx, item.assetID, reimportFilePatch(&item.scanned, item.hash, &item.extractedMetadata, item.existing)); err != nil {
 			return err
 		}
-		return pipe.markThumbnail(ctx, repos, item)
+		item.logger.Debug("reimport: derived state + enrichment DLQ cleared", "path", item.scanned.relPath, "assetID", item.assetID)
+		return clearStaleDerived(ctx, repos, item.assetID)
 	default: // actionNew, actionDuplicate
 		asset := buildAsset(item.assetID, pipe.source, &item.scanned, item.hash, &item.extractedMetadata)
 		if err := repos.Assets.Create(ctx, asset); err != nil {
 			return err
 		}
 		if item.verdict == actionDuplicate {
-			if err := repos.Dups.Log(ctx, &domain.Duplicate{
+			return repos.Dups.Log(ctx, &domain.Duplicate{
 				ID:               domain.NewID(),
 				OriginalAssetID:  item.existing.ID,
 				DuplicateAssetID: asset.ID,
 				PartialHash:      item.hash,
 				DetectedAt:       time.Now().UTC(),
 				Status:           "pending",
-			}); err != nil {
-				return err
-			}
+			})
 		}
-		return pipe.markThumbnail(ctx, repos, item)
+		return nil
 	}
 }
 
-func (pipe *pipeline) markThumbnail(ctx context.Context, repos sqlite.Repos, item *pipelineItem) error {
-	if item.thumbnailedAt == nil {
-		return nil
+// clearStaleDerived is the D28 staleness transition, run inside the reimport's
+// own transaction: new bytes mean every derived artifact describes the OLD
+// bytes, so derived columns flip to NULL (instantly "missing" — the next
+// enrichment scan re-derives them) and the asset's enrichment DLQ rows are
+// deleted (exhaustion described the old bytes; new bytes get fresh attempts).
+// Thumbnail FILES deliberately survive on disk: the grid shows the
+// outdated-but-real thumb until regeneration overwrites it, and the
+// content-addressed URL cache-busts on completion.
+func clearStaleDerived(ctx context.Context, repos sqlite.Repos, assetID string) error {
+	if err := repos.Assets.ClearDerived(ctx, assetID); err != nil {
+		return err
 	}
-	return repos.Assets.SetThumbnailAt(ctx, item.assetID, *item.thumbnailedAt)
+	return repos.Enrichment.ClearFailures(ctx, assetID)
 }
 
 // persist applies the decided verdict on the single-file (watcher) path. New and
 // duplicate mint a fresh asset; reimport refreshes observation columns ONLY
 // (judgments untouched — the writer split makes touching them impossible, and a
-// missing file reappearing at its original path is restored online here).
-// Duplicates also log the pair. This is the unbatched sibling of writeItem.
+// missing file reappearing at its original path is restored online here) and
+// then runs the D28 staleness clear (see clearStaleDerived) through the same
+// store transaction the batch path uses. This is the unbatched sibling of
+// writeItem.
 func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
 	switch verdict {
 	case actionReimport:
 		logger.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
-		return existing.ID, imp.Obs.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing))
+		return existing.ID, imp.Store.InTx(ctx, func(repos sqlite.Repos) error {
+			if err := repos.Assets.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing)); err != nil {
+				return err
+			}
+			return clearStaleDerived(ctx, repos, existing.ID)
+		})
 
 	default: // actionNew, actionDuplicate
 		logger.Debug("write.persist: new asset detected - minting!", "path", scanned.relPath)
@@ -298,9 +312,9 @@ func reimportFilePatch(scanned *scannedFile, hash string, extractedMetadata *met
 }
 
 // buildAsset creates a new asset from scan + hash, then overlays extracted
-// metadata. The ID is minted by the caller (MATCH mints it before THUMB, which
-// needs it to name the thumbnail file). ThumbnailAt is left nil here — the
-// thumbnail stage patches it after the asset is written (see stage_thumb.go).
+// metadata. The ID is minted by the caller (MATCH). ThumbnailAt is nil at
+// commit by design (D25): the thumbnail is an enrichment artifact, produced
+// post-commit by the engine — the missing column IS the queue.
 func buildAsset(id string, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata) *domain.Asset {
 	now := time.Now().UTC()
 	asset := &domain.Asset{

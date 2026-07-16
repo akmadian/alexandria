@@ -734,6 +734,28 @@ control, and edges are claims — rescan recovery needs the disk path regardless
 fusion trigger's measurements arrive, the sanctioned shapes are a bounded lookaside cache or
 decode fusion.)*
 
+*(2026-07-14, task-19 build round (Ari + Claude) — thumbnails left ingest; three in-round
+calls worth recording. **The thumb capability is a strategy VALUE in the assettype table:**
+`thumbnailer.GenFunc` became a method value on the `Thumbnailer` struct (`GenerateRaster` /
+`GenerateRawPreview` — the receiver, passed at call time, carries every runtime dependency:
+output layout, the exiftool daemon), so the static table stays the single capability truth,
+applicability stays `handler.Thumb != nil`, and no second dispatch layer exists. Rejected: a
+producer-side type conditional (capability truth leaks into code that drifts from the
+applicability predicate — the C10 rot pattern) and a strategy-enum with a constructed
+strategy registry (a second registry stacked on the one the table already is). Nil
+degradation is two-level and loud: nil `Thumb` = the format has no capability (never
+enqueued); nil daemon at runtime = a `tool_unavailable` DLQ row, never silent
+inapplicability. Ceiling noted at the `GenFunc` definition: a strategy needing per-call state
+not derivable from (Thumbnailer fields + source path) reopens the shape. **Corrupt-pixel
+discovery moved engines with the decode:** ingest never decodes, so a valid-magic
+undecodable file now commits with NO `import_errors` row — the decode failure is the
+thumbnail job's `enrichment_errors` row. D13's self-heal loop is unchanged but cross-engine:
+the reimport staleness clear wipes the DLQ row, the scan re-derives the work, and the
+corrupt→heal acceptance test walks both engines. **The exiftool stay_open transport is
+binary-safe now:** `-b` output carries no trailing newline, so the `{readyN}` ready marker is
+matched as a line suffix instead of a whole line — the line-based reader would have hung
+forever on the first real preview extraction.)*
+
 ## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
 
 The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —

@@ -40,9 +40,11 @@ const (
 	// scanPageSize bounds one missing-artifact scan pass; a full page means
 	// "more work likely — rescan when the queue drains".
 	scanPageSize = 512
-	// maxAttempts is the DLQ exhaustion threshold: at this many recorded
+	// MaxAttempts is the DLQ exhaustion threshold: at this many recorded
 	// failures nothing re-enqueues the job and the asset reads "failed".
-	maxAttempts = 5
+	// Exported for consumers of the failed state (the dev harness's
+	// convergence check; task 21's per-asset decoration).
+	MaxAttempts = 5
 	// writeBatchSize / writeLull mirror the ingest WRITE stage's batching.
 	writeBatchSize = 50
 )

@@ -2,8 +2,9 @@
 
 Turns files on disk into catalog rows. This is the ingest engine: it walks a
 source, figures out what each file *is* relative to what the catalog already
-knows, extracts metadata, generates thumbnails, and writes everything the
-catalog needs — durably, concurrently, and idempotently.
+knows, extracts metadata, and writes everything the catalog needs — durably,
+concurrently, and idempotently. Thumbnails are deliberately NOT its job (D25):
+they are enrichment artifacts, produced post-commit by `internal/enrichment`.
 
 This README is the reference for the pipeline. The `D<n>` references below point at
 [`docs/decisions.md`](../../docs/decisions.md).
@@ -30,10 +31,15 @@ Most of the code makes sense once these land:
    matrix. Idempotency is what makes this safe: running twice on an unchanged tree
    writes nothing.
 
-4. **An asset commits only when fully processed.** Thumbnailing happens *before*
-   the database write, not after. There is no "imported but still generating"
-   half-state — no placeholder cards (an emphatic product decision, D12). If a
-   committed asset has no thumbnail, there is a DLQ row saying why.
+4. **Committed = identity + observation complete; enrichment converges (D25).**
+   An asset commits as soon as ingest knows what it is and what the filesystem
+   says about it. Derived artifacts (thumbnails, signals) are produced
+   post-commit by the enrichment engine — a NULL derived column IS the pending
+   state, honestly renderable (EXTRACT already yields dimensions/orientation
+   for a correctly-shaped placeholder cell), and every eligible asset converges
+   to enriched or to a durable `enrichment_errors` row, never an ambiguous
+   blank. This supersedes D12's "commit only when fully processed" — the LrC
+   trauma was *dishonest* placeholders, not placeholders per se.
 
 5. **Idempotency is the recovery mechanism.** There is no retry queue. A failed
    or canceled run leaves committed work intact and re-drives cheaply: the next
@@ -42,12 +48,12 @@ Most of the code makes sense once these land:
 ## The pipeline
 
 ```
-walk ─► SCAN ─► HASH ─► MATCH ─► EXTRACT ─► THUMB ─► WRITE ─► post-commit
-       1 grtn   pool     1        pool       pool     1 grtn
-                (4)    (matrix)   (2)        (2)     50/txn
+walk ─► SCAN ─► HASH ─► MATCH ─► EXTRACT ─► WRITE ─► post-commit
+       1 grtn   pool     1        pool      1 grtn
+                (4)    (matrix)   (2)      50/txn
 ```
 
-Six stages connected by bounded channels; a full channel blocking a send *is* the
+Five stages connected by bounded channels; a full channel blocking a send *is* the
 backpressure. Every channel is created, wired, and closed in exactly one function
 (`pipeline.run`); stages take directional channel params and never make channels.
 One `errgroup` owns all goroutines.
@@ -58,12 +64,16 @@ One `errgroup` owns all goroutines.
 | HASH | `stage_hash.go` | Fingerprint (xxhash of first 64KB + size) | Also runs the magic-byte `Sniff` on the same buffer — see the mismatch policy below. |
 | MATCH | `stage_match.go` | Run the identity matrix, mint IDs | **Singleton** — one goroutine reads a serializable view of the catalog it's mutating. |
 | EXTRACT | `stage_extract.go` | Pull normalized metadata | Best-effort: a decode failure is a DLQ row, never a stop. |
-| THUMB | `stage_thumb.go` | Generate the thumbnail file | Precedes WRITE (idea #4). Skipped for types with no generator. |
-| WRITE | `stage_write.go` | Commit a batch in one transaction | **Singleton** — SQLite has one writer, so this goroutine *is* the batching point (50 items, a 500ms lull, or stream end). Builds the asset/patch/sidecar rows. |
+| WRITE | `stage_write.go` | Commit a batch in one transaction | **Singleton** — SQLite has one writer, so this goroutine *is* the batching point (50 items, a 500ms lull, or stream end). Builds the asset/patch/sidecar rows; a reimport's transaction also runs the D28 staleness clear (derived columns + enrichment DLQ rows). |
 
-`MATCH` and `WRITE` are single goroutines on purpose; `HASH`/`EXTRACT`/`THUMB` are
-worker pools (defaults in `defaultPools`, `pipeline.go`). Pool sizes are hardcoded
-until per-machine config lands.
+`MATCH` and `WRITE` are single goroutines on purpose; `HASH`/`EXTRACT` are worker
+pools (`Machine.Workers.Ingest`, falling back to `defaultPools` in `pipeline.go`).
+There is no decode stage: ingest never touches pixels, which is why its
+throughput is hash/extract-bound (the D30 traces showed thumbnailing at 95% of
+the old run time — that work now happens post-commit, under the enrichment
+engine's CPU budget). WRITE's post-commit hook (`OnAssetCommitted`) is where the
+composition root chains the enrichment dispatcher nudge (`Engine.RequestScan`) —
+a hint, never truth; the missing-artifact scan stays the authority.
 
 ## Entry points
 
@@ -109,8 +119,13 @@ the DB yet, but it's in the map.
   the observation/derived/dup/sidecar/import repos on `Repos`. Keep it that way.
 - **Channels are born, wired, and closed only in `pipeline.run`.** Stages receive
   directional channels; they never allocate or close one.
-- **THUMB stays before WRITE.** Don't "optimize" by committing first and
-  thumbnailing after — that reintroduces the half-imported state.
+- **Never decode pixels in ingest.** Thumbnails (and every future
+  pixel-derived signal) belong to the enrichment engine — reintroducing a
+  decode stage re-couples commit latency to the slowest work (the D25
+  reversal, with D30's measurements as the receipt).
+- **The reimport staleness clear stays inside the reimport's transaction**
+  (`clearStaleDerived`): derived columns and the asset's enrichment DLQ rows
+  flip together with the observation patch, or not at all (D28).
 - **Per-file failures never abort the run.** They become `import_errors` (DLQ)
   rows and the run continues. Only catastrophic failures (DB down, source root
   unreachable at start) return an error.
@@ -130,11 +145,12 @@ spans when `Importer.Tracer` is set (nil = off; every call on a nil tracer is a
   aggregates never mix their timings). The span rides the item (`pipelineItem.ctx`),
   starts at SCAN emit, and ends after WRITE commits — so an item still in flight
   at cancel/crash shows as an incomplete span (`end_ns IS NULL`), by design.
-- `import.hash` / `import.match` / `import.extract` / `import.thumb` — per-stage
-  child spans, ended **before** the downstream send, so the gap between one
-  stage's end and the next stage's start *is* the queue time. No work = no span
-  (sidecars have no match/extract/thumb spans). A stage failure `Fail`s its span;
-  the DLQ row remains the durable record.
+- `import.hash` / `import.match` / `import.extract` — per-stage child spans,
+  ended **before** the downstream send, so the gap between one stage's end and
+  the next stage's start *is* the queue time. No work = no span (sidecars have
+  no match/extract spans). A stage failure `Fail`s its span; the DLQ row
+  remains the durable record. (Thumbnail spans live in the enrichment
+  vocabulary: `enrichment.thumbnail`.)
 - `import.await-commit` — WRITE arrival → commit: the batching latency made
   queryable (batch fill + lull + transaction).
 - `import.write-batch` — each commit is its own tiny trace (a batch serving N
@@ -176,8 +192,11 @@ dropped events at the default buffer.
 ## Tests
 
 `pipeline_test.go` is the acceptance suite — the five matrix verdicts, the in-run
-duplicate pair, the D7 mismatch, corrupt→heal DLQ, batch-progress visibility, and
-the sacred full-processing-invariant cancel test — plus a throughput benchmark.
+duplicate pair, the D7 mismatch, the cross-engine corrupt→heal loop, the
+reimport staleness clear, batch-progress visibility, and the re-derived commit
+invariant (assets commit with no thumbnails; a real enrichment engine then
+converges them, after a full import and after a mid-run cancel) — plus a
+throughput benchmark that now measures ingest alone.
 Pure transforms (`partialHash`, the matrix) get direct unit tests; the channel
 plumbing is tested once via the end-to-end runs, not re-tested per stage.
 

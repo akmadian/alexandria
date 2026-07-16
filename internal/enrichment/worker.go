@@ -101,7 +101,7 @@ func (e *Engine) runJob(ctx context.Context, assignment *job) {
 		Kind:                definition.Kind,
 		ArtifactColumn:      definition.ArtifactColumn,
 		PrerequisiteColumns: e.prerequisiteColumns[definition.Kind],
-		MaxAttempts:         maxAttempts,
+		MaxAttempts:         MaxAttempts,
 	})
 	if err != nil {
 		e.finishSkipped(ctx, result, "eligibility check failed", err)

@@ -25,7 +25,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/assettype"
+	"github.com/akmadian/alexandria/internal/dependency"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/enrichment"
 	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/akmadian/alexandria/internal/logging"
 	"github.com/akmadian/alexandria/internal/migrations"
@@ -83,7 +86,7 @@ func usage() {
 
 usage:
   dev import <path>   [--catalog <dir|:memory:>] [--debug [--debug-addr <addr>]]
-                      [--hash-workers N] [--extract-workers N] [--thumb-workers N]
+                      [--hash-workers N] [--extract-workers N] [--thumbnail-workers N]
                       [--trace=false]
   dev reconcile <path> [--catalog <dir>]           mark missing/restored files
   dev watch     <path> [--catalog <dir>]           live-watch a tree until Ctrl-C
@@ -92,13 +95,15 @@ usage:
   dev rebuild fts     [--catalog <dir>]            rebuild the FTS index
 
 worker pools (import):
-  EXTRACT and THUMB (CPU-bound) default to ~75% of your cores — fast, but leaves
-  headroom so the machine stays responsive (it can't lock up: the OS preempts and
-  Go caps parallelism at NumCPU regardless). THUMB (decode + resize) is usually
-  the wall for real photos. Override with --thumb-workers/--extract-workers, or
-  pass 0 for the conservative engine default (hash=4 extract=2 thumb=2). Each
-  in-flight THUMB holds a fully-decoded image, so more workers = more RAM; watch
-  it under --debug (/debug/pprof/heap). The effective sizes print at start.
+  EXTRACT and the thumbnail enrichment pool (CPU-bound) default to ~75% of your
+  cores — fast, but leaves headroom so the machine stays responsive (it can't
+  lock up: the OS preempts, Go caps parallelism at NumCPU, and the enrichment
+  CPU budget arbitrates the sum regardless). Thumbnailing runs POST-commit on
+  the enrichment engine (D25): the import finishes at ingest speed, then the
+  harness waits for enrichment to converge. Override with --thumbnail-workers/
+  --extract-workers, or pass 0 for the conservative defaults (hash=4 extract=2
+  thumbnail=2). Each in-flight thumbnail decode holds a full image in RAM;
+  watch it under --debug (/debug/pprof/heap).
 
 catalog storage (--catalog):
   :memory:   (default)  throwaway in-memory DB — fast, but nothing to browse afterward.
@@ -202,23 +207,124 @@ func openCatalog(catalogPath string) (*openedCatalog, error) {
 
 func newIngester(catalog *openedCatalog) *importer.Importer {
 	assets := &sqlite.AssetRepo{DB: catalog.store.DB}
-	set := catalog.currentSettings()
-	thumb := thumbnailer.New(catalog.thumbDir)
-	if set.ThumbnailQuality > 0 {
-		thumb.Quality = set.ThumbnailQuality // settings owns JPEG quality
-	}
 	return &importer.Importer{
-		Reader:    assets,
-		Obs:       assets,
-		Derived:   assets,
-		Dups:      &sqlite.DuplicateRepo{DB: catalog.store.DB},
-		Thumbnail: thumb,
-		Store:     catalog.store,
-		Imports:   &sqlite.ImportRepo{DB: catalog.store.DB},
-		Settings:  set,                      // D18 ignore list + WRITE batch size, owned by settings
-		Machine:   catalog.currentMachine(), // worker-pool sizes, owned by settings (machine.json)
-		Log:       log.Default(),            // debug-level; configured in main
+		Reader:   assets,
+		Obs:      assets,
+		Dups:     &sqlite.DuplicateRepo{DB: catalog.store.DB},
+		Store:    catalog.store,
+		Imports:  &sqlite.ImportRepo{DB: catalog.store.DB},
+		Settings: catalog.currentSettings(), // D18 ignore list + WRITE batch size, owned by settings
+		Machine:  catalog.currentMachine(),  // worker-pool sizes, owned by settings (machine.json)
+		Log:      log.Default(),             // debug-level; configured in main
 	}
+}
+
+// enrichmentRig is a running enrichment engine plus the runtime dependencies
+// the harness composed for it (the first real composition root for the task-18
+// engine). Stop shuts the engine down and closes the exiftool daemon.
+type enrichmentRig struct {
+	engine      *enrichment.Engine
+	definitions []enrichment.JobDefinition
+	repo        *sqlite.EnrichmentRepo
+	daemon      *dependency.ExiftoolDaemon // nil when exiftool is undiscovered
+}
+
+// startEnrichment builds and starts the enrichment engine against an open
+// catalog: the thumbnailer (with the exiftool daemon when discoverable — RAW
+// previews degrade to tool_unavailable DLQ rows without it), the canonical
+// job-definition registry, and the engine itself. thumbnailWorkers > 0
+// overrides the thumbnail pool size (the harness's fast-local-import knob).
+func startEnrichment(ctx context.Context, catalog *openedCatalog, tracer *gospan.Tracer, thumbnailWorkers int) (*enrichmentRig, error) {
+	settingsSnapshot := catalog.currentSettings()
+	thumbnails := thumbnailer.New(catalog.thumbDir)
+	if settingsSnapshot.ThumbnailQuality > 0 {
+		thumbnails.Quality = settingsSnapshot.ThumbnailQuality // settings owns JPEG quality
+	}
+	machine := catalog.currentMachine()
+	var daemon *dependency.ExiftoolDaemon
+	status := dependency.Discover(dependency.Exiftool, machine.DependencyPaths[string(dependency.Exiftool)])
+	if status.Available() {
+		started, err := dependency.StartExiftool(status, log.Default())
+		if err != nil {
+			return nil, err
+		}
+		daemon = started
+		thumbnails.Exiftool = daemon
+	} else {
+		log.Default().Warn("exiftool not found — RAW thumbnails will fail as tool_unavailable", "state", status.State)
+	}
+
+	if thumbnailWorkers > 0 {
+		if machine.Workers.Enrichment == nil {
+			machine.Workers.Enrichment = map[string]int{}
+		}
+		machine.Workers.Enrichment["thumbnail"] = thumbnailWorkers
+	}
+	definitions := enrichment.Definitions(thumbnails, &sqlite.SourceRepo{DB: catalog.store.DB})
+	enrichmentRepo := &sqlite.EnrichmentRepo{DB: catalog.store.DB}
+	engine, err := enrichment.New(&enrichment.Config{
+		Definitions: definitions,
+		Reader:      &sqlite.AssetRepo{DB: catalog.store.DB},
+		Store:       catalog.store,
+		Enrichment:  enrichmentRepo,
+		Log:         log.Default(),
+		Tracer:      tracer,
+		Machine:     machine,
+	})
+	if err != nil {
+		if daemon != nil {
+			_ = daemon.Close()
+		}
+		return nil, err
+	}
+	engine.Start(ctx)
+	return &enrichmentRig{engine: engine, definitions: definitions, repo: enrichmentRepo, daemon: daemon}, nil
+}
+
+func (rig *enrichmentRig) stop() {
+	rig.engine.Stop()
+	if rig.daemon != nil {
+		_ = rig.daemon.Close()
+	}
+}
+
+// missingArtifacts counts the catalog's remaining enrichment work: assets
+// eligible for some definition whose artifact is still missing and not
+// attempt-exhausted — the same scan the dispatcher runs, reused as the
+// harness's convergence probe (0 = every artifact machine reached present or
+// failed).
+func (rig *enrichmentRig) missingArtifacts(ctx context.Context) (int, error) {
+	columnByKind := make(map[string]string, len(rig.definitions))
+	for index := range rig.definitions {
+		columnByKind[rig.definitions[index].Kind] = rig.definitions[index].ArtifactColumn
+	}
+	total := 0
+	for index := range rig.definitions {
+		definition := &rig.definitions[index]
+		var extensions []string
+		for _, handler := range assettype.All() {
+			if definition.Applicable(handler) {
+				extensions = append(extensions, handler.Ext)
+			}
+		}
+		prerequisiteColumns := make([]string, 0, len(definition.Prerequisites))
+		for _, prerequisite := range definition.Prerequisites {
+			prerequisiteColumns = append(prerequisiteColumns, columnByKind[prerequisite])
+		}
+		missing, err := rig.repo.ListMissingArtifacts(ctx, &sqlite.MissingArtifactScan{
+			Kind:                definition.Kind,
+			ArtifactColumn:      definition.ArtifactColumn,
+			PrerequisiteColumns: prerequisiteColumns,
+			Extensions:          extensions,
+			MaxAttempts:         enrichment.MaxAttempts,
+			Limit:               10000, // a count cap, not a page — dev-harness precision is fine
+		})
+		if err != nil {
+			return 0, err
+		}
+		total += len(missing)
+	}
+	return total, nil
 }
 
 // currentSettings is the settings snapshot the composition root injects into the
@@ -289,10 +395,10 @@ func cmdImport(args []string) error {
 	trace := flags.Bool("trace", true, "write a gospan trace file for this run (--trace=false for A/B overhead runs)")
 	hashWorkers := flags.Int("hash-workers", 0, "HASH pool size (0 = engine default; I/O-bound)")
 	extractWorkers := flags.Int("extract-workers", cpuBoundWorkers(), "EXTRACT pool size (CPU-bound; 0 = conservative engine default)")
-	thumbWorkers := flags.Int("thumb-workers", cpuBoundWorkers(), "THUMB pool size (CPU-bound, ~1 image in RAM each; 0 = engine default)")
+	thumbnailWorkers := flags.Int("thumbnail-workers", cpuBoundWorkers(), "thumbnail enrichment pool size (CPU-bound, ~1 image in RAM each; 0 = registry default)")
 	path, ok := parsePathAndFlags(flags, args)
 	if !ok {
-		return fmt.Errorf("usage: dev import <path> [--catalog <dir|:memory:>] [--debug] [--thumb-workers N]")
+		return fmt.Errorf("usage: dev import <path> [--catalog <dir|:memory:>] [--debug] [--thumbnail-workers N]")
 	}
 	absolutePath, err := filepath.Abs(path)
 	if err != nil {
@@ -332,26 +438,38 @@ func cmdImport(args []string) error {
 		}
 		tracer, err = gospan.New(
 			traceSink,
+			// gospan.MultiSink(
+			// 	gospan.SlogSink(slog.Default()),
+			// 	traceSink,
+			// ),
 			gospan.WithLogger(slog.New(log.Default())),
-			gospan.WithOverheadSampling(1))
+			gospan.WithOverheadSampling(4))
 		if err != nil {
 			return err
 		}
 		defer tracer.Close(context.Background()) // safety net for early returns; Close is idempotent — the reporting Close runs below
 	}
 
+	// The enrichment engine runs alongside the import (the real model: the CPU
+	// budget arbitrates between them); ingest's post-commit hook nudges its
+	// dispatcher, and the on-open scan has already queued any backlog from
+	// previous runs.
+	rig, err := startEnrichment(ctx, catalog, tracer, *thumbnailWorkers)
+	if err != nil {
+		return err
+	}
 	ingester := newIngester(catalog)
 	ingester.Tracer = tracer
+	ingester.OnAssetCommitted = func(context.Context, *domain.Source, string, string) {
+		rig.engine.RequestScan() // a hint, coalesced; the scan stays the authority
+	}
 	// Worker counts come from machine.json (via newIngester); the dev flags override
-	// per stage when >0 (extract/thumb default to cpuBoundWorkers for fast local imports).
+	// per stage when >0 (extract defaults to cpuBoundWorkers for fast local imports).
 	if *hashWorkers > 0 {
 		ingester.Machine.Workers.Ingest.Hash = *hashWorkers
 	}
 	if *extractWorkers > 0 {
 		ingester.Machine.Workers.Ingest.Extract = *extractWorkers
-	}
-	if *thumbWorkers > 0 {
-		ingester.Machine.Workers.Ingest.Thumb = *thumbWorkers
 	}
 
 	startedAt := time.Now()
@@ -402,6 +520,18 @@ func cmdImport(args []string) error {
 		fmt.Println("  catalog db: in-memory (nothing to browse — use --catalog <dir> for a real file)")
 	}
 
+	// Let enrichment converge before exiting — a one-shot harness process takes
+	// its queues with it, so waiting here is what makes `dev import` end with a
+	// fully-thumbnailed catalog (a canceled import skips the wait; the next run's
+	// on-open scan converges the committed remainder, which is the D25 model).
+	if runErr == nil {
+		if err := awaitConvergence(ctx, rig, signals); err != nil {
+			fmt.Fprintln(os.Stderr, "  (enrichment convergence:", err, ")")
+		}
+	}
+	rig.stop()
+	printEnrichmentFailures(ctx, catalog)
+
 	// Close drains the buffer and finishes the trace file; stats read after so
 	// Written is final. Dropped > 0 means the event buffer needs WithBufferSize.
 	if tracer != nil {
@@ -428,6 +558,52 @@ func cmdImport(args []string) error {
 		<-hold
 	}
 	return nil
+}
+
+// awaitConvergence polls the missing-artifact count (requesting a scan pass
+// each tick so non-exhausted failures keep retrying) until every artifact
+// machine reaches present or failed, or the user interrupts.
+func awaitConvergence(ctx context.Context, rig *enrichmentRig, interrupt <-chan os.Signal) error {
+	remaining, err := rig.missingArtifacts(ctx)
+	if err != nil || remaining == 0 {
+		return err
+	}
+	fmt.Printf("  enrichment: %d artifact(s) to converge…\n", remaining)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-interrupt:
+			fmt.Printf("\r%60s\rinterrupted — %d artifact(s) left for the next run's scan\n", "", remaining)
+			return nil
+		case <-ticker.C:
+			rig.engine.RequestScan()
+			remaining, err = rig.missingArtifacts(ctx)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("\r  enrichment: %d remaining   ", remaining)
+			if remaining == 0 {
+				fmt.Printf("\r%60s\r  enrichment: converged\n", "")
+				return nil
+			}
+		}
+	}
+}
+
+// printEnrichmentFailures summarizes the enrichment DLQ after a run — absence
+// is ambiguous, so the harness says out loud which assets ended failed.
+func printEnrichmentFailures(ctx context.Context, catalog *openedCatalog) {
+	var failures, exhausted int
+	row := catalog.store.DB.QueryRowContext(ctx,
+		"SELECT COUNT(*), COALESCE(SUM(attempts >= ?), 0) FROM enrichment_errors", enrichment.MaxAttempts)
+	if err := row.Scan(&failures, &exhausted); err != nil {
+		fmt.Fprintln(os.Stderr, "  (enrichment DLQ read:", err, ")")
+		return
+	}
+	if failures > 0 {
+		fmt.Printf("  enrichment DLQ: %d asset/kind failure(s), %d exhausted (see enrichment_errors)\n", failures, exhausted)
+	}
 }
 
 // startDebugServer serves Go's stdlib pprof + expvar on addr in the background.
@@ -522,8 +698,19 @@ func cmdWatch(args []string) error {
 	if err != nil {
 		return err
 	}
+	// The engine converges watcher-ingested files live: every committed asset
+	// nudges the dispatcher, and the on-open scan already covered the backlog.
+	rig, err := startEnrichment(ctx, catalog, nil, 0)
+	if err != nil {
+		return err
+	}
+	defer rig.stop()
+	ingester := newIngester(catalog)
+	ingester.OnAssetCommitted = func(context.Context, *domain.Source, string, string) {
+		rig.engine.RequestScan()
+	}
 	fileWatcher := &watcher.Watcher{
-		Ingester: newIngester(catalog),
+		Ingester: ingester,
 		Obs:      &sqlite.AssetRepo{DB: catalog.store.DB}, // the one sanctioned write: connectivity
 		Source:   source,
 		Root:     absolutePath,

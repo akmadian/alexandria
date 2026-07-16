@@ -560,12 +560,32 @@ func (r *AssetRepo) RecordXMPWritten(ctx context.Context, id string, writtenAt t
 	return checkRowsAffected(res, "asset", id)
 }
 
-// --- Derived writer (jobs / thumbnail stage) ---
+// --- Derived writer (enrichment writer + the reimport staleness clear) ---
 
 func (r *AssetRepo) SetThumbnailAt(ctx context.Context, id string, t time.Time) error {
 	res, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET thumbnail_at = ?, updated_at = ? WHERE id = ?",
 		formatTime(t), formatTime(time.Now().UTC()), id)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "asset", id)
+}
+
+// ClearDerived nulls every derived artifact column on one asset — the D28
+// staleness transition: a reimport's transaction calls this so derived state
+// instantly reads "missing" and the next enrichment scan re-derives it. The
+// column set is derivedArtifactColumns (the enrichment scan allowlist), so a
+// task-20 column added there is cleared on reimport with no change here.
+func (r *AssetRepo) ClearDerived(ctx context.Context, id string) error {
+	clauses := make([]string, 0, len(derivedArtifactColumns)+1)
+	for _, column := range sortedDerivedArtifactColumns() {
+		clauses = append(clauses, column+" = NULL")
+	}
+	clauses = append(clauses, "updated_at = ?")
+	res, err := r.DB.ExecContext(ctx,
+		"UPDATE assets SET "+strings.Join(clauses, ", ")+" WHERE id = ?",
+		formatTime(time.Now().UTC()), id)
 	if err != nil {
 		return err
 	}

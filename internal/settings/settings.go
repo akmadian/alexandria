@@ -50,10 +50,11 @@ type WorkerCounts struct {
 	Enrichment map[string]int `json:"enrichment,omitempty"`
 }
 
+// IngestWorkers has no thumb pool: thumbnailing left ingest for the enrichment
+// engine (D25, task 19) — its count lives at Workers.Enrichment["thumbnail"].
 type IngestWorkers struct {
 	Hash    int `json:"hash"`
 	Extract int `json:"extract"`
-	Thumb   int `json:"thumb"`
 }
 
 // EnrichmentConfig is the machine-scoped enrichment engine tuning (D28).
@@ -96,12 +97,12 @@ func DefaultSettings() Settings {
 	}
 }
 
-// DefaultMachine — worker defaults mirror importer.defaultPools (hash=4/extract=2/thumb=2).
+// DefaultMachine — worker defaults mirror importer.defaultPools (hash=4/extract=2).
 // Enrichment worker counts deliberately have NO defaults here: the job-kind
 // registry row owns each kind's default, and this map only overrides it.
 func DefaultMachine() Machine {
 	return Machine{
-		Workers:    WorkerCounts{Ingest: IngestWorkers{Hash: 4, Extract: 2, Thumb: 2}},
+		Workers:    WorkerCounts{Ingest: IngestWorkers{Hash: 4, Extract: 2}},
 		Enrichment: EnrichmentConfig{Effort: EffortNormal, IOTokens: 4},
 	}
 }
@@ -192,7 +193,6 @@ func sanitizeMachine(machine Machine, logger *log.Logger) Machine {
 	}
 	clamp("workers.ingest.hash", &ingest.Hash, defaults.Hash)
 	clamp("workers.ingest.extract", &ingest.Extract, defaults.Extract)
-	clamp("workers.ingest.thumb", &ingest.Thumb, defaults.Thumb)
 
 	enrichmentDefaults := DefaultMachine().Enrichment
 	switch machine.Enrichment.Effort {

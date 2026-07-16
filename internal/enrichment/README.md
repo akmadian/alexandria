@@ -2,8 +2,9 @@
 
 The convergent-lane background engine (D25/D28): derives work from missing
 artifacts, produces them under a global CPU budget, and commits results through
-the catalog's third writer class. Task 19 moves thumbnails onto it; task 20
-adds the cheap signals. The `D<n>` references point at
+the catalog's third writer class. `thumbnail` is the first real job kind
+(decode for raster formats; RAW via the exiftool daemon's embedded-preview
+extraction); task 20 adds the cheap signals. The `D<n>` references point at
 [`docs/decisions.md`](../../docs/decisions.md).
 
 ## The model
@@ -35,7 +36,8 @@ artifact IS the queue" (D17, generalized).
 
 | Piece | File | One-liner |
 |-------|------|-----------|
-| Job-definition registry | `registry.go` | ONE file is the whole graph (D28 commitment #1): every definition is a node — kind, lane, applicability over `assettype` capabilities, artifact column, prerequisite edges, pool default, timeout policy, weight, producer. `Validate`/`MustValidate` topo-sort it: cycles, danglers, definitions applicable to nothing all fail boot and the suite. |
+| Job-definition registry | `registry.go` | ONE file is the whole graph (D28 commitment #1): every definition is a node — kind, lane, applicability over `assettype` capabilities, artifact column, prerequisite edges, pool default, timeout policy, weight, producer. `Validate`/`MustValidate` topo-sort it: cycles, danglers, definitions applicable to nothing all fail boot and the suite. `Definitions(…)` takes the producers' runtime dependencies (the thumbnailer, a source resolver) and returns the canonical rows. |
+| Thumbnail producer | `thumbnail.go` | The first real node: resolves the asset's absolute path and executes whatever strategy the `assettype` row holds (`handler.Thumb` — a method value on `thumbnailer.Thumbnailer`; decode vs. RAW embedded preview is the strategy's business, invisible here). Failures map onto the DLQ taxonomy: `tool_unavailable` (exiftool undiscovered), `read_failed`, `decode_failed`. |
 | Job queues | `queue.go` | One `container/heap` per node. `Less` is the composite priority key — hinted band (in hint order) over import recency — and is the ONLY place dispatch order exists, never a DB column. Hint promotion/demotion are `heap.Fix` (`promote`/`demote`). |
 | Dispatcher | `dispatcher.go` | One goroutine owning every queue and the dedup ledger. Three job sources into the same queues: **scans** (the authority — on open, on demand, on drain-refill), **edge emissions** (an applied completion enqueues the node's dependents, inheriting the asset's live hint priority — the frontier advances a level per commit), **hints** (speculative, replace-wholesale). Workers rendezvous for jobs; pause parks them. |
 | Workers | `worker.go` | Per-definition pools (`Workers.Enrichment.<kind>`, registry default fallback), every worker running the identical node template: pop → fetch asset → recheck eligibility → I/O token → weighted budget → produce. Only the definition's data differs. Watchdog definitions get a heartbeat-resettable stall timer instead of a wall clock. |
@@ -83,5 +85,6 @@ traces. Nil tracer = off, ~4ns.
 tracker), weightable (budget ceiling), chainable (prerequisite gating + edge
 emission), instant (hint ordering). Registry validation is a table test; the
 budget's blocking/dial mechanics are unit tests (`budget_internal_test.go`).
-The canonical registry (empty until task 19) is validated by the suite on
-every run.
+The canonical registry is validated by the suite on every run, and the
+importer's acceptance suite runs a REAL engine end-to-end (import → converge,
+cancel → converge, corrupt → DLQ → heal).
