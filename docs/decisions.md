@@ -756,6 +756,30 @@ binary-safe now:** `-b` output carries no trailing newline, so the `{readyN}` re
 matched as a line suffix instead of a whole line — the line-based reader would have hung
 forever on the first real preview extraction.)*
 
+*(2026-07-15, task-20 build round (Ari + Claude) — the cheap signals landed as the engine's
+second, third, and fourth kinds; the round's calls, most of them scope-narrowing. **The signal
+math is pure functions in a new `internal/signals`, hand-rolled, no imaging dependency:** the
+"real OpenCV for Go" (gocv) is cgo + a system OpenCV install — banned by the no-cgo/dependency-
+package invariant — and the pure-Go options (bild, imaging) aren't load-bearing for one Laplacian
+kernel + one histogram + one hash (redundancy test); `internal/enrichment/signals.go` stays thin
+producer glue. **phash is dHash, a swappable `PerceptualHasher` strategy value** — pure Go, no
+DCT, robust for near-dup ranking; a DCT-based pHash (goimagehash) is a one-line swap if recall
+ever falls short. **Sharpness is stored RAW (variance of Laplacian), no normalization:** ranking
+is the contract, not the absolute value (the epic's own words), and building a within-burst
+ranking scale when no burst concept exists yet is inventing a consumer; 512px is the analysis
+input (prior-art-standard for the measure, and the thumbnail the signal's prerequisite already
+guarantees) — contrast-normalization (`var/mean²`) and a JPEG-artifact pre-blur are documented
+upgrades behind markers, neither with a consumer. **clipping is one kind writing two columns**
+(highlights + shadows from one histogram pass; the scan marks on `clipping_highlights`, both
+clear together). **The query surface was narrowed below the original acceptance line:** only
+sharpness + clipping got `ast` FILTER vocabulary (the C11 "propose as data, dispose via query"
+contract); phash's query surface (hamming/near-dup) defers with clustering, sort-by-signal defers
+(no cull UI, and sort is already a curated subset), and signal DISPLAY (`catalog.AssetRow`)
+defers — all in DEFERRED §12. The stored columns are the durable half; each deferred surface is a
+small add onto them when its UI consumer lands. **The `derivedArtifactColumns` allowlist is now
+dual-purpose** — the set ClearDerived nulls on reimport AND the pool a registry row's marker must
+be drawn from — so a multi-column kind lists every column but marks one.)*
+
 ## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
 
 The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —

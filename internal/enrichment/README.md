@@ -4,8 +4,9 @@ The convergent-lane background engine (D25/D28): derives work from missing
 artifacts, produces them under a global CPU budget, and commits results through
 the catalog's third writer class. `thumbnail` is the first real job kind
 (decode for raster formats; RAW via the exiftool daemon's embedded-preview
-extraction); task 20 adds the cheap signals. The `D<n>` references point at
-[`docs/decisions.md`](../../docs/decisions.md).
+extraction); the cheap culling signals — `sharpness`, `clipping`, `phash` — are
+the second wave, each gating on the thumbnail artifact. The `D<n>` references
+point at [`docs/decisions.md`](../../docs/decisions.md).
 
 ## The model
 
@@ -38,6 +39,7 @@ artifact IS the queue" (D17, generalized).
 |-------|------|-----------|
 | Job-definition registry | `registry.go` | ONE file is the whole graph (D28 commitment #1): every definition is a node — kind, lane, applicability over `assettype` capabilities, artifact column, prerequisite edges, pool default, timeout policy, weight, producer. `Validate`/`MustValidate` topo-sort it: cycles, danglers, definitions applicable to nothing all fail boot and the suite. `Definitions(…)` takes the producers' runtime dependencies (the thumbnailer, a source resolver) and returns the canonical rows. |
 | Thumbnail producer | `thumbnail.go` | The first real node: resolves the asset's absolute path and executes whatever strategy the `assettype` row holds (`handler.Thumb` — a method value on `thumbnailer.Thumbnailer`; decode vs. RAW embedded preview is the strategy's business, invisible here). Failures map onto the DLQ taxonomy: `tool_unavailable` (exiftool undiscovered), `read_failed`, `decode_failed`. |
+| Signal producers | `signals.go` | The cheap culling signals — `sharpness`, `clipping` (one kind → highlights + shadows), `phash` — each gating on the thumbnail artifact and reading it off disk (`Thumbnailer.AnalysisSize`). The math is pure functions in `internal/signals` (variance of Laplacian; luma-histogram clipping %; dHash, a swappable `PerceptualHasher` strategy); this file is the thin producer glue plus the read-failure DLQ taxonomy (`read_failed`/`decode_failed`). |
 | Job queues | `queue.go` | One `container/heap` per node. `Less` is the composite priority key — hinted band (in hint order) over import recency — and is the ONLY place dispatch order exists, never a DB column. Hint promotion/demotion are `heap.Fix` (`promote`/`demote`). |
 | Dispatcher | `dispatcher.go` | One goroutine owning every queue and the dedup ledger. Three job sources into the same queues: **scans** (the authority — on open, on demand, on drain-refill), **edge emissions** (an applied completion enqueues the node's dependents, inheriting the asset's live hint priority — the frontier advances a level per commit), **hints** (speculative, replace-wholesale). Workers rendezvous for jobs; pause parks them. |
 | Workers | `worker.go` | Per-definition pools (`Workers.Enrichment.<kind>`, registry default fallback), every worker running the identical node template: pop → fetch asset → recheck eligibility → I/O token → weighted budget → produce. Only the definition's data differs. Watchdog definitions get a heartbeat-resettable stall timer instead of a wall clock. |
@@ -45,6 +47,17 @@ artifact IS the queue" (D17, generalized).
 | In-flight tracker | `tracker.go` | `map[assetID]KindSet` under RWMutex — the transient queued/running truth the seam decorates from (task 21). Process restart empties it, and that is correct. |
 | Writer | `writer.go` | The engine's ONE catalog mutator (one-cook): batched transactions (50 items / 500ms lull), applies results through `catalog.AssetDerivedWriter` — judgment/observation columns are unreachable by type. Ordering contract: **DB write → clear bit → emit.** Its completion reports drive edge emission. |
 | DLQ | `sqlite/enrichment_repo.go` | `enrichment_errors(asset_id, kind, …)` — absence is ambiguous, so failure is durable. Exhaustion (5 attempts) is terminal for scans AND hints; success deletes the row. The scan SQL is engine-internal by decision — never routed through `internal/ast` (see the D28 dated note). |
+
+**Signal fidelity.** The cheap signals read the fixed analysis thumbnail (512px,
+q80 JPEG), never the original bytes — re-decoding a giant RAW/TIFF is the cost the
+engine exists to avoid. What the values therefore carry: sharpness is a RAW
+variance-of-Laplacian whose **ranking is the contract, absolute value is not** (no
+normalization — a fixed thumbnail size keeps the scale comparable, and 512px is
+prior-art-standard for the measure); changing which tier signals read is a
+deliberate rebuild (clear the signal columns → the scan re-derives) — the engine
+does not auto-detect a tier change, so treat it as a migration; phash is a
+perceptual hash for near-duplicate detection whose user-facing query surface
+(hamming/clustering) is deferred (DEFERRED §12).
 
 ## Rules you must not break
 

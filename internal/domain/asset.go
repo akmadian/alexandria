@@ -103,6 +103,15 @@ type Asset struct {
 	// stored — see internal/thumbnailer.Registry.Path.
 	ThumbnailAt *time.Time
 
+	// Cheap culling signals (task 20), derived post-commit by the enrichment
+	// engine; nil = not yet computed. Sharpness is the raw variance of Laplacian
+	// (ranking is the contract, not the absolute value); clipping is the % of
+	// blown/crushed pixels. phash has no struct field — it is stored but has no
+	// read/query surface yet (DEFERRED §12).
+	Sharpness          *float64
+	ClippingHighlights *float64
+	ClippingShadows    *float64
+
 	IsDeleted  bool
 	DeletedAt  *time.Time
 	IngestedAt time.Time

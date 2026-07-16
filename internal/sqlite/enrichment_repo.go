@@ -23,13 +23,19 @@ type EnrichmentRepo struct {
 	DB DBTX
 }
 
-// derivedArtifactColumns is the closed allowlist of assets columns the
-// enrichment scan may treat as an artifact marker (NULL = missing). Registry
-// rows name columns as data, so this map is what stands between that data and
-// the SQL — an unknown column is an error, never interpolated. Task 20 adds
-// sharpness, clipping_highlights, clipping_shadows, phash.
+// derivedArtifactColumns is the closed allowlist of enrichment-owned derived
+// columns: every column here is nulled by ClearDerived on reimport (the D28
+// staleness path), and a registry row's artifact marker MUST be one of them. It
+// stands between registry data and SQL — an unknown column is an error, never
+// interpolated. The scan keys only on the markers a registry row names (one per
+// kind); a kind that writes several columns (clipping → highlights + shadows)
+// lists them all here so they clear together, while marking just one.
 var derivedArtifactColumns = map[string]bool{
-	"thumbnail_at": true,
+	"thumbnail_at":        true,
+	"sharpness":           true,
+	"clipping_highlights": true,
+	"clipping_shadows":    true,
+	"phash":               true,
 }
 
 // IsDerivedArtifactColumn reports whether the enrichment scan may key on the

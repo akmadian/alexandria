@@ -93,6 +93,21 @@ func (thumb *Thumbnailer) Path(assetID string, size int) string {
 	return filepath.Join(thumb.Dir, strconv.Itoa(size), shard, assetID+".jpg")
 }
 
+// AnalysisSize is the thumbnail tier the cheap enrichment signals read (task 20).
+// The smallest generated size: always present, fastest to decode, and sufficient
+// for the culling signals (D28). If a signal ever needs more detail, point it at a
+// larger tier and rebuild that column — the analysis size is a rebuild-triggering
+// input, never a silent mix.
+func (thumb *Thumbnailer) AnalysisSize() int {
+	smallest := thumb.Sizes[0]
+	for _, size := range thumb.Sizes[1:] {
+		if size < smallest {
+			smallest = size
+		}
+	}
+	return smallest
+}
+
 // ensureDirs creates the sharded output directories for one asset's files.
 func (thumb *Thumbnailer) ensureDirs(assetID string) error {
 	for _, size := range thumb.Sizes {

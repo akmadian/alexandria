@@ -106,6 +106,10 @@ func TestDerivedGrammar_Golden(t *testing.T) {
 		ast.FieldCaption:     withPresence(text),
 		ast.FieldCreator:     withPresence(text),
 		ast.FieldCopyright:   withPresence(text),
+
+		ast.FieldSharpness:          withPresence(numeric),
+		ast.FieldClippingHighlights: withPresence(numeric),
+		ast.FieldClippingShadows:    withPresence(numeric),
 	}
 
 	fields := ast.AllFields()

@@ -7,6 +7,8 @@ export type TokenField =
   | "cameraModel"
   | "caption"
   | "capturedAt"
+  | "clippingHighlights"
+  | "clippingShadows"
   | "colorLabel"
   | "copyright"
   | "creator"
@@ -18,6 +20,7 @@ export type TokenField =
   | "ingestedAt"
   | "lensModel"
   | "rating"
+  | "sharpness"
   | "source"
   | "tag"
   | "text"
@@ -85,6 +88,8 @@ export const fieldGrammar = {
   cameraModel: { operators: ["eq", "neq", "contains", "startsWith", "empty", "notEmpty"], kind: "text", suggestable: true },
   caption: { operators: ["eq", "neq", "contains", "startsWith", "empty", "notEmpty"], kind: "text", suggestable: false },
   capturedAt: { operators: ["within", "notWithin", "empty", "notEmpty"], kind: "dateRange", suggestable: false },
+  clippingHighlights: { operators: ["eq", "neq", "gte", "lte", "empty", "notEmpty"], kind: "numeric", suggestable: false },
+  clippingShadows: { operators: ["eq", "neq", "gte", "lte", "empty", "notEmpty"], kind: "numeric", suggestable: false },
   colorLabel: { operators: ["in", "notIn", "empty", "notEmpty"], kind: "enum", suggestable: false },
   copyright: { operators: ["eq", "neq", "contains", "startsWith", "empty", "notEmpty"], kind: "text", suggestable: true },
   creator: { operators: ["eq", "neq", "contains", "startsWith", "empty", "notEmpty"], kind: "text", suggestable: true },
@@ -96,6 +101,7 @@ export const fieldGrammar = {
   ingestedAt: { operators: ["within", "notWithin"], kind: "dateRange", suggestable: false },
   lensModel: { operators: ["eq", "neq", "contains", "startsWith", "empty", "notEmpty"], kind: "text", suggestable: true },
   rating: { operators: ["eq", "neq", "gte", "lte", "empty", "notEmpty"], kind: "numeric", suggestable: false },
+  sharpness: { operators: ["eq", "neq", "gte", "lte", "empty", "notEmpty"], kind: "numeric", suggestable: false },
   source: { operators: ["in", "notIn"], kind: "entityReference", suggestable: false },
   tag: { operators: ["has", "lacks", "under", "notUnder", "empty", "notEmpty"], kind: "tagReference", suggestable: false },
   text: { operators: ["matches"], kind: "freeText", suggestable: false },

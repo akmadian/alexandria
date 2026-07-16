@@ -34,14 +34,30 @@ func (f *fakeSourceResolver) Get(_ context.Context, id string) (*domain.Source, 
 	return nil, nil
 }
 
-// recordingDerivedWriter captures the ApplyFunc's side effect.
+// recordingDerivedWriter captures each ApplyFunc's side effect.
 type recordingDerivedWriter struct {
 	thumbnailedAssetID string
 	thumbnailedAt      time.Time
+	sharpness          *float64
+	clippingHighlights *float64
+	clippingShadows    *float64
+	phash              string
 }
 
 func (w *recordingDerivedWriter) SetThumbnailAt(_ context.Context, id string, at time.Time) error {
 	w.thumbnailedAssetID, w.thumbnailedAt = id, at
+	return nil
+}
+func (w *recordingDerivedWriter) SetSharpness(_ context.Context, _ string, value float64) error {
+	w.sharpness = &value
+	return nil
+}
+func (w *recordingDerivedWriter) SetClipping(_ context.Context, _ string, highlights, shadows float64) error {
+	w.clippingHighlights, w.clippingShadows = &highlights, &shadows
+	return nil
+}
+func (w *recordingDerivedWriter) SetPhash(_ context.Context, _ string, hash string) error {
+	w.phash = hash
 	return nil
 }
 func (w *recordingDerivedWriter) ClearDerived(context.Context, string) error { panic("unused") }

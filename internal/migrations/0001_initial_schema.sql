@@ -89,8 +89,13 @@ CREATE TABLE IF NOT EXISTS assets (
     xmp_last_read_at    TEXT,
     xmp_last_written_at TEXT,
     xmp_hash            TEXT,
-    -- [der] thumbnail marker -----------------------------------------------------
+    -- [der] enrichment artifacts (NULL = not computed; the missing-artifact scan IS
+    -- the queue, D25/D28; all cleared by the reimport staleness path, task 19) -----
     thumbnail_at        TEXT,
+    sharpness           REAL,    -- raw variance of Laplacian on the 512px thumb; ranking is the contract, not the absolute value
+    clipping_highlights REAL,    -- % of thumb pixels at/near pure white
+    clipping_shadows    REAL,    -- % of thumb pixels at/near pure black
+    phash               TEXT,    -- 64-bit perceptual hash (dHash), hex; the near-dup query surface is deferred (DEFERRED §12)
     ingested_at         TEXT NOT NULL,
     updated_at          TEXT NOT NULL
 );

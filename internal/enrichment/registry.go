@@ -122,6 +122,45 @@ func Definitions(thumbnails *thumbnailer.Thumbnailer, sources SourceResolver) []
 			Weight:         thumbnailWeight,
 			Produce:        thumbnailProducer(thumbnails, sources),
 		},
+		// The cheap signals (task 20): each gates on the thumbnail artifact and
+		// reads it off disk. Applicable wherever a thumbnail exists (same predicate
+		// as thumbnail). Fixed small weight (nil → 1 token) — the input is a fixed
+		// analysis thumbnail, not the original file. Priority 1: right behind
+		// thumbnails, so the signals that make culling fast are there when the user
+		// sits down (D25/D28).
+		{
+			Kind:           "sharpness",
+			Lane:           LaneConvergent,
+			Applicable:     func(handler assettype.Handler) bool { return handler.Thumb != nil },
+			ArtifactColumn: "sharpness",
+			Prerequisites:  []string{"thumbnail"},
+			DefaultWorkers: 2,
+			TimeoutPolicy:  signalTimeout,
+			Priority:       1,
+			Produce:        sharpnessProducer(thumbnails),
+		},
+		{
+			Kind:           "clipping",
+			Lane:           LaneConvergent,
+			Applicable:     func(handler assettype.Handler) bool { return handler.Thumb != nil },
+			ArtifactColumn: "clipping_highlights", // sentinel; the producer writes highlights + shadows together
+			Prerequisites:  []string{"thumbnail"},
+			DefaultWorkers: 2,
+			TimeoutPolicy:  signalTimeout,
+			Priority:       1,
+			Produce:        clippingProducer(thumbnails),
+		},
+		{
+			Kind:           "phash",
+			Lane:           LaneConvergent,
+			Applicable:     func(handler assettype.Handler) bool { return handler.Thumb != nil },
+			ArtifactColumn: "phash",
+			Prerequisites:  []string{"thumbnail"},
+			DefaultWorkers: 2,
+			TimeoutPolicy:  signalTimeout,
+			Priority:       1,
+			Produce:        phashProducer(thumbnails),
+		},
 	}
 }
 

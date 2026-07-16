@@ -31,6 +31,13 @@ const (
 	FieldCopyright   Field = "copyright"
 	FieldFileStatus  Field = "fileStatus"
 	FieldText        Field = "text"
+	// Cheap culling signals (task 20). Derived, nullable (NULL = not yet
+	// computed). phash is intentionally NOT here — a scalar predicate over a
+	// perceptual hash is meaningless; its near-dup query surface is deferred with
+	// clustering (DEFERRED §12).
+	FieldSharpness          Field = "sharpness"
+	FieldClippingHighlights Field = "clippingHighlights"
+	FieldClippingShadows    Field = "clippingShadows"
 )
 
 // Operator is a comparison operator in a predicate leaf. These generate the
@@ -133,6 +140,10 @@ var vocabulary = map[Field]FieldSpec{
 	FieldCopyright:   {Kind: KindText, Nullable: true, Suggestable: true},
 	FieldFileStatus:  {Kind: KindEnum},
 	FieldText:        {Kind: KindFreeText, virtual: true},
+
+	FieldSharpness:          {Kind: KindNumeric, Nullable: true},
+	FieldClippingHighlights: {Kind: KindNumeric, Nullable: true},
+	FieldClippingShadows:    {Kind: KindNumeric, Nullable: true},
 }
 
 // Operators derives the field's full operator set: its kind's family, plus the

@@ -119,6 +119,62 @@ func awaitThumbnails(t *testing.T, database *sql.DB, want int) {
 	}
 }
 
+// awaitSignals polls until want assets carry all three cheap signals — the
+// convergence the prerequisite edge (each signal kind gates on the thumbnail
+// artifact) promises — or fails at the deadline.
+func awaitSignals(t *testing.T, database *sql.DB, want int) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var scored int
+		if err := database.QueryRowContext(context.Background(),
+			`SELECT COUNT(*) FROM assets
+			 WHERE sharpness IS NOT NULL AND clipping_highlights IS NOT NULL
+			   AND clipping_shadows IS NOT NULL AND phash IS NOT NULL`).Scan(&scored); err != nil {
+			t.Fatal(err)
+		}
+		if scored >= want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("signals did not converge: %d/%d fully scored", scored, want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// signalSnapshot is one asset's full set of computed signals — a comparable
+// struct so idempotence can be asserted across all of them, not just sharpness.
+type signalSnapshot struct {
+	sharpness          float64
+	clippingHighlights float64
+	clippingShadows    float64
+	phash              string
+}
+
+// readSignals snapshots every asset's computed signals, keyed by id.
+func readSignals(t *testing.T, database *sql.DB) map[string]signalSnapshot {
+	t.Helper()
+	rows, err := database.QueryContext(context.Background(),
+		`SELECT id, sharpness, clipping_highlights, clipping_shadows, phash
+		 FROM assets WHERE sharpness IS NOT NULL`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	snapshots := map[string]signalSnapshot{}
+	for rows.Next() {
+		var id string
+		var snapshot signalSnapshot
+		if err := rows.Scan(&id, &snapshot.sharpness, &snapshot.clippingHighlights,
+			&snapshot.clippingShadows, &snapshot.phash); err != nil {
+			t.Fatal(err)
+		}
+		snapshots[id] = snapshot
+	}
+	return snapshots
+}
+
 // writeJPEGFiles writes count distinct decodable JPEGs under dir and returns
 // their relative paths.
 func writeJPEGFiles(t *testing.T, dir string, count int) []string {
@@ -771,6 +827,60 @@ func TestEnrichment_FailureIsDurableAndAssetBrowsable(t *testing.T) {
 		t.Fatal("the failing asset must stay committed and browsable (D13)")
 	}
 	awaitEnrichmentFailure(t, &sqlite.EnrichmentRepo{DB: database}, broken.ID, "decode_failed")
+}
+
+// --- Cheap signals: convergence + idempotence (task 20) ---
+
+// TestEnrichment_SignalsConvergeAfterThumbnails is the task-20 acceptance: an
+// import commits assets with no signals; the enrichment scan then drives every
+// eligible asset through thumbnail → all three cheap signals, via scans alone (no
+// re-import), because each signal kind gates on the thumbnail artifact.
+func TestEnrichment_SignalsConvergeAfterThumbnails(t *testing.T) {
+	ingester, source, sourceDir, database := diskImporter(t)
+	writeJPEGFiles(t, sourceDir, 12)
+
+	result, err := ingester.Run(context.Background(), source, os.DirFS(sourceDir))
+	if err != nil || result.Added != 12 {
+		t.Fatalf("import: added=%d err=%v, want 12/nil", result.Added, err)
+	}
+
+	startEnrichmentEngine(t, database, t.TempDir())
+	awaitThumbnails(t, database, 12)
+	awaitSignals(t, database, 12)
+}
+
+// TestEnrichment_SignalsIdempotentOnRederive proves re-running the signal kinds on
+// an already-enriched asset is a harmless, deterministic overwrite: clearing the
+// derived columns (the D28 reimport staleness path) and rescanning re-derives the
+// SAME values — the rebuild path the derived-state invariant requires.
+func TestEnrichment_SignalsIdempotentOnRederive(t *testing.T) {
+	ingester, source, sourceDir, database := diskImporter(t)
+	writeJPEGFiles(t, sourceDir, 3)
+	if _, err := ingester.Run(context.Background(), source, os.DirFS(sourceDir)); err != nil {
+		t.Fatal(err)
+	}
+	engine := startEnrichmentEngine(t, database, t.TempDir())
+	awaitSignals(t, database, 3)
+	before := readSignals(t, database)
+
+	// Clear every asset's derived state (thumbnail + signals), as a reimport would,
+	// then rescan: the thumbnail regenerates from unchanged bytes and the signals
+	// recompute off it.
+	assets := &sqlite.AssetRepo{DB: database}
+	for id := range before {
+		if err := assets.ClearDerived(context.Background(), id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine.RequestScan()
+	awaitSignals(t, database, 3)
+
+	after := readSignals(t, database)
+	for id, want := range before {
+		if after[id] != want {
+			t.Fatalf("re-derived signals for %s = %+v, want %+v (idempotent)", id, after[id], want)
+		}
+	}
 }
 
 // --- Tracing: gospan spans cover the pipeline ---

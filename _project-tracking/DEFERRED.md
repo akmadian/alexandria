@@ -539,3 +539,32 @@ would justify it — the cold backlog orders by import recency, per the same D28
 **Trigger:** real-hardware evidence that enrichment scans crawl on spinning or external media —
 a user report or a trace file showing producer read-wait dominating on an HDD source. Then build
 detection + depth policy as its own layer; the token seam it feeds already exists.
+
+---
+
+## 12. Cheap-signal query surface beyond scalar filters — phash near-dup, signal sort, signal display
+
+**Surfaced:** task 20 build round (2026-07-15, Ari + Claude). The cheap signals (sharpness,
+clipping, phash) are computed + stored as derived columns; deliberately narrower query/display
+surface than the task's original acceptance line ("filter + sort tokens" for all three).
+
+What shipped: `sharpness` + `clipping_highlights` + `clipping_shadows` are **filterable** vocabulary
+fields (`ast`, numeric + presence operators) — the C11 "propose as data, dispose via the query"
+contract. What was deliberately NOT built, each with no consumer yet:
+
+- **phash query surface (hamming / near-dup / clustering).** A scalar predicate over a 64-bit
+  perceptual hash is meaningless; phash's real query is hamming-distance near-dup, which is the
+  burst/grouping deep-dive (`ideation/backend-open-questions.md` #7). So phash is stored + hashed
+  (dHash, a swappable strategy) but has NO `ast` field and NO `domain.Asset` struct field. The
+  `signals.Hamming` primitive exists, used by tests.
+- **Sort-by-signal.** Sort fields are a curated subset (not every filterable field is sortable —
+  `cameraMake`/`width` already aren't). "Sharpest first" has no cull/grid UI consuming it yet, so
+  no `SortField` member was added.
+- **Signal display in the seam.** `catalog.AssetRow` carries no signal fields — nothing renders
+  them yet (the read model `domain.Asset` does carry sharpness/clipping, populated on read, for
+  when the seam wants them).
+
+**Trigger:** the cull/grid UI that consumes signals — a threshold-filter pill wanting a sort axis,
+a burst view wanting near-dup clustering, or a cell wanting to show a sharpness score. Add the
+`SortField` member, the phash hamming grammar, and/or the `AssetRow` fields then, each a small
+addition onto the stored columns that already exist.
