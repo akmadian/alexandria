@@ -42,7 +42,8 @@ var modelManifest = []struct {
 var enumImports = map[string]string{
 	"FileType": "enums", "ColorLabel": "enums", "Flag": "enums",
 	"FileStatus": "enums", "SourceKind": "enums", "SourceConnectivity": "enums",
-	"Topic": "events", "EventType": "events", "JobState": "events",
+	"EnrichmentKind": "enums",
+	"Topic":          "events", "EventType": "events", "JobState": "events",
 }
 
 func renderModels() []byte {

@@ -2,7 +2,7 @@
 // Source of truth: internal/catalog + internal/seam (struct json tags), per C13/C15.
 // Regenerate with `make generate` after changing the Go source.
 
-import type { ColorLabel, FileStatus, FileType, Flag } from "./enums";
+import type { ColorLabel, EnrichmentKind, FileStatus, FileType, Flag } from "./enums";
 import type { EventTopic, EventType, JobState } from "./events";
 
 /** The slim grid-card projection. The seam adapter layers thumbURL + the kind discriminator on top. */
@@ -24,6 +24,8 @@ export interface AssetRow {
   thumbnailAt: string | null;
   relativePath: string;
   sizeBytes: number;
+  enriching?: EnrichmentKind[];
+  failed?: EnrichmentKind[];
 }
 
 /** The one C8 event envelope. */
@@ -52,6 +54,7 @@ export interface JobProgress {
   stage?: string;
   cancelable: boolean;
   message?: string;
+  queueDepth?: Record<string, number>;
 }
 
 /** Completion tally carried by JobDone. */

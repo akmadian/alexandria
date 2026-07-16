@@ -29,6 +29,15 @@ type AssetRow struct {
 	ThumbnailAt  *time.Time         `json:"thumbnailAt"`
 	RelativePath string             `json:"relativePath"`
 	SizeBytes    int64              `json:"sizeBytes"`
+
+	// Enriching / Failed are transient enrichment decoration (task 21), filled by
+	// the seam from the engine — NOT the catalog query (both are zero off the DB).
+	// Enriching lists the kinds in flight; Failed lists the terminally-failed
+	// (attempt-exhausted) kinds. The frontend derives per-artifact state: data
+	// present = ready, in Enriching = enriching, in Failed = failed, neither =
+	// pending (D25). omitempty so an idle row carries neither.
+	Enriching []domain.EnrichmentKind `json:"enriching,omitempty"`
+	Failed    []domain.EnrichmentKind `json:"failed,omitempty"`
 }
 
 // TriageState is the prior-state projection undo captures: before-images for

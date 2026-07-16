@@ -780,6 +780,31 @@ small add onto them when its UI consumer lands. **The `derivedArtifactColumns` a
 dual-purpose** — the set ClearDerived nulls on reimport AND the pool a registry row's marker must
 be drawn from — so a multi-column kind lists every column but marks one.)*
 
+*(2026-07-15, task-21 build round (Ari + Claude) — the seam face of the engine; the round's
+calls. **Visibility ships as KIND NAMES, not a bitmask:** the spec's "enriching bitmask" would
+need generated bit constants matching the engine's registry-ROW-ORDER bit assignment — fragile
+and not self-describing — so the seam ships `[]domain.EnrichmentKind` (a generated union pinned
+to the registry by a crosswalk) and the `KindSet` bitmask stays an engine internal. The engine
+exposes `RunningKinds`/`FailedKinds` (kind names); the reverse lives in the engine, the seam
+never sees a bit. **Read is pull-decorated, write is a thin service, events are aggregate.** The
+grid gets `AssetRow.Enriching` (one tracker lock per page) + `AssetRow.Failed` (one DLQ query,
+attempt-exhausted only — a retrying row is still pending); decoration is best-effort (a DLQ read
+error drops the failed half, never fails the query) and nil-safe (no engine = no decoration).
+`EnrichmentEngineService` wraps the engine's pause/resume/effort/hint behind a STRUCTURAL interface, so
+the seam package never imports enrichment; the effort dial persists-then-applies (a crash leaves
+the durable intent). Aggregate events ride the existing envelope (no new topic): `JobProgress`
+gained an optional `QueueDepth` (the convergent lane has no run identity, so done/total stay 0
+and the per-kind backlog is the signal), emitted by the free function `EmitEnrichmentBatch` off
+the engine's `OnBatchCommitted` hook — a free function, not a method, so the composition captures
+`engine.QueueDepths` and no construction cycle forms; the DB→clear-bit→emit ordering holds
+because the hook fires after the tracker clears. **No live wiring, by necessity:** no Wails host
+binds the seam services yet (frontend-rebuild epic), so this round is contract + capability +
+tests — the engine-through-the-seam controls are proven with a real engine in tests, the effort
+store is faked (its machine.json adapter lands with the host). **Narrowed:** the per-asset detail
+read (error reason codes) and the `blocked` derivation (a kind whose prerequisite failed) defer
+with the loupe/inspector that renders them (DEFERRED §13) — the grid's three D25 states
+(enriching/ready/failed) are complete without them.)*
+
 ## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
 
 The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —

@@ -109,8 +109,27 @@ func (e *Engine) runDispatcher(ctx context.Context) error {
 			state.scanAll(ctx)
 		case completions := <-e.completions:
 			state.handleCompletions(ctx, completions)
+		case reply := <-e.depthRequests:
+			reply <- state.snapshotDepths()
 		}
 	}
+}
+
+// snapshotDepths copies the per-kind count of jobs not yet complete — queued OR
+// in-flight (pendingCount is bumped on enqueue and cleared only on completion, so
+// a running job still counts) — the backlog signal the seam's progress payload
+// rides on (task 21). Zero-count kinds (fully drained but still keyed) are skipped
+// so the payload is sparse and a wholly-drained backlog is an empty map. A copy so
+// the caller never touches dispatcher-owned state; task 22's fuller snapshot
+// extends this read-out.
+func (d *dispatcherState) snapshotDepths() map[string]int {
+	depths := make(map[string]int, len(d.pendingCount))
+	for kind, count := range d.pendingCount {
+		if count > 0 {
+			depths[kind] = count
+		}
+	}
+	return depths
 }
 
 // enqueue records and queues a job for a node unless the ledger already holds

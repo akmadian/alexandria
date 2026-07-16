@@ -126,6 +126,12 @@ type JobProgress struct {
 	Stage      string   `json:"stage,omitempty"`
 	Cancelable bool     `json:"cancelable"`
 	Message    string   `json:"message,omitempty"`
+	// QueueDepth is the enrichment backlog by kind (task 21): jobs not yet
+	// complete (queued or in-flight) per kind, the "how much left" signal for a
+	// job with no fixed total (the convergent lane has no run identity, so
+	// done/total stay 0). Omitted for jobs that report done/total (import), so the
+	// one envelope serves both (C9).
+	QueueDepth map[string]int `json:"queueDepth,omitempty"`
 }
 
 // JobSummary is the completion tally, carried by JobDone. Mirrors the engine's

@@ -568,3 +568,38 @@ contract. What was deliberately NOT built, each with no consumer yet:
 a burst view wanting near-dup clustering, or a cell wanting to show a sharpness score. Add the
 `SortField` member, the phash hamming grammar, and/or the `AssetRow` fields then, each a small
 addition onto the stored columns that already exist.
+
+---
+
+## 13. Per-asset enrichment DETAIL read — error reasons + blocked derivation
+
+**Surfaced:** task 21 build round (2026-07-15, Ari + Claude). The seam's enrichment
+visibility shipped as GRID decoration — `AssetRow.Enriching` (running kinds) and
+`AssetRow.Failed` (attempt-exhausted kinds) — which gives the grid the three
+D25 states (enriching / ready / failed) distinctly. Deliberately narrower than the
+spec's full "failed state" bullet.
+
+What was NOT built, each with no consumer yet:
+
+- **The per-asset detail read** — surfacing an asset's DLQ rows (`EnrichmentError`:
+  reason code, attempts, last-attempt) + its `blocked` kinds. The repo read exists
+  (`EnrichmentRepo.ListFailures`); what defers is the wire shape and the plumbing,
+  because the inspector/loupe that shows *why* an artifact failed does not exist
+  (frontend rebuild). **Build it on the asset read path, NOT a separate lookup**
+  (Ari, 2026-07-15): enrichment state is a property of the asset, so this decorates
+  the asset DETAIL response (the `GetAsset` path — likely a detail wrapper, since
+  `domain.Asset` can't carry transient state), exactly as the grid decorates
+  `AssetRow`. It must NOT become an `EnrichmentEngineService.GetEnrichment(assetID)`
+  method — that service holds engine CONTROL verbs only; collecting enrichment data
+  keyed by asset, separately from the asset, is the smell this note exists to prevent.
+- **The `blocked` derivation** — a kind whose prerequisite is exhausted-failed
+  reading `blocked` rather than an eternal `pending` (thumbnail failed ⇒ sharpness
+  blocked). The engine has the prerequisite graph; the one-level derivation is ~15
+  lines. It defers with the detail read because the grid tile is thumbnail-centric
+  (a failed thumbnail already reads `failed`), and `blocked` is a loupe/inspector
+  refinement of `pending` with no renderer yet.
+
+**Trigger:** the loupe/inspector that renders per-asset enrichment state — when a UI
+wants to show reason codes or distinguish blocked-vs-pending per artifact. Add the
+seam detail method (+ `EnrichmentError` wire projection) and `Engine.BlockedKinds`
+then; both build onto reads that already exist.

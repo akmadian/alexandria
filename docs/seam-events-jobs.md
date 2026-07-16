@@ -58,6 +58,16 @@ progress paths** (C9): import, enrichment, backup, export, integrity, RAW dispat
 through this envelope; status bar and activity drawer render it generically — a new kind of
 background work is a new `kind` string, zero new UI.
 
+**Enrichment on the envelope (task 21).** The convergent lane has no run identity (D28), so it
+rides one stable synthetic job (`kind: "enrich"`, `done/total: 0`) whose real signal is the
+optional `queueDepth` (per-kind backlog) added to `JobProgress`; a drained backlog reports
+`state: "done"`. Ticks are emitted per writer-batch commit (natural throttle), alongside a
+`catalog/changed` invalidation. **Per-asset enrichment state is pull-decorated, never streamed**
+(D28): asset rows carry `enriching` / `failed` (`EnrichmentKind[]`) filled by the seam from the
+engine's in-flight tracker + DLQ — thousands of transitions per second are bit-flips, not
+events. Controls (pause/resume global+per-kind, the effort dial, the viewport hint) are
+synchronous seam methods on the enrichment service.
+
 ## The binary channel
 
 Standing convention (from contract.ts, adopted): **bytes never cross the seam.** Thumbnails,

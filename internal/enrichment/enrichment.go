@@ -108,12 +108,13 @@ type Engine struct {
 	budget     *cpuBudget
 	readTokens *sourceReadTokens
 
-	requests     chan workRequest
-	results      chan *jobResult
-	hints        chan []string
-	pauses       chan pauseChange
-	scanRequests chan struct{}
-	completions  chan []completion
+	requests      chan workRequest
+	results       chan *jobResult
+	hints         chan []string
+	pauses        chan pauseChange
+	scanRequests  chan struct{}
+	completions   chan []completion
+	depthRequests chan chan map[string]int // seam queue-depth reads (task 21)
 
 	runCtx context.Context
 	stop   context.CancelFunc
@@ -163,6 +164,7 @@ func New(config *Config) (*Engine, error) {
 		pauses:              make(chan pauseChange, 8),
 		scanRequests:        make(chan struct{}, 1),
 		completions:         make(chan []completion, 64),
+		depthRequests:       make(chan chan map[string]int),
 	}
 
 	definitions := make([]JobDefinition, len(config.Definitions))
@@ -308,6 +310,22 @@ func (e *Engine) SetEffort(level string) {
 
 // Tracker exposes the in-flight ledger for seam decoration (task 21).
 func (e *Engine) Tracker() *InFlightTracker { return e.tracker }
+
+// QueueDepths returns a per-kind snapshot of jobs not yet complete — queued OR
+// in-flight — the backlog signal the seam's jobs/progress payload carries (task
+// 21); a fully-drained kind is absent (sparse). Answered by the dispatcher
+// goroutine, so it never races queue mutation. Returns an empty map after Stop
+// (the dispatcher no longer answers; the read falls through on the stopped context).
+func (e *Engine) QueueDepths() map[string]int {
+	e.mustBeStarted("QueueDepths")
+	reply := make(chan map[string]int, 1)
+	select {
+	case e.depthRequests <- reply:
+		return <-reply
+	case <-e.runCtx.Done():
+		return map[string]int{}
+	}
+}
 
 // KindBit returns the tracker bit assigned to a definition (zero for unknown
 // kinds).

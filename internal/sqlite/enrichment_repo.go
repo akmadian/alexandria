@@ -228,6 +228,44 @@ func (r *EnrichmentRepo) ListFailures(ctx context.Context, assetID string) ([]*d
 	return failures, rows.Err()
 }
 
+// ExhaustedKinds returns, per asset, the kinds whose DLQ row is attempt-exhausted
+// (attempts >= maxAttempts) — the terminally-failed state the grid renders
+// distinctly (D25/task 21). One query over a page of ids; an asset with no
+// exhausted failure is absent (sparse, like the in-flight tracker), so a healthy
+// page allocates nothing.
+func (r *EnrichmentRepo) ExhaustedKinds(ctx context.Context, assetIDs []string, maxAttempts int) (map[string][]string, error) {
+	if len(assetIDs) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(assetIDs))
+	args := make([]any, 0, len(assetIDs)+1)
+	for index, id := range assetIDs {
+		placeholders[index] = "?"
+		args = append(args, id)
+	}
+	args = append(args, maxAttempts)
+	rows, err := r.DB.QueryContext(ctx,
+		"SELECT asset_id, kind FROM enrichment_errors WHERE asset_id IN ("+
+			strings.Join(placeholders, ",")+") AND attempts >= ? ORDER BY asset_id, kind", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result map[string][]string
+	for rows.Next() {
+		var assetID, kind string
+		if err := rows.Scan(&assetID, &kind); err != nil {
+			return nil, err
+		}
+		if result == nil {
+			result = make(map[string][]string)
+		}
+		result[assetID] = append(result[assetID], kind)
+	}
+	return result, rows.Err()
+}
+
 func validateArtifactColumns(artifactColumn string, prerequisiteColumns []string) error {
 	if !derivedArtifactColumns[artifactColumn] {
 		return fmt.Errorf("enrichment: %q is not a derived artifact column", artifactColumn)

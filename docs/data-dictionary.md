@@ -82,6 +82,7 @@ derive from the field name (virtual fields compile through joins instead).
 - **FileStatus**: `missing`, `offline`, `online`
 - **SourceKind**: `external_drive`, `local`, `nfs`, `smb`
 - **SourceConnectivity**: `offline`, `online`
+- **EnrichmentKind**: `clipping`, `phash`, `sharpness`, `thumbnail`
 
 ## Events (C8) and errors
 

@@ -151,6 +151,7 @@ var domainEnumTypes = []string{
 	"FileStatus",
 	"SourceKind",
 	"SourceConnectivity",
+	"EnrichmentKind",
 }
 
 // renderDomainEnums builds enums.ts from the discovered members. The type order
