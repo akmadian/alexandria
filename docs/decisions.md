@@ -828,6 +828,19 @@ asset types with identical applicable-kind sets collapsed to one sub-graph); `de
 renders it, `dot -Tsvg`-clean. The dev-harness page is hand-rolled HTML + meta-refresh poll,
 stdlib only (DEFERRED §9's constraint stands; the import-pipeline `/state` half stays deferred).)*
 
+*(2026-07-16, epic pre-merge review round (Ari) — one contract call, settling the review's one
+Important finding. **The convergent lane is a STANDING job — never terminal.** The task-21 round
+had a drained backlog report `state: "done"` on the progress tick, contradicting the JobState
+contract (`internal/seam/events.go`: terminal states ride the done event exclusively) — and a
+lane that new imports/reimports/hints un-drain would terminate and resurrect, forcing exactly
+the special-casing C9 forbids on a generic renderer. Fixed the code, not the contract:
+`EmitEnrichmentBatch` always emits `running`; a zero `queueDepth` total IS the drained signal
+(the frontend hides the indicator at zero). **Per-import enrichment status ("import X is 80%
+enriched") was considered and deferred, not refused** — the convergent model makes it a pure
+read-side aggregate over catalog truth, needing only the missing asset→session linkage (an
+`import_session_id` observation column) + a seam read; run identity stays out of the engine.
+DEFERRED §15 holds the shape and its trigger (the frontend surface that renders it).)*
+
 ## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
 
 The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —

@@ -638,3 +638,35 @@ The doctrinal line: **live gauges in the snapshot; distributions in the gospan t
 its TS types get generated, C15), or a live perf diagnosis the gauges can't answer and the
 post-hoc trace file can't either. Add the histogram/cost fields to `Snapshot` then, backed by
 whatever accounting the diagnosis actually needs.
+
+---
+
+## 15. Per-import enrichment status — needs the asset→session linkage first
+
+**Surfaced:** enrichment-epic pre-merge review round (2026-07-16, Ari + Claude), settling the
+jobs-envelope question: the convergent lane is a STANDING job (never terminal; zero
+`queueDepth` is the drained signal — `docs/seam-events-jobs.md`), so "how far along is MY
+import's enrichment?" cannot and should not come from job events.
+
+The desirable UX is real: "import X is 80% enriched" tells a user when a shoot is ready to
+cull. The convergent design makes it a pure read-side aggregate — count session X's assets
+with artifact columns non-null vs. total — computable any time from catalog truth, no engine
+involvement, no run identity (D28 refused the workflow-engine shape; reimports, staleness
+clears, and hints all create work with no import attached, so an engine-side "run" would lie
+at the edges).
+
+What's missing is the linkage: `import_sessions` exists but nothing maps assets to it — the
+assets table carries `ingested_at` only (the only session-linked table is `import_errors`).
+The build is two small pieces, both worthless without a consumer:
+
+- an `import_session_id` observation column on assets, written by ingest (writer-class clean);
+- a seam read (or session-row decoration) exposing the per-session enrichment aggregate.
+
+Note the *behavior* already exists — the missing-artifact scan orders by `ingested_at DESC`
+and WRITE's post-commit hook nudges the dispatcher, so the newest import enriches first; only
+the per-import *reporting* is absent.
+
+**Trigger:** the frontend surface that would render it — an imports/activity panel showing
+per-import progress, or a "ready to cull?" affordance on a session row. Add the column and the
+aggregate read then; schema note — if a real release exists by then, this becomes a stacked
+migration + backfill (NULL for pre-linkage assets is honest and fine).

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/akmadian/alexandria/internal/ast"
@@ -64,7 +65,7 @@ func (s *fakeEffortStore) SetEnrichmentEffort(level string) error {
 func TestQueryAssets_DecoratesEnrichment(t *testing.T) {
 	rows := make([]catalog.AssetRow, 200)
 	for index := range rows {
-		rows[index] = catalog.AssetRow{ID: "asset-" + itoa(index)}
+		rows[index] = catalog.AssetRow{ID: "asset-" + strconv.Itoa(index)}
 	}
 	view := &fakeEnrichmentView{
 		running: map[string][]domain.EnrichmentKind{
@@ -209,29 +210,22 @@ func TestEmitEnrichmentBatch_EmitsInvalidationAndProgress(t *testing.T) {
 	}
 }
 
-func TestEmitEnrichmentBatch_ZeroDepthIsDone(t *testing.T) {
+// TestEmitEnrichmentBatch_DrainedStaysRunning pins the standing-job contract:
+// the convergent lane is never terminal (terminal states ride the done event
+// exclusively), so a drained backlog reports running with zero queue depth —
+// the frontend hides the indicator at zero, it never finalizes the job.
+func TestEmitEnrichmentBatch_DrainedStaysRunning(t *testing.T) {
 	emitter := &fakeEmitter{}
 	seam.EmitEnrichmentBatch(emitter, map[string]int{})
 	progress := emitter.snapshot()[1].Payload.(seam.JobProgress)
-	if progress.State != seam.JobStateDone {
-		t.Errorf("drained backlog must report done, got %q", progress.State)
+	if progress.State != seam.JobStateRunning {
+		t.Errorf("drained backlog must stay running (zero depth is the signal), got %q", progress.State)
+	}
+	if len(progress.QueueDepth) != 0 {
+		t.Errorf("drained backlog must carry zero depth, got %v", progress.QueueDepth)
 	}
 }
 
 func TestEmitEnrichmentBatch_NilEmitterNoPanic(t *testing.T) {
 	seam.EmitEnrichmentBatch(nil, map[string]int{"thumbnail": 1})
-}
-
-// --- helpers ---
-
-func itoa(value int) string {
-	if value == 0 {
-		return "0"
-	}
-	digits := []byte{}
-	for value > 0 {
-		digits = append([]byte{byte('0' + value%10)}, digits...)
-		value /= 10
-	}
-	return string(digits)
 }

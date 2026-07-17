@@ -60,6 +60,10 @@ func (s *EnrichmentEngineService) ResumeAll() {
 	s.engine.ResumeAll()
 }
 
+// ponytail: an unknown kind is a silent engine no-op here, while SetEffort
+// rejects an unknown level — validate against the kind vocabulary when a live
+// host wires these controls (needs a runtime kinds list; today the
+// domain.EnrichmentKind union is compile-time only, pinned by the crosswalk).
 func (s *EnrichmentEngineService) PauseKind(kind string) {
 	log.Info("seam: enrichment kind paused", "kind", kind)
 	s.engine.PauseKind(kind)
@@ -112,8 +116,11 @@ const (
 // throttle (C8/C9: aggregate events only, never per-asset). The composition root
 // wires it as the engine's OnBatchCommitted hook, capturing the engine's
 // QueueDepths to pass here — which is why this is a free function, not a method
-// needing the engine at construction. A zero total means the backlog drained
-// (state done); the ordering contract (DB write → clear bit → emit) holds because
+// needing the engine at construction. The convergent lane is a STANDING job: it
+// is never terminal (new imports, reimports, and hints un-drain it), so the state
+// is always running and a zero queueDepth total IS the drained signal — terminal
+// states ride the done event exclusively, per the JobState contract (events.go).
+// The ordering contract (DB write → clear bit → emit) holds because
 // OnBatchCommitted fires after the tracker bits clear.
 //
 // The depth is a display signal, not an exact count: the hook fires on the writer
@@ -126,15 +133,12 @@ func EmitEnrichmentBatch(emitter Emitter, depths map[string]int) {
 		return
 	}
 	emitter.Emit(EventCatalogChanged, CatalogChange{Scope: ScopeAssets})
-	state := JobStateRunning
-	if totalDepth(depths) == 0 {
-		state = JobStateDone
-	}
+	log.Debug("seam: enrichment batch emitted", "totalDepth", totalDepth(depths))
 	emitter.Emit(EventJobProgress, JobProgress{
 		JobID:      enrichmentJobID,
 		Kind:       enrichmentJobKind,
 		Label:      jobLabelKey(enrichmentJobKind),
-		State:      state,
+		State:      JobStateRunning,
 		QueueDepth: depths,
 	})
 }

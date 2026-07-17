@@ -168,3 +168,13 @@ func TestPath_ShardsByPrefix(t *testing.T) {
 		t.Errorf("Path = %q, want %q", got, want)
 	}
 }
+
+// TestAnalysisSize_PicksSmallestTier pins the signal-input contract (task 20):
+// the analysis size is the smallest generated tier regardless of Sizes order,
+// so adding a larger tier never silently changes what the signals read.
+func TestAnalysisSize_PicksSmallestTier(t *testing.T) {
+	thumb := &thumbnailer.Thumbnailer{Sizes: []int{1024, 256, 512}}
+	if got := thumb.AnalysisSize(); got != 256 {
+		t.Errorf("AnalysisSize() = %d, want 256", got)
+	}
+}

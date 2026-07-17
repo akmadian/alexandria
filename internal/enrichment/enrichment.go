@@ -80,7 +80,11 @@ type Config struct {
 	// Tests pin it for determinism; production leaves it 0.
 	BudgetCapacity int64
 	// OnBatchCommitted, if set, fires after each writer batch commits, AFTER
-	// the tracker bits clear (the ordering contract). Nil-safe.
+	// the tracker bits clear (the ordering contract). Nil-safe. It runs on the
+	// writer goroutine, and calling back into the engine (QueueDepths — the seam
+	// composition does exactly that) is safe by design: completions are handed
+	// to the dispatcher on a buffered channel before the hook fires, and the
+	// dispatcher never blocks on the writer. Keep it that way.
 	OnBatchCommitted func(committed []JobKey)
 }
 

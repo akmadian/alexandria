@@ -15,7 +15,8 @@ Local-first DAM for creative professionals. Go engine + React UI + SQLite catalo
    feature roadmap (P0–P4): what will be built, and when.
 5. Living reference: `docs/` (data model, seam contract, vocabulary, requirements distilled)
    plus package READMEs beside the code (`internal/importer/README.md` for the ingest engine,
-   `internal/xmp/README.md` for sidecar sync). Where code and current specs conflict, specs
+   `internal/enrichment/README.md` for the enrichment engine, `internal/xmp/README.md` for
+   sidecar sync). Where code and current specs conflict, specs
    win. `frontend/src/` predating the ground-up redesign (2026-07-08, the frontend-redesign
    epic) was disposable by decision; the rebuild now underway replaces it.
 

@@ -206,7 +206,9 @@ func clearStaleDerived(ctx context.Context, repos sqlite.Repos, assetID string) 
 // missing file reappearing at its original path is restored online here) and
 // then runs the D28 staleness clear (see clearStaleDerived) through the same
 // store transaction the batch path uses. This is the unbatched sibling of
-// writeItem.
+// writeItem. Note the reimport branch requires Store (not just the narrow Obs
+// writer) — a watcher composition that omits Store nil-panics on its primary
+// event, a same-path edit.
 func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
 	switch verdict {
 	case actionReimport:

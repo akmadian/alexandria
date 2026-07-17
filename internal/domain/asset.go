@@ -100,7 +100,7 @@ type Asset struct {
 
 	// ThumbnailAt records when thumbnails were generated (and doubles as the
 	// "has a thumbnail?" flag). The file path is derived from the asset ID, not
-	// stored — see internal/thumbnailer.Registry.Path.
+	// stored — see internal/thumbnailer.Thumbnailer.Path.
 	ThumbnailAt *time.Time
 
 	// Cheap culling signals (task 20), derived post-commit by the enrichment
