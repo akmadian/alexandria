@@ -27,7 +27,8 @@ const assetColumns = `id, source_id, relative_path, file_status, last_verified_a
 	extended_metadata, rating, color_label, flag, note,
 	xmp_last_read_at, xmp_last_written_at, xmp_hash,
 	thumbnail_at, is_deleted, deleted_at, ingested_at, updated_at,
-	title, caption, judgment_modified_at`
+	title, caption, judgment_modified_at,
+	sharpness, clipping_highlights, clipping_shadows`
 
 // --- Reader ---
 
@@ -395,7 +396,7 @@ func (r *AssetRepo) Create(ctx context.Context, asset *domain.Asset) error {
 	}
 	_, err = r.DB.ExecContext(ctx, `INSERT INTO assets
 		(`+assetColumns+`) VALUES
-		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?)`,
+		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?)`,
 		asset.ID, asset.SourceID, asset.RelativePath, asset.FileStatus, formatTimePtr(asset.LastVerifiedAt),
 		asset.Filename, asset.Extension, asset.MIMEType, asset.FileType, asset.SizeBytes, formatTime(asset.MTime), asset.PartialHash,
 		asset.Width, asset.Height, asset.DurationSecs, asset.ColorSpace, asset.BitDepth,
@@ -407,7 +408,8 @@ func (r *AssetRepo) Create(ctx context.Context, asset *domain.Asset) error {
 		formatTimePtr(asset.ThumbnailAt),
 		boolToInt(asset.IsDeleted), formatTimePtr(asset.DeletedAt),
 		formatTime(asset.IngestedAt), formatTime(asset.UpdatedAt),
-		asset.Title, asset.Caption, formatTimePtr(asset.JudgmentModifiedAt))
+		asset.Title, asset.Caption, formatTimePtr(asset.JudgmentModifiedAt),
+		asset.Sharpness, asset.ClippingHighlights, asset.ClippingShadows)
 	return err
 }
 
@@ -560,12 +562,65 @@ func (r *AssetRepo) RecordXMPWritten(ctx context.Context, id string, writtenAt t
 	return checkRowsAffected(res, "asset", id)
 }
 
-// --- Derived writer (jobs / thumbnail stage) ---
+// --- Derived writer (enrichment writer + the reimport staleness clear) ---
 
 func (r *AssetRepo) SetThumbnailAt(ctx context.Context, id string, t time.Time) error {
 	res, err := r.DB.ExecContext(ctx,
 		"UPDATE assets SET thumbnail_at = ?, updated_at = ? WHERE id = ?",
 		formatTime(t), formatTime(time.Now().UTC()), id)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "asset", id)
+}
+
+func (r *AssetRepo) SetSharpness(ctx context.Context, id string, value float64) error {
+	res, err := r.DB.ExecContext(ctx,
+		"UPDATE assets SET sharpness = ?, updated_at = ? WHERE id = ?",
+		value, formatTime(time.Now().UTC()), id)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "asset", id)
+}
+
+// SetClipping writes both clipping columns in one statement — clipping is one
+// enrichment kind whose single histogram pass yields highlights and shadows
+// together (D28: one kind, one DLQ row, here two columns committed atomically).
+func (r *AssetRepo) SetClipping(ctx context.Context, id string, highlights, shadows float64) error {
+	res, err := r.DB.ExecContext(ctx,
+		"UPDATE assets SET clipping_highlights = ?, clipping_shadows = ?, updated_at = ? WHERE id = ?",
+		highlights, shadows, formatTime(time.Now().UTC()), id)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "asset", id)
+}
+
+func (r *AssetRepo) SetPhash(ctx context.Context, id string, hash string) error {
+	res, err := r.DB.ExecContext(ctx,
+		"UPDATE assets SET phash = ?, updated_at = ? WHERE id = ?",
+		hash, formatTime(time.Now().UTC()), id)
+	if err != nil {
+		return err
+	}
+	return checkRowsAffected(res, "asset", id)
+}
+
+// ClearDerived nulls every derived artifact column on one asset — the D28
+// staleness transition: a reimport's transaction calls this so derived state
+// instantly reads "missing" and the next enrichment scan re-derives it. The
+// column set is derivedArtifactColumns (the enrichment scan allowlist), so a
+// task-20 column added there is cleared on reimport with no change here.
+func (r *AssetRepo) ClearDerived(ctx context.Context, id string) error {
+	clauses := make([]string, 0, len(derivedArtifactColumns)+1)
+	for _, column := range sortedDerivedArtifactColumns() {
+		clauses = append(clauses, column+" = NULL")
+	}
+	clauses = append(clauses, "updated_at = ?")
+	res, err := r.DB.ExecContext(ctx,
+		"UPDATE assets SET "+strings.Join(clauses, ", ")+" WHERE id = ?",
+		formatTime(time.Now().UTC()), id)
 	if err != nil {
 		return err
 	}
@@ -641,6 +696,7 @@ func scanAssetFromRow(scanner assetScanner) (*domain.Asset, error) {
 	var xmpHash sql.NullString
 	var creator, copyright, title, caption sql.NullString
 	var judgmentModifiedAt sql.NullString
+	var sharpness, clippingHighlights, clippingShadows sql.NullFloat64
 
 	err := scanner.Scan(
 		&asset.ID, &asset.SourceID, &asset.RelativePath, &asset.FileStatus, &lastVerifiedAt,
@@ -651,7 +707,8 @@ func scanAssetFromRow(scanner assetScanner) (*domain.Asset, error) {
 		&extMetadata, &rating, &colorLabel, &flag, &note,
 		&xmpLastReadAt, &xmpLastWrittenAt, &xmpHash,
 		&thumbnailAt, &isDeleted, &deletedAt, &ingestedAt, &updatedAt,
-		&title, &caption, &judgmentModifiedAt)
+		&title, &caption, &judgmentModifiedAt,
+		&sharpness, &clippingHighlights, &clippingShadows)
 	if err != nil {
 		return nil, err
 	}
@@ -701,6 +758,9 @@ func scanAssetFromRow(scanner assetScanner) (*domain.Asset, error) {
 	asset.XMPLastWrittenAt = parseNullTime(xmpLastWrittenAt)
 	asset.XMPHash = nullStringPtr(xmpHash)
 	asset.ThumbnailAt = parseNullTime(thumbnailAt)
+	asset.Sharpness = nullFloat64Ptr(sharpness)
+	asset.ClippingHighlights = nullFloat64Ptr(clippingHighlights)
+	asset.ClippingShadows = nullFloat64Ptr(clippingShadows)
 	asset.IsDeleted = isDeleted != 0
 	asset.DeletedAt = parseNullTime(deletedAt)
 	asset.IngestedAt = parseTime(ingestedAt)

@@ -2,7 +2,10 @@ package importer
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io/fs"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -18,6 +21,10 @@ import (
 // missing diff, and flips progress to determinate when the walk completes.
 
 func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error {
+	// One span for the whole walk (a sibling of the item traces, not their
+	// parent). Its duration includes backpressure from a full SCAN channel —
+	// honest: that IS what the walk spends its time on.
+	_, walkSpan := pipe.importer.Tracer.Start(ctx, "import.scan")
 	err := fs.WalkDir(pipe.fsys, ".", func(relativePath string, entry fs.DirEntry, walkErr error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -55,7 +62,8 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 		extension := ext(name)
 		if assettype.IsSidecar(extension) {
 			pipe.importer.Log.Debug("sidecar detected", "path", relativePath, "ext", extension)
-			return pipe.emit(ctx, out, &pipelineItem{scanned: sidecarScan(relativePath, name, extension, info), isSidecar: true})
+			sidecarItem := &pipelineItem{scanned: sidecarScan(relativePath, name, extension, info), isSidecar: true}
+			return pipe.emit(ctx, out, pipe.traceItem(ctx, sidecarItem))
 		}
 		handler, ok := assettype.Classify(extension)
 		if !ok {
@@ -70,14 +78,111 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 			pipe.skippedCount.Add(1)
 			return nil
 		}
-		pipe.total.Add(1)
-		return pipe.emit(ctx, out, &pipelineItem{scanned: scanned})
+		if !pipe.walkDone.Load() {
+			pipe.total.Add(1) // fallback denominator when the pre-count didn't run (see countAssets)
+		}
+		return pipe.emit(ctx, out, pipe.traceItem(ctx, &pipelineItem{scanned: scanned}))
 	})
 	if err == nil {
 		pipe.walkDone.Store(true) // Total is now final → progress upgrades to determinate
 	}
+	if err != nil {
+		walkSpan.Fail(err)
+	}
+	walkSpan.SetAttrs(slog.Int64("emitted", pipe.total.Load()), slog.Int64("skipped", pipe.skippedCount.Load()))
+	walkSpan.End()
 	return err
 }
+
+// traceItem mints the item's root trace span, a child of the run span. Assets
+// and sidecars get distinct span names so per-name aggregates (Summary, SQL
+// GROUP BY) never mix their timings. Stages hang child spans off item.ctx; the
+// root ends after WRITE commits the item (stage_write.go endItemTrace).
+func (pipe *pipeline) traceItem(ctx context.Context, item *pipelineItem) *pipelineItem {
+	name := "import.asset"
+	if item.isSidecar {
+		name = "import.sidecar"
+	}
+	item.ctx, _ = pipe.importer.Tracer.Start(ctx, name, slog.String("path", item.scanned.relPath))
+	return item
+}
+
+// countAssets walks the tree once, up front, counting the asset items SCAN will
+// emit — so progress starts determinate ("N / total") instead of climbing from
+// "N / ?". The walk's own Total only settles at the very end, because SCAN
+// blocks on downstream backpressure, so it stays indeterminate for nearly the
+// whole run. This pass is cheap (readdir + one Stat per candidate; no hashing,
+// no decode) relative to the real work. Sidecars and unknown/ignored/hidden/
+// empty/unchanged files are excluded for the same reasons SCAN skips them, so
+// the count equals what SCAN emits.
+//
+// ponytail: mirrors SCAN's emit filter above. The two can only drift if the tree
+// changes between this pass and the walk — that shifts a progress denominator,
+// never a catalog fact (Finish writes the authoritative counts).
+func (pipe *pipeline) countAssets(ctx context.Context) (int64, error) {
+	var count int64
+	err := fs.WalkDir(pipe.fsys, ".", func(relativePath string, entry fs.DirEntry, walkErr error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if walkErr != nil {
+			return nil // SCAN records the unreadable entry; the pre-count just skips it
+		}
+		name := entry.Name()
+		if entry.IsDir() {
+			if relativePath != "." && (isHidden(name) || pipe.importer.Settings.Ignored(name)) {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if isHidden(name) || pipe.importer.Settings.MatchIgnore(name) != "" {
+			return nil
+		}
+		extension := ext(name)
+		if assettype.IsSidecar(extension) {
+			return nil
+		}
+		if _, ok := assettype.Classify(extension); !ok {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil || info.Size() == 0 {
+			return nil
+		}
+		if unchanged(&scannedFile{relPath: relativePath, size: info.Size(), mtime: info.ModTime()}, pipe.known) {
+			return nil
+		}
+		count++
+		return nil
+	})
+	return count, err
+}
+
+// preflightReadable probes the source root before the pipeline opens a session,
+// turning a permission failure into an actionable error instead of a silent
+// empty import. This matters twice: on macOS, TCC withholds access to protected
+// and removable/network volumes (a /Volumes path fails with EPERM) until the app
+// — or, for the dev harness, the terminal running it — is granted access; and a
+// denied root would otherwise walk nothing, so the walk-end diff (markMissing)
+// would mark every known asset in the source missing. Failing fast here prevents
+// both. Only the root is probed — a deeper unreadable subtree is per-entry noise
+// SCAN already records as run errors, not a reason to abort the whole import.
+func preflightReadable(fsys fs.FS, displayPath string) error {
+	if _, err := fs.ReadDir(fsys, "."); err != nil {
+		if isPermissionDenied(err) {
+			return fmt.Errorf("cannot scan %q: macOS is withholding permission for this location. "+
+				"Grant Full Disk Access to Alexandria (or, running the dev harness, your terminal) in "+
+				"System Settings › Privacy & Security › Full Disk Access, then retry: %w", displayPath, err)
+		}
+		return fmt.Errorf("cannot scan %q: %w", displayPath, err)
+	}
+	return nil
+}
+
+// isPermissionDenied reports whether err is a filesystem permission failure —
+// classic EACCES or macOS's EPERM (TCC withholding a protected or removable/
+// network volume). Both surface as fs.ErrPermission through io/fs.
+func isPermissionDenied(err error) bool { return errors.Is(err, fs.ErrPermission) }
 
 // scannedFile is the file-level facts gathered before hashing. handler carries
 // the per-type capability funcs (metadata/thumbnail) so the extract and thumbnail

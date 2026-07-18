@@ -496,6 +496,20 @@ already gives the live pipeline picture. Deferred: **statsviz** (live charts), a
 **`/state`** JSON snapshot (pipeline stage depths, session counters), the `go:embed` HTML
 dashboard, and `--json` output for scripting.
 
+*(2026-07-13, gospan round: the calculus changed. `dev import` now writes a per-run gospan
+trace file — per-stage percentiles, queue-time gaps, and batch analysis are one SQL query
+against a closed file, which covers most of what the `/state` snapshot and statsviz wanted
+post-hoc. What remains genuinely deferred here is the LIVE surface; task 22's enrichment
+snapshot endpoint is its likely first real consumer.)*
+
+*(2026-07-16, task 22: the ENRICHMENT slice of this landed — `dev import --debug` now also
+mounts a live `/enrichment` page + `/enrichment/snapshot.json` over `Engine.Snapshot` (queues,
+budget, in-flight, DLQ-by-reason, asset × kind matrix), and `dev jobs graph` renders the
+registry. Still deferred: the same for the IMPORT pipeline (a general `/state` over stage
+depths), statsviz live charts, the `go:embed` dashboard, and `--json` scripting output. The
+enrichment page is hand-rolled HTML with a meta-refresh poll — the stdlib-only constraint
+stands until this entry's own trigger fires.)*
+
 **Trigger:** a real workload the stdlib surface can't diagnose — chasing a throughput regression
 or a stuck-stage bug where watching queue depths over time would have answered it faster.
 
@@ -514,3 +528,154 @@ fetch requires explicit consent + checksum verification).
 
 **Trigger:** the first feature that needs a second external tool (video thumbnails/metadata →
 ffmpeg is the likely first), or the packaging round deciding to bundle/offer managed installs.
+
+---
+
+## 11. Per-device I/O awareness — enrichment I/O tokens are per-source, no path-ordered reads
+
+**Surfaced:** task 18 build round (2026-07-13, Ari + Claude), simplifying D28's "per-device I/O
+tokens: HDD depth ~2, SSD dozens; backlog reads path-ordered."
+
+`internal/enrichment` caps concurrent producer reads with **one token pool per source**
+(`machine.json` `enrichment.ioTokens`, default 4) — a source approximates a device well enough
+for v1. What was deliberately NOT built: real device detection (spinning vs solid state — and
+beyond that the connection-type swamp: SATA vs SAS vs Thunderbolt 3/5 vs USB 2/3, network mounts;
+per-OS IOKit/sysfs code with no stdlib path), a path→device mapping, and path-ordered backlog
+reads (a seek optimization that only pays on spinning media, so it defers with the detection that
+would justify it — the cold backlog orders by import recency, per the same D28).
+
+**Trigger:** real-hardware evidence that enrichment scans crawl on spinning or external media —
+a user report or a trace file showing producer read-wait dominating on an HDD source. Then build
+detection + depth policy as its own layer; the token seam it feeds already exists.
+
+---
+
+## 12. Cheap-signal query surface beyond scalar filters — phash near-dup, signal sort, signal display
+
+**Surfaced:** task 20 build round (2026-07-15, Ari + Claude). The cheap signals (sharpness,
+clipping, phash) are computed + stored as derived columns; deliberately narrower query/display
+surface than the task's original acceptance line ("filter + sort tokens" for all three).
+
+What shipped: `sharpness` + `clipping_highlights` + `clipping_shadows` are **filterable** vocabulary
+fields (`ast`, numeric + presence operators) — the C11 "propose as data, dispose via the query"
+contract. What was deliberately NOT built, each with no consumer yet:
+
+- **phash query surface (hamming / near-dup / clustering).** A scalar predicate over a 64-bit
+  perceptual hash is meaningless; phash's real query is hamming-distance near-dup, which is the
+  burst/grouping deep-dive (`ideation/backend-open-questions.md` #7). So phash is stored + hashed
+  (dHash, a swappable strategy) but has NO `ast` field and NO `domain.Asset` struct field. The
+  `signals.Hamming` primitive exists, used by tests.
+  - **Stale-hash caveat for the trigger.** `signals.DefaultHasher` is a swappable strategy and the
+    scan keys on `phash IS NULL`, so once computed a hash reads "present" forever — there is no
+    registered *bulk* rebuild (only per-asset reimport `ClearDerived`). If the algorithm is refined
+    before the near-dup surface lands, already-stored hashes are silently trusted as if freshly
+    computed. So the consumer that lands this surface MUST first establish a bulk recompute path
+    (a registered rebuild that NULLs the column library-wide + lets the scan re-derive, mirroring
+    `RebuildFTS`) and/or an algorithm-version tag — do not compare hashes across an algorithm change
+    without it. (Open scope question flagged 2026-07-16: whether to keep computing phash at all
+    before this consumer exists, or defer the producer too — it is machinery for an absent reader.)
+- **Sort-by-signal.** Sort fields are a curated subset (not every filterable field is sortable —
+  `cameraMake`/`width` already aren't). "Sharpest first" has no cull/grid UI consuming it yet, so
+  no `SortField` member was added.
+- **Signal display in the seam.** `catalog.AssetRow` carries no signal fields — nothing renders
+  them yet (the read model `domain.Asset` does carry sharpness/clipping, populated on read, for
+  when the seam wants them).
+
+**Trigger:** the cull/grid UI that consumes signals — a threshold-filter pill wanting a sort axis,
+a burst view wanting near-dup clustering, or a cell wanting to show a sharpness score. Add the
+`SortField` member, the phash hamming grammar, and/or the `AssetRow` fields then, each a small
+addition onto the stored columns that already exist.
+
+---
+
+## 13. Per-asset enrichment DETAIL read — error reasons + blocked derivation
+
+**Surfaced:** task 21 build round (2026-07-15, Ari + Claude). The seam's enrichment
+visibility shipped as GRID decoration — `AssetRow.Enriching` (running kinds) and
+`AssetRow.Failed` (attempt-exhausted kinds) — which gives the grid the three
+D25 states (enriching / ready / failed) distinctly. Deliberately narrower than the
+spec's full "failed state" bullet.
+
+What was NOT built, each with no consumer yet:
+
+- **The per-asset detail read** — surfacing an asset's DLQ rows (`EnrichmentError`:
+  reason code, attempts, last-attempt) + its `blocked` kinds. The repo read exists
+  (`EnrichmentRepo.ListFailures`); what defers is the wire shape and the plumbing,
+  because the inspector/loupe that shows *why* an artifact failed does not exist
+  (frontend rebuild). **Build it on the asset read path, NOT a separate lookup**
+  (Ari, 2026-07-15): enrichment state is a property of the asset, so this decorates
+  the asset DETAIL response (the `GetAsset` path — likely a detail wrapper, since
+  `domain.Asset` can't carry transient state), exactly as the grid decorates
+  `AssetRow`. It must NOT become an `EnrichmentEngineService.GetEnrichment(assetID)`
+  method — that service holds engine CONTROL verbs only; collecting enrichment data
+  keyed by asset, separately from the asset, is the smell this note exists to prevent.
+- **The `blocked` derivation** — a kind whose prerequisite is exhausted-failed
+  reading `blocked` rather than an eternal `pending` (thumbnail failed ⇒ sharpness
+  blocked). The engine has the prerequisite graph; the one-level derivation is ~15
+  lines. It defers with the detail read because the grid tile is thumbnail-centric
+  (a failed thumbnail already reads `failed`), and `blocked` is a loupe/inspector
+  refinement of `pending` with no renderer yet.
+
+**Trigger:** the loupe/inspector that renders per-asset enrichment state — when a UI
+wants to show reason codes or distinguish blocked-vs-pending per artifact. Add the
+seam detail method (+ `EnrichmentError` wire projection) and `Engine.BlockedKinds`
+then; both build onto reads that already exist.
+
+---
+
+## 14. Enrichment snapshot: distributions & per-job cost — gospan's territory
+
+**Surfaced:** task 22 build round (2026-07-16, Ari + Claude). `Engine.Snapshot` ships the
+live debug surface as **gauges** — everything harvested for free from state the engine already
+holds (queue depths hot/cold, in-flight jobs, budget capacity/usable/in-use, DLQ by reason,
+per-kind pool size + paused + more-backlog). Deliberately narrower than the task's snapshot
+bullet, which also listed histograms and per-job cost.
+
+What was NOT built, because it needs new per-job instrumentation with no live consumer:
+
+- **Per-kind duration histograms** and **per-(kind, asset) token cost** — distributions, not
+  current-state. gospan already captures these: every job is an `enrichment.<kind>` span with
+  `tokens`/`size_bytes` attrs and timing (D30), and per-kind percentiles are one SQL query
+  against the trace file. Building in-memory ring-buffer histograms would duplicate that.
+- **Per-kind budget holds** and **per-job tokens-held** — the aggregate `Budget.InUse` covers
+  the "in-use ≤ capacity" question; a per-kind breakdown needs the budget to account by kind,
+  and a worker→dispatcher token-feedback path for per-job, neither worth it for a dev view.
+
+The doctrinal line: **live gauges in the snapshot; distributions in the gospan trace file.**
+
+**Trigger:** the in-app dev corner (the second consumer of the snapshot JSON — at which point
+its TS types get generated, C15), or a live perf diagnosis the gauges can't answer and the
+post-hoc trace file can't either. Add the histogram/cost fields to `Snapshot` then, backed by
+whatever accounting the diagnosis actually needs.
+
+---
+
+## 15. Per-import enrichment status — needs the asset→session linkage first
+
+**Surfaced:** enrichment-epic pre-merge review round (2026-07-16, Ari + Claude), settling the
+jobs-envelope question: the convergent lane is a STANDING job (never terminal; zero
+`queueDepth` is the drained signal — `docs/seam-events-jobs.md`), so "how far along is MY
+import's enrichment?" cannot and should not come from job events.
+
+The desirable UX is real: "import X is 80% enriched" tells a user when a shoot is ready to
+cull. The convergent design makes it a pure read-side aggregate — count session X's assets
+with artifact columns non-null vs. total — computable any time from catalog truth, no engine
+involvement, no run identity (D28 refused the workflow-engine shape; reimports, staleness
+clears, and hints all create work with no import attached, so an engine-side "run" would lie
+at the edges).
+
+What's missing is the linkage: `import_sessions` exists but nothing maps assets to it — the
+assets table carries `ingested_at` only (the only session-linked table is `import_errors`).
+The build is two small pieces, both worthless without a consumer:
+
+- an `import_session_id` observation column on assets, written by ingest (writer-class clean);
+- a seam read (or session-row decoration) exposing the per-session enrichment aggregate.
+
+Note the *behavior* already exists — the missing-artifact scan orders by `ingested_at DESC`
+and WRITE's post-commit hook nudges the dispatcher, so the newest import enriches first; only
+the per-import *reporting* is absent.
+
+**Trigger:** the frontend surface that would render it — an imports/activity panel showing
+per-import progress, or a "ready to cull?" affordance on a session row. Add the column and the
+aggregate read then; schema note — if a real release exists by then, this becomes a stacked
+migration + backfill (NULL for pre-linkage assets is honest and fine).

@@ -1,7 +1,14 @@
 # Thumbnailing performance & hardware acceleration
 
-**Audience:** Ari + future Claudes. This is the reference for *why the ingest
-pipeline spends its time where it does*, what "hardware acceleration" actually
+> **Reframed by task 19 (2026-07-14, D25):** THUMB is no longer an ingest stage —
+> thumbnailing is the enrichment engine's `thumbnail` job kind, running post-commit
+> under the D28 CPU budget, and RAW already extracts the embedded preview via the
+> exiftool daemon (`thumbnailer.GenerateRawPreview`). The decode analysis below still
+> applies verbatim to the enrichment *producer* (shrink-on-load remains the unclaimed
+> win); read "THUMB stage" as "thumbnail producer" throughout.
+
+**Audience:** Ari + future Claudes. This is the reference for *why thumbnailing
+spends its time where it does*, what "hardware acceleration" actually
 means for this workload, and the architecture that lets us go fast without a
 per-format × per-platform code explosion. Written after the impl/04 pipeline
 shipped and we tuned it on a real folder.

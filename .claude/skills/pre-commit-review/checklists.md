@@ -47,6 +47,12 @@ exhaustive switches, coverage gate, generated-TS freshness) — do not re-litiga
   Conversely: speculative abstraction (interface with one implementation, config for a constant,
   scaffolding "for later") is a finding too — interfaces are carved at the *second*
   implementation.
+- **Bespoke structures reimplementing a stdlib container are a finding** (§7). Hand-rolled
+  priority handling (promotion flags, lazy-discard husks, ordered-merge of parallel lists) is
+  `container/heap` in a costume; ad-hoc linked structures are `container/list`; custom
+  ordering plumbing is `sort`/`slices`. The tell: the diff grows *mutation bookkeeping* (flags,
+  generation counters, dedup maps) to emulate an operation the stdlib type provides natively.
+  Named the hard way in the task-18 enrichment round (see the D28 dated notes).
 - **Leftovers.** No debug prints routed around forbidigo, no dead code kept "just in case", no
   stray scratch files, no TODOs without an owner (a DEFERRED entry or a ponytail marker).
 

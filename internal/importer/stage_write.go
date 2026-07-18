@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/sqlite"
+	"github.com/akmadian/gospan"
 	"github.com/charmbracelet/log"
 )
 
@@ -41,6 +43,9 @@ func (pipe *pipeline) write(ctx context.Context, incoming <-chan *pipelineItem) 
 			if !ok {
 				return flush()
 			}
+			// The write-wait span: arrival → commit. Its duration is the batching
+			// latency (fill time + lull + tx), ended in endItemTrace.
+			_, item.awaitCommitSpan = pipe.importer.Tracer.Start(item.ctx, "import.await-commit")
 			if len(batch) == 0 {
 				timer.Reset(writeLull)
 			}
@@ -66,6 +71,12 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 	if len(batch) == 0 {
 		return nil
 	}
+	// The batch is its own tiny trace (fan-in recipe): a commit serving N item
+	// traces belongs to none of them, so the many-to-one lives in the shared
+	// batch_seq attribute, never in span structure.
+	pipe.batchSeq++
+	_, batchSpan := pipe.importer.Tracer.Start(context.Background(), "import.write-batch",
+		slog.Int("items", len(batch)), slog.Int("batch_seq", pipe.batchSeq))
 	err := pipe.importer.Store.InTx(ctx, func(repos sqlite.Repos) error {
 		for _, item := range batch {
 			if err := pipe.writeItem(ctx, repos, item); err != nil {
@@ -75,6 +86,10 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		return nil
 	})
 	if err != nil {
+		batchSpan.Fail(err)
+	}
+	batchSpan.End()
+	if err != nil {
 		// The tx is poisoned by the first failing statement, so per-item isolation
 		// isn't free here. Log loudly, count the batch as errored, continue — the
 		// work is skip-gated / re-driven next run (idempotency is the recovery).
@@ -83,6 +98,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		pipe.importer.Log.Error("batch commit failed", "items", len(batch), "err", err)
 		for _, item := range batch {
 			pipe.addItemError(item, "write", err)
+			pipe.endItemTrace(item, err)
 		}
 		pipe.errorCount += len(batch)
 		return nil
@@ -91,6 +107,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 	var committed int
 	for _, item := range batch {
 		pipe.tally(item)
+		pipe.endItemTrace(item, nil)
 		if !item.isSidecar && !item.rejected {
 			committed++
 			if pipe.importer.OnAssetCommitted != nil {
@@ -101,6 +118,28 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 	pipe.done.Add(int64(committed))
 	pipe.postCommit(ctx)
 	return nil
+}
+
+// endItemTrace closes the item's await-commit span and its root span, both
+// tagged with the batch that carried them. The root records the verdict (for
+// per-verdict SQL) and whether the item was rejected upstream; a failed commit
+// fails the root, and a rejected item's error lives on the failed STAGE span +
+// the DLQ row — the root's status stays the commit outcome.
+func (pipe *pipeline) endItemTrace(item *pipelineItem, commitErr error) {
+	batchAttr := slog.Int("batch_seq", pipe.batchSeq)
+	item.awaitCommitSpan.SetAttrs(batchAttr)
+	item.awaitCommitSpan.End()
+
+	root := gospan.FromContext(item.ctx)
+	if !item.isSidecar && !item.rejected {
+		root.SetAttrs(batchAttr, slog.String("verdict", item.verdict.String()))
+	} else {
+		root.SetAttrs(batchAttr, slog.Bool("rejected", item.rejected))
+	}
+	if commitErr != nil {
+		root.Fail(commitErr)
+	}
+	root.End()
 }
 
 // writeItem applies one item's mutations via the tx-bound repos. Uses only the
@@ -125,45 +164,61 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 		if err := repos.Assets.ApplyFilePatch(ctx, item.assetID, reimportFilePatch(&item.scanned, item.hash, &item.extractedMetadata, item.existing)); err != nil {
 			return err
 		}
-		return pipe.markThumbnail(ctx, repos, item)
+		item.logger.Debug("reimport: derived state + enrichment DLQ cleared", "path", item.scanned.relPath, "assetID", item.assetID)
+		return clearStaleDerived(ctx, repos, item.assetID)
 	default: // actionNew, actionDuplicate
 		asset := buildAsset(item.assetID, pipe.source, &item.scanned, item.hash, &item.extractedMetadata)
 		if err := repos.Assets.Create(ctx, asset); err != nil {
 			return err
 		}
 		if item.verdict == actionDuplicate {
-			if err := repos.Dups.Log(ctx, &domain.Duplicate{
+			return repos.Dups.Log(ctx, &domain.Duplicate{
 				ID:               domain.NewID(),
 				OriginalAssetID:  item.existing.ID,
 				DuplicateAssetID: asset.ID,
 				PartialHash:      item.hash,
 				DetectedAt:       time.Now().UTC(),
 				Status:           "pending",
-			}); err != nil {
-				return err
-			}
+			})
 		}
-		return pipe.markThumbnail(ctx, repos, item)
+		return nil
 	}
 }
 
-func (pipe *pipeline) markThumbnail(ctx context.Context, repos sqlite.Repos, item *pipelineItem) error {
-	if item.thumbnailedAt == nil {
-		return nil
+// clearStaleDerived is the D28 staleness transition, run inside the reimport's
+// own transaction: new bytes mean every derived artifact describes the OLD
+// bytes, so derived columns flip to NULL (instantly "missing" — the next
+// enrichment scan re-derives them) and the asset's enrichment DLQ rows are
+// deleted (exhaustion described the old bytes; new bytes get fresh attempts).
+// Thumbnail FILES deliberately survive on disk: the grid shows the
+// outdated-but-real thumb until regeneration overwrites it, and the
+// content-addressed URL cache-busts on completion.
+func clearStaleDerived(ctx context.Context, repos sqlite.Repos, assetID string) error {
+	if err := repos.Assets.ClearDerived(ctx, assetID); err != nil {
+		return err
 	}
-	return repos.Assets.SetThumbnailAt(ctx, item.assetID, *item.thumbnailedAt)
+	return repos.Enrichment.ClearFailures(ctx, assetID)
 }
 
 // persist applies the decided verdict on the single-file (watcher) path. New and
 // duplicate mint a fresh asset; reimport refreshes observation columns ONLY
 // (judgments untouched — the writer split makes touching them impossible, and a
-// missing file reappearing at its original path is restored online here).
-// Duplicates also log the pair. This is the unbatched sibling of writeItem.
+// missing file reappearing at its original path is restored online here) and
+// then runs the D28 staleness clear (see clearStaleDerived) through the same
+// store transaction the batch path uses. This is the unbatched sibling of
+// writeItem. Note the reimport branch requires Store (not just the narrow Obs
+// writer) — a watcher composition that omits Store nil-panics on its primary
+// event, a same-path edit.
 func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
 	switch verdict {
 	case actionReimport:
 		logger.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
-		return existing.ID, imp.Obs.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing))
+		return existing.ID, imp.Store.InTx(ctx, func(repos sqlite.Repos) error {
+			if err := repos.Assets.ApplyFilePatch(ctx, existing.ID, reimportFilePatch(scanned, hash, extractedMetadata, existing)); err != nil {
+				return err
+			}
+			return clearStaleDerived(ctx, repos, existing.ID)
+		})
 
 	default: // actionNew, actionDuplicate
 		logger.Debug("write.persist: new asset detected - minting!", "path", scanned.relPath)
@@ -259,9 +314,9 @@ func reimportFilePatch(scanned *scannedFile, hash string, extractedMetadata *met
 }
 
 // buildAsset creates a new asset from scan + hash, then overlays extracted
-// metadata. The ID is minted by the caller (MATCH mints it before THUMB, which
-// needs it to name the thumbnail file). ThumbnailAt is left nil here — the
-// thumbnail stage patches it after the asset is written (see stage_thumb.go).
+// metadata. The ID is minted by the caller (MATCH). ThumbnailAt is nil at
+// commit by design (D25): the thumbnail is an enrichment artifact, produced
+// post-commit by the engine — the missing column IS the queue.
 func buildAsset(id string, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata) *domain.Asset {
 	now := time.Now().UTC()
 	asset := &domain.Asset{

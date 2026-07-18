@@ -147,6 +147,11 @@ const FIELD: Record<TokenField, (asset: MockAsset) => unknown> = {
     cameraModel: (a) => a.cameraModel,
     caption: (a) => a.caption,
     capturedAt: (a) => a.capturedAt,
+    // Backend-computed signals; the mock carries no signal fixtures yet, so they
+    // read as "not computed" (null) — filters match nothing until it grows them
+    // (DEFERRED §12).
+    clippingHighlights: () => null,
+    clippingShadows: () => null,
     colorLabel: (a) => a.colorLabel,
     copyright: (a) => a.copyright,
     creator: (a) => a.creator,
@@ -158,6 +163,7 @@ const FIELD: Record<TokenField, (asset: MockAsset) => unknown> = {
     ingestedAt: (a) => a.ingestedAt,
     lensModel: (a) => a.lensModel,
     rating: (a) => a.rating,
+    sharpness: () => null,
     source: (a) => a.sourceId,
     tag: (a) => a.tagIds,
     text: (a) => `${a.filename} ${a.title ?? ""} ${a.caption ?? ""} ${a.creator ?? ""}`,

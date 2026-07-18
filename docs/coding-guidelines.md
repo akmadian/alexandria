@@ -353,7 +353,7 @@ the `for range` plumbing for every stage — it's the same shape each time.
 Files are free (§0), so give each stage its own file rather than one grab-bag.
 `internal/importer` is the reference: **one `stage_<name>.go` per step**
 (`stage_scan.go`, `stage_hash.go`, `stage_match.go`, `stage_extract.go`,
-`stage_thumb.go`, `stage_write.go`), with the channel wiring and run-level state
+`stage_write.go`), with the channel wiring and run-level state
 in `pipeline.go` and the item that threads through them in `item.go`. This is a
 *file* split, not a *package* split: the stages share a wide mutable surface (the
 `pipeline` struct and the item), which is exactly what a single package's

@@ -154,17 +154,27 @@ func (e *ExiftoolDaemon) Close() error {
 	return err
 }
 
-// readUntilMarker reads lines until one equals the ready marker, returning
-// everything before it. The marker line itself is consumed and dropped. An EOF
-// before the marker means the daemon died mid-command.
+// readUntilMarker reads until the ready marker, returning everything before it.
+// The marker is matched as a line SUFFIX, not a whole line: binary output
+// (-b preview extraction) does not end with a newline, so the marker glues onto
+// the payload's last bytes — a whole-line match would wedge the reader forever
+// waiting for a line that never comes. The marker (and its trailing newline) is
+// consumed and dropped. An EOF before the marker means the daemon died
+// mid-command.
+//
+// Accepted risk, inherent to the merged-stream stay_open protocol: a binary
+// payload that happens to contain "{ready<seq>}\n" would be silently truncated
+// at that point. The marker is sequence-numbered, so the odds are astronomical;
+// the known upgrade path if it ever bites is `-echo4`-style stderr markers on a
+// separate pipe.
 func readUntilMarker(reader *bufio.Reader, marker string) ([]byte, error) {
 	var accumulated []byte
 	for {
 		line, err := reader.ReadString('\n')
 		// exiftool prints the marker followed by a newline; on some platforms the
-		// final line may lack it, so check the trimmed content before the EOF test.
-		if strings.TrimRight(line, "\r\n") == marker {
-			return accumulated, nil
+		// final line may lack it, so trim before the suffix check and the EOF test.
+		if trimmed := strings.TrimRight(line, "\r\n"); strings.HasSuffix(trimmed, marker) {
+			return append(accumulated, trimmed[:len(trimmed)-len(marker)]...), nil
 		}
 		accumulated = append(accumulated, line...)
 		if err != nil {

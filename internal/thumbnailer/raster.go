@@ -1,6 +1,7 @@
 package thumbnailer
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -24,26 +25,40 @@ import (
 // thumbnail scale — so it's the default here. The full quality ladder is a
 // one-word change: dial up to draw.BiLinear or draw.CatmullRom if large-downscale
 // aliasing on very textured images ever shows. The real fix for huge sources is
-// decode-downscale (DCT / subprocess), which lands with RAW support (impl/07);
+// decode-downscale (DCT / subprocess), which lands with full RAW decode support;
 // this kernel choice is orthogonal to that.
 var resizeKernel draw.Interpolator = draw.ApproxBiLinear
 
-// GenerateRaster decodes a standard raster image once, then writes one JPEG per
-// size, each scaled to fit that long edge. It is a thumbnailer.GenFunc.
+// generateRaster is the GenerateRaster strategy: open the source file, decode it
+// with a standard decoder, and write one JPEG per configured size.
 //
 // "Raster" here means the formats a standard decoder can turn straight into
 // pixels — JPEG/PNG/GIF via Go's stdlib today. It is deliberately NOT the RAW
-// path: a RAW file's own handler extracts its embedded JPEG preview and feeds
-// those bytes back through THIS function, so RAW thumbnailing reuses the raster
-// backend instead of duplicating resize/encode. Everything that can produce
-// decodable pixels funnels here (see docs/perf/).
-func GenerateRaster(r io.ReadSeeker, sizes []int, quality int, dst func(int) string) error {
-	src, _, err := image.Decode(r)
+// path: GenerateRawPreview extracts a RAW file's embedded JPEG preview and feeds
+// those bytes through the same resizeAndEncode backend, so RAW thumbnailing
+// reuses the raster backend instead of duplicating resize/encode.
+func (thumb *Thumbnailer) generateRaster(_ context.Context, sourcePath string, assetID string) error {
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open source: %w", err)
+	}
+	defer func() { _ = sourceFile.Close() }()
+	return thumb.resizeAndEncode(sourceFile, assetID)
+}
+
+// resizeAndEncode is the shared backend both strategies funnel into: decode a
+// stream of pixels once, write one JPEG per configured size, each scaled to fit
+// that long edge.
+func (thumb *Thumbnailer) resizeAndEncode(reader io.Reader, assetID string) error {
+	src, _, err := image.Decode(reader)
 	if err != nil {
 		return fmt.Errorf("decode: %w", err)
 	}
-	for _, size := range sizes {
-		if err := encodeJPEG(dst(size), fit(src, size), quality); err != nil {
+	if err := thumb.ensureDirs(assetID); err != nil {
+		return err
+	}
+	for _, size := range thumb.Sizes {
+		if err := encodeJPEG(thumb.Path(assetID, size), fit(src, size), thumb.Quality); err != nil {
 			return err
 		}
 	}
@@ -72,10 +87,13 @@ func fit(src image.Image, long int) image.Image {
 
 	targetWidth, targetHeight := width, height
 	if width > long || height > long { // downscale only
+		// max(_, 1): an extreme aspect ratio (>~1024:1) rounds the short edge to 0,
+		// and jpeg.Encode accepts a zero-dimension image silently — a "successful"
+		// but undecodable thumbnail that later fails/degrades every signal job.
 		if width >= height {
-			targetWidth, targetHeight = long, round(height*long, width)
+			targetWidth, targetHeight = long, max(round(height*long, width), 1)
 		} else {
-			targetWidth, targetHeight = round(width*long, height), long
+			targetWidth, targetHeight = max(round(width*long, height), 1), long
 		}
 	}
 
@@ -89,5 +107,5 @@ func fit(src image.Image, long int) image.Image {
 	return dst
 }
 
-// round computes a*/b rounded to nearest, for aspect-preserving dimensions.
+// round computes a*long/b rounded to nearest, for aspect-preserving dimensions.
 func round(a, b int) int { return int(math.Round(float64(a) / float64(b))) }

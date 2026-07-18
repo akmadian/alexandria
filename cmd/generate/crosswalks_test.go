@@ -20,6 +20,7 @@ import (
 	"github.com/akmadian/alexandria/internal/ast"
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/enrichment"
 	"github.com/akmadian/alexandria/internal/metadata"
 	"github.com/akmadian/alexandria/internal/testutil"
 )
@@ -35,6 +36,34 @@ var crosswalks = []struct {
 	{"metadata.Metadata is a subset of domain.Asset", checkExtractionSubset},
 	{"catalog.FilePatch is a subset of domain.Asset", checkFilePatchSubset},
 	{"catalog triage shapes name domain.Asset judgment fields", checkTriageSubset},
+	{"domain.EnrichmentKind matches the engine registry kinds", checkEnrichmentKinds},
+}
+
+// checkEnrichmentKinds pins the published domain.EnrichmentKind union to the
+// engine's registry kinds: every registry kind must have a const (so the seam's
+// decoration never ships a kind the frontend union lacks) and every const must be
+// a live registry kind (no stale member). Definitions(nil, nil) is safe — only the
+// static Kind fields are read, the producers are never invoked.
+func checkEnrichmentKinds(t *testing.T) {
+	declared := map[string]bool{}
+	for _, value := range loadEnumMembers(domainPackage, []string{"EnrichmentKind"})["EnrichmentKind"] {
+		declared[value] = true
+	}
+	registryKinds := map[string]bool{}
+	definitions := enrichment.Definitions(nil, nil)
+	for index := range definitions {
+		registryKinds[definitions[index].Kind] = true
+	}
+	for kind := range registryKinds {
+		if !declared[kind] {
+			t.Errorf("registry kind %q has no domain.EnrichmentKind const", kind)
+		}
+	}
+	for value := range declared {
+		if !registryKinds[value] {
+			t.Errorf("domain.EnrichmentKind %q is not a registry kind — stale const", value)
+		}
+	}
 }
 
 func TestCrosswalks(t *testing.T) {

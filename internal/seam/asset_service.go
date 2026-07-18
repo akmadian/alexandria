@@ -32,6 +32,22 @@ type assetJudgmentWriter interface {
 	SoftDelete(ctx context.Context, ids []string) error
 }
 
+// enrichmentView is the seam's read slice of the engine (task 21): per-asset
+// transient + failed state as KIND NAMES, resolved a page at a time (the
+// enrichment.Engine satisfies it). Optional — a nil view leaves rows undecorated,
+// so the read path works with no engine (every existing test, and any host built
+// before enrichment is wired). It never leaks the engine's internal bitmask.
+type enrichmentView interface {
+	RunningKinds(assetIDs []string) map[string][]domain.EnrichmentKind
+	FailedKinds(ctx context.Context, assetIDs []string) (map[string][]domain.EnrichmentKind, error)
+}
+
+// enrichmentDecoratable is the setter WithEnrichmentView targets — only
+// AssetService implements it, so the option is a no-op on any other service.
+type enrichmentDecoratable interface {
+	setEnrichmentView(view enrichmentView)
+}
+
 // AssetService exposes the asset read + judgment-write surface — the workhorse of
 // the seam (C7): one QueryAssets absorbs every predicate, one UpdateAssets absorbs
 // every triage write. It reads through the query authority (ast) and writes
@@ -40,9 +56,12 @@ type assetJudgmentWriter interface {
 // choke point is the natural producer (impl/16 §4).
 type AssetService struct {
 	emitting
-	reader assetReader
-	writer assetJudgmentWriter
+	reader     assetReader
+	writer     assetJudgmentWriter
+	enrichment enrichmentView // nil = no decoration
 }
+
+func (s *AssetService) setEnrichmentView(view enrichmentView) { s.enrichment = view }
 
 // NewAssetService constructs the bound service over the asset read/write slices.
 // Pass WithEmitter to wire catalog/changed events; without it, writes succeed and
@@ -53,6 +72,18 @@ func NewAssetService(reader assetReader, writer assetJudgmentWriter, opts ...Opt
 		opt(service)
 	}
 	return service
+}
+
+// WithEnrichmentView wires the engine's per-asset visibility into the asset
+// service, so query results carry enrichment decoration (task 21). Only
+// AssetService consumes it — the option type-asserts for the setter, so it is a
+// no-op on any other bound service.
+func WithEnrichmentView(view enrichmentView) Option {
+	return func(s serviceOption) {
+		if decoratable, ok := s.(enrichmentDecoratable); ok {
+			decoratable.setEnrichmentView(view)
+		}
+	}
 }
 
 // QueryResult is the QueryAssets envelope: the grid-card page plus the total
@@ -101,8 +132,33 @@ func (s *AssetService) QueryAssets(query ast.Query, arrangement ast.Arrangement,
 		log.Error("seam: QueryAssets failed", "err", err)
 		return QueryResult{}, normalizeError(err)
 	}
+	s.decorateEnrichment(seamContext(), items)
 	log.Debug("seam: queried assets", "returned", len(items), "total", total)
 	return QueryResult{Items: items, Total: total}, nil
+}
+
+// decorateEnrichment fills each row's transient enrichment state (task 21): the
+// running kinds (one tracker lock for the page) and the terminally-failed kinds
+// (one DLQ query). Nil-safe (no engine wired = no decoration) and best-effort —
+// decoration never fails a query, so a DLQ read error drops the failed half and
+// logs, leaving the running half intact.
+func (s *AssetService) decorateEnrichment(ctx context.Context, rows []catalog.AssetRow) {
+	if s.enrichment == nil || len(rows) == 0 {
+		return
+	}
+	ids := make([]string, len(rows))
+	for index := range rows {
+		ids[index] = rows[index].ID
+	}
+	running := s.enrichment.RunningKinds(ids)
+	failed, err := s.enrichment.FailedKinds(ctx, ids)
+	if err != nil {
+		log.Warn("seam: enrichment failed-state decoration skipped", "err", err)
+	}
+	for index := range rows {
+		rows[index].Enriching = running[rows[index].ID]
+		rows[index].Failed = failed[rows[index].ID]
+	}
 }
 
 // GetAsset returns the full asset by id (the only method that returns the whole

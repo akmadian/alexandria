@@ -963,7 +963,7 @@ Within each priority tier, features should be built roughly in this order based 
 1. Domain model and types (`internal/domain/`)
 2. SQLite catalog, schema, migrations, settings
 3. Source management (add, scan config, drive identity)
-4. Ingest pipeline stages (scanner -> hasher -> dedup -> extractor -> thumbnailer -> writer)
+4. Ingest pipeline stages (SCAN -> HASH -> MATCH -> EXTRACT -> WRITE; thumbnails are post-ingest enrichment per D25)
 5. Asset repository and query layer
 6. Frontend shell (CSS Grid, tokens, themes)
 7. Browser/sidebar with tree component

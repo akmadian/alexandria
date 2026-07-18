@@ -24,7 +24,6 @@ func newImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.Asse
 	imp := &importer.Importer{
 		Reader:  assets,
 		Obs:     assets,
-		Derived: assets,
 		Dups:    &sqlite.DuplicateRepo{DB: db},
 		Store:   sqlite.NewStore(db),
 		Imports: &sqlite.ImportRepo{DB: db},

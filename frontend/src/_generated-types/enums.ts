@@ -36,3 +36,9 @@ export type SourceKind =
 export type SourceConnectivity =
   | "offline"
   | "online";
+
+export type EnrichmentKind =
+  | "clipping"
+  | "phash"
+  | "sharpness"
+  | "thumbnail";

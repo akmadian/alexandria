@@ -17,11 +17,14 @@ import (
 func (pipe *pipeline) extract(ctx context.Context, in <-chan *pipelineItem, out chan<- *pipelineItem) error {
 	for item := range in {
 		if !item.isSidecar && !item.rejected && (item.verdict == actionNew || item.verdict == actionReimport) {
+			_, span := pipe.importer.Tracer.Start(item.ctx, "import.extract")
 			extractedMetadata, err := pipe.importer.extractMetadata(pipe.fsys, &item.scanned, item.logger)
 			item.extractedMetadata = extractedMetadata
 			if err != nil {
+				span.Fail(err)
 				item.addError("extract", "decode_failed", err.Error())
 			}
+			span.End()
 		}
 		if err := pipe.emit(ctx, out, item); err != nil {
 			return err

@@ -1,8 +1,15 @@
 // Package thumbnailer generates cached thumbnails from asset files, mapping each
-// format onto one shared decode→resize→encode path. This package owns the
-// decoders and the on-disk layout; per-type dispatch lives in the assettype
-// registry (internal/assettype), which points each extension at the right GenFunc
+// format onto one shared resize→encode path. This package owns the decoders and
+// the on-disk layout; per-type dispatch lives in the assettype registry
+// (internal/assettype), which points each extension at the right GenFunc
 // (nil = no generator → generic card, not an error).
+//
+// A GenFunc is a strategy expressed as a method value on Thumbnailer: the static
+// assettype table can hold `thumbnailer.GenerateRaster` at package init because
+// the receiver — the Thumbnailer instance carrying the runtime dependencies
+// (output layout, the exiftool daemon) — is passed in at call time. The contract
+// is the postcondition, never the mechanism: after a successful call, one JPEG
+// exists at Path(assetID, size) for every configured size.
 //
 // Thumbnails are throwaway JPEGs, rebuildable from source. The on-disk layout is
 // keyed by asset ID, not file path, because a file's path can change without a
@@ -11,72 +18,102 @@
 package thumbnailer
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/akmadian/alexandria/internal/dependency"
 )
 
 // DefaultQuality is the JPEG quality for generated thumbnails.
 const DefaultQuality = 80
 
-// GenFunc decodes r once and writes one JPEG per requested size. dst maps a size
-// to its output path. A nil GenFunc means the type has no generator.
-type GenFunc func(r io.ReadSeeker, sizes []int, quality int, dst func(size int) string) error
+// GenFunc is one thumbnail strategy: given the Thumbnailer and a source file's
+// absolute path, leave one JPEG per configured size at Path(assetID, size).
+// A nil GenFunc on an assettype row means the type has no generator.
+//
+// Ceiling: if a strategy ever needs per-call state that is not derivable from
+// (Thumbnailer fields + source path), this signature grows — that is the
+// trigger to revisit toward constructed strategy values.
+type GenFunc func(thumb *Thumbnailer, ctx context.Context, sourcePath string, assetID string) error
 
-// Thumbnailer writes thumbnails for assetID using the supplied generator,
-// sourcing pixels from an opened, seekable file. It reports whether a thumbnail
-// was produced: a nil generator is a no-op (false, nil) — callers use ok to
-// decide whether to record the thumbnail (don't flag an asset thumbnailed when
-// no file was written).
-type Thumbnailer interface {
-	Generate(gen GenFunc, r io.ReadSeeker, assetID string) (ok bool, err error)
-}
+// The strategies the assettype registry rows point at.
+var (
+	// GenerateRaster decodes the file itself — the stdlib-decodable formats
+	// (JPEG/PNG/GIF today).
+	GenerateRaster GenFunc = (*Thumbnailer).generateRaster
+	// GenerateRawPreview extracts the camera-written embedded JPEG preview via
+	// the exiftool daemon, then reuses the raster resize/encode backend on those
+	// bytes. Owning RAW decoding is anti-scope: the per-camera quirk table is
+	// exiftool's twenty-year moat (D28 — delegation is permanent).
+	GenerateRawPreview GenFunc = (*Thumbnailer).generateRawPreview
+)
 
-// Registry owns the output layout: where thumbnails go (Dir), at what sizes, and
-// at what JPEG quality. It carries no per-type dispatch — the caller passes the
-// generator for the file at hand.
-type Registry struct {
+// ErrExiftoolUnavailable is returned by GenerateRawPreview when the Thumbnailer
+// was built without a daemon — the capability exists in the registry, the tool
+// is missing at runtime. The enrichment producer maps it to a distinct DLQ
+// reason (tool_unavailable) so the asset reads "failed: tool missing", never
+// an eternal spinner and never a silent skip.
+var ErrExiftoolUnavailable = errors.New("thumbnailer: exiftool daemon unavailable")
+
+// Thumbnailer owns the output layout (where thumbnails go, at what sizes and
+// JPEG quality) and every runtime dependency a strategy needs. It carries no
+// per-type dispatch — the assettype registry hands the caller the strategy for
+// the file at hand.
+type Thumbnailer struct {
 	Dir     string // app-data thumbnails root
 	Sizes   []int  // long-edge pixels; one file generated per entry
 	Quality int    // JPEG quality 1..100
+	// Exiftool is the shared daemon GenerateRawPreview delegates to. Nil means
+	// the RAW preview capability is unavailable at runtime (tool undiscovered);
+	// RAW jobs then fail into the DLQ with tool_unavailable.
+	Exiftool *dependency.ExiftoolDaemon
 }
 
-// New returns a Registry writing under dir.
+// New returns a Thumbnailer writing under dir.
 //
 // ponytail: one size (512) for v1 — nothing consumes larger tiers yet. Add a
 // preview tier (e.g. 2048) here when the loupe needs it and every asset gets a
 // file per size, no other change.
-func New(dir string) Registry {
-	return Registry{Dir: dir, Sizes: []int{512}, Quality: DefaultQuality}
-}
-
-// Generate writes one thumbnail per configured size using gen. A nil gen (the
-// type has no generator) is a no-op reporting ok=false.
-func (reg Registry) Generate(gen GenFunc, reader io.ReadSeeker, assetID string) (bool, error) {
-	if gen == nil {
-		return false, nil
-	}
-	for _, size := range reg.Sizes {
-		if err := os.MkdirAll(filepath.Dir(reg.Path(assetID, size)), 0o750); err != nil {
-			return false, fmt.Errorf("thumbnail dir: %w", err)
-		}
-	}
-	dst := func(size int) string { return reg.Path(assetID, size) }
-	if err := gen(reader, reg.Sizes, reg.Quality, dst); err != nil {
-		return false, fmt.Errorf("thumbnail %s: %w", assetID, err)
-	}
-	return true, nil
+func New(dir string) *Thumbnailer {
+	return &Thumbnailer{Dir: dir, Sizes: []int{512}, Quality: DefaultQuality}
 }
 
 // Path returns the on-disk thumbnail path for an asset at a given size. Pure
 // string derivation, no I/O: <Dir>/<size>/<2-char shard>/<id>.jpg. The shard
 // prefix caps files per directory at large library sizes.
-func (reg Registry) Path(assetID string, size int) string {
+func (thumb *Thumbnailer) Path(assetID string, size int) string {
 	shard := assetID
 	if len(shard) >= 2 {
 		shard = shard[:2]
 	}
-	return filepath.Join(reg.Dir, strconv.Itoa(size), shard, assetID+".jpg")
+	return filepath.Join(thumb.Dir, strconv.Itoa(size), shard, assetID+".jpg")
+}
+
+// AnalysisSize is the thumbnail tier the cheap enrichment signals read (task 20).
+// The smallest generated size: always present, fastest to decode, and sufficient
+// for the culling signals (D28). If a signal ever needs more detail, point it at a
+// larger tier and rebuild that column — the analysis size is a rebuild-triggering
+// input, never a silent mix.
+func (thumb *Thumbnailer) AnalysisSize() int {
+	smallest := thumb.Sizes[0]
+	for _, size := range thumb.Sizes[1:] {
+		if size < smallest {
+			smallest = size
+		}
+	}
+	return smallest
+}
+
+// ensureDirs creates the sharded output directories for one asset's files.
+func (thumb *Thumbnailer) ensureDirs(assetID string) error {
+	for _, size := range thumb.Sizes {
+		if err := os.MkdirAll(filepath.Dir(thumb.Path(assetID, size)), 0o750); err != nil {
+			return fmt.Errorf("thumbnail dir: %w", err)
+		}
+	}
+	return nil
 }
