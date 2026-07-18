@@ -301,11 +301,20 @@ func (d *dispatcherState) paused(kind string) bool {
 // refills any node whose queue drained below a full scan, and logs
 // convergence transitions.
 func (d *dispatcherState) handleCompletions(ctx context.Context, completions []completion) {
+	// Phase 1: retire every finished job from the ledger BEFORE any edge emission.
+	// enqueue() dedups against the ledger, so a dependent a sibling completion is
+	// about to re-enqueue must already be gone. Otherwise a job that skipped early
+	// on a not-yet-visible prerequisite still sits in the ledger (running) when its
+	// now-satisfied prerequisite completes in the same batch, its re-enqueue is
+	// dropped, and a join node (2+ prerequisites) is stranded until the next scan.
 	for _, done := range completions {
 		if _, known := d.ledger[done.key]; known {
 			delete(d.ledger, done.key)
 			d.pendingCount[done.key.Kind]--
 		}
+	}
+	// Phase 2: advance the frontier — an applied artifact enqueues its dependents.
+	for _, done := range completions {
 		if !done.applied {
 			continue
 		}

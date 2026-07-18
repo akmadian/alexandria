@@ -39,6 +39,9 @@ func (e *Engine) RunningKinds(assetIDs []string) map[string][]domain.EnrichmentK
 // non-exhausted DLQ row is still being retried, so it is NOT failed here; it reads
 // as pending until the scan gives up. Sparse, like RunningKinds.
 func (e *Engine) FailedKinds(ctx context.Context, assetIDs []string) (map[string][]domain.EnrichmentKind, error) {
+	if !e.failuresPossible.Load() {
+		return nil, nil // no failure ever recorded — the DLQ query would return nothing
+	}
 	exhausted, err := e.enrichmentRepo.ExhaustedKinds(ctx, assetIDs, MaxAttempts)
 	if err != nil {
 		return nil, err

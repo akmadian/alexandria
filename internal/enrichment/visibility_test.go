@@ -53,6 +53,10 @@ func TestFailedKinds_ExhaustedOnly(t *testing.T) {
 	if err := repo.LogFailure(context.Background(), retrying, "alpha", "decode_failed", "bad"); err != nil {
 		t.Fatal(err)
 	}
+	// Start so the engine seeds its failures gate from the rows just written — the
+	// live path (a reopened catalog with existing DLQ rows); without it FailedKinds
+	// short-circuits the DLQ read as a clean-catalog no-op.
+	harness.start(t)
 
 	failed, err := harness.engine.FailedKinds(context.Background(), []string{exhausted, retrying})
 	if err != nil {

@@ -36,16 +36,17 @@ const (
 // asset facts (extension, ingest time) edge emission needs so the dispatcher
 // never re-reads the catalog to enqueue dependents.
 type jobResult struct {
-	key             JobKey
-	bit             KindSet
-	status          resultStatus
-	apply           ApplyFunc
-	reasonCode      string
-	message         string
-	err             error
-	span            *gospan.Span // the enrichment.<kind> root; ended after commit
-	assetExtension  string
-	assetIngestedAt time.Time
+	key              JobKey
+	bit              KindSet
+	status           resultStatus
+	apply            ApplyFunc
+	reasonCode       string
+	message          string
+	err              error
+	span             *gospan.Span // the enrichment.<kind> root; ended after commit
+	assetExtension   string
+	assetIngestedAt  time.Time
+	assetPartialHash string // identity at dispatch; the writer drops the apply if a reimport changed it
 }
 
 // errStalled is the watchdog's cancel cause: the producer went silent longer
@@ -89,6 +90,7 @@ func (e *Engine) runJob(ctx context.Context, assignment *job) {
 	}
 	result.assetExtension = asset.Extension
 	result.assetIngestedAt = asset.IngestedAt
+	result.assetPartialHash = asset.PartialHash
 	// Applicability is part of the recheck: hints enqueue speculatively, so a
 	// definition must never produce for a type it didn't register for — that
 	// would mint a DLQ "failed" for an asset that is simply not applicable.

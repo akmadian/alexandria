@@ -87,10 +87,13 @@ func fit(src image.Image, long int) image.Image {
 
 	targetWidth, targetHeight := width, height
 	if width > long || height > long { // downscale only
+		// max(_, 1): an extreme aspect ratio (>~1024:1) rounds the short edge to 0,
+		// and jpeg.Encode accepts a zero-dimension image silently — a "successful"
+		// but undecodable thumbnail that later fails/degrades every signal job.
 		if width >= height {
-			targetWidth, targetHeight = long, round(height*long, width)
+			targetWidth, targetHeight = long, max(round(height*long, width), 1)
 		} else {
-			targetWidth, targetHeight = round(width*long, height), long
+			targetWidth, targetHeight = max(round(width*long, height), 1), long
 		}
 	}
 

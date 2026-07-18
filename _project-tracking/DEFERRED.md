@@ -565,6 +565,15 @@ contract. What was deliberately NOT built, each with no consumer yet:
   burst/grouping deep-dive (`ideation/backend-open-questions.md` #7). So phash is stored + hashed
   (dHash, a swappable strategy) but has NO `ast` field and NO `domain.Asset` struct field. The
   `signals.Hamming` primitive exists, used by tests.
+  - **Stale-hash caveat for the trigger.** `signals.DefaultHasher` is a swappable strategy and the
+    scan keys on `phash IS NULL`, so once computed a hash reads "present" forever — there is no
+    registered *bulk* rebuild (only per-asset reimport `ClearDerived`). If the algorithm is refined
+    before the near-dup surface lands, already-stored hashes are silently trusted as if freshly
+    computed. So the consumer that lands this surface MUST first establish a bulk recompute path
+    (a registered rebuild that NULLs the column library-wide + lets the scan re-derive, mirroring
+    `RebuildFTS`) and/or an algorithm-version tag — do not compare hashes across an algorithm change
+    without it. (Open scope question flagged 2026-07-16: whether to keep computing phash at all
+    before this consumer exists, or defer the producer too — it is machinery for an absent reader.)
 - **Sort-by-signal.** Sort fields are a curated subset (not every filterable field is sortable —
   `cameraMake`/`width` already aren't). "Sharpest first" has no cull/grid UI consuming it yet, so
   no `SortField` member was added.

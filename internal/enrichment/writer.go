@@ -147,11 +147,32 @@ func (e *Engine) commitBatch(ctx context.Context, batch []*jobResult, batchSeq *
 func (e *Engine) writeResult(ctx context.Context, repos sqlite.Repos, result *jobResult) error {
 	switch result.status {
 	case resultApplied:
+		// Staleness guard (two-writer race): if a reimport changed the asset's
+		// identity between this job's dispatch and now, the artifact describes bytes
+		// that no longer exist and the reimport already NULLed the derived column —
+		// drop the apply (the scan re-derives from the new bytes) instead of
+		// resurrecting it. The in-tx read pins the snapshot, so a reimport landing
+		// after this check conflicts the apply-write → batch error → rescan.
+		current, err := repos.Enrichment.StillCurrent(ctx, result.key.AssetID, result.assetPartialHash)
+		if err != nil {
+			return err
+		}
+		if !current {
+			e.log.Debug("enrichment: dropping stale artifact — asset changed since dispatch",
+				"kind", result.key.Kind, "asset", result.key.AssetID)
+			return nil
+		}
 		if err := result.apply(ctx, repos.Assets); err != nil {
 			return err
 		}
-		return repos.Enrichment.ClearFailure(ctx, result.key.AssetID, result.key.Kind)
+		// Skip the DLQ clear unless some failure has been recorded — otherwise it is
+		// a no-op DELETE per applied artifact on a clean import.
+		if e.failuresPossible.Load() {
+			return repos.Enrichment.ClearFailure(ctx, result.key.AssetID, result.key.Kind)
+		}
+		return nil
 	case resultFailed:
+		e.failuresPossible.Store(true)
 		return repos.Enrichment.LogFailure(ctx, result.key.AssetID, result.key.Kind, result.reasonCode, result.message)
 	default:
 		return nil

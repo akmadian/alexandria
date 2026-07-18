@@ -145,6 +145,42 @@ func TestEdgeEmissionRespectsDependentApplicability(t *testing.T) {
 	}
 }
 
+// TestJoinNodeNotStrandedByEarlySkip: a dependent with 2+ prerequisites can be
+// dispatched — and skip — on a prerequisite not yet visible; when that
+// prerequisite then completes in the SAME batch as the skip, the re-enqueue must
+// win, not be dropped against the skipped job's still-in-ledger entry. That is the
+// two-phase (retire-all, then emit) contract in handleCompletions. The completion
+// order below ([parent2 applied, join skip]) is the one that strands a single-pass
+// loop: the emit fires while join is still running, dedups away, and join is then
+// retired and never requeued.
+func TestJoinNodeNotStrandedByEarlySkip(t *testing.T) {
+	parent1 := internalDefinition("parent1", imageApplicable)
+	parent2 := internalDefinition("parent2", imageApplicable)
+	join := internalDefinition("join", imageApplicable)
+	join.Prerequisites = []string{"parent1", "parent2"}
+	_, state := internalEngineState(t, []JobDefinition{parent1, parent2, join}, 0)
+
+	// join was emitted by parent1, dispatched, and is about to skip (parent2 still
+	// missing): enqueue then dequeue leaves it running in the ledger.
+	when := time.Now().UTC()
+	state.enqueue("join", "asset-x", when)
+	if running := state.next("join"); running == nil {
+		t.Fatal("failed to mark join running")
+	}
+
+	state.handleCompletions(context.Background(), []completion{
+		{key: JobKey{AssetID: "asset-x", Kind: "parent2"}, applied: true, extension: "jpg", ingestedAt: when},
+		{key: JobKey{AssetID: "asset-x", Kind: "join"}, applied: false, extension: "jpg", ingestedAt: when},
+	})
+
+	if entry := state.ledger[JobKey{AssetID: "asset-x", Kind: "join"}]; entry == nil {
+		t.Fatal("join stranded: the parent completion did not re-enqueue the skipped dependent")
+	}
+	if state.queues["join"].Len() != 1 {
+		t.Fatalf("join not requeued: queue len = %d, want 1", state.queues["join"].Len())
+	}
+}
+
 func TestRefillOnDrainRescansTruncatedBacklog(t *testing.T) {
 	_, state := internalEngineState(t, []JobDefinition{internalDefinition("fake", imageApplicable)}, 3)
 	// Simulate "the last scan hit the page limit, and the queue has drained":

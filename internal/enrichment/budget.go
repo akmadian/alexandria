@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/charmbracelet/log"
@@ -98,39 +97,59 @@ func (b *cpuBudget) setLevel(level string) {
 
 // manageReservation is the dial: it holds capacity−tokensFor(level) tokens so
 // jobs can only use what the level allows. Runs for the engine's lifetime.
-// ponytail: dialing DOWN polls TryAcquire on a short tick instead of a
-// cancellable blocking acquire — tens of milliseconds of latency on an
-// operation whose effect is inherently "as jobs finish" costs nothing, and it
-// keeps this loop trivially correct.
+//
+// Reclaim is a BLOCKING, fair Acquire, one token at a time — NOT TryAcquire. This
+// is load-bearing: x/sync's TryAcquire is refused whenever any goroutine is queued
+// in Acquire (it requires waiters.Len()==0), and Release hands each freed token to
+// those FIFO waiters — so under a churning backlog a polling manager never wins a
+// token and the dial silently fails to throttle. Queuing as a waiter makes the
+// manager a fair participant that actually reclaims its reservation; one token per
+// turn keeps it responsive to a level change. (No ticker: the loop now blocks only
+// on real events — a freed token, a level change, or shutdown.)
 func (b *cpuBudget) manageReservation(ctx context.Context, initialLevel string) {
 	var held int64
-	b.usable.Store(b.tokensFor(initialLevel))
-	target := b.capacity - b.tokensFor(initialLevel)
-	tick := time.NewTicker(25 * time.Millisecond)
-	defer tick.Stop()
+	level := initialLevel
+	b.usable.Store(b.tokensFor(level))
 	defer func() {
 		if held > 0 {
 			b.semaphore.Release(held)
 		}
 	}()
 	for {
-		for held > target {
-			b.semaphore.Release(1)
-			held--
-		}
-		for held < target && b.semaphore.TryAcquire(1) {
-			held++
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case level := <-b.levels:
-			b.usable.Store(b.tokensFor(level))
-			target = b.capacity - b.tokensFor(level)
-			b.log.Info("enrichment: effort level applied", "level", level, "tokens", b.tokensFor(level), "capacity", b.capacity)
-		case <-tick.C:
+		target := b.capacity - b.tokensFor(level)
+		switch {
+		case held > target: // dial-up: hand the surplus back at once
+			b.semaphore.Release(held - target)
+			held = target
+		case held < target: // dial-down: reclaim toward the reservation, fairly
+			select {
+			case <-ctx.Done():
+				return
+			case level = <-b.levels:
+				b.applyLevel(level)
+			default:
+				if err := b.semaphore.Acquire(ctx, 1); err != nil {
+					return // ctx canceled while queued for a token
+				}
+				held++
+			}
+		default: // held == target: idle until the dial moves
+			select {
+			case <-ctx.Done():
+				return
+			case level = <-b.levels:
+				b.applyLevel(level)
+			}
 		}
 	}
+}
+
+// applyLevel resizes the usable budget (the per-job acquire clamp) to a new effort
+// level and logs it; the reservation the manager holds reconciles toward
+// capacity−usable on the next loop turn.
+func (b *cpuBudget) applyLevel(level string) {
+	b.usable.Store(b.tokensFor(level))
+	b.log.Info("enrichment: effort level applied", "level", level, "tokens", b.tokensFor(level), "capacity", b.capacity)
 }
 
 // tokensFor maps an effort level to usable budget tokens. ponytail: stated

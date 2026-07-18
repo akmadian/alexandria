@@ -94,20 +94,29 @@ const (
 
 // Clipping returns the percentage of pixels that are blown-out highlights
 // (luma ≥ highlightFloor) and crushed shadows (luma ≤ shadowCeil), each in 0..100.
-// Both fall out of one histogram pass — one job kind, two columns (D28).
+// Both fall out of one histogram pass — one job kind, two columns (D28). Luma is
+// computed inline rather than via grayField: this is a single linear pass with no
+// random access, so materializing a width*height float64 buffer (~2 MB at the
+// analysis tier) would be pure allocation churn (Sharpness needs the buffer for
+// its neighbour reads; this does not).
 func Clipping(img image.Image) (highlights, shadows float64) {
-	gray, width, height := grayField(img)
-	total := width * height
+	bounds := img.Bounds()
+	total := bounds.Dx() * bounds.Dy()
 	if total == 0 {
 		return 0, 0
 	}
 	highCount, lowCount := 0, 0
-	for _, value := range gray {
-		switch {
-		case value >= highlightFloor:
-			highCount++
-		case value <= shadowCeil:
-			lowCount++
+	for pixelY := bounds.Min.Y; pixelY < bounds.Max.Y; pixelY++ {
+		for pixelX := bounds.Min.X; pixelX < bounds.Max.X; pixelX++ {
+			// Same Rec.601 luma as grayField: RGBA is 16-bit (0..65535); /257 maps to 0..255.
+			red, green, blue, _ := img.At(pixelX, pixelY).RGBA()
+			luma := (0.299*float64(red) + 0.587*float64(green) + 0.114*float64(blue)) / 257.0
+			switch {
+			case luma >= highlightFloor:
+				highCount++
+			case luma <= shadowCeil:
+				lowCount++
+			}
 		}
 	}
 	return 100 * float64(highCount) / float64(total), 100 * float64(lowCount) / float64(total)

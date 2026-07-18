@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 )
 
 // previewTags are the embedded-preview tags tried in order, best first.
@@ -28,6 +29,13 @@ var previewTags = []string{"-PreviewImage", "-JpgFromRaw", "-ThumbnailImage"}
 func (thumb *Thumbnailer) generateRawPreview(ctx context.Context, sourcePath string, assetID string) error {
 	if thumb.Exiftool == nil {
 		return ErrExiftoolUnavailable
+	}
+	// Stat first so a missing/unreadable source reads as read_failed, not
+	// decode_failed: exiftool under -q -q swallows the open error and returns zero
+	// bytes, indistinguishable downstream from a file that simply has no embedded
+	// preview. The raster path gets this free from os.Open; RAW must ask.
+	if _, err := os.Stat(sourcePath); err != nil {
+		return err // wraps fs.ErrNotExist / fs.ErrPermission → thumbnailReason → read_failed
 	}
 	var previewBytes []byte
 	for _, tag := range previewTags {

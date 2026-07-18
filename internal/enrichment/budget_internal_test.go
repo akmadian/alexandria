@@ -3,9 +3,11 @@ package enrichment
 import (
 	"context"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/charmbracelet/log"
 )
 
@@ -13,6 +15,59 @@ import (
 // reservation mechanics — the two behaviors too timing-sensitive to prove
 // through full engine choreography (the engine-level budget acceptance lives
 // in enrichment_test.go).
+
+// TestBudgetReservationReclaimsUnderLoad: the effort dial must actually cap
+// concurrency under a sustained backlog — the case a TryAcquire-polling reservation
+// silently failed (x/sync refuses TryAcquire while any worker is queued in Acquire,
+// and hands freed tokens to those FIFO waiters). With the blocking-Acquire manager,
+// no more than `usable` jobs may hold tokens at once even while workers churn.
+func TestBudgetReservationReclaimsUnderLoad(t *testing.T) {
+	const capacity = 4
+	budget := newCPUBudget(capacity, log.New(io.Discard))
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go budget.manageReservation(ctx, settings.EffortLow) // usable = capacity/4 = 1
+
+	// 2×capacity acquirers keep at least one goroutine queued in Acquire at all
+	// times (the waiters-present condition), each briefly holding one token.
+	stop := make(chan struct{})
+	var workers sync.WaitGroup
+	for range capacity * 2 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				held, err := budget.acquire(ctx, 1)
+				if err != nil {
+					return
+				}
+				time.Sleep(500 * time.Microsecond)
+				budget.release(held)
+			}
+		}()
+	}
+	t.Cleanup(func() { close(stop); workers.Wait() })
+
+	// Let the manager reclaim its reservation (capacity−usable tokens) under load —
+	// a few ms is ample; 300 is slack. A defeated reclaim never gives tokens back.
+	time.Sleep(300 * time.Millisecond)
+	usable := budget.usable.Load()
+	var maxSeen int64
+	for range 500 {
+		if inUse := budget.inUse.Load(); inUse > maxSeen {
+			maxSeen = inUse
+		}
+		time.Sleep(200 * time.Microsecond)
+	}
+	if maxSeen > usable {
+		t.Fatalf("effort dial defeated under load: saw %d concurrent token holders, dial (low) allows %d", maxSeen, usable)
+	}
+}
 
 func TestBudgetJumboClampsAndBlocksUntilRoomFrees(t *testing.T) {
 	tokenBudget := newCPUBudget(4, log.New(io.Discard))

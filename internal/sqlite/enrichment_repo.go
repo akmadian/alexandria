@@ -170,6 +170,37 @@ func (r *EnrichmentRepo) MissingAndEligible(ctx context.Context, probe *Eligibil
 	return eligible, nil
 }
 
+// StillCurrent reports whether the asset still exists (not deleted) with the
+// partial hash the job enriched. The enrichment writer calls it in-tx right before
+// applying a derived artifact: a reimport that landed new bytes (bumping the hash
+// and NULLing the derived columns) between a job's dispatch and its commit must
+// discard the now-stale result rather than re-set the column against bytes it never
+// analyzed. The in-tx read pins a WAL snapshot, so a reimport landing after this
+// check makes the following apply-write conflict (→ batch error → rescan) — either
+// way the stale value never lands. Ingest is the only writer of partial_hash, so it
+// is the clean staleness discriminator (derived writes never touch it).
+func (r *EnrichmentRepo) StillCurrent(ctx context.Context, assetID, partialHash string) (bool, error) {
+	var current bool
+	err := r.DB.QueryRowContext(ctx,
+		"SELECT EXISTS(SELECT 1 FROM assets WHERE id = ? AND partial_hash = ? AND is_deleted = 0)",
+		assetID, partialHash).Scan(&current)
+	if err != nil {
+		return false, err
+	}
+	return current, nil
+}
+
+// AnyFailures reports whether the DLQ holds any row at all — the engine's
+// start-up seed for its failures gate (skip DLQ reads/clears on a clean catalog).
+func (r *EnrichmentRepo) AnyFailures(ctx context.Context) (bool, error) {
+	var any bool
+	err := r.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM enrichment_errors)").Scan(&any)
+	if err != nil {
+		return false, err
+	}
+	return any, nil
+}
+
 // LogFailure upserts the (asset, kind) DLQ row, bumping attempts on a repeat.
 // Attempts accumulate across scans by design — the scan is the retry, and this
 // counter is what eventually exhausts it.
@@ -233,37 +264,47 @@ func (r *EnrichmentRepo) ListFailures(ctx context.Context, assetID string) ([]*d
 // distinctly (D25/task 21). One query over a page of ids; an asset with no
 // exhausted failure is absent (sparse, like the in-flight tracker), so a healthy
 // page allocates nothing.
-func (r *EnrichmentRepo) ExhaustedKinds(ctx context.Context, assetIDs []string, maxAttempts int) (map[string][]string, error) {
-	if len(assetIDs) == 0 {
-		return nil, nil
-	}
-	placeholders := make([]string, len(assetIDs))
-	args := make([]any, 0, len(assetIDs)+1)
-	for index, id := range assetIDs {
-		placeholders[index] = "?"
-		args = append(args, id)
-	}
-	args = append(args, maxAttempts)
-	rows, err := r.DB.QueryContext(ctx,
-		"SELECT asset_id, kind FROM enrichment_errors WHERE asset_id IN ("+
-			strings.Join(placeholders, ",")+") AND attempts >= ? ORDER BY asset_id, kind", args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+// exhaustedScanChunk bounds one ExhaustedKinds IN-list so a large decorated page
+// never trips SQLite's host-parameter limit (SQLITE_MAX_VARIABLE_NUMBER, 32766 on
+// modernc). A per-grid-page query is tiny; this only guards an unpaginated caller
+// (a Page{Limit:0} query returning the whole library) — without it that query
+// errors and decorateEnrichment, being best-effort, silently drops the failed
+// badge for the whole page.
+const exhaustedScanChunk = 500
 
+func (r *EnrichmentRepo) ExhaustedKinds(ctx context.Context, assetIDs []string, maxAttempts int) (map[string][]string, error) {
 	var result map[string][]string
-	for rows.Next() {
-		var assetID, kind string
-		if err := rows.Scan(&assetID, &kind); err != nil {
+	for start := 0; start < len(assetIDs); start += exhaustedScanChunk {
+		chunk := assetIDs[start:min(start+exhaustedScanChunk, len(assetIDs))]
+		args := make([]any, 0, len(chunk)+1)
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		args = append(args, maxAttempts)
+		rows, err := r.DB.QueryContext(ctx,
+			"SELECT asset_id, kind FROM enrichment_errors WHERE asset_id IN ("+
+				placeholders(len(chunk))+") AND attempts >= ? ORDER BY asset_id, kind", args...)
+		if err != nil {
 			return nil, err
 		}
-		if result == nil {
-			result = make(map[string][]string)
+		for rows.Next() {
+			var assetID, kind string
+			if err := rows.Scan(&assetID, &kind); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			if result == nil {
+				result = make(map[string][]string)
+			}
+			result[assetID] = append(result[assetID], kind)
 		}
-		result[assetID] = append(result[assetID], kind)
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		_ = rows.Close()
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 // FailureCounts rolls the DLQ up by (kind, reason_code) for the debug snapshot

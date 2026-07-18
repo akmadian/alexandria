@@ -109,6 +109,12 @@ type Engine struct {
 	workerCounts        map[string]int
 	initialEffort       string
 	currentEffort       atomic.Value // string: the live dial level, for the debug snapshot (task 22)
+	// failuresPossible gates the DLQ read (FailedKinds decoration) and the
+	// post-apply DLQ clear: false means no enrichment failure has ever been
+	// recorded, so both are pure no-ops and skipped. Seeded from the catalog at
+	// Start, latched true by the writer on the first LogFailure. Monotonic — a
+	// catalog that once had failures keeps paying the queries, which is fine.
+	failuresPossible atomic.Bool
 
 	tracker    *InFlightTracker
 	budget     *cpuBudget
@@ -159,7 +165,6 @@ func New(config *Config) (*Engine, error) {
 		extensionsByKind:    make(map[string][]string, len(config.Definitions)),
 		applicableByKind:    make(map[string]map[string]bool, len(config.Definitions)),
 		prerequisiteColumns: make(map[string][]string, len(config.Definitions)),
-		dependentsByKind:    make(map[string][]string, len(config.Definitions)),
 		workerCounts:        make(map[string]int, len(config.Definitions)),
 		initialEffort:       initialEffort,
 		tracker:             NewInFlightTracker(),
@@ -194,14 +199,15 @@ func New(config *Config) (*Engine, error) {
 		}
 		engine.scanOrder = append(engine.scanOrder, definition.Kind)
 	}
+	// The reverse index IS the outgoing-edge table: completing a prerequisite's job
+	// emits into these dependents' queues. Same relation the graph renderer builds,
+	// so share the one pure function rather than open-code it twice.
+	engine.dependentsByKind = dependentsByKind(definitions)
 	for index := range definitions {
 		definition := &definitions[index]
 		columns := make([]string, 0, len(definition.Prerequisites))
 		for _, prerequisite := range definition.Prerequisites {
 			columns = append(columns, engine.definitions[prerequisite].ArtifactColumn)
-			// The reverse index IS the outgoing-edge table: completing a
-			// prerequisite's job emits into these dependents' queues.
-			engine.dependentsByKind[prerequisite] = append(engine.dependentsByKind[prerequisite], definition.Kind)
 		}
 		engine.prerequisiteColumns[definition.Kind] = columns
 	}
@@ -225,6 +231,16 @@ func (e *Engine) Start(ctx context.Context) {
 	e.stop = cancel
 	group, groupCtx := errgroup.WithContext(runCtx)
 	e.group = group
+
+	// Seed the failures gate: on a catalog with no enrichment errors the DLQ read
+	// (decoration) and the post-apply DLQ clear are no-ops and skip their queries.
+	// Default armed; only a clean probe disarms it (a probe error leaves it armed).
+	e.failuresPossible.Store(true)
+	if anyFailures, err := e.enrichmentRepo.AnyFailures(ctx); err != nil {
+		e.log.Warn("enrichment: failure-gate probe failed; DLQ reads stay armed", "err", err)
+	} else {
+		e.failuresPossible.Store(anyFailures)
+	}
 
 	group.Go(func() error { e.budget.manageReservation(groupCtx, e.initialEffort); return nil })
 	group.Go(func() error { return e.runDispatcher(groupCtx) })
