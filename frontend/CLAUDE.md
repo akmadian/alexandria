@@ -46,11 +46,14 @@ full map). What code must know:
   row intents bind heights to permitted type roles (control 28 / list 24 / text 16);
   spacing is quantum multiples via `--alx-space-N`; radius encodes detachment; the
   accent is never the sole signal for a state.
-- **Interim reality:** there is deliberately NO token plumbing in `src/` right now —
-  the interim runtime generator and its frozen snapshot were removed (D29) so nobody
-  builds on them. `--alx-*` variables arrive when the Phase C compiler emits them from
-  `design/tokens/`; until then src CSS references intentionally-unresolved vars and
-  the tree does not compile. Building the compiler is the code round's first task.
+- **The compiler is the bridge (D31, 2026-07-17):** `design/compiler/` (bun + TS)
+  resolves `design/tokens/`, executes `contracts.json` — a failing contract blocks
+  emission — and emits `src/styles/tokens.css` + `tokens.ts` (the generated theme
+  vocabulary) + `tokens-reference.json`. Regenerate: `bun run generate:tokens`;
+  `bun run check` freshness-gates the committed output. Emitted names are the strict
+  path mirror (`--alx-` + token path, dots → hyphens) plus one `.alx-type-<role>`
+  unit class per type role. Never edit emitted files; never resurrect a runtime
+  generator (D29).
 - **Assets are sacred (§11):** no CSS filters/blends/opacity on content pixels;
   selection shades the cell mat, never the photo; thumbnails fit, never crop.
 
@@ -99,7 +102,7 @@ types-only — bridge to runtime with the completeness trick.
 ## 7. Commands · layout
 
 ```bash
-make check      # tsc + eslint (+ stylelint when restored) + vitest — from frontend/
+make check      # token generate + freshness + tsc + eslint + stylelint + vitest
 bun run dev     # vite dev server (mock catalog)
 ```
 
@@ -111,16 +114,16 @@ src/_generated-types/  Go-generated (never edit)
     components/        PRIMITIVES — RAC behavior + token look
     features/          domain compositions; never import each other
     app/               shell, providers, boot
-    styles/            app-base.css · fonts (token vars arrive with the Phase C compiler)
+    styles/            tokens.css|.ts (GENERATED — bun run generate:tokens) · app-base.css · fonts
     lib/  i18n/        cx, format, logger, theme · i18next
 design/                THE DESIGN SOURCE — see design/CLAUDE.md
 ```
 
 ## 8. Gotchas
 
-- Until the compiler lands, ALL `var(--alx-…)` references are intentionally
-  unresolved — that's the construction-site state, not a bug to patch around
-  (and never by hardcoding a value).
+- Emitted `--alx-*` variables are real now (`styles/tokens.css`); a var that
+  doesn't resolve is a NAME error against the strict path mirror (look it up in
+  `styles/tokens-reference.json`) — never something to hardcode around.
 - Restart the dev server after touching `vite.config.ts` or generated sources
   (HMR serves stale modules). The browser pane's console keeps a stale error
   backlog for deleted files — trust `make check-frontend` and the DOM, not that

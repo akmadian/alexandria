@@ -930,3 +930,39 @@ fold-and-delete); the pointers to them in `docs/frontend-architecture.md` and th
 flows-and-views epic were repaired. `frontend/CLAUDE.md` rewritten (the old one taught the
 deleted ds-reference system); `frontend/design/CLAUDE.md` added (proximity-loaded design
 orientation).
+
+## D31 — Phase C executed: the bespoke token compiler, and the first machine certification (2026-07-17)
+
+**The D29 Phase C compiler landed** as a bespoke frontend-side program
+(`frontend/design/compiler/`, TypeScript run by bun; `culori` + `apca-w3` as its only
+dependencies — the reference APCA implementation the contracts cite): **resolve** (the DTCG
+2025.10 resolver contexts → four flat, alias-free theme trees) → **validate** (`contracts.json`
+executed in full; any failure exits nonzero and emits nothing) → **emit**
+(`src/styles/tokens.css` with `:root` = the default theme and varying-only `[data-theme]`
+overrides; `tokens.ts` carrying the generated theme vocabulary that `lib/theme.ts` now imports
+(C15 — its hand-listed pre-v3 names were live drift against index.html); and
+`tokens-reference.json` for the design library). Freshness-gated in `bun run check` by the
+`check-generated` pattern (regenerate + `git diff --exit-code`), frontend-side. Emitted-name
+contract and the adjudications below are recorded in constitution §29 (dated 2026-07-17).
+
+**Bespoke over a library, evaluated not assumed:** Style Dictionary cannot read the 2025.10
+Resolver Module (a parallel SD config re-declaring the resolver's contexts is a C15 defect);
+Terrazzo's contrast lint is WCAG2-shaped and its modes are not the resolver file. Either would
+replace only the trivial resolve third while the validator and the house emission shapes became
+plugin code inside someone else's API. Revisit trigger recorded in DEFERRED §16.
+
+**The validator's first pass over the ratified palette found 13 real conflicts** — every one a
+PIN hypothesis target written 2026-07-12 colliding with a value Ari later ratified by eye.
+Adjudicated same day (Ari): per-polarity text targets (the dark ink retune stands; dark
+polarity is derived from `familyDirection` — raise ⇔ dark, never re-declared); the §25 selected
+promote rule; the world-varying per-hue **ring step** (structural finding: world-independent
+solids measure Lc 20–43 against dark panels, so the flat ring contract was unsatisfiable for
+any solid — same shape as the tint/line world split). The first eligibility computation is
+itself new information: the dark panels now pass for every hue, but seven hues (peach, orange,
+amber, lime, green, teal, cyan) fail the LIGHT panels — their light-world ring aliases the
+pre-existing solid — leaving 5 of 12 accent-eligible (red, blue, indigo, purple, magenta).
+Whether that attrition stands or the light-world ring detaches from the solid is the
+token-gaps round's call, alongside the dark ring's eye-tune. Register-step multiples and sRGB-gamut
+excess are validator WARNINGS, not failures: the ratified ramps predate the register-step's own
+tokenization, and §28 already tracks P3 headroom — promoting either to a failure is the
+token-gaps round's call, with Ari's eye at the gate.

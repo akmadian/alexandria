@@ -1,5 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/stylelintrc",
+  "ignoreFiles": ["src/styles/tokens.css"],
   "plugins": ["stylelint-declaration-strict-value"],
   "rules": {
     "color-no-hex": true,

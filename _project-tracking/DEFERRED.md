@@ -679,3 +679,21 @@ the per-import *reporting* is absent.
 per-import progress, or a "ready to cull?" affordance on a session row. Add the column and the
 aggregate read then; schema note — if a real release exists by then, this becomes a stacked
 migration + backfill (NULL for pre-linkage assets is honest and fine).
+
+---
+
+## 16. Design-token compiler stays bespoke — no Style Dictionary / Terrazzo
+
+**Surfaced:** task-23 pickup (2026-07-17, Ari's challenge; evaluation recorded in D31).
+
+The Phase C compiler is ~700 lines of our own TypeScript instead of a token-tooling
+dependency, deliberately: Style Dictionary cannot read the DTCG 2025.10 Resolver Module our
+source uses (mirroring the resolver into SD config would be a hand-written parallel
+definition — a C15 defect), Terrazzo's contrast lint is WCAG2 rather than the APCA + ΔL
+register bands `contracts.json` demands, and both would replace only the resolve third while
+the validator and house emission shapes became plugin code. The load-bearing math rides
+`culori` + `apca-w3`.
+
+**Trigger:** a second output platform (iOS/Android/native tokens), or Style Dictionary v5
+shipping real Resolver Module support at a moment when the bespoke resolve layer is causing
+actual maintenance pain — not before.

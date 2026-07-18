@@ -31,14 +31,19 @@ code *consumes* this system.
    system in real Geist (fonts in `library/fonts/`); add sibling probe pages the same
    way as new rounds need them. Serve with launch config `design-library` (port 8123).
 
-## No frozen legacy exists — by decision
+## The compiler is live — no frozen legacy, by decision
 
 The interim runtime token generator, its frozen `tokens.json` snapshot, and the old
-swatch-library trio were **deleted** (2026-07-13, D29) after they went stale: a tool
-rendering outdated values authoritatively is poison for future sessions. Consequence:
-`src/` has no token plumbing and does not compile — deliberate. The Phase C compiler
-(emitting CSS variables + TS types + docs from `tokens/`, with the validator in
-`make check`) is the code round's first task; do not resurrect a runtime generator.
+swatch-library trio were **deleted** (2026-07-13, D29) once they went stale: a tool
+rendering outdated values authoritatively is poison for future sessions. The Phase C
+compiler landed 2026-07-17 (D31): **`compiler/`** (bun + TS; culori + apca-w3)
+resolves this directory, executes `contracts.json` — **a failing contract blocks
+emission** — and emits `../src/styles/tokens.{css,ts}` + `tokens-reference.json`,
+freshness-gated in `bun run check`. Design sessions edit `tokens/` and re-run
+`bun run generate:tokens`; a change that fights a contract will not emit — that is
+§23 enforcement working, not an obstacle to route around. Emitted names: the strict
+path mirror (`--alx-` + token path, dots → hyphens) + one `.alx-type-<role>` unit
+class per role. Never edit emitted files; never resurrect a runtime generator.
 
 ## How design sessions run here (the method that works)
 
@@ -67,9 +72,12 @@ the color temperature ("bold and saturated"). **`_archive/` inside that set is
 off-limits by explicit instruction.** Radix Colors' 12-step methodology is the
 engineering reference for scales.
 
-## Open board (as of 2026-07-13)
+## Open board (as of 2026-07-17)
 
 Fun-layer recipe + gradient palette-indexing (§30.8 — Ari has usage scenarios to talk
 through first) · iconography round (§14/§30.9; stroke 1.5-vs-2 needs a real 1× display)
 · dark-world cell duals (decided in the loupe-view round) · Windows ClearType 1× checks
-(§28) · then Phase C: the compiler + validator that make all of this enforced.
+(§28) · the token-gaps round: scrim/dim treatment, chrome dimensions, icon registry
+seed, and the ring-step eye-tune — both worlds (§29 2026-07-17: dark ring is a
+computed starting symmetry; the light ring aliases the solid, which leaves seven hues
+failing ring contrast on paper/linen and only 5 of 12 accent-eligible today).

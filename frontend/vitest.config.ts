@@ -15,8 +15,10 @@ export default defineConfig({
         coverage: {
             provider: "v8",
             reporter: ["text", "html"],
-            include: ["src/**/*.{ts,tsx}"],
-            exclude: ["src/**/*.test.{ts,tsx}", "src/test/**", "src/**/*.module.css"],
+            include: ["src/**/*.{ts,tsx}", "design/compiler/**/*.ts"],
+            // main.ts is the CLI entry (top-level side effects, run by bun, not importable
+            // in tests); the pipeline it drives is covered via resolve/validate/emit.
+            exclude: ["**/*.test.{ts,tsx}", "src/test/**", "src/**/*.module.css", "design/compiler/main.ts"],
             // Ratchet, not gate (UI doc §13): record now, fail on regression once stable.
         },
     },

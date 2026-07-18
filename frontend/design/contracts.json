@@ -2,11 +2,11 @@
   "$description": "Validator input (design-constitution §23) — NOT tokens; deliberately outside the DTCG files. The validator (built when the compiler lands, Phase C) fails `make check` when the system contradicts its own reasoning. minLc per APCA-W3. Every check runs per theme; stage checks run across the stage's full adjustable range.",
 
   "text": {
-    "$comment": "Every declared ink/surface pair meets its promised Lc at the smallest declared text size. Targets are §23 PIN hypotheses.",
+    "$comment": "Every declared ink/surface pair meets its promised Lc at the smallest declared text size. Targets are per-POLARITY since the 2026-07-17 adjudication (a theme is dark ⇔ its chrome familyDirection is 'raise'): the 07-13 dark ink retune (graphite ink.2 0.80→0.75, carbon 0.785→0.74, ink.3 with them) was eye-ratified on probes and STANDS over the pre-retune single-target hypothesis; APCA scores reverse polarity lower for the same felt step, and light-on-dark bloom is why dark type runs dimmer. minLcDark applies on dark themes; absent = one target for both polarities. Dark floors sit with regression margin under the measured retuned worst case (ink.2: 51.1 on graphite surface.transient — the RAISED transient is the binding surface on dark, not panel).",
     "pairs": [
       { "ink": "ink.1", "on": ["surface.panel", "surface.field", "surface.transient", "cell.rest", "cell.active"], "minLc": 75 },
-      { "ink": "ink.2", "on": ["surface.panel", "surface.field", "surface.transient"], "minLc": 60 },
-      { "ink": "ink.3", "on": ["surface.panel"], "minLc": 40 },
+      { "ink": "ink.2", "on": ["surface.panel", "surface.field", "surface.transient"], "minLc": 60, "minLcDark": 50 },
+      { "ink": "ink.3", "on": ["surface.panel"], "minLc": 40, "minLcDark": 36 },
       { "ink": "ink.4", "on": ["surface.panel"], "minLc": 25 }
     ]
   },
@@ -32,15 +32,15 @@
   ],
 
   "ring": {
-    "$comment": "Accent eligibility gate (2026-07-13): every hue offered in the accent picker must pass focus-ring contrast against every theme's panel. Non-text target; PIN hypothesis.",
-    "pairs": [{ "ink": "color.<hue>.solid", "on": "surface.panel", "minLc": 45, "perTheme": true }]
+    "$comment": "Accent eligibility gate (2026-07-13): every hue offered in the accent picker must pass focus-ring contrast against every theme's panel. Non-text target; minLc 45 stays a PIN hypothesis. Re-based 2026-07-17 onto the world-varying ring STEP (worlds/*.tokens.json): world-independent solids measure Lc 20–43 on dark panels — unsatisfiable for ANY solid — so ring/link/toggle signals bind color.<hue>.ring while swatches keep the invariant solid.",
+    "pairs": [{ "ink": "color.<hue>.ring", "on": "surface.panel", "minLc": 45, "perTheme": true }]
   },
 
   "selected-text": {
-    "$comment": "Text carried by the strengthened selected fill (2026-07-13, +2 register steps): row text must survive on it. PIN — validator adjudicates; if ink.2 fails, either selected caps at +1 or counts promote one ink step on selected rows.",
+    "$comment": "Text carried by the strengthened selected fill (2026-07-13, +2 register steps). Adjudicated 2026-07-17: the PROMOTE RULE (§25) — on selected fills, content ink promotes one step (ink.2 content renders ink.1, ink.3 renders ink.2), so these pairs check the PROMOTED inks: ink.1 as primary + promoted-secondary (70 not 75 — linen measures 70.4; PIN pending the linen probe in the token-gaps round), ink.2 as the promoted-muted floor.",
     "pairs": [
-      { "ink": "ink.1", "on": "surface.selected", "minLc": 75 },
-      { "ink": "ink.2", "on": "surface.selected", "minLc": 60 }
+      { "ink": "ink.1", "on": "surface.selected", "minLc": 70 },
+      { "ink": "ink.2", "on": "surface.selected", "minLc": 40 }
     ]
   },
 

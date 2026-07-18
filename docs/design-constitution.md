@@ -442,10 +442,11 @@ beside it — never inside it.
 The validator runs in `make check` and fails when the system contradicts its own
 reasoning — internal consistency first, usage-linting second:
 
-- Every declared ink/surface pair meets its promised APCA Lc (**PIN** targets;
-  working hypothesis: primary ink ≥ Lc 75, secondary ≥ Lc 60, hairlines Lc 10–20,
-  at the smallest declared text size) — re-checked per theme, per family, and for
-  the stage across its full adjustable range, not just the default.
+- Every declared ink/surface pair meets its promised APCA Lc — re-checked per
+  theme, per family, and for the stage across its full adjustable range, not just
+  the default. Targets are per-POLARITY since 2026-07-17 (dark worlds run lower:
+  APCA scores reverse polarity down and light-on-dark blooms); `contracts.json`
+  is the numeric authority.
 - Register families are monotonic in their declared direction; **every adjacent
   step in every family** sits within the declared band — above the perceivability
   floor AND below the delta cap. (A step below threshold is a state users cannot
@@ -480,6 +481,10 @@ read-only · drop-target · invalid · mixed`
   temporarily can't act on — offline volume's assets are not "disabled").
 - **Invalid** = error-red hairline + message row in ink (§5); never color alone.
 - **Mixed** = em-dash state on any value component (§15).
+- **Selected — the promote rule** (adjudicated 2026-07-17): on the strengthened
+  selected fill (+2 register steps), content ink **promotes one step** — ink.2
+  content renders ink.1, ink.3 renders ink.2 — so findability keeps its fill and
+  text keeps its contrast. The selected-text contract checks the promoted pairs.
 
 ### §26 Motion doctrine
 
@@ -539,6 +544,18 @@ on re-inventing mechanics users already know.
   classical art, interactive dot art, illustrative modern skeuomorphism (never
   interactive chrome). Decorated/hued icons deferred to the iconography round
   carrying the hypothesis: display-scale choice moments only, never working rows.
+- Ratified 2026-07-17 (the Phase C adjudication — the validator's first machine
+  pass over the palette round; D31): text targets are per-polarity (the 07-13 dark
+  ink retune stands over the pre-retune hypothesis; the raised transient is dark's
+  binding surface); the §25 selected promote rule (linen's selected-primary at
+  Lc 70 pending its probe); the hue scales gain a world-varying **ring step**
+  (light world: the solid; dark world: L 0.74 C 0.12 starting symmetry, PIN —
+  eye-tune in the token-gaps round) because world-independent solids measure only
+  Lc 20–43 on dark panels — unsatisfiable for any focus ring. Emitted-name
+  contract: strict path mirror (`--alx-` + token path, dots → hyphens), one unit
+  class per type role carrying its paired ink; `type-scale` composites are not
+  emitted (roles supersede them); accent/attention carry their bound hue's
+  on-solid and ring pairings (`--alx-accent-on` / `--alx-accent-ring`).
 
 ---
 
