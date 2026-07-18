@@ -82,7 +82,10 @@ engineering reference for scales.
 Fun-layer recipe + gradient palette-indexing (§30.8 — Ari has usage scenarios to talk
 through first) · iconography round (§14/§30.9; stroke 1.5-vs-2 needs a real 1× display)
 · dark-world cell duals (decided in the loupe-view round) · Windows ClearType 1× checks
-(§28) · the token-gaps round: scrim/dim treatment, chrome dimensions, icon registry
-seed, and the ring-step eye-tune — both worlds (§29 2026-07-17: dark ring is a
-computed starting symmetry; the light ring aliases the solid, which leaves seven hues
-failing ring contrast on paper/linen and only 5 of 12 accent-eligible today).
+(§28) · the token-gaps pick-list (parked to ideation, per-need): scrim/dim treatment,
+chrome dimensions, and the ring-step eye-tune — both worlds (§29 2026-07-17: dark
+ring is a computed starting symmetry; the light ring aliases the solid, which leaves
+seven hues failing ring contrast on paper/linen and only 5 of 12 accent-eligible
+today). The icon registry is SEEDED (2026-07-17, `disclose` — registries.json
+`icons` + `components/icon`) and grows a concept per need; the full iconography
+round still owns stroke empirics and decorated display icons.

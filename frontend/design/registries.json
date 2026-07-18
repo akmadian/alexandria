@@ -54,6 +54,13 @@
     "text": { "height": "size.row-text", "typeRoles": ["label-sm", "data-sm", "caption", "micro"], "interactive": false }
   },
 
+  "icons": {
+    "$comment": "§14 structural family: concept → Lucide glyph, ONE glyph per concept; components name concepts, never glyphs. Runtime registry: frontend/src/components/icon (C10-complete; the two lists grow together — compiler emission closes the gap when the count warrants). Seeded 2026-07-17: the disclosure chevron was the first per-need pull from the parked token-gaps list. Machinery states use the dot-matrix map above, never rows here.",
+    "structural": {
+      "disclose": "chevron-right"
+    }
+  },
+
   "hueEligibility": {
     "$comment": "Capability rows (2026-07-13): which scales each user-pickable role may bind. Gray is tag-only (gray signal is no signal). Accent additionally gated by the ring contract per theme — a hue failing ring Lc on any theme is not offered.",
     "tag": "all",

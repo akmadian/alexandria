@@ -697,3 +697,20 @@ the validator and house emission shapes became plugin code. The load-bearing mat
 **Trigger:** a second output platform (iOS/Android/native tokens), or Style Dictionary v5
 shipping real Resolver Module support at a moment when the bespoke resolve layer is causing
 actual maintenance pain — not before.
+
+---
+
+## 17. No generic layout-primitive zoo (Stack/Box/Cluster) — the row grammar is the structural component
+
+**Surfaced:** the 2026-07-17 design-system review (Ari's "row and column component" question);
+executed by the Row/PanelSection round the same day.
+
+The industry Stack/Box pattern earns its keep where layout is freeform and responsive. Alexandria's
+chrome is neither: the app frame is the fixed §12 zone grid, free-form spacing is already gated by
+stylelint's token rule (gap/padding must be `--alx-space-N`), and the piece with a real contract to
+enforce was the registered row grammar — now structural via `components/row` + `panel-section`
+(the intent binds height, inset, and slot type-roles by construction). A generic `<Stack gap={2}>`
+here would rename `display: flex; gap: var(--alx-space-2)` without adding a guarantee.
+
+**Trigger:** feature CSS sprawling near-identical ad-hoc flex containers with inconsistent gaps —
+promote the repeated pattern to a Stack primitive then, not before.

@@ -1,0 +1,7 @@
+/* One chrome size, one stroke constant (§14; stroke value is a §30.9 PIN token). */
+.icon {
+    width: var(--alx-size-icon);
+    height: var(--alx-size-icon);
+    stroke-width: var(--alx-size-icon-stroke);
+    flex: none;
+}

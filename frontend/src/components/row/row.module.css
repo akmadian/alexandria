@@ -1,0 +1,39 @@
+/* Row structure (§8/§12): identical generous side insets across every intent —
+ * density is VERTICAL only; text never touches an edge. */
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    padding: 0 var(--alx-size-row-inset);
+}
+
+.control {
+    height: var(--alx-size-row-control);
+}
+
+.list {
+    height: var(--alx-size-row-list);
+}
+
+.text {
+    height: var(--alx-size-row-text);
+}
+
+.label {
+    flex: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* A label may still shrink when the value needs the room, but never past half. */
+    max-width: 50%;
+}
+
+.value {
+    margin-left: auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
+}

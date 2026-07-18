@@ -55,6 +55,12 @@
     gap: var(--alx-space-2);
 }
 
+.panelSpecimen {
+    width: var(--alx-size-panel-right);
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    background: var(--alx-surface-panel);
+}
+
 .matrixRow {
     display: grid;
     grid-template-columns: 80px repeat(6, 120px);

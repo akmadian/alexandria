@@ -8,6 +8,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, type ButtonRung } from "@/components/button/button";
+import { PanelSection } from "@/components/panel-section/panel-section";
+import { Row } from "@/components/row/row";
 import { getTheme, setTheme, themes, type Theme } from "@/lib/theme";
 import reference from "@/styles/tokens-reference.json";
 import styles from "./design-library.module.css";
@@ -128,6 +130,33 @@ function ButtonMatrix() {
     );
 }
 
+function RowSpecimens() {
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Row + PanelSection — the §12 grammar, at panel width</h2>
+            <div className={styles.panelSpecimen}>
+                <PanelSection head="Judgment" intent="control">
+                    <Row intent="control" label="Rating" value="unrated" />
+                    <Row intent="control" label="Flag">
+                        <Button size="control">Pick</Button>
+                    </Row>
+                </PanelSection>
+                <PanelSection head="Collections" intent="list">
+                    <Row label="2024 — Iceland" value="1,204" />
+                    <Row label="Selects" value="86" />
+                    <Row label="A collection with a very long name that must end-truncate" value="12" />
+                </PanelSection>
+                <PanelSection head="Capture" intent="text">
+                    <Row label="ISO" value="400" />
+                    <Row label="Aperture" value="ƒ/1.8" />
+                    <Row label="Shutter" value="1/250 s" />
+                    <Row label="Lens" value="XF 56mm f/1.2 R WR — long enough to truncate and hover-reveal" />
+                </PanelSection>
+            </div>
+        </section>
+    );
+}
+
 function TypeRoles() {
     const roles = byPrefix("type-role.");
     return (
@@ -239,6 +268,7 @@ export function DesignLibrary() {
                 <a className={styles.backLink} href="#/">← app shell</a>
             </header>
             <ButtonMatrix />
+            <RowSpecimens />
             <TypeRoles />
             <ChromeSwatches />
             <HueGrid />

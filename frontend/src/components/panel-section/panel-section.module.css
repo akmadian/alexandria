@@ -1,0 +1,50 @@
+/* PanelSection — the head is itself a control-height row (§12 uniform rhythm);
+ * the chevron is ink riding the head's states; rotation is the §26 state
+ * readout: transform-only, fast, reduced-motion silent. */
+
+.head {
+    composes: alx-type-head from global;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: var(--alx-space-1);
+    height: var(--alx-size-row-control);
+    padding: 0 var(--alx-size-row-inset);
+    border: none;
+    background: transparent;
+    text-align: start;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.head[data-hovered] {
+    background: var(--alx-surface-hover);
+}
+
+.head[data-pressed] {
+    background: var(--alx-surface-pressed);
+}
+
+.head[data-focus-visible] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+
+.headText {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chevron {
+    transition: transform var(--alx-duration-fast) var(--alx-easing-out);
+}
+
+.section[data-expanded] .chevron {
+    transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chevron {
+        transition: none;
+    }
+}
