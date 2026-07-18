@@ -43,7 +43,12 @@ freshness-gated in `bun run check`. Design sessions edit `tokens/` and re-run
 `bun run generate:tokens`; a change that fights a contract will not emit — that is
 §23 enforcement working, not an obstacle to route around. Emitted names: the strict
 path mirror (`--alx-` + token path, dots → hyphens) + one `.alx-type-<role>` unit
-class per role. Never edit emitted files; never resurrect a runtime generator.
+class per role (`:where()`-wrapped: role classes are zero-specificity DEFAULTS a
+component declaration always beats). Never edit emitted files; never resurrect a
+runtime generator. The **in-app design library** (`#/design-library` under
+`bun run dev`) renders the emitted system live — primitive matrices, type-role
+specimens, and the reference table across all four themes; every new primitive
+lands its matrix there (frontend/CLAUDE.md §6).
 
 ## How design sessions run here (the method that works)
 

@@ -966,3 +966,8 @@ token-gaps round's call, alongside the dark ring's eye-tune. Register-step multi
 excess are validator WARNINGS, not failures: the ratified ramps predate the register-step's own
 tokenization, and §28 already tracks P3 headroom — promoting either to a failure is the
 token-gaps round's call, with Ari's eye at the gate.
+
+*Dated note (2026-07-17, the task-24 round):* type-role unit classes emit inside `:where()` —
+zero selector specificity, so the class supplies role DEFAULTS and any component declaration
+wins regardless of stylesheet injection order. Found live in the browser pass: equal
+specificity left the fill rung's label ink-on-ink on carbon.

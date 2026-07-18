@@ -1,0 +1,248 @@
+// The in-app design library (#/design-library): specimens and product share one
+// implementation (frontend/CLAUDE.md §6). Everything rendered here is driven by
+// the compiler's outputs — tokens-reference.json for the inventory, the live
+// CSS variables for values — never a hand-listed parallel of either (C15).
+//
+// ponytail: copy is literal by sanction (task-24 spec) — this is a dev-facing
+// surface; C14 keys arrive when product chrome adopts these strings.
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Button, type ButtonRung } from "@/components/button/button";
+import { getTheme, setTheme, themes, type Theme } from "@/lib/theme";
+import reference from "@/styles/tokens-reference.json";
+import styles from "./design-library.module.css";
+
+const RUNGS = ["ghost", "outline", "tint", "fill", "hero"] as const satisfies readonly ButtonRung[];
+
+const FORCED_STATES = ["rest", "hovered", "pressed", "focus-visible"] as const;
+type ForcedState = (typeof FORCED_STATES)[number];
+
+/** Freezes one RAC interaction state onto the specimen inside, so every matrix
+ * cell exercises the product's own CSS. RAC computes data-attributes from its
+ * interaction hooks and drops same-named props, so the attribute is stamped
+ * IMPERATIVELY after mount — React leaves attributes it never rendered alone,
+ * and RAC only touches them on real interaction, which specimens never receive.
+ * This is the library's standing specimen device for primitive matrices. */
+function ForcedStateCell({ state, children }: { state: ForcedState; children: ReactNode }) {
+    const cellReference = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        if (state === "rest") return;
+        cellReference.current?.querySelector("button")?.setAttribute(`data-${state}`, "true");
+    }, [state]);
+    return (
+        <span ref={cellReference} className={styles.matrixCell}>
+            {children}
+        </span>
+    );
+}
+
+interface ReferenceToken {
+    path: string;
+    type: string;
+    varying: boolean;
+    role?: string;
+    pin?: string;
+    /** Invariant tokens: one CSS string. Varying tokens: per-theme map. */
+    css?: string | Record<string, string>;
+    /** Typography composites carry per-property variables instead of css. */
+    variables?: Record<string, string>;
+}
+
+const tokens = reference.tokens as ReferenceToken[];
+
+const byPrefix = (prefix: string): ReferenceToken[] =>
+    tokens.filter((token) => token.path.startsWith(prefix));
+
+/** color.<hue>.<step> paths → the hue list, in SPECTRAL order (the reference file
+ * is alphabetical by path; a palette reads by hue angle, gray last). */
+const hueAngle = (hue: string): number => {
+    const solid = tokens.find((token) => token.path === `color.${hue}.solid`);
+    const match = /oklch\([\d.]+ ([\d.]+) ([\d.]+)/.exec(String(solid?.css ?? ""));
+    return match === null || match[1] === "0" ? Number.POSITIVE_INFINITY : Number(match[2]);
+};
+const hueNames = [...new Set(
+    byPrefix("color.").map((token) => token.path.split(".")[1]),
+)].sort((first, second) => hueAngle(first) - hueAngle(second));
+
+const HUE_STEPS = ["solid", "tint", "line", "ring"] as const;
+
+function ThemeSwitcher() {
+    const [activeTheme, setActiveTheme] = useState<Theme>(() => getTheme());
+    return (
+        <div className={styles.switcher} role="group" aria-label="Theme">
+            {themes.map((theme) => (
+                <Button
+                    key={theme}
+                    rung={theme === activeTheme ? "tint" : "ghost"}
+                    onPress={() => {
+                        setTheme(theme);
+                        setActiveTheme(theme);
+                    }}
+                >
+                    {theme}
+                </Button>
+            ))}
+        </div>
+    );
+}
+
+function ButtonMatrix() {
+    const [pressCount, setPressCount] = useState(0);
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Button — rungs × states</h2>
+            <div className={styles.matrix}>
+                <div className={styles.matrixRow}>
+                    <span className={styles.matrixLabel} />
+                    {FORCED_STATES.map((state) => (
+                        <span key={state} className={styles.matrixLabel}>{state}</span>
+                    ))}
+                    <span className={styles.matrixLabel}>disabled</span>
+                    <span className={styles.matrixLabel}>live</span>
+                </div>
+                {RUNGS.map((rung) => (
+                    <div key={rung} className={styles.matrixRow}>
+                        <span className={styles.matrixLabel}>{rung}</span>
+                        {FORCED_STATES.map((state) => (
+                            <ForcedStateCell key={state} state={state}>
+                                <Button rung={rung}>Import</Button>
+                            </ForcedStateCell>
+                        ))}
+                        <span className={styles.matrixCell}>
+                            <Button rung={rung} isDisabled>Import</Button>
+                        </span>
+                        <span className={styles.matrixCell}>
+                            <Button rung={rung} onPress={() => setPressCount((count) => count + 1)}>
+                                Import
+                            </Button>
+                        </span>
+                    </div>
+                ))}
+            </div>
+            <p className={styles.note}>
+                Sizes: <Button size="control">control 24</Button>{" "}
+                <Button size="control-lg">control-lg 28</Button>{" "}
+                <span className={styles.pressReadout}>{pressCount > 0 ? `${pressCount} presses` : ""}</span>
+            </p>
+        </section>
+    );
+}
+
+function TypeRoles() {
+    const roles = byPrefix("type-role.");
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Type roles — each is a unit (§9)</h2>
+            {roles.map((token) => {
+                const roleName = token.path.split(".").at(-1) ?? "";
+                return (
+                    <div key={token.path} className={styles.roleRow}>
+                        <span className={styles.tokenPath}>{roleName}</span>
+                        <span className={`alx-type-${roleName}`}>
+                            The quick brown fox — 0123456789
+                        </span>
+                        {token.role !== undefined && <span className={styles.roleNote}>{token.role}</span>}
+                    </div>
+                );
+            })}
+        </section>
+    );
+}
+
+function Swatch({ path }: { path: string }) {
+    return <span className={styles.swatch} style={{ background: `var(--alx-${path.replaceAll(".", "-")})` }} />;
+}
+
+function ChromeSwatches() {
+    const groups = ["surface.", "cell.", "ink."];
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Chrome roles — live on the active theme</h2>
+            {groups.map((prefix) => (
+                <div key={prefix} className={styles.swatchRow}>
+                    {byPrefix(prefix).map((token) => (
+                        <span key={token.path} className={styles.swatchEntry}>
+                            <Swatch path={token.path} />
+                            <span className={styles.tokenPath}>{token.path}</span>
+                        </span>
+                    ))}
+                </div>
+            ))}
+        </section>
+    );
+}
+
+function HueGrid() {
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>
+                Hue scales — accent-eligible: {reference.accentEligible.join(", ")}
+            </h2>
+            <div className={styles.hueGrid}>
+                {hueNames.map((hue) => (
+                    <div key={hue} className={styles.hueRow}>
+                        <span className={styles.tokenPath}>{hue}</span>
+                        {HUE_STEPS.map((step) => (
+                            <Swatch key={step} path={`color.${hue}.${step}`} />
+                        ))}
+                    </div>
+                ))}
+            </div>
+            <p className={styles.note}>steps: {HUE_STEPS.join(" · ")}</p>
+        </section>
+    );
+}
+
+function Scales() {
+    const spaces = byPrefix("space.").sort(
+        (first, second) => Number(first.path.split(".")[1]) - Number(second.path.split(".")[1]),
+    );
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Space · radius · shadows</h2>
+            <div className={styles.swatchRow}>
+                {spaces.map((token) => (
+                    <span key={token.path} className={styles.swatchEntry}>
+                        <span
+                            className={styles.spaceBar}
+                            style={{ width: `var(--alx-${token.path.replaceAll(".", "-")})` }}
+                        />
+                        <span className={styles.tokenPath}>{token.path}</span>
+                    </span>
+                ))}
+            </div>
+            <div className={styles.swatchRow}>
+                {byPrefix("radius.").map((token) => (
+                    <span key={token.path} className={styles.swatchEntry}>
+                        <span
+                            className={styles.radiusChip}
+                            style={{ borderRadius: `var(--alx-${token.path.replaceAll(".", "-")})` }}
+                        />
+                        <span className={styles.tokenPath}>{token.path}</span>
+                    </span>
+                ))}
+                <span className={styles.swatchEntry}>
+                    <span className={styles.shadowChip} style={{ boxShadow: "var(--alx-shadow-occlusion)" }} />
+                    <span className={styles.tokenPath}>shadow.occlusion</span>
+                </span>
+            </div>
+        </section>
+    );
+}
+
+export function DesignLibrary() {
+    return (
+        <div className={styles.page}>
+            <header className={styles.header}>
+                <h1 className={styles.title}>Alexandria design library</h1>
+                <ThemeSwitcher />
+                <a className={styles.backLink} href="#/">← app shell</a>
+            </header>
+            <ButtonMatrix />
+            <TypeRoles />
+            <ChromeSwatches />
+            <HueGrid />
+            <Scales />
+        </div>
+    );
+}

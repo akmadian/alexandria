@@ -208,12 +208,12 @@ describe("emit", () => {
         expect(files.css).toContain(`--alx-fun-gradient: linear-gradient(100deg, oklch(0.72 0.16 15) 0%,`);
     });
 
-    test("type roles emit per-property variables plus the unit class with paired ink", () => {
+    test("type roles emit per-property variables plus the zero-specificity unit class with paired ink", () => {
         expect(files.css).toContain(`--alx-type-role-control-font-size: 12px;`);
-        expect(files.css).toContain(`.alx-type-control {`);
+        expect(files.css).toContain(`:where(.alx-type-control) {`);
         expect(files.css).toContain(`font-size: var(--alx-type-role-control-font-size);`);
-        expect(files.css).toMatch(/\.alx-type-label-sm \{[^}]*color: var\(--alx-ink-3\);/s);
-        expect(files.css).toMatch(/\.alx-type-data \{[^}]*font-variant-numeric: tabular-nums;/s);
+        expect(files.css).toMatch(/:where\(\.alx-type-label-sm\) \{[^}]*color: var\(--alx-ink-3\);/s);
+        expect(files.css).toMatch(/:where\(\.alx-type-data\) \{[^}]*font-variant-numeric: tabular-nums;/s);
     });
 
     test("type-scale composites are not emitted — roles supersede them", () => {

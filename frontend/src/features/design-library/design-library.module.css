@@ -1,0 +1,155 @@
+/* Design library — chrome grammar on the panel surface; specimen geometry
+ * (swatch sizes, matrix columns) is structural, not design values. */
+
+.page {
+    /* The app frame (#root) is fixed-height with overflow hidden; surfaces own
+     * their scrolling (§13 — the window never scrolls in a desktop tool). */
+    height: 100%;
+    overflow-y: auto;
+    background: var(--alx-surface-panel);
+    padding: var(--alx-space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-8);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-4);
+}
+
+.title {
+    composes: alx-type-display-sm from global;
+    margin: 0;
+}
+
+.backLink {
+    composes: alx-type-label from global;
+    margin-left: auto;
+    color: var(--alx-accent);
+    text-decoration-color: var(--alx-ink-hairline);
+}
+
+.switcher {
+    display: flex;
+    gap: var(--alx-space-1);
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-3);
+}
+
+.sectionHead {
+    composes: alx-type-head from global;
+    margin: 0;
+    padding-bottom: var(--alx-space-1);
+    border-bottom: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+.matrix {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-2);
+}
+
+.matrixRow {
+    display: grid;
+    grid-template-columns: 80px repeat(6, 120px);
+    align-items: center;
+    gap: var(--alx-space-2);
+}
+
+.matrixLabel {
+    composes: alx-type-label-sm from global;
+}
+
+.matrixCell {
+    display: flex;
+}
+
+.note {
+    composes: alx-type-caption from global;
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    margin: 0;
+}
+
+.pressReadout {
+    composes: alx-type-data-sm from global;
+}
+
+.roleRow {
+    display: grid;
+    grid-template-columns: 100px minmax(280px, max-content) 1fr;
+    align-items: baseline;
+    gap: var(--alx-space-4);
+}
+
+.roleNote {
+    composes: alx-type-caption from global;
+}
+
+.tokenPath {
+    composes: alx-type-data-sm from global;
+}
+
+.swatchRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--alx-space-3);
+}
+
+.swatchEntry {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--alx-space-1);
+}
+
+.swatch {
+    display: inline-block;
+    width: 40px;
+    height: 28px;
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    border-radius: var(--alx-radius-control);
+}
+
+.hueGrid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-1);
+}
+
+.hueRow {
+    display: grid;
+    grid-template-columns: 80px repeat(4, 44px);
+    align-items: center;
+    gap: var(--alx-space-2);
+}
+
+.spaceBar {
+    display: inline-block;
+    height: 12px;
+    background: var(--alx-accent);
+}
+
+.radiusChip {
+    display: inline-block;
+    width: 44px;
+    height: 28px;
+    background: var(--alx-surface-selected);
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+.shadowChip {
+    display: inline-block;
+    width: 44px;
+    height: 28px;
+    background: var(--alx-surface-transient);
+    border-radius: var(--alx-radius-transient);
+}

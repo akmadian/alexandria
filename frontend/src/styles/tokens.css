@@ -458,7 +458,7 @@
     --alx-world-register-step: 0.035;
 }
 
-.alx-type-caption {
+:where(.alx-type-caption) {
     font-family: var(--alx-type-role-caption-font-family);
     font-size: var(--alx-type-role-caption-font-size);
     font-weight: var(--alx-type-role-caption-font-weight);
@@ -467,7 +467,7 @@
     color: var(--alx-ink-3);
 }
 
-.alx-type-control {
+:where(.alx-type-control) {
     font-family: var(--alx-type-role-control-font-family);
     font-size: var(--alx-type-role-control-font-size);
     font-weight: var(--alx-type-role-control-font-weight);
@@ -476,7 +476,7 @@
     color: var(--alx-ink-1);
 }
 
-.alx-type-data {
+:where(.alx-type-data) {
     font-family: var(--alx-type-role-data-font-family);
     font-size: var(--alx-type-role-data-font-size);
     font-weight: var(--alx-type-role-data-font-weight);
@@ -486,7 +486,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-.alx-type-data-sm {
+:where(.alx-type-data-sm) {
     font-family: var(--alx-type-role-data-sm-font-family);
     font-size: var(--alx-type-role-data-sm-font-size);
     font-weight: var(--alx-type-role-data-sm-font-weight);
@@ -496,7 +496,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-.alx-type-display {
+:where(.alx-type-display) {
     font-family: var(--alx-type-role-display-font-family);
     font-size: var(--alx-type-role-display-font-size);
     font-weight: var(--alx-type-role-display-font-weight);
@@ -505,7 +505,7 @@
     color: var(--alx-ink-1);
 }
 
-.alx-type-display-sm {
+:where(.alx-type-display-sm) {
     font-family: var(--alx-type-role-display-sm-font-family);
     font-size: var(--alx-type-role-display-sm-font-size);
     font-weight: var(--alx-type-role-display-sm-font-weight);
@@ -514,7 +514,7 @@
     color: var(--alx-ink-1);
 }
 
-.alx-type-head {
+:where(.alx-type-head) {
     font-family: var(--alx-type-role-head-font-family);
     font-size: var(--alx-type-role-head-font-size);
     font-weight: var(--alx-type-role-head-font-weight);
@@ -523,7 +523,7 @@
     color: var(--alx-ink-1);
 }
 
-.alx-type-label {
+:where(.alx-type-label) {
     font-family: var(--alx-type-role-label-font-family);
     font-size: var(--alx-type-role-label-font-size);
     font-weight: var(--alx-type-role-label-font-weight);
@@ -532,7 +532,7 @@
     color: var(--alx-ink-2);
 }
 
-.alx-type-label-sm {
+:where(.alx-type-label-sm) {
     font-family: var(--alx-type-role-label-sm-font-family);
     font-size: var(--alx-type-role-label-sm-font-size);
     font-weight: var(--alx-type-role-label-sm-font-weight);
@@ -541,7 +541,7 @@
     color: var(--alx-ink-3);
 }
 
-.alx-type-micro {
+:where(.alx-type-micro) {
     font-family: var(--alx-type-role-micro-font-family);
     font-size: var(--alx-type-role-micro-font-size);
     font-weight: var(--alx-type-role-micro-font-weight);
@@ -550,7 +550,7 @@
     color: var(--alx-ink-4);
 }
 
-.alx-type-placeholder {
+:where(.alx-type-placeholder) {
     font-family: var(--alx-type-role-placeholder-font-family);
     font-size: var(--alx-type-role-placeholder-font-size);
     font-weight: var(--alx-type-role-placeholder-font-weight);
@@ -559,7 +559,7 @@
     color: var(--alx-ink-4);
 }
 
-.alx-type-title {
+:where(.alx-type-title) {
     font-family: var(--alx-type-role-title-font-family);
     font-size: var(--alx-type-role-title-font-size);
     font-weight: var(--alx-type-role-title-font-weight);
@@ -568,7 +568,7 @@
     color: var(--alx-ink-1);
 }
 
-.alx-type-value {
+:where(.alx-type-value) {
     font-family: var(--alx-type-role-value-font-family);
     font-size: var(--alx-type-role-value-font-size);
     font-weight: var(--alx-type-role-value-font-weight);

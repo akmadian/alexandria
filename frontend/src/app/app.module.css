@@ -1,40 +1,51 @@
 /* Three-row desktop shell, v3: header and status are docked chrome (panel +
- * hairline seams, §6); the main region is the grid well (§2). */
+ * hairline seams, §6); the main region is the grid well (§2).
+ * ponytail: the 44px/28px chrome heights are structural literals until the
+ * token-gaps round mints chrome dimension tokens (task 25 §30.5). */
+
 .shell {
     height: 100%;
     display: grid;
-    grid-template-rows: 44px auto 1fr 28px;
+    grid-template-rows: 44px 1fr 28px;
     background: var(--alx-surface-panel);
 }
 
 .header {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 0 var(--alx-row-inset);
-    border-bottom: 1px solid var(--alx-ink-hairline);
+    gap: var(--alx-space-4);
+    padding: 0 var(--alx-size-row-inset);
+    border-bottom: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
 }
 
 .title {
-    font-size: var(--alx-type-ui-13-size);
-    font-weight: var(--alx-weight-semibold);
+    composes: alx-type-display-sm from global;
 }
 
 .main {
     min-height: 0;
     background: var(--alx-cell-well);
+    display: grid;
+    place-items: center;
+}
+
+.wellHint {
+    composes: alx-type-caption from global;
+    margin: 0;
+}
+
+.wellLink {
+    color: var(--alx-accent);
+    text-decoration-color: var(--alx-ink-hairline);
 }
 
 .status {
     display: flex;
     align-items: center;
-    padding: 0 var(--alx-row-inset);
-    border-top: 1px solid var(--alx-ink-hairline);
+    padding: 0 var(--alx-size-row-inset);
+    border-top: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
 }
 
 .metric {
-    font-family: var(--alx-font-mono);
-    font-size: var(--alx-type-ui-11-size);
-    color: var(--alx-ink-3);
-    font-variant-numeric: tabular-nums;
+    composes: alx-type-data-sm from global;
 }

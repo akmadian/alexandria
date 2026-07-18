@@ -124,13 +124,17 @@ function typographyVariables(token: ResolvedToken): [string, string][] {
     ];
 }
 
-/** The role's unit class: all properties together + the paired ink (§9: type is a unit). */
+/** The role's unit class: all properties together + the paired ink (§9: type is a
+ * unit). `:where()` zeroes the selector's specificity — the class supplies role
+ * DEFAULTS, and any component declaration (a fill rung's inverse ink, a state
+ * shift) must win regardless of stylesheet injection order. Found the hard way:
+ * equal specificity made fill's label ink-on-ink invisible on carbon. */
 function typeRoleClass(token: ResolvedToken): string {
     const roleName = token.path.split(".").at(-1);
     const base = variableName(token.path);
     const ink = token.extensions?.alx?.ink;
     const lines = [
-        `.alx-type-${roleName} {`,
+        `:where(.alx-type-${roleName}) {`,
         `    font-family: var(${base}-font-family);`,
         `    font-size: var(${base}-font-size);`,
         `    font-weight: var(${base}-font-weight);`,

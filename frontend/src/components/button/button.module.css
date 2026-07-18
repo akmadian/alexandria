@@ -1,0 +1,134 @@
+/* Button — §4 rungs × §7 register shifts × §25 states. Emitted tokens only.
+ * Type is a unit (§9): the control role composes from the generated global class.
+ * Register grammar: ghost/outline/tint ride the surface family's state steps, so
+ * direction (recess on light, raise on dark) is theme-correct for free. */
+
+.button {
+    composes: alx-type-control from global;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--alx-space-1);
+    padding: 0 var(--alx-space-3);
+    border: none;
+    border-radius: var(--alx-radius-control);
+    background: transparent;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.button[data-focus-visible] {
+    /* First consumer of the world-varying ring step (§29 2026-07-17). */
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+
+.button[data-disabled] {
+    /* §4 unary operator: chroma drained (chrome has none) + the ramp's disabled rung. */
+    color: var(--alx-ink-4);
+}
+
+.control {
+    height: var(--alx-size-control);
+}
+
+.controlLarge {
+    height: var(--alx-size-control-lg);
+    padding: 0 var(--alx-space-4);
+}
+
+/* ghost — the quiet rung: no container at rest (§3: cheapest sufficient separation). */
+.ghost[data-hovered] {
+    background: var(--alx-surface-hover);
+}
+.ghost[data-pressed] {
+    background: var(--alx-surface-pressed);
+}
+
+/* outline — hairline container; the default affordance. */
+.outline {
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+.outline[data-hovered] {
+    background: var(--alx-surface-hover);
+}
+.outline[data-pressed] {
+    background: var(--alx-surface-pressed);
+}
+
+/* tint — quiet fill at rest, one register step in; states walk the family ladder.
+ * ponytail: rides the surface state steps as rest values (hover→pressed→selected) —
+ * dedicated tint-rung fills are the token-gaps round's call if this reads muddy. */
+.tint {
+    background: var(--alx-surface-hover);
+}
+.tint[data-hovered] {
+    background: var(--alx-surface-pressed);
+}
+.tint[data-pressed] {
+    background: var(--alx-surface-selected);
+}
+
+/* fill — the loud rung: solid ink, inverse text (§7: the button face is locally
+ * a dark world on light themes, so its states move toward ITS ink = lighten).
+ * ponytail: ink.2 is the only adjacent step the ramp offers, and hover/pressed
+ * share it — dedicated fill-state steps are the token-gaps round's call. */
+.fill {
+    background: var(--alx-ink-1);
+    color: var(--alx-surface-panel);
+}
+.fill[data-hovered],
+.fill[data-pressed] {
+    background: var(--alx-ink-2);
+}
+.fill[data-disabled] {
+    background: var(--alx-ink-4);
+    color: var(--alx-surface-panel);
+}
+
+/* hero — fill + the fun layer (§17 hero-cta site; recipe values are §30.8 PIN).
+ * The polychrome face is the injected overlay, not chrome hue; press payoff
+ * (one-shot bloom) lands with the fun-recipe round. Motion is transform-only
+ * (frontend/CLAUDE.md §6, compositor rule): the gradient lives on an over-scanned
+ * layer that translates; its stop list starts and ends on the same color, so a
+ * two-thirds loop is seamless. */
+.hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    color: var(--alx-fun-ink);
+    text-shadow: var(--alx-fun-text-shadow);
+    box-shadow: var(--alx-fun-face-inset);
+}
+.hero::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    /* Over-scan is animation geometry, not a design value (flagged 2026-07-12). */
+    width: 300%;
+    background: var(--alx-fun-gradient);
+    animation: hero-flow var(--alx-fun-flow-duration) linear infinite;
+}
+.hero[data-disabled] {
+    color: var(--alx-surface-panel);
+    text-shadow: none;
+    box-shadow: none;
+}
+.hero[data-disabled]::before {
+    animation: none;
+    background: var(--alx-ink-4);
+}
+
+@keyframes hero-flow {
+    to {
+        transform: translateX(-66.667%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero::before {
+        animation: none;
+    }
+}

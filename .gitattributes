@@ -10,3 +10,8 @@
 
 # Generated seam artifacts — committed, but excluded from diffs/language stats
 frontend/wailsjs/** linguist-generated=true
+frontend/src/_generated-types/** linguist-generated=true
+frontend/src/styles/tokens.css linguist-generated=true
+frontend/src/styles/tokens.ts linguist-generated=true
+frontend/src/styles/tokens-reference.json linguist-generated=true
+docs/data-dictionary.md linguist-generated=true
