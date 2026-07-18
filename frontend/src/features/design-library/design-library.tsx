@@ -11,6 +11,7 @@ import { Button, type ButtonRung } from "@/components/button/button";
 import { Checkbox } from "@/components/checkbox/checkbox";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Row } from "@/components/row/row";
+import { Switch } from "@/components/switch/switch";
 import { ToggleButton } from "@/components/toggle-button/toggle-button";
 import { getTheme, setTheme, themes, type Theme } from "@/lib/theme";
 import reference from "@/styles/tokens-reference.json";
@@ -220,6 +221,45 @@ function CheckboxMatrix() {
     );
 }
 
+function SwitchMatrix() {
+    const specimens: {
+        name: string;
+        state: ForcedState;
+        on?: boolean;
+        disabled?: boolean;
+    }[] = [
+        { name: "rest", state: "rest" },
+        { name: "hovered", state: "hovered" },
+        { name: "pressed", state: "pressed" },
+        { name: "focus-visible", state: "focus-visible" },
+        { name: "on", state: "rest", on: true },
+        { name: "on+hovered", state: "hovered", on: true },
+        { name: "disabled", state: "rest", disabled: true },
+        { name: "disabled on", state: "rest", on: true, disabled: true },
+    ];
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Switch — the immediate-effect boolean (§5)</h2>
+            <div className={styles.swatchRow}>
+                {specimens.map((specimen) => (
+                    <span key={specimen.name} className={styles.swatchEntry}>
+                        <span className={styles.matrixLabel}>{specimen.name}</span>
+                        <ForcedStateCell state={specimen.state}>
+                            <Switch defaultSelected={specimen.on} isDisabled={specimen.disabled}>
+                                Watch
+                            </Switch>
+                        </ForcedStateCell>
+                    </span>
+                ))}
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>live</span>
+                    <Switch>Watch</Switch>
+                </span>
+            </div>
+        </section>
+    );
+}
+
 function RowSpecimens() {
     return (
         <section className={styles.section}>
@@ -360,6 +400,7 @@ export function DesignLibrary() {
             <ButtonMatrix />
             <ToggleButtonMatrix />
             <CheckboxMatrix />
+            <SwitchMatrix />
             <RowSpecimens />
             <TypeRoles />
             <ChromeSwatches />

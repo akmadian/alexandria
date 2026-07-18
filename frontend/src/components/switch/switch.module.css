@@ -1,0 +1,75 @@
+/* Switch — pill track riding the CELL family exactly as Checkbox's box does
+ * (well → hover → active, the input-mat register); ON = the §5 toggles-on
+ * accent fill with the on-accent thumb. Thumb travel is transform-only (the
+ * motion law), killed under prefers-reduced-motion. Selected rules sit AFTER
+ * the interaction rules: on a selected switch, selected tops out. */
+
+.switch {
+    composes: alx-type-value from global;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Track 28×16, thumb 12: 1px hairline + 1px inset each side makes the travel
+ * symmetric (structural geometry, deliberately ungated). */
+.track {
+    position: relative;
+    width: 28px;
+    height: var(--alx-size-icon);
+    flex: none;
+    box-sizing: border-box;
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    border-radius: var(--alx-radius-round);
+    background: var(--alx-cell-well);
+}
+
+/* The thumb is INK, not a cell surface (§14: indicators are ink) — a cell-tone
+ * knob melts into the pressed track (cell.active on cell.active, caught in the
+ * carbon browser pass). Ink reads on every track step in every theme. */
+.thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 12px;
+    height: 12px;
+    border-radius: var(--alx-radius-round);
+    background: var(--alx-ink-3);
+    transition: transform var(--alx-duration-fast);
+}
+
+.switch[data-hovered] .track {
+    background: var(--alx-cell-hover);
+}
+
+.switch[data-pressed] .track {
+    background: var(--alx-cell-active);
+}
+
+.switch[data-selected] .track {
+    border-color: var(--alx-accent);
+    background: var(--alx-accent);
+}
+
+.switch[data-selected] .thumb {
+    background: var(--alx-accent-on);
+    transform: translateX(12px);
+}
+
+.switch[data-focus-visible] .track {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+
+.switch[data-disabled] {
+    /* §4: the label drops to the disabled rung; an ON track KEEPS its fill —
+     * the state stays readable (the ToggleButton precedent, ruled 2026-07-17). */
+    color: var(--alx-ink-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .thumb {
+        transition: none;
+    }
+}
