@@ -1,8 +1,10 @@
-# 25 — Token-inventory gaps: scrim, chrome dimensions, icon registry seed
+# Token-inventory gaps: scrim, chrome dimensions, icon registry seed
 
-**Areas:** frontend (design round — D29 method: deliverables are token values, constitution
-amendments, registry rows, and probe renders; no component code). **Blocked by:**
-23-frontend-token-compiler.md.
+**Parked as a pick-list, 2026-07-17 (Ari):** components-first — each item below lands as a
+mini design decision inside the component round that first needs it (a dialog forces the
+scrim call; the first icon-bearing primitive forces the registry seed; shell polish forces
+the chrome dimensions), rather than as one batch round. The D29 method still applies
+per-pull: values render before they ratify, Ari's eye is the gate.
 **References:** `docs/design-constitution.md` §6, §12, §14, §18, §19, §26, §28, §30.5;
 `frontend/design/CLAUDE.md` (method, decision altitude); `frontend/design/registries.json`.
 
