@@ -155,6 +155,11 @@ pinned steps, not alpha overlays (checkable contracts beat computed composites).
   everywhere on the ramp.
 - **px-locked, no rem.** Pro-tool convention: chrome does not scale with OS font
   settings. App zoom is out of scope for v1; content zoom (loupe) is a view feature.
+  *Intent clarified 2026-07-17 (Ari):* the out-of-scope line means dynamic
+  pinch-magnification; a **persistent UI-scale preference** is wanted eventually —
+  deferred until a settings surface exists to host it. px-locking is what makes a
+  uniform whole-chrome scale clean when it lands; the 1× floor below is its
+  empirical gate (fractional scale softens hairlines — probe before the ladder ships).
 - **The 1× floor:** if a hairline and the smallest text are crisp on a 1080p 1×
   display, everything above is free. Sub-pixel (0.5px) refinements are 2×-only
   garnish, never load-bearing.
