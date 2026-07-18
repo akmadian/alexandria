@@ -53,7 +53,9 @@
 }
 
 .checkbox[data-invalid] .box {
-    border-color: var(--alx-attention);
+    /* §5: invalid input is ERROR RED (its own ledger row, independent of the
+     * attention hue) — the red scale's engineered border step. */
+    border-color: var(--alx-color-red-line);
 }
 
 .checkbox[data-disabled] {

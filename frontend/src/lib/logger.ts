@@ -1,4 +1,4 @@
-// Frontend logging (docs/functional-requirements.md �Logging and Observability).
+// Frontend logging (docs/functional-requirements.md §Logging and Observability).
 //
 // Every entry goes to an in-memory ring buffer and a batch queue. The queue
 // flushes to a pluggable sink — today a dev-console no-op; when the backend

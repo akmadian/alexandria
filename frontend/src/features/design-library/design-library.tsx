@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/checkbox/checkbox";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Row } from "@/components/row/row";
 import { Switch } from "@/components/switch/switch";
+import { TextField } from "@/components/text-field/text-field";
 import { ToggleButton } from "@/components/toggle-button/toggle-button";
 import { getTheme, setTheme, themes, type Theme } from "@/lib/theme";
 import reference from "@/styles/tokens-reference.json";
@@ -20,7 +21,8 @@ import styles from "./design-library.module.css";
 const RUNGS = ["ghost", "outline", "tint", "fill", "hero"] as const satisfies readonly ButtonRung[];
 
 const FORCED_STATES = ["rest", "hovered", "pressed", "focus-visible"] as const;
-type ForcedState = (typeof FORCED_STATES)[number];
+/** "focused" exists for the text-input family, whose ring shows on ANY focus. */
+type ForcedState = (typeof FORCED_STATES)[number] | "focused";
 
 /** Freezes one RAC interaction state onto the specimen inside, so every matrix
  * cell exercises the product's own CSS. RAC computes data-attributes from its
@@ -32,9 +34,14 @@ function ForcedStateCell({ state, children }: { state: ForcedState; children: Re
     const cellReference = useRef<HTMLSpanElement>(null);
     useEffect(() => {
         if (state === "rest") return;
-        cellReference.current
-            ?.querySelector("button, label")
-            ?.setAttribute(`data-${state}`, "true");
+        // The stateful element differs per family: the text-input family keys
+        // hover/focus on the INPUT; the press family keys on its root. The
+        // checkbox family's hidden inputs are type=checkbox — never targets.
+        const root = cellReference.current;
+        const target =
+            root?.querySelector("input:not([type=checkbox])") ??
+            root?.querySelector("button, label");
+        target?.setAttribute(`data-${state}`, "true");
     }, [state]);
     return (
         <span ref={cellReference} className={styles.matrixCell}>
@@ -260,6 +267,53 @@ function SwitchMatrix() {
     );
 }
 
+function TextFieldMatrix() {
+    const specimens: {
+        name: string;
+        state: ForcedState;
+        invalid?: boolean;
+        disabled?: boolean;
+        description?: string;
+    }[] = [
+        { name: "rest", state: "rest" },
+        { name: "hovered", state: "hovered" },
+        { name: "focused", state: "focused" },
+        { name: "invalid", state: "rest", invalid: true },
+        { name: "described", state: "rest", description: "Shown in the panel tree" },
+        { name: "disabled", state: "rest", disabled: true },
+    ];
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>TextField — the field composite (§25)</h2>
+            <div className={styles.swatchRow}>
+                {specimens.map((specimen) => (
+                    <span key={specimen.name} className={styles.swatchEntry}>
+                        <span className={styles.matrixLabel}>{specimen.name}</span>
+                        <ForcedStateCell state={specimen.state}>
+                            <TextField
+                                label="Collection"
+                                defaultValue="2024 — Iceland"
+                                description={specimen.description}
+                                errorMessage="Name is taken"
+                                isInvalid={specimen.invalid}
+                                isDisabled={specimen.disabled}
+                            />
+                        </ForcedStateCell>
+                    </span>
+                ))}
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>live</span>
+                    <TextField label="Collection" placeholder="Type here…" />
+                </span>
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>control-lg</span>
+                    <TextField label="Collection" size="control-lg" defaultValue="Selects" />
+                </span>
+            </div>
+        </section>
+    );
+}
+
 function RowSpecimens() {
     return (
         <section className={styles.section}>
@@ -401,6 +455,7 @@ export function DesignLibrary() {
             <ToggleButtonMatrix />
             <CheckboxMatrix />
             <SwitchMatrix />
+            <TextFieldMatrix />
             <RowSpecimens />
             <TypeRoles />
             <ChromeSwatches />

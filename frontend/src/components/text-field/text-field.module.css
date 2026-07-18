@@ -1,0 +1,67 @@
+/* TextField — the input well rides the CELL family (§7 recess: well → hover);
+ * the accent ring shows on ANY focus (data-focused — text-input platform
+ * convention, unlike the press family's focus-visible). Invalid = the §5
+ * ERROR-RED hairline (color.red.line, the engineered border step of the red
+ * scale) + the message row in INK; error red is independent of attention. */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-1);
+    min-width: 0;
+}
+
+.label {
+    composes: alx-type-label from global;
+}
+
+.input {
+    composes: alx-type-value from global;
+    box-sizing: border-box;
+    padding: 0 var(--alx-space-2);
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    border-radius: var(--alx-radius-control);
+    background: var(--alx-cell-well);
+    min-width: 0;
+}
+
+.input::placeholder {
+    /* §9 (ratified): placeholder = ink.4, two steps below its label. */
+    color: var(--alx-ink-4);
+}
+
+.input[data-hovered] {
+    background: var(--alx-cell-hover);
+}
+
+.input[data-focused] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+
+.field[data-invalid] .input {
+    border-color: var(--alx-color-red-line);
+}
+
+.field[data-disabled] .label,
+.field[data-disabled] .input {
+    color: var(--alx-ink-4);
+}
+
+.description {
+    composes: alx-type-caption from global;
+}
+
+.error {
+    composes: alx-type-caption from global;
+    /* The message row is INK (§25), one step up from the caption voice. */
+    color: var(--alx-ink-2);
+}
+
+.control {
+    height: var(--alx-size-control);
+}
+
+.controlLarge {
+    height: var(--alx-size-control-lg);
+}
