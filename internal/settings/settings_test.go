@@ -62,13 +62,46 @@ func TestBadFieldDoesNotZeroGoodFields(t *testing.T) {
 	m := DefaultMachine()
 	m.Workers.Ingest.Hash = -3 // bad
 	m.Workers.Ingest.Extract = 5
-	m.Workers.Ingest.Thumb = 6
 	got := sanitizeMachine(m, testLogger())
 	if got.Workers.Ingest.Hash != DefaultMachine().Workers.Ingest.Hash {
 		t.Fatalf("bad hash count should clamp to default, got %d", got.Workers.Ingest.Hash)
 	}
-	if got.Workers.Ingest.Extract != 5 || got.Workers.Ingest.Thumb != 6 {
+	if got.Workers.Ingest.Extract != 5 {
 		t.Fatal("good fields must survive a single bad field")
+	}
+}
+
+func TestSanitizeMachineEnrichmentFields(t *testing.T) {
+	machine := DefaultMachine()
+	machine.Enrichment.Effort = "turbo" // not a level
+	machine.Enrichment.IOTokens = -1
+	machine.Workers.Enrichment = map[string]int{"thumbnail": 0, "sharpness": 3}
+	got := sanitizeMachine(machine, testLogger())
+	if got.Enrichment.Effort != EffortNormal {
+		t.Fatalf("unknown effort should fall back to normal, got %q", got.Enrichment.Effort)
+	}
+	if got.Enrichment.IOTokens != DefaultMachine().Enrichment.IOTokens {
+		t.Fatalf("non-positive ioTokens should clamp to default, got %d", got.Enrichment.IOTokens)
+	}
+	if _, present := got.Workers.Enrichment["thumbnail"]; present {
+		t.Fatal("non-positive per-kind override must be dropped (registry default applies)")
+	}
+	if got.Workers.Enrichment["sharpness"] != 3 {
+		t.Fatal("valid per-kind override must survive its sibling being dropped")
+	}
+
+	// Every real level passes through untouched; empty falls back too.
+	for _, level := range []string{EffortPaused, EffortLow, EffortNormal, EffortFull} {
+		leveled := DefaultMachine()
+		leveled.Enrichment.Effort = level
+		if got := sanitizeMachine(leveled, testLogger()); got.Enrichment.Effort != level {
+			t.Fatalf("valid effort %q rewritten to %q", level, got.Enrichment.Effort)
+		}
+	}
+	machine = DefaultMachine()
+	machine.Enrichment.Effort = ""
+	if got := sanitizeMachine(machine, testLogger()); got.Enrichment.Effort != EffortNormal {
+		t.Fatalf("empty effort should default to normal, got %q", got.Enrichment.Effort)
 	}
 }
 
@@ -94,12 +127,12 @@ func TestSaveRoundTrips(t *testing.T) {
 				c, _ := OpenMachine(dir, testLogger())
 				defer c.Close()
 				want := DefaultMachine()
-				want.Workers.Ingest.Thumb = 8
+				want.Workers.Enrichment = map[string]int{"thumbnail": 8}
 				if err := c.Save(want); err != nil {
 					t.Fatal(err)
 				}
 				got := loadJSON(filepath.Join(dir, "machine.json"), DefaultMachine(), testLogger())
-				if got.Workers.Ingest.Thumb != 8 {
+				if got.Workers.Enrichment["thumbnail"] != 8 {
 					t.Fatalf("machine round-trip mismatch: %+v", got)
 				}
 			case "keybindings":

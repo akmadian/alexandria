@@ -30,6 +30,7 @@ type Repos struct {
 	Dups        *DuplicateRepo
 	Sidecars    *SidecarRepo
 	Imports     *ImportRepo
+	Enrichment  *EnrichmentRepo
 	Tags        *TagRepo
 	Collections *CollectionRepo
 }
@@ -41,6 +42,7 @@ func reposFor(queryer DBTX) Repos {
 		Dups:        &DuplicateRepo{DB: queryer},
 		Sidecars:    &SidecarRepo{DB: queryer},
 		Imports:     &ImportRepo{DB: queryer},
+		Enrichment:  &EnrichmentRepo{DB: queryer},
 		Tags:        &TagRepo{DB: queryer},
 		Collections: &CollectionRepo{DB: queryer},
 	}

@@ -47,6 +47,8 @@ derive from the field name (virtual fields compile through joins instead).
 | `cameraModel` | text | true | `camera_model` | eq, neq, contains, startsWith, empty, notEmpty | true |
 | `caption` | text | true | `caption` | eq, neq, contains, startsWith, empty, notEmpty | false |
 | `capturedAt` | dateRange | true | `captured_at` | within, notWithin, empty, notEmpty | false |
+| `clippingHighlights` | numeric | true | `clipping_highlights` | eq, neq, gte, lte, empty, notEmpty | false |
+| `clippingShadows` | numeric | true | `clipping_shadows` | eq, neq, gte, lte, empty, notEmpty | false |
 | `colorLabel` | enum | true | `color_label` | in, notIn, empty, notEmpty | false |
 | `copyright` | text | true | `copyright` | eq, neq, contains, startsWith, empty, notEmpty | true |
 | `creator` | text | true | `creator` | eq, neq, contains, startsWith, empty, notEmpty | true |
@@ -58,6 +60,7 @@ derive from the field name (virtual fields compile through joins instead).
 | `ingestedAt` | dateRange | false | `ingested_at` | within, notWithin | false |
 | `lensModel` | text | true | `lens_model` | eq, neq, contains, startsWith, empty, notEmpty | true |
 | `rating` | numeric | true | `rating` | eq, neq, gte, lte, empty, notEmpty | false |
+| `sharpness` | numeric | true | `sharpness` | eq, neq, gte, lte, empty, notEmpty | false |
 | `source` | entityReference | false | `source_id` | in, notIn | false |
 | `tag` | tagReference | true | `— (virtual)` | has, lacks, under, notUnder, empty, notEmpty | false |
 | `text` | freeText | false | `— (virtual)` | matches | false |
@@ -79,6 +82,7 @@ derive from the field name (virtual fields compile through joins instead).
 - **FileStatus**: `missing`, `offline`, `online`
 - **SourceKind**: `external_drive`, `local`, `nfs`, `smb`
 - **SourceConnectivity**: `offline`, `online`
+- **EnrichmentKind**: `clipping`, `phash`, `sharpness`, `thumbnail`
 
 ## Events (C8) and errors
 

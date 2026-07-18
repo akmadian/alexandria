@@ -89,8 +89,13 @@ CREATE TABLE IF NOT EXISTS assets (
     xmp_last_read_at    TEXT,
     xmp_last_written_at TEXT,
     xmp_hash            TEXT,
-    -- [der] thumbnail marker -----------------------------------------------------
+    -- [der] enrichment artifacts (NULL = not computed; the missing-artifact scan IS
+    -- the queue, D25/D28; all cleared by the reimport staleness path, task 19) -----
     thumbnail_at        TEXT,
+    sharpness           REAL,    -- raw variance of Laplacian on the 512px thumb; ranking is the contract, not the absolute value
+    clipping_highlights REAL,    -- % of thumb pixels at/near pure white
+    clipping_shadows    REAL,    -- % of thumb pixels at/near pure black
+    phash               TEXT,    -- 64-bit perceptual hash (dHash), hex; the near-dup query surface is deferred (DEFERRED §12)
     ingested_at         TEXT NOT NULL,
     updated_at          TEXT NOT NULL
 );
@@ -262,6 +267,25 @@ CREATE TABLE IF NOT EXISTS import_errors (
 );
 
 CREATE INDEX IF NOT EXISTS idx_import_errors_session ON import_errors(session_id);
+
+-- The enrichment DLQ (D28): one row per (asset, kind) failure. Deliberately NOT
+-- an import_errors extension — import failures are path-keyed (pre-identity),
+-- enrichment failures are (asset, kind)-keyed (post-identity). "Absence is
+-- ambiguous" is why this table exists: a missing artifact means "not yet"
+-- UNLESS a row here says "tried and failed"; the missing-artifact scan skips
+-- attempt-exhausted rows so a corrupt file never spins forever, and the UI
+-- renders failed instead of an eternal spinner.
+CREATE TABLE IF NOT EXISTS enrichment_errors (
+    asset_id        TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL,          -- job-kind registry key, e.g. 'thumbnail'
+    reason_code     TEXT NOT NULL,          -- machine-readable taxonomy, e.g. 'decode_failed'
+    message         TEXT NOT NULL,          -- raw error
+    attempts        INTEGER NOT NULL DEFAULT 1,
+    last_attempt_at TEXT NOT NULL,
+    PRIMARY KEY (asset_id, kind)
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrichment_errors_kind ON enrichment_errors(kind);
 
 -- Settings are NOT stored in the catalog DB. They live as plain JSON files
 -- (settings.json in the catalog dir, machine.json/keybindings.json in the app

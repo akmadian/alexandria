@@ -9,7 +9,6 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
-	"github.com/akmadian/alexandria/internal/thumbnailer"
 	"github.com/akmadian/gospan"
 	"github.com/charmbracelet/log"
 )
@@ -19,25 +18,27 @@ import (
 // across imports.
 //
 // The single-file and reconcile paths use the writer-scoped catalog interfaces
-// (docs/data-model.md §1): a reader, the observation writer, and the
-// derived writer (for the thumbnail marker). They are given NO judgment or sync
-// writer — ingest cannot touch ratings/flags/notes, so a reimport can never
-// clobber user judgment. That guarantee is structural (the types), not a
-// convention.
+// (docs/data-model.md §1): a reader and the observation writer. They are given
+// NO judgment or sync writer — ingest cannot touch ratings/flags/notes, so a
+// reimport can never clobber user judgment. That guarantee is structural (the
+// types), not a convention. The one sanctioned derived-class write is the
+// reimport staleness clear (D28), which runs through the Store transaction.
 //
-// The batched pipeline path (Run/RunJob) additionally holds the sqlite Store:
-// each 50-item commit is one Store.InTx, the transaction seam impl/02 built.
-// Within that one function it uses only the observation/derived/dup/sidecar/
-// import repos on Repos — the "one cook" that owns every catalog mutation.
+// Thumbnails are not ingest's job (D25): they are produced post-commit by the
+// enrichment engine. OnAssetCommitted is where the composition root wires the
+// dispatcher nudge.
+//
+// The batched pipeline path (Run/RunJob) holds the sqlite Store: each 50-item
+// commit is one Store.InTx, the transaction seam impl/02 built. Within that one
+// function it uses only the observation/derived/dup/sidecar/import repos on
+// Repos — the "one cook" that owns every catalog mutation.
 type Importer struct {
-	Reader    catalog.AssetReader
-	Obs       catalog.AssetObservationWriter
-	Derived   catalog.AssetDerivedWriter
-	Dups      catalog.DuplicateRepository
-	Thumbnail thumbnailer.Thumbnailer
-	Store     *sqlite.Store      // batched-write transaction boundary (pipeline WRITE)
-	Imports   *sqlite.ImportRepo // session lifecycle (Start/Finish outside the batch txns)
-	Log       *log.Logger
+	Reader  catalog.AssetReader
+	Obs     catalog.AssetObservationWriter
+	Dups    catalog.DuplicateRepository
+	Store   *sqlite.Store      // transaction boundary (pipeline WRITE batches + the reimport staleness clear)
+	Imports *sqlite.ImportRepo // session lifecycle (Start/Finish outside the batch txns)
+	Log     *log.Logger
 
 	// Tracer, if set, instruments the pipeline path with gospan spans: one run
 	// root, one trace per item (import.asset / import.sidecar) with per-stage
@@ -55,9 +56,8 @@ type Importer struct {
 
 	// Machine is the machine-scoped config snapshot (worker-pool sizes), injected by
 	// the composition root. resolvePools reads Machine.Workers.Ingest; a zero count
-	// falls back to defaultPools. HASH is I/O-bound (raise for fast SSDs), EXTRACT and
-	// THUMB are CPU-bound (raise toward NumCPU — but each in-flight THUMB holds a
-	// fully-decoded image, so more workers cost proportionally more memory).
+	// falls back to defaultPools. HASH is I/O-bound (raise for fast SSDs); EXTRACT
+	// is CPU-bound (raise toward NumCPU).
 	Machine settings.Machine
 
 	// OnProgress, if set, fires per batch commit and at walk completion. Nil-safe.
@@ -136,7 +136,6 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 	if err != nil {
 		return err
 	}
-	imp.thumbnail(ctx, fsys, &scanned, assetID, verdict, fileLogger)
 	fileLogger.Info("ingested file", "source", source.Name, "path", scanned.relPath, "verdict", verdict, "assetID", assetID)
 	if imp.OnAssetCommitted != nil {
 		imp.OnAssetCommitted(ctx, source, assetID, scanned.relPath)

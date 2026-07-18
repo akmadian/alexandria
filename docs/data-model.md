@@ -9,7 +9,7 @@ it, what wins in conflict, how it's backed up, and how it's repaired.
 |---|---|---|---|---|---|
 | **Judgment** | user-declared (k8s `spec`) | user-action service only | DB wins | paranoid | restore |
 | **Observation** | world-state copied from FS (k8s `status`) | ingest/watcher only | world wins | nice-to-have | re-scan |
-| **Derived** | computed from the other two | jobs only | n/a | never | recompute |
+| **Derived** | computed from the other two | enrichment writer only (+ ingest's reimport tx may CLEAR — the D28 staleness transition, the one sanctioned exception) | n/a | never | recompute |
 | **Sync-state** | reconcilers' own cursors | owning reconciler only | n/a | with judgments | reset+resync |
 
 Enforcement is structural: repositories expose **writer-scoped interfaces** (`impl/02`) so an
@@ -36,6 +36,9 @@ Class assignments by column group:
 - `assets_fts`, thumbnails-on-disk = derived · smart-collection membership = derived-unmaterialized
   (computed at query time; the best kind)
 - `import_sessions`/`import_errors` = system log (importer writes; losable)
+- `enrichment_errors` = system log (the enrichment DLQ, D28 — the engine's writer goroutine
+  writes it; losable: a lost row costs one wasted retry, nothing else). Keyed (asset_id, kind) —
+  post-identity, which is why it is not an `import_errors` extension (that DLQ is path-keyed)
 
 Special cases resolved by the classification:
 
@@ -68,6 +71,7 @@ Special cases resolved by the classification:
 | ~~`asset_groups` / `_members`~~ | — | — | DELETED (D24) — re-derived by the grouping round |
 | `duplicates` | uuid | asset ids (CASCADE) | status · UNIQUE(original, duplicate) |
 | `import_sessions` / `import_errors` | uuid | session_id (CASCADE) | started_at |
+| `enrichment_errors` | (asset_id, kind) | asset_id (CASCADE) | kind · attempts gate the missing-artifact scan (D28) |
 | `assets_fts` | — | external-content on `assets` | trigger-maintained |
 
 **No `settings` or `keybindings` table** (impl/11, supersedes D16's storage mechanism). Both are
@@ -133,8 +137,10 @@ are **removed**; a file that reappears at a new path is a new asset + a pending 
 
 1. **Unchanged**: path known + size exact + mtime within 2s tolerance → skip.
 2. **Reimport**: path match → same asset; refresh observations ONLY (FilePatch — judgments
-   untouched); regenerate thumbnail; restore online if it was missing and reappeared at its
-   **original** path. Path identity wins for a known address.
+   untouched); clear derived state + the asset's enrichment DLQ rows in the same transaction
+   (the D28 staleness transition — the enrichment scan regenerates from "missing"); restore
+   online if it was missing and reappeared at its **original** path. Path identity wins for a
+   known address.
 3. **Duplicate**: content match vs another asset (present **or** missing, any source) → new
    identity + a `pending` duplicates row. A detection FLAG only, never a mutation of the matched
    asset — the review queue derives duplicate-vs-probable-move from live status (DEFERRED §5).

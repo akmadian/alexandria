@@ -65,9 +65,16 @@ type AssetSyncWriter interface {
 	RecordXMPWritten(ctx context.Context, id string, writtenAt time.Time, xmpHash string) error
 }
 
-// AssetDerivedWriter — jobs / ingest thumbnail stage ONLY.
+// AssetDerivedWriter — the enrichment writer goroutine, plus ingest's reimport
+// path for ClearDerived ONLY (the D28 staleness transition: a reimport's
+// transaction clears derived columns so the enrichment scan re-derives them —
+// the one sanctioned derived write outside the engine).
 type AssetDerivedWriter interface {
 	SetThumbnailAt(ctx context.Context, id string, t time.Time) error
+	SetSharpness(ctx context.Context, id string, value float64) error
+	SetClipping(ctx context.Context, id string, highlights, shadows float64) error
+	SetPhash(ctx context.Context, id string, hash string) error
+	ClearDerived(ctx context.Context, id string) error
 }
 
 // TagRepository is the tag surface. Today it exposes only the keyword-import

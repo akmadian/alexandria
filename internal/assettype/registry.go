@@ -38,9 +38,10 @@ type Handler struct {
 	// Preview, Grouping join here when their features ship (rule of two).
 }
 
-// registry is the whole supported-format table. Only the stdlib-decodable raster
-// formats (jpeg/png/gif) carry capability funcs today; the rest classify but have
-// no extractor/generator until their decoders land (RAW/video/PDF/… via the
+// registry is the whole supported-format table. The stdlib-decodable raster
+// formats (jpeg/png/gif) decode directly; the RAW family thumbnails via its
+// embedded preview (the exiftool daemon, D28); the rest classify but have no
+// extractor/generator until their decoders land (video/PDF/… via the
 // dependency fleet). Add a format = add a row.
 var registry = []Handler{
 	// images
@@ -53,15 +54,15 @@ var registry = []Handler{
 	{"tiff", "image/tiff", domain.FileTypeImage, nil, nil},
 	{"heic", "image/heic", domain.FileTypeImage, nil, nil},
 	{"bmp", "image/bmp", domain.FileTypeImage, nil, nil},
-	// camera raw
-	{"cr2", "image/x-canon-cr2", domain.FileTypeRaw, nil, nil},
-	{"cr3", "image/x-canon-cr3", domain.FileTypeRaw, nil, nil},
-	{"nef", "image/x-nikon-nef", domain.FileTypeRaw, nil, nil},
-	{"arw", "image/x-sony-arw", domain.FileTypeRaw, nil, nil},
-	{"dng", "image/x-adobe-dng", domain.FileTypeRaw, nil, nil},
-	{"orf", "image/x-olympus-orf", domain.FileTypeRaw, nil, nil},
-	{"raf", "image/x-fuji-raf", domain.FileTypeRaw, nil, nil},
-	{"rw2", "image/x-panasonic-rw2", domain.FileTypeRaw, nil, nil},
+	// camera raw — thumbnails from the embedded preview, never a RAW decode
+	{"cr2", "image/x-canon-cr2", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
+	{"cr3", "image/x-canon-cr3", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
+	{"nef", "image/x-nikon-nef", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
+	{"arw", "image/x-sony-arw", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
+	{"dng", "image/x-adobe-dng", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
+	{"orf", "image/x-olympus-orf", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
+	{"raf", "image/x-fuji-raf", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
+	{"rw2", "image/x-panasonic-rw2", domain.FileTypeRaw, nil, thumbnailer.GenerateRawPreview},
 	// video
 	{"mov", "video/quicktime", domain.FileTypeVideo, nil, nil},
 	{"mp4", "video/mp4", domain.FileTypeVideo, nil, nil},
@@ -104,6 +105,16 @@ func Classify(ext string) (Handler, bool) {
 func IsSupported(ext string) bool {
 	_, ok := byExtension[normalizeExt(ext)]
 	return ok
+}
+
+// All returns a copy of the full handler table. The enrichment job-kind
+// registry evaluates each kind's applicability predicate over this set to
+// derive the extension list its missing-artifact scan filters on — capability
+// truth stays here, in the one table (C10), never duplicated as a second list.
+func All() []Handler {
+	handlers := make([]Handler, len(registry))
+	copy(handlers, registry)
+	return handlers
 }
 
 // sidecarExts are companion files tracked but never treated as assets. v1 parses

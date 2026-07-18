@@ -704,6 +704,143 @@ that thumbnail re-decode dominates a signal's cost; per-artifact provenance stam
 clear-on-reimport proves too coarse in practice; the effort dial's shape (token counts per
 level) is implementation detail, tune freely.
 
+*(2026-07-13, task-18 build round — the engine landed as specced; three in-round calls worth
+recording. **Engine scans are a different lane than the query authority:** the missing-artifact
+scan and eligibility probe are hand-written SQL in `sqlite.EnrichmentRepo`, deliberately NOT
+routed through `internal/ast` — the AST is the user-predicate contract between frontend and
+catalog; engine plumbing (DLQ anti-joins, artifact-column probes) must never leak into that
+grammar, and the AST must never care about engine internals. The artifact-column allowlist in
+that repo is what stands between registry data and the SQL. **I/O tokens shipped per-source,
+not per-device** — device detection is its own layer (DEFERRED §11 has the trigger); path-
+ordered backlog reads deferred with it. **Jumbo weights clamp to the dialed capacity**, so an
+over-budget job serializes against everything rather than deadlocking against tokens the
+effort level will never release; the effort→token mapping (full/half/quarter of NumCPU) is a
+stated assumption awaiting the gospan samples-table calibration (D30).)*
+
+*(2026-07-14, the naming-and-structure round (Ari) — the engine re-grounded in its own graph
+model before anything shipped on it. **Vocabulary:** the registry row is a `JobDefinition`
+(node); a `job` is one execution (its identity `JobKey{AssetID, Kind}` — the operand is the
+ASSET; "artifact" vocabulary stays on the catalog side, where the artifact actually lives);
+queues hold jobs; workers run them; `KindSet` replaces the pipeline-borrowed "Stage" for the
+tracker bitmask. **Structure:** the hand-rolled hot/cold lists (steal flags, husk discard,
+served-dedup — a bespoke reimplementation of heap.Fix) were replaced with one
+`container/heap` per node whose `Less` is the composite key (hinted band, hint order, import
+recency) — §7's use-the-stdlib rule, enforced late; the pre-commit checklist now flags
+bespoke stdlib-container reimplementations. **Edge emission:** an applied completion enqueues
+the node's dependents directly (inheriting the asset's live hint priority — the fast track
+carries through the graph at every step); scans demote to authority, cold start, and refill.
+**Artifact handoff:** producers' outputs never ride queues (retained memory outside admission
+control, and edges are claims — rescan recovery needs the disk path regardless); when the
+fusion trigger's measurements arrive, the sanctioned shapes are a bounded lookaside cache or
+decode fusion.)*
+
+*(2026-07-14, task-19 build round (Ari + Claude) — thumbnails left ingest; three in-round
+calls worth recording. **The thumb capability is a strategy VALUE in the assettype table:**
+`thumbnailer.GenFunc` became a method value on the `Thumbnailer` struct (`GenerateRaster` /
+`GenerateRawPreview` — the receiver, passed at call time, carries every runtime dependency:
+output layout, the exiftool daemon), so the static table stays the single capability truth,
+applicability stays `handler.Thumb != nil`, and no second dispatch layer exists. Rejected: a
+producer-side type conditional (capability truth leaks into code that drifts from the
+applicability predicate — the C10 rot pattern) and a strategy-enum with a constructed
+strategy registry (a second registry stacked on the one the table already is). Nil
+degradation is two-level and loud: nil `Thumb` = the format has no capability (never
+enqueued); nil daemon at runtime = a `tool_unavailable` DLQ row, never silent
+inapplicability. Ceiling noted at the `GenFunc` definition: a strategy needing per-call state
+not derivable from (Thumbnailer fields + source path) reopens the shape. **Corrupt-pixel
+discovery moved engines with the decode:** ingest never decodes, so a valid-magic
+undecodable file now commits with NO `import_errors` row — the decode failure is the
+thumbnail job's `enrichment_errors` row. D13's self-heal loop is unchanged but cross-engine:
+the reimport staleness clear wipes the DLQ row, the scan re-derives the work, and the
+corrupt→heal acceptance test walks both engines. **The exiftool stay_open transport is
+binary-safe now:** `-b` output carries no trailing newline, so the `{readyN}` ready marker is
+matched as a line suffix instead of a whole line — the line-based reader would have hung
+forever on the first real preview extraction.)*
+
+*(2026-07-15, task-20 build round (Ari + Claude) — the cheap signals landed as the engine's
+second, third, and fourth kinds; the round's calls, most of them scope-narrowing. **The signal
+math is pure functions in a new `internal/signals`, hand-rolled, no imaging dependency:** the
+"real OpenCV for Go" (gocv) is cgo + a system OpenCV install — banned by the no-cgo/dependency-
+package invariant — and the pure-Go options (bild, imaging) aren't load-bearing for one Laplacian
+kernel + one histogram + one hash (redundancy test); `internal/enrichment/signals.go` stays thin
+producer glue. **phash is dHash, a swappable `PerceptualHasher` strategy value** — pure Go, no
+DCT, robust for near-dup ranking; a DCT-based pHash (goimagehash) is a one-line swap if recall
+ever falls short. **Sharpness is stored RAW (variance of Laplacian), no normalization:** ranking
+is the contract, not the absolute value (the epic's own words), and building a within-burst
+ranking scale when no burst concept exists yet is inventing a consumer; 512px is the analysis
+input (prior-art-standard for the measure, and the thumbnail the signal's prerequisite already
+guarantees) — contrast-normalization (`var/mean²`) and a JPEG-artifact pre-blur are documented
+upgrades behind markers, neither with a consumer. **clipping is one kind writing two columns**
+(highlights + shadows from one histogram pass; the scan marks on `clipping_highlights`, both
+clear together). **The query surface was narrowed below the original acceptance line:** only
+sharpness + clipping got `ast` FILTER vocabulary (the C11 "propose as data, dispose via query"
+contract); phash's query surface (hamming/near-dup) defers with clustering, sort-by-signal defers
+(no cull UI, and sort is already a curated subset), and signal DISPLAY (`catalog.AssetRow`)
+defers — all in DEFERRED §12. The stored columns are the durable half; each deferred surface is a
+small add onto them when its UI consumer lands. **The `derivedArtifactColumns` allowlist is now
+dual-purpose** — the set ClearDerived nulls on reimport AND the pool a registry row's marker must
+be drawn from — so a multi-column kind lists every column but marks one.)*
+
+*(2026-07-15, task-21 build round (Ari + Claude) — the seam face of the engine; the round's
+calls. **Visibility ships as KIND NAMES, not a bitmask:** the spec's "enriching bitmask" would
+need generated bit constants matching the engine's registry-ROW-ORDER bit assignment — fragile
+and not self-describing — so the seam ships `[]domain.EnrichmentKind` (a generated union pinned
+to the registry by a crosswalk) and the `KindSet` bitmask stays an engine internal. The engine
+exposes `RunningKinds`/`FailedKinds` (kind names); the reverse lives in the engine, the seam
+never sees a bit. **Read is pull-decorated, write is a thin service, events are aggregate.** The
+grid gets `AssetRow.Enriching` (one tracker lock per page) + `AssetRow.Failed` (one DLQ query,
+attempt-exhausted only — a retrying row is still pending); decoration is best-effort (a DLQ read
+error drops the failed half, never fails the query) and nil-safe (no engine = no decoration).
+`EnrichmentEngineService` wraps the engine's pause/resume/effort/hint behind a STRUCTURAL interface, so
+the seam package never imports enrichment; the effort dial persists-then-applies (a crash leaves
+the durable intent). Aggregate events ride the existing envelope (no new topic): `JobProgress`
+gained an optional `QueueDepth` (the convergent lane has no run identity, so done/total stay 0
+and the per-kind backlog is the signal), emitted by the free function `EmitEnrichmentBatch` off
+the engine's `OnBatchCommitted` hook — a free function, not a method, so the composition captures
+`engine.QueueDepths` and no construction cycle forms; the DB→clear-bit→emit ordering holds
+because the hook fires after the tracker clears. **No live wiring, by necessity:** no Wails host
+binds the seam services yet (frontend-rebuild epic), so this round is contract + capability +
+tests — the engine-through-the-seam controls are proven with a real engine in tests, the effort
+store is faked (its machine.json adapter lands with the host). **Narrowed:** the per-asset detail
+read (error reason codes) and the `blocked` derivation (a kind whose prerequisite failed) defer
+with the loupe/inspector that renders them (DEFERRED §13) — the grid's three D25 states
+(enriching/ready/failed) are complete without them.)*
+
+*(2026-07-16, task-22 build round (Ari + Claude) — the visibility half: commitments #2 and #4
+made concrete. **The snapshot is gauges, harvested for free; distributions are gospan's.** One
+`Engine.Snapshot` — the dispatcher builds its scheduling half on its own goroutine (per-kind
+queue depths split hot/cold/running, in-flight jobs, pause state — one pass over the ledger,
+no lock), the engine fills the effort dial, the budget gauge (a new `inUse` atomic on the
+weighted semaphore; the reservation manager bypasses it, so `InUse ≤ Capacity` always), and the
+DLQ rolled up by (kind, reason) via one grouped query. Everything reads state the engine already
+holds; the round explicitly refused per-kind duration histograms + per-(kind, asset) token cost
+(new per-job instrumentation duplicating gospan's spans — the trace file answers distributions by
+SQL, D30), DEFERRED §14 holds the line and its trigger. **The JSON shape IS the contract** (json
+tags, `internal/enrichment`), served raw at `/enrichment/snapshot.json` for the future in-app dev
+corner; its TS types get generated when that second consumer lands (C15), not before — the
+snapshot is an operational debug feed, NOT the seam's frontend contract (task 21's services), so
+it lives on the engine and the harness serves it, no seam involvement. **The matrix collapses
+queued into pending:** the dev page's asset × kind cells read done / running / failed / pending —
+"queued" is a transient in-memory scheduling optimization with no durable per-artifact meaning
+(the missing artifact IS the queue), so dumping the ledger per-asset is the transient-dump
+anti-pattern; queued stays visible as an aggregate per-kind depth instead. **The graph renderer
+is pure** (`RenderGraphDOT`/`RenderGraphASCII` over `Definitions(nil,nil)` + the assettype table,
+asset types with identical applicable-kind sets collapsed to one sub-graph); `dev jobs graph`
+renders it, `dot -Tsvg`-clean. The dev-harness page is hand-rolled HTML + meta-refresh poll,
+stdlib only (DEFERRED §9's constraint stands; the import-pipeline `/state` half stays deferred).)*
+
+*(2026-07-16, epic pre-merge review round (Ari) — one contract call, settling the review's one
+Important finding. **The convergent lane is a STANDING job — never terminal.** The task-21 round
+had a drained backlog report `state: "done"` on the progress tick, contradicting the JobState
+contract (`internal/seam/events.go`: terminal states ride the done event exclusively) — and a
+lane that new imports/reimports/hints un-drain would terminate and resurrect, forcing exactly
+the special-casing C9 forbids on a generic renderer. Fixed the code, not the contract:
+`EmitEnrichmentBatch` always emits `running`; a zero `queueDepth` total IS the drained signal
+(the frontend hides the indicator at zero). **Per-import enrichment status ("import X is 80%
+enriched") was considered and deferred, not refused** — the convergent model makes it a pure
+read-side aggregate over catalog truth, needing only the missing asset→session linkage (an
+`import_session_id` observation column) + a seam read; run identity stays out of the engine.
+DEFERRED §15 holds the shape and its trigger (the frontend surface that renders it).)*
+
 ## D30 — gospan adopted: the pipeline is span-traced; trace files are exhaust (2026-07-13)
 
 The gospan validation round (Ari + Claude): [gospan](https://github.com/akmadian/gospan) —

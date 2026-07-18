@@ -1,12 +1,43 @@
 package dependency
 
 import (
+	"bufio"
 	"context"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/log"
 )
+
+// TestReadUntilMarker pins the transport's framing, especially the binary case:
+// -b output (preview extraction) does not end with a newline, so the ready
+// marker glues onto the payload's final bytes — the reader must match it as a
+// suffix, split it off, and return the payload intact.
+func TestReadUntilMarker(t *testing.T) {
+	cases := []struct {
+		name    string
+		stream  string
+		want    string
+		wantErr bool
+	}{
+		{name: "marker on its own line", stream: "line one\nline two\n{ready1}\n", want: "line one\nline two\n"},
+		{name: "marker glued to binary tail", stream: "\xff\xd8binary\xff\xd9{ready1}\n", want: "\xff\xd8binary\xff\xd9"},
+		{name: "binary payload containing newlines", stream: "head\nmiddle\x00\ntail{ready1}\n", want: "head\nmiddle\x00\ntail"},
+		{name: "empty payload", stream: "{ready1}\n", want: ""},
+		{name: "eof before marker", stream: "partial output\n", want: "partial output\n", wantErr: true},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := readUntilMarker(bufio.NewReader(strings.NewReader(testCase.stream)), "{ready1}")
+			if (err != nil) != testCase.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, testCase.wantErr)
+			}
+			if string(got) != testCase.want {
+				t.Fatalf("payload = %q, want %q", got, testCase.want)
+			}
+		})
+	}
+}
 
 // TestDiscover_MissingDegrades is the always-runnable half: a tool that isn't on
 // PATH reports StateMissing without error, and StartExiftool refuses it. This is

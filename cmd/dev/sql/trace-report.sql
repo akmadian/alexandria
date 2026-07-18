@@ -18,16 +18,21 @@
 .print
 .print == stage scoreboard: exact percentiles per span name ==
 .print '   (lower = better everywhere; p99 far above p50 = a long tail — a few bad files, not a systemic cost)'
+-- Nearest-rank percentiles (ceil convention): the value at row ceil(p*n) of the
+-- sorted set, so p99 can reach the max and small n never collapses to the
+-- median. (The old PERCENT_RANK<=p form could never select the max — its rank
+-- is 1.0 — and reported p50=p90=p99 for small n.)
 WITH durations AS (
   SELECT n.name, (s.end_ns - s.start_ns) AS dur,
-         PERCENT_RANK() OVER (PARTITION BY n.name ORDER BY s.end_ns - s.start_ns) AS pr
+         ROW_NUMBER() OVER (PARTITION BY n.name ORDER BY s.end_ns - s.start_ns) AS rank_in_name,
+         COUNT(*)    OVER (PARTITION BY n.name) AS name_count
   FROM spans s JOIN names n ON n.id = s.name_id
   WHERE s.end_ns IS NOT NULL),
 ranked AS (
-  SELECT name, COUNT(*) AS n,
-         MAX(CASE WHEN pr <= .50 THEN dur END) AS p50,
-         MAX(CASE WHEN pr <= .90 THEN dur END) AS p90,
-         MAX(CASE WHEN pr <= .99 THEN dur END) AS p99,
+  SELECT name, MAX(name_count) AS n,
+         MAX(CASE WHEN rank_in_name = (name_count * 50 + 99) / 100 THEN dur END) AS p50,
+         MAX(CASE WHEN rank_in_name = (name_count * 90 + 99) / 100 THEN dur END) AS p90,
+         MAX(CASE WHEN rank_in_name = (name_count * 99 + 99) / 100 THEN dur END) AS p99,
          MAX(dur) AS worst
   FROM durations GROUP BY name)
 SELECT name, n,
@@ -38,18 +43,21 @@ SELECT name, n,
 FROM ranked ORDER BY ranked.worst DESC;
 
 .print
-.print == effective parallelism: total work / wall clock ==
+.print == effective parallelism: total work / the name's own active window ==
 .print '   (worker POOLS: higher = better, pinned at the pool size = the bottleneck — add workers or move the work;'
-.print '    singletons (run/scan/match/write-batch) top out at 1.00x; item/await spans just count concurrent residency)'
-WITH wall AS (SELECT MAX(end_ns) - MIN(start_ns) AS run FROM spans WHERE end_ns IS NOT NULL),
-work AS (
-  SELECT n.name, SUM(s.end_ns - s.start_ns) AS total
+.print '    singletons (run/scan/match/write-batch) top out at 1.00x; item/await spans just count concurrent residency.'
+.print '    window = first start to last end PER NAME, so import and enrichment phases sharing one trace file do not'
+.print '    dilute each other)'
+WITH work AS (
+  SELECT n.name, SUM(s.end_ns - s.start_ns) AS total,
+         MAX(s.end_ns) - MIN(s.start_ns) AS window
   FROM spans s JOIN names n ON n.id = s.name_id
   WHERE s.end_ns IS NOT NULL GROUP BY n.name)
 SELECT name,
        CASE WHEN total >= 6e10 THEN printf('%dm %.1fs', CAST(total/6e10 AS INT), (total%6e10)/1e9) WHEN total >= 1e9 THEN printf('%.2f s', total/1e9) WHEN total >= 1e6 THEN printf('%.1f ms', total/1e6) ELSE printf('%.0f µs', total/1e3) END AS total_work,
-       printf('%6.2fx', total * 1.0 / wall.run) AS parallelism
-FROM work, wall ORDER BY total DESC;
+       CASE WHEN window >= 6e10 THEN printf('%dm %.1fs', CAST(window/6e10 AS INT), (window%6e10)/1e9) WHEN window >= 1e9 THEN printf('%.2f s', window/1e9) WHEN window >= 1e6 THEN printf('%.1f ms', window/1e6) ELSE printf('%.0f µs', window/1e3) END AS window,
+       printf('%6.2fx', total * 1.0 / window) AS parallelism
+FROM work ORDER BY total DESC;
 
 .print
 .print == queue map: wait between import stages ==
@@ -57,16 +65,13 @@ FROM work, wall ORDER BY total DESC;
 WITH stage AS (
   SELECT s.parent_id AS item, n.name, s.start_ns, s.end_ns
   FROM spans s JOIN names n ON n.id = s.name_id
-  WHERE n.name IN ('import.hash','import.match','import.extract','import.thumb')),
+  WHERE n.name IN ('import.hash','import.match','import.extract')),
 gaps AS (
   SELECT 'hash -> match' AS hop, AVG(b.start_ns - a.end_ns) AS avg_gap, MAX(b.start_ns - a.end_ns) AS worst_gap
     FROM stage a JOIN stage b ON b.item = a.item AND a.name = 'import.hash'    AND b.name = 'import.match'
   UNION ALL
   SELECT 'match -> extract', AVG(b.start_ns - a.end_ns), MAX(b.start_ns - a.end_ns)
-    FROM stage a JOIN stage b ON b.item = a.item AND a.name = 'import.match'   AND b.name = 'import.extract'
-  UNION ALL
-  SELECT 'extract -> thumb', AVG(b.start_ns - a.end_ns), MAX(b.start_ns - a.end_ns)
-    FROM stage a JOIN stage b ON b.item = a.item AND a.name = 'import.extract' AND b.name = 'import.thumb')
+    FROM stage a JOIN stage b ON b.item = a.item AND a.name = 'import.match'   AND b.name = 'import.extract')
 SELECT hop,
        CASE WHEN avg_gap >= 6e10 THEN printf('%dm %.1fs', CAST(avg_gap/6e10 AS INT), (avg_gap%6e10)/1e9) WHEN avg_gap >= 1e9 THEN printf('%.2f s', avg_gap/1e9) WHEN avg_gap >= 1e6 THEN printf('%.1f ms', avg_gap/1e6) ELSE printf('%.0f µs', avg_gap/1e3) END AS avg_wait,
        CASE WHEN worst_gap >= 6e10 THEN printf('%dm %.1fs', CAST(worst_gap/6e10 AS INT), (worst_gap%6e10)/1e9) WHEN worst_gap >= 1e9 THEN printf('%.2f s', worst_gap/1e9) WHEN worst_gap >= 1e6 THEN printf('%.1f ms', worst_gap/1e6) ELSE printf('%.0f µs', worst_gap/1e3) END AS worst

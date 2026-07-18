@@ -221,7 +221,6 @@ func TestStartImport_RealImporterEndToEnd(t *testing.T) {
 		ingester := &importer.Importer{
 			Reader:     assets,
 			Obs:        assets,
-			Derived:    assets,
 			Dups:       &sqlite.DuplicateRepo{DB: db},
 			Store:      sqlite.NewStore(db),
 			Imports:    &sqlite.ImportRepo{DB: db},

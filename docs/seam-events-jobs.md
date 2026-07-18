@@ -50,6 +50,7 @@ interface JobProgress {
   stage?: string;            // pipeline stage for the activity drawer
   cancelable: boolean;
   message?: string;          // optional detail for logs + the dev corner
+  queueDepth?: Record<string, number>; // per-kind enrichment backlog (task 21); omitted by done/total jobs
 }
 ```
 
@@ -57,6 +58,19 @@ Completion carries the existing `JobSummary` (added/updated/skipped/errors). **N
 progress paths** (C9): import, enrichment, backup, export, integrity, RAW dispatch all report
 through this envelope; status bar and activity drawer render it generically — a new kind of
 background work is a new `kind` string, zero new UI.
+
+**Enrichment on the envelope (task 21).** The convergent lane has no run identity (D28), so it
+rides one stable synthetic job (`kind: "enrich"`, `done/total: 0`) whose real signal is the
+optional `queueDepth` (per-kind backlog) added to `JobProgress`. The lane is a STANDING job —
+never terminal, because new imports/reimports/hints un-drain it — so its state is always
+`running` and a zero `queueDepth` total is the drained signal (the frontend hides the
+indicator at zero); terminal states ride the `done` event exclusively, generic renderers need
+no special case. Ticks are emitted per writer-batch commit (natural throttle), alongside a
+`catalog/changed` invalidation. **Per-asset enrichment state is pull-decorated, never streamed**
+(D28): asset rows carry `enriching` / `failed` (`EnrichmentKind[]`) filled by the seam from the
+engine's in-flight tracker + DLQ — thousands of transitions per second are bit-flips, not
+events. Controls (pause/resume global+per-kind, the effort dial, the viewport hint) are
+synchronous seam methods on the enrichment service.
 
 ## The binary channel
 

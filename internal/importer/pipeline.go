@@ -16,11 +16,17 @@ import (
 
 // This file is the pipeline's plumbing: the channel wiring, the per-run state,
 // and the run-level lifecycle (start a session, run the stages, fuse the
-// walk-end missing diff, finalize). The six stages themselves live one-per-file
+// walk-end missing diff, finalize). The five stages themselves live one-per-file
 // in stage_*.go; the item they thread through is in item.go.
 //
-//	walk ─► SCAN ─► HASH ─► MATCH ─► EXTRACT ─► THUMB ─► WRITE ─► post-commit
-//	       1 grtn   pool     1        pool       pool     1 grtn
+//	walk ─► SCAN ─► HASH ─► MATCH ─► EXTRACT ─► WRITE ─► post-commit
+//	       1 grtn   pool     1        pool      1 grtn
+//
+// Thumbnails are NOT a stage (D25): they are the first enrichment job kind,
+// produced post-commit by internal/enrichment — ingest sheds its slowest work
+// and an asset commits as soon as identity + observation are complete. The
+// post-commit hook nudges the enrichment dispatcher (a hint; its scan stays
+// the authority).
 //
 // All channels are created, wired, and closed in ONE function (run). Stages are
 // plain methods taking directional channels; they never make channels. Bounded
@@ -37,11 +43,11 @@ const (
 )
 
 // poolSizes are the per-stage worker counts.
-type poolSizes struct{ hash, extract, thumb int }
+type poolSizes struct{ hash, extract int }
 
 // defaultPools is the fallback per-stage worker count when Machine carries none
 // (a zero count for a stage); the live source is Machine.Workers.Ingest.
-var defaultPools = poolSizes{hash: 4, extract: 2, thumb: 2}
+var defaultPools = poolSizes{hash: 4, extract: 2}
 
 // resolvePools reads the machine-scoped worker counts (settings-owned), falling
 // back to defaultPools for any stage left at zero.
@@ -53,9 +59,6 @@ func resolvePools(imp *Importer) poolSizes {
 	}
 	if ingest.Extract > 0 {
 		pools.extract = ingest.Extract
-	}
-	if ingest.Thumb > 0 {
-		pools.thumb = ingest.Thumb
 	}
 	return pools
 }
@@ -146,7 +149,7 @@ func (imp *Importer) RunJob(ctx context.Context, jobID string, source *domain.So
 	ctx, runSpan := imp.Tracer.Start(ctx, "import.run",
 		slog.String("source", source.Name), slog.String("session", sessionID))
 	imp.Log.Info("import started", "source", source.Name, "known", len(known), "session", sessionID,
-		"pools", fmt.Sprintf("hash=%d extract=%d thumb=%d", pipe.pools.hash, pipe.pools.extract, pipe.pools.thumb))
+		"pools", fmt.Sprintf("hash=%d extract=%d", pipe.pools.hash, pipe.pools.extract))
 
 	// Pre-count the tree so progress is determinate from the first event. On
 	// success the count owns Total and SCAN stops incrementing it (walkDone gates
@@ -203,14 +206,12 @@ func (pipe *pipeline) run(ctx context.Context) error {
 	hashOut := make(chan *pipelineItem, pipe.pools.hash*2)
 	matchOut := make(chan *pipelineItem, 8)
 	extractOut := make(chan *pipelineItem, pipe.pools.extract*2)
-	thumbOut := make(chan *pipelineItem, pipe.pools.thumb*2)
 
 	group.Go(func() error { defer close(scanOut); return pipe.scan(ctx, scanOut) })
 	fanStage(group, pipe.pools.hash, hashOut, func() error { return pipe.hash(ctx, scanOut, hashOut) })
 	group.Go(func() error { defer close(matchOut); return pipe.match(ctx, hashOut, matchOut) })
 	fanStage(group, pipe.pools.extract, extractOut, func() error { return pipe.extract(ctx, matchOut, extractOut) })
-	fanStage(group, pipe.pools.thumb, thumbOut, func() error { return pipe.thumb(ctx, extractOut, thumbOut) })
-	group.Go(func() error { return pipe.write(ctx, thumbOut) })
+	group.Go(func() error { return pipe.write(ctx, extractOut) })
 
 	return group.Wait()
 }
