@@ -130,4 +130,9 @@ design/                THE DESIGN SOURCE — see design/CLAUDE.md
   console.
 - Verify interactive work in the real browser (`bun run dev`) — RAC portals and
   overlays are hard to assert in happy-dom.
+- The browser pane's synthesized clicks/keys CANNOT drive RAC checkbox-family
+  toggles (label→hidden-input press routing; proven 2026-07-17 against Adobe's
+  own live Checkbox docs — identical dead clicks there). Verify those with unit
+  tests + an in-page `input.click()` probe; a dead pane click on a checkbox is
+  not a product bug.
 - `cx` is at `@/lib/cx`. Chrome is hue-free; test every state with the accent unset.

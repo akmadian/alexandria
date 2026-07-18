@@ -1,0 +1,63 @@
+/* Checkbox — hairline box on the field well at rest; interaction walks the CELL
+ * family (well → hover → active: the input-mat register, theme-correct for
+ * free); ON = the accent's registered toggles-on fill (§5) with the on-accent
+ * glyph. Invalid is §25's error hairline; disabled is the §4 operator (chroma
+ * drained + the ramp's disabled rung). Emitted tokens only. */
+
+.checkbox {
+    composes: alx-type-value from global;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--alx-size-icon);
+    height: var(--alx-size-icon);
+    flex: none;
+    box-sizing: border-box;
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    border-radius: var(--alx-radius-control);
+    background: var(--alx-cell-well);
+}
+
+/* The glyph fills the box's inner square; Lucide's built-in viewBox padding
+ * keeps the mark clear of the border. */
+.glyph {
+    width: 100%;
+    height: 100%;
+}
+
+.checkbox[data-hovered] .box {
+    background: var(--alx-cell-hover);
+}
+
+.checkbox[data-pressed] .box {
+    background: var(--alx-cell-active);
+}
+
+.checkbox[data-selected] .box,
+.checkbox[data-indeterminate] .box {
+    border-color: var(--alx-accent);
+    background: var(--alx-accent);
+    color: var(--alx-accent-on);
+}
+
+.checkbox[data-focus-visible] .box {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+
+.checkbox[data-invalid] .box {
+    border-color: var(--alx-attention);
+}
+
+.checkbox[data-disabled] {
+    /* §4: the label drops to the disabled rung; a checked box KEEPS its fill —
+     * the state stays readable (the ToggleButton precedent, ruled 2026-07-17). */
+    color: var(--alx-ink-4);
+}

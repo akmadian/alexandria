@@ -7,17 +7,20 @@
 // dot-matrix family (§14), never rows here.
 //
 // Seeded 2026-07-17 with `disclose` — the first per-need pull from the parked
-// token-gaps list (PanelSection's disclosure chevron forced it).
+// token-gaps list (PanelSection's disclosure chevron forced it). `check` and
+// `mixed` (§25's em-dash state as a glyph) arrived with Checkbox the same day.
 
-import { ChevronRight, type LucideIcon } from "lucide-react";
+import { Check, ChevronRight, Minus, type LucideIcon } from "lucide-react";
 import { cx } from "@/lib/cx";
 import styles from "./icon.module.css";
 
-export type IconConcept = "disclose";
+export type IconConcept = "check" | "disclose" | "mixed";
 
 // C10: a new concept fails to compile until it has exactly one glyph.
 const GLYPHS = {
+    check: Check,
     disclose: ChevronRight,
+    mixed: Minus,
 } as const satisfies Record<IconConcept, LucideIcon>;
 
 export function Icon({ concept, className }: { concept: IconConcept; className?: string }) {

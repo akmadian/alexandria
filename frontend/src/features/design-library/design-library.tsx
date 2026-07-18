@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, type ButtonRung } from "@/components/button/button";
+import { Checkbox } from "@/components/checkbox/checkbox";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Row } from "@/components/row/row";
 import { ToggleButton } from "@/components/toggle-button/toggle-button";
@@ -30,7 +31,9 @@ function ForcedStateCell({ state, children }: { state: ForcedState; children: Re
     const cellReference = useRef<HTMLSpanElement>(null);
     useEffect(() => {
         if (state === "rest") return;
-        cellReference.current?.querySelector("button")?.setAttribute(`data-${state}`, "true");
+        cellReference.current
+            ?.querySelector("button, label")
+            ?.setAttribute(`data-${state}`, "true");
     }, [state]);
     return (
         <span ref={cellReference} className={styles.matrixCell}>
@@ -163,6 +166,54 @@ function ToggleButtonMatrix() {
                 <span className={styles.swatchEntry}>
                     <span className={styles.matrixLabel}>control-lg</span>
                     <ToggleButton size="control-lg" defaultSelected>Raw</ToggleButton>
+                </span>
+            </div>
+        </section>
+    );
+}
+
+function CheckboxMatrix() {
+    const specimens: {
+        name: string;
+        state: ForcedState;
+        checked?: boolean;
+        mixed?: boolean;
+        disabled?: boolean;
+        invalid?: boolean;
+    }[] = [
+        { name: "rest", state: "rest" },
+        { name: "hovered", state: "hovered" },
+        { name: "pressed", state: "pressed" },
+        { name: "focus-visible", state: "focus-visible" },
+        { name: "checked", state: "rest", checked: true },
+        { name: "checked+hovered", state: "hovered", checked: true },
+        { name: "mixed", state: "rest", mixed: true },
+        { name: "invalid", state: "rest", invalid: true },
+        { name: "disabled", state: "rest", disabled: true },
+        { name: "disabled checked", state: "rest", checked: true, disabled: true },
+    ];
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Checkbox — the toggles-on ledger row (§5)</h2>
+            <div className={styles.swatchRow}>
+                {specimens.map((specimen) => (
+                    <span key={specimen.name} className={styles.swatchEntry}>
+                        <span className={styles.matrixLabel}>{specimen.name}</span>
+                        <ForcedStateCell state={specimen.state}>
+                            <Checkbox
+                                defaultSelected={specimen.checked}
+                                isIndeterminate={specimen.mixed}
+                                isDisabled={specimen.disabled}
+                                isInvalid={specimen.invalid}
+                            >
+                                Reject
+                            </Checkbox>
+                        </ForcedStateCell>
+                    </span>
+                ))}
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>live</span>
+                    <Checkbox>Reject</Checkbox>
                 </span>
             </div>
         </section>
@@ -308,6 +359,7 @@ export function DesignLibrary() {
             </header>
             <ButtonMatrix />
             <ToggleButtonMatrix />
+            <CheckboxMatrix />
             <RowSpecimens />
             <TypeRoles />
             <ChromeSwatches />

@@ -57,7 +57,9 @@
   "icons": {
     "$comment": "§14 structural family: concept → Lucide glyph, ONE glyph per concept; components name concepts, never glyphs. Runtime registry: frontend/src/components/icon (C10-complete; the two lists grow together — compiler emission closes the gap when the count warrants). Seeded 2026-07-17: the disclosure chevron was the first per-need pull from the parked token-gaps list. Machinery states use the dot-matrix map above, never rows here.",
     "structural": {
-      "disclose": "chevron-right"
+      "check": "check",
+      "disclose": "chevron-right",
+      "mixed": "minus"
     }
   },
 
