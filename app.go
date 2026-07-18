@@ -98,9 +98,7 @@ func (h *host) runImport(ctx context.Context, jobID string, source *domain.Sourc
 	ingester := &importer.Importer{
 		Reader:     assetRepo,
 		Obs:        assetRepo,
-		Derived:    assetRepo,
 		Dups:       &sqlite.DuplicateRepo{DB: h.catalog.DB},
-		Thumbnail:  thumb,
 		Store:      sqlite.NewStore(h.catalog.DB),
 		Imports:    &sqlite.ImportRepo{DB: h.catalog.DB},
 		Settings:   set,
