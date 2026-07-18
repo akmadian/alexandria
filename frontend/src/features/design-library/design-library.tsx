@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, type ButtonRung } from "@/components/button/button";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Row } from "@/components/row/row";
+import { ToggleButton } from "@/components/toggle-button/toggle-button";
 import { getTheme, setTheme, themes, type Theme } from "@/lib/theme";
 import reference from "@/styles/tokens-reference.json";
 import styles from "./design-library.module.css";
@@ -126,6 +127,44 @@ function ButtonMatrix() {
                 <Button size="control-lg">control-lg 28</Button>{" "}
                 <span className={styles.pressReadout}>{pressCount > 0 ? `${pressCount} presses` : ""}</span>
             </p>
+        </section>
+    );
+}
+
+function ToggleButtonMatrix() {
+    const specimens: { name: string; state: ForcedState; selected: boolean; disabled?: boolean }[] = [
+        { name: "rest", state: "rest", selected: false },
+        { name: "hovered", state: "hovered", selected: false },
+        { name: "pressed", state: "pressed", selected: false },
+        { name: "focus-visible", state: "focus-visible", selected: false },
+        { name: "selected", state: "rest", selected: true },
+        { name: "selected+hovered", state: "hovered", selected: true },
+        { name: "disabled", state: "rest", selected: false, disabled: true },
+        { name: "disabled on", state: "rest", selected: true, disabled: true },
+    ];
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>ToggleButton — the boolean register (§14: on = fill)</h2>
+            <div className={styles.swatchRow}>
+                {specimens.map((specimen) => (
+                    <span key={specimen.name} className={styles.swatchEntry}>
+                        <span className={styles.matrixLabel}>{specimen.name}</span>
+                        <ForcedStateCell state={specimen.state}>
+                            <ToggleButton defaultSelected={specimen.selected} isDisabled={specimen.disabled}>
+                                Raw
+                            </ToggleButton>
+                        </ForcedStateCell>
+                    </span>
+                ))}
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>live</span>
+                    <ToggleButton>Raw</ToggleButton>
+                </span>
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>control-lg</span>
+                    <ToggleButton size="control-lg" defaultSelected>Raw</ToggleButton>
+                </span>
+            </div>
         </section>
     );
 }
@@ -268,6 +307,7 @@ export function DesignLibrary() {
                 <a className={styles.backLink} href="#/">← app shell</a>
             </header>
             <ButtonMatrix />
+            <ToggleButtonMatrix />
             <RowSpecimens />
             <TypeRoles />
             <ChromeSwatches />
