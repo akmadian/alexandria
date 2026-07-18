@@ -26,6 +26,11 @@ validator must pass on the result.
    status bar, and filmstrip heights; grid-cell geometry — cell aspect, inter-cell gutter,
    thumbnail size steps (§19 specs the anatomy; only `cell-pad` is tokenized today). The
    shell CSS currently hardcodes 44px/28px; after this round it may not.
+   *Grid-slice disposition (2026-07-17, task 31):* the geometry pull was evaluated and
+   deliberately NOT taken — the grid ships one structural `TARGET_CELL_WIDTH` (160) and
+   ZERO inter-cell gap (Ari leans gutterless; the knob is one CSS line on `.row`);
+   thumbnail size-step tokens belong to the density-slider round, which owns the real
+   scale. Aspect stays square structurally until that round.
 3. **Icon registry seed.** A new `icons` section in `registries.json`: concept → Lucide
    glyph, one glyph per concept, per §14/§18 (the registry extends "UI nouns come from the
    vocabulary" to pictures). Seed the v1 concept set (judgment verbs, tree/chrome

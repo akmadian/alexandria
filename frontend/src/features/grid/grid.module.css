@@ -1,0 +1,38 @@
+/* The grid owns its scroll; the well shows through as the family base (§20).
+ * Inter-cell gap is ZERO by ruling (task 31: Ari leans gutterless — photos are
+ * separated by each mat's interior pad); the knob, if ever wanted, is one
+ * `gap: var(--alx-space-1)` on .row. Row positioning values come from the
+ * virtualizer at runtime (inline transform/height — structural, not styling). */
+
+.scroll {
+    height: 100%;
+    overflow-y: auto;
+    background: var(--alx-cell-well);
+}
+
+.canvas {
+    position: relative;
+    width: 100%;
+}
+
+.row {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: grid;
+}
+
+.state {
+    composes: alx-type-caption from global;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    background: var(--alx-cell-well);
+}
+
+.stateStack {
+    display: grid;
+    gap: var(--alx-space-2);
+    justify-items: center;
+}

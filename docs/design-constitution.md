@@ -403,6 +403,10 @@ thin mat around a busy thumbnail is at threshold; the frame removes doubt withou
 spending hue. Dark-world duals of all rows exist for the dimmed loupe context
 (**PIN**).
 
+*Dated note (2026-07-17, grid slice):* the CURSOR cell renders the **active** row of
+this table — the table names no cursor row, and active (ceiling + frame) is the
+ratified reading; keyboard focus stays the separate focus-visible ring row.
+
 ### §21 Themes
 
 A theme is a re-assignment of L values to the same roles, shipped only if it passes

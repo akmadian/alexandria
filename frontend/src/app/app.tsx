@@ -10,6 +10,7 @@
 import { useSyncExternalStore } from "react";
 import { useQueryAssets } from "@/api/queries";
 import { DesignLibrary } from "@/features/design-library/design-library";
+import { Grid } from "@/features/grid/grid";
 import { formatNumber } from "@/lib/format";
 import { useCatalogQuery, useSelectionCount } from "@/stores/catalog-store";
 import s from "./app.module.css";
@@ -40,10 +41,7 @@ function Shell() {
                 {data && <span className={s.metric}>{formatNumber(total)} assets</span>}
             </header>
             <main className={s.main}>
-                <p className={s.wellHint}>
-                    The grid arrives with its feature round —{" "}
-                    <a className={s.wellLink} href="#/design-library">design library</a>
-                </p>
+                <Grid />
             </main>
             <footer className={s.status}>
                 <span className={s.metric}>{selected > 0 ? `${formatNumber(selected)} selected` : "—"}</span>

@@ -9,11 +9,11 @@ beforeEach(() => {
     window.location.hash = "";
 });
 
-test("renders the shell (with the mock catalog's count) by default", async () => {
+test("renders the shell with the grid over the mock catalog", async () => {
     render(<App />);
     expect(screen.getByText("Library")).toBeInTheDocument();
-    expect(screen.getByText(/The grid arrives/)).toBeInTheDocument();
     expect(await screen.findByText(/assets/)).toBeInTheDocument();
+    expect((await screen.findAllByRole("img")).length).toBeGreaterThan(0);
 });
 
 test("the hash switches to the design library and back", async () => {
@@ -27,5 +27,5 @@ test("the hash switches to the design library and back", async () => {
         window.location.hash = "#/";
         window.dispatchEvent(new Event("hashchange"));
     });
-    expect(screen.getByText(/The grid arrives/)).toBeInTheDocument();
+    expect(screen.getByText("Library")).toBeInTheDocument();
 });

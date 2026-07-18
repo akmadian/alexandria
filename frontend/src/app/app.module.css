@@ -25,18 +25,6 @@
 .main {
     min-height: 0;
     background: var(--alx-cell-well);
-    display: grid;
-    place-items: center;
-}
-
-.wellHint {
-    composes: alx-type-caption from global;
-    margin: 0;
-}
-
-.wellLink {
-    color: var(--alx-accent);
-    text-decoration-color: var(--alx-ink-hairline);
 }
 
 .status {

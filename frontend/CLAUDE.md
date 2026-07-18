@@ -135,4 +135,9 @@ design/                THE DESIGN SOURCE — see design/CLAUDE.md
   own live Checkbox docs — identical dead clicks there). Verify those with unit
   tests + an in-page `input.click()` probe; a dead pane click on a checkbox is
   not a product bug.
+- Two more pane traps (2026-07-17): `navigate` to the SAME hash URL is a soft
+  hash-change — the stale bundle keeps running while Vite serves fresh source;
+  reload with in-page `window.location.reload()`. And the pane's
+  ResizeObserver NEVER fires (not even the initial observation) — resize
+  behavior can't be verified there.
 - `cx` is at `@/lib/cx`. Chrome is hue-free; test every state with the accent unset.
