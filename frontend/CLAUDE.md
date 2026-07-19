@@ -1,8 +1,10 @@
 # Alexandria Frontend — agent orientation
 
 React 19 + TypeScript + Vite desktop UI for the Alexandria DAM. Talks to a Go engine
-through a typed seam (Wails v2, locked 2026-07-07); until the backend binds it runs
-entirely against an in-memory mock (`bun run dev`, no Wails/Go).
+through a typed seam (Wails v2, locked 2026-07-07). The read slice is bound for real
+(2026-07-18): `wails dev` runs the full stack (real catalog, real thumbnails), while
+`bun run dev` (no Wails/Go) keeps the in-memory mock — `api/client.ts` picks by
+runtime presence of the Wails bridge.
 
 **Rebuild status (read this honestly):** the frontend is mid-ground-up-rebuild on the
 `frontend-design-v3` line. The design system was redesigned from scratch (2026-07-12/13,

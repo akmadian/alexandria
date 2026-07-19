@@ -110,8 +110,14 @@ not strings; forward-compatible enum handling — are standing seam conventions.
 - `frontend/src/api/contract.ts` re-expresses the read surface as `AlexandriaAPI` over the AST
   query model, with the mock engine (`mock.ts`) as the SQL stand-in; hand-written provisional
   wire types are deleted as the generator emits their replacements (C13).
+- The read slice is bound for real (2026-07-18): the `wailsjs/` method bindings are
+  regenerated, `api/wails-api.ts` adapts the three read methods (chosen at boot by runtime
+  presence of the Wails bridge; mock otherwise), and the binary channel is served — the app
+  host mounts the catalog's thumbnail tree as asset-server middleware
+  (`internal/app.ThumbnailMiddleware`; middleware, not the not-found handler, because the dev
+  server's SPA fallback answers 200 for any GET).
 - Everything still pending has a trigger row in `../_project-tracking/DEFERRED.md` §7: the
   unbacked engine methods (tag management, folder tree, open-in, undo/redo, source removal,
-  hard delete, presets, machine.json exposure), the `wailsjs/` method-binding regeneration +
-  event-pump wiring (the `wails dev` pass), and thumbnail URL cache-busting (needs its asset
-  handler; the URL must carry a content token — thumbnails regenerate in place at P2).
+  hard delete, presets, machine.json exposure), event-pump wiring (frontend/09 §Event pump),
+  and thumbnail URL cache-busting (the URL must carry a content token — thumbnails regenerate
+  in place at P2).

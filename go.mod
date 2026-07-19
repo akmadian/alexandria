@@ -10,7 +10,7 @@ require (
 	github.com/dsoprea/go-exif/v3 v3.0.1
 	github.com/google/uuid v1.6.0
 	github.com/rjeczalik/notify v0.9.3
-	github.com/wailsapp/wails/v2 v2.13.0
+	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/image v0.44.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/text v0.40.0

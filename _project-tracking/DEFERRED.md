@@ -404,15 +404,13 @@ the `ApiError` normalization layer + generated `errors.ts` code catalog.
 | keybinding **preset** list/apply | no preset engine; the default set is the frontend command registry's vocabulary | the keyboard-settings UI, if presets are still wanted then |
 | `machine.json` exposure (worker pools, dependency paths) | settings engine exists, but no UI consumes it and machine scope is app-host-owned | the performance/settings UI milestone |
 
-**Also deferred to the `wails dev` pass (not an engine gap — a toolchain one):** the
-**`wailsjs/` method-binding regeneration** half of the contract reconciliation.
-*(Narrowed 2026-07-11: the MODEL half — AssetRow + event payload interfaces — shipped
-early via the D24 struct emitter; see the DONE entry below. What remains here:)*
-regenerating the `wailsjs/` bindings for the new services runs `wails generate`,
-which needs the webkit toolchain and runs the app — impl/14 already ruled that out
-of the webkit-free backend gate (drift caught at the next `wails dev`/`build`). So
-the method-binding side lands when the frontend rebuild runs under Wails (which is
-also when the `TriagePatchInput` raw-JSON wire encoding gets its final shape).
+**`wailsjs/` method-binding regeneration — ✅ DONE (2026-07-18, the read-slice Wails
+bind):** the frontend rebuild ran under Wails; `wails generate module` regenerated the
+bindings for all five bound services, and `api/wails-api.ts` consumes the asset read
+surface. Drift continues to be caught at the next `wails dev`/`build`, as impl/14
+ruled. **Still open from this block:** the `TriagePatchInput` raw-JSON wire encoding
+gets its final shape when the frontend consumes the MUTATION surface (the read slice
+doesn't touch it).
 
 **Event PAYLOAD TypeScript types — ✅ DONE EARLY (2026-07-10, the D24 schema-compiler
 round).** The struct emitter landed ahead of its event-pump trigger: `cmd/generate`
@@ -420,9 +418,9 @@ reflects `catalog.AssetRow` + the envelope/payload structs (json tags = the cont
 into the generated `models.ts`, and `contract.ts`'s hand-written `AssetRow` is now a
 composition over the generated model (adapter adds `kind` + `thumbURL` only). The
 Go-side `AssetRow` gained `durationSecs`/`cameraModel` + camelCase json tags in the
-same change. **Still deferred to the `wails dev` pass:** regenerating the `wailsjs/`
-method bindings (webkit toolchain) and wiring the event pump itself (frontend/09
-§Event pump owns that).
+same change. **Still deferred:** wiring the event pump itself (frontend/09
+§Event pump owns that; the method bindings landed 2026-07-18 — see the DONE
+entry above).
 
 **Mock ⇄ SQL parity fixtures (golden vectors) — deferred (D24 round, 2026-07-10).**
 The mock engine and the SQL compiler are two evaluators of one AST. The D24 round
@@ -432,6 +430,9 @@ ISO-8601 durations) and marked the known deliberate gaps with `ponytail:` marker
 FTS). A shared golden-vector fixture (query + dataset → expected ids, run by both Go
 and vitest) is only worth building **if the mock outlives the Wails bind** as a
 permanent dev backend. Trigger: the Wails adapter lands and the mock is kept.
+**Trigger FIRED 2026-07-18:** the adapter landed and `client.ts` keeps the mock as
+the no-bridge backend (`bun run dev`, vitest) by runtime detection — the fixture is
+now actionable; unscheduled.
 
 **Trigger (umbrella):** each row above is pulled in by its named milestone; none
 blocks impl/16 or the frontend rebuild's read path.

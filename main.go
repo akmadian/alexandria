@@ -35,10 +35,17 @@ func main() {
 	}
 
 	err = wails.Run(&options.App{
-		Title:       "Alexandria",
-		Width:       1280,
-		Height:      800,
-		AssetServer: &assetserver.Options{Assets: assets},
+		Title:  "Alexandria",
+		Width:  1280,
+		Height: 800,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+			// The binary channel: /thumbnails/* short-circuits to the catalog's
+			// thumbnail tree. Middleware, not Handler — under wails dev the
+			// frontend dev server's SPA fallback answers 200 for any GET, so
+			// the not-found Handler slot would never see thumbnail requests.
+			Middleware: app.ThumbnailMiddleware(host.thumbDir),
+		},
 		OnStartup:   host.onStartup,
 		OnShutdown:  host.onShutdown,
 		Bind:        host.boundServices(),

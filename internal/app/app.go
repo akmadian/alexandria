@@ -1,8 +1,9 @@
-// Package app resolves where Alexandria keeps its data and wires up logging.
-// The app home is one directory (default ~/.alexandria) holding the session logs
-// and the default catalog — everything in one place, easy to find, copy, and
-// back up. It is a LEAF (paths + logging bootstrap only); the app host and dev
-// harness call in. Kept out of the root Wails package so it stays testable
+// Package app resolves where Alexandria keeps its data, wires up logging, and
+// carries the app host's webkit-free helpers (today: the asset-server thumbnail
+// middleware, the seam's binary channel). The app home is one directory (default
+// ~/.alexandria) holding the session logs and the default catalog — everything
+// in one place, easy to find, copy, and back up. It is a LEAF; the app host and
+// dev harness call in. Kept out of the root Wails package so it stays testable
 // without the gtk/webkit toolchain.
 package app
 
