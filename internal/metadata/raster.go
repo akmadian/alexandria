@@ -78,6 +78,33 @@ func applyExif(result *Metadata, tags map[string]exif.ExifTag) {
 	}
 	result.GPSLat = exifGPS(tags, "GPSLatitude", "GPSLatitudeRef", "S")
 	result.GPSLon = exifGPS(tags, "GPSLongitude", "GPSLongitudeRef", "W")
+	result.ColorSpace = exifColorSpace(tags)
+}
+
+// exifColorSpace maps the EXIF ColorSpace short (0xA001) onto its common display
+// names; rare vendor codes yield nil. EXIF has no standard code for Adobe RGB:
+// cameras write Uncalibrated (65535) plus InteroperabilityIndex "R03", so that
+// pair reports as Adobe RGB.
+func exifColorSpace(tags map[string]exif.ExifTag) *string {
+	code := exifInt(tags, "ColorSpace")
+	if code == nil {
+		return nil
+	}
+	var name string
+	switch *code {
+	case 1:
+		name = "sRGB"
+	case 2: // non-standard, but some cameras write it for Adobe RGB
+		name = "Adobe RGB"
+	case 65535:
+		name = "Uncalibrated"
+		if index := exifString(tags, "InteroperabilityIndex"); index != nil && strings.HasPrefix(*index, "R03") {
+			name = "Adobe RGB"
+		}
+	default:
+		return nil
+	}
+	return &name
 }
 
 func exifString(tags map[string]exif.ExifTag, name string) *string {

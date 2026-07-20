@@ -38,6 +38,10 @@ func TestExtract_RealJPEG_DimensionsAndRights(t *testing.T) {
 	if result.Copyright == nil || *result.Copyright != "ALL RIGHTS RESERVED | Ari Madian" {
 		t.Errorf("copyright = %v", deref(result.Copyright))
 	}
+	// ColorSpace short 1 → "sRGB" (exifColorSpace).
+	if result.ColorSpace == nil || *result.ColorSpace != "sRGB" {
+		t.Errorf("ColorSpace = %v, want sRGB", deref(result.ColorSpace))
+	}
 }
 
 func TestExtract_Graceful(t *testing.T) {
@@ -55,15 +59,17 @@ func TestExtract_Graceful(t *testing.T) {
 
 // Validates the camera/exposure mapping (rationals → floats, ExposureTime → "1/x"
 // shutter, ISO int coercion, EXIF timestamp parse) against a real original-camera
-// JPEG. testdata/exif-original.jpg is a FUJIFILM X-T5 frame; these are its actual
+// JPEG. testdata/exif-original.JPG is a FUJIFILM X-T5 frame; these are its actual
 // recorded values, so a regression in any coercion breaks exactly one assertion.
 // The fixture carries no GPS, so the DMS→decimal path is covered separately in
 // TestExifGPS_DMSToDecimal.
 func TestExtract_FullEXIF(t *testing.T) {
-	const path = "../../testdata/exif-original.jpg"
+	// The path case must match the committed fixture exactly: a mismatch skips
+	// silently on macOS but fails on case-sensitive CI — hence Fatal, not Skip.
+	const path = "../../testdata/exif-original.JPG"
 	file, err := os.Open(path)
 	if err != nil {
-		t.Skipf("no full-EXIF fixture at %s (drop an original camera JPEG there to enable): %v", path, err)
+		t.Fatalf("full-EXIF fixture missing at %s: %v", path, err)
 	}
 	defer file.Close()
 
@@ -100,5 +106,9 @@ func TestExtract_FullEXIF(t *testing.T) {
 	// DateTimeOriginal parsed as UTC-labelled wall-clock (exifTime).
 	if result.CapturedAt == nil || !result.CapturedAt.Equal(time.Date(2026, 5, 20, 15, 59, 30, 0, time.UTC)) {
 		t.Errorf("CapturedAt = %v, want 2026-05-20 15:59:30 UTC", deref(result.CapturedAt))
+	}
+	// ColorSpace 65535 + InteroperabilityIndex R03 → "Adobe RGB" (exifColorSpace).
+	if result.ColorSpace == nil || *result.ColorSpace != "Adobe RGB" {
+		t.Errorf("ColorSpace = %v, want Adobe RGB", deref(result.ColorSpace))
 	}
 }
