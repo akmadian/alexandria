@@ -22,6 +22,7 @@ import (
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/enrichment"
 	"github.com/akmadian/alexandria/internal/metadata"
+	"github.com/akmadian/alexandria/internal/seam"
 	"github.com/akmadian/alexandria/internal/testutil"
 )
 
@@ -36,6 +37,7 @@ var crosswalks = []struct {
 	{"metadata.Metadata is a subset of domain.Asset", checkExtractionSubset},
 	{"catalog.FilePatch is a subset of domain.Asset", checkFilePatchSubset},
 	{"catalog triage shapes name domain.Asset judgment fields", checkTriageSubset},
+	{"seam.AssetDetail is a subset of domain.Asset", checkAssetDetailSubset},
 	{"domain.EnrichmentKind matches the engine registry kinds", checkEnrichmentKinds},
 }
 
@@ -302,4 +304,8 @@ func checkFilePatchSubset(t *testing.T) {
 func checkTriageSubset(t *testing.T) {
 	checkSubset(t, reflect.TypeOf(catalog.TriagePatch{}), "catalog.TriagePatch")
 	checkSubset(t, reflect.TypeOf(catalog.TriageState{}), "catalog.TriageState")
+}
+
+func checkAssetDetailSubset(t *testing.T) {
+	checkSubset(t, reflect.TypeOf(seam.AssetDetail{}), "seam.AssetDetail")
 }

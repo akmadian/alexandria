@@ -97,6 +97,7 @@ derive from the field name (virtual fields compile through joins instead).
 Reflected from Go structs whose json tags are the wire contract.
 
 - **AssetRow** (`internal/catalog`) — The slim grid-card projection. The seam adapter layers thumbURL + the kind discriminator on top.
+- **AssetDetail** (`internal/seam`) — The full-asset detail projection GetAsset returns — the inspector's read.
 - **Envelope** (`internal/seam`) — The one C8 event envelope.
 - **CatalogChange** (`internal/seam`) — catalog/changed payload.
 - **JobProgress** (`internal/seam`) — jobs/progress payload (C9).

@@ -54,66 +54,6 @@ export namespace catalog {
 
 export namespace domain {
 	
-	export interface Asset {
-	    ID: string;
-	    SourceID: string;
-	    RelativePath: string;
-	    FileStatus: string;
-	    // Go type: time
-	    LastVerifiedAt?: any;
-	    Filename: string;
-	    Extension: string;
-	    MIMEType: string;
-	    FileType: string;
-	    SizeBytes: number;
-	    // Go type: time
-	    MTime: any;
-	    PartialHash: string;
-	    Width?: number;
-	    Height?: number;
-	    DurationSecs?: number;
-	    ColorSpace?: string;
-	    BitDepth?: number;
-	    // Go type: time
-	    CapturedAt?: any;
-	    CameraMake?: string;
-	    CameraModel?: string;
-	    LensModel?: string;
-	    FocalLengthMM?: number;
-	    Aperture?: number;
-	    ShutterSpeed?: string;
-	    ISO?: number;
-	    GPSLat?: number;
-	    GPSLon?: number;
-	    Creator?: string;
-	    Copyright?: string;
-	    Title?: string;
-	    Caption?: string;
-	    ExtendedMetadata: Record<string, any>;
-	    Rating?: number;
-	    ColorLabel?: string;
-	    Flag?: string;
-	    Note?: string;
-	    // Go type: time
-	    JudgmentModifiedAt?: any;
-	    // Go type: time
-	    XMPLastReadAt?: any;
-	    // Go type: time
-	    XMPLastWrittenAt?: any;
-	    XMPHash?: string;
-	    // Go type: time
-	    ThumbnailAt?: any;
-	    Sharpness?: number;
-	    ClippingHighlights?: number;
-	    ClippingShadows?: number;
-	    IsDeleted: boolean;
-	    // Go type: time
-	    DeletedAt?: any;
-	    // Go type: time
-	    IngestedAt: any;
-	    // Go type: time
-	    UpdatedAt: any;
-	}
 	export interface Collection {
 	    ID: string;
 	    Name: string;
@@ -154,6 +94,46 @@ export namespace domain {
 
 export namespace seam {
 	
+	export interface AssetDetail {
+	    id: string;
+	    sourceId: string;
+	    filename: string;
+	    extension: string;
+	    mimeType: string;
+	    fileType: string;
+	    fileStatus: string;
+	    relativePath: string;
+	    sizeBytes: number;
+	    // Go type: time
+	    mtime: any;
+	    // Go type: time
+	    ingestedAt: any;
+	    width?: number;
+	    height?: number;
+	    durationSecs?: number;
+	    // Go type: time
+	    capturedAt?: any;
+	    cameraMake?: string;
+	    cameraModel?: string;
+	    lensModel?: string;
+	    focalLengthMm?: number;
+	    aperture?: number;
+	    shutterSpeed?: string;
+	    iso?: number;
+	    gpsLat?: number;
+	    gpsLon?: number;
+	    colorSpace?: string;
+	    bitDepth?: number;
+	    title?: string;
+	    caption?: string;
+	    creator?: string;
+	    copyright?: string;
+	    rating?: number;
+	    colorLabel?: string;
+	    flag?: string;
+	    note?: string;
+	    extendedMetadata?: Record<string, any>;
+	}
 	export interface CollectionInput {
 	    name: string;
 	    parentId?: string;

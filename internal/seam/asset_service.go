@@ -161,16 +161,18 @@ func (s *AssetService) decorateEnrichment(ctx context.Context, rows []catalog.As
 	}
 }
 
-// GetAsset returns the full asset by id (the only method that returns the whole
-// *domain.Asset; the grid uses the slim AssetRow projection).
-func (s *AssetService) GetAsset(id string) (*domain.Asset, error) {
+// GetAsset returns the full-asset detail projection by id — the inspector's
+// read (the grid uses the slim AssetRow projection). The wire shape is
+// AssetDetail, not *domain.Asset: the seam decides which fields cross.
+func (s *AssetService) GetAsset(id string) (*AssetDetail, error) {
 	asset, err := s.reader.Get(seamContext(), id)
 	if err != nil {
 		log.Error("seam: GetAsset failed", "id", id, "err", err)
 		return nil, normalizeError(err)
 	}
+	detail := detailFromAsset(asset)
 	log.Debug("seam: got asset", "id", id)
-	return asset, nil
+	return &detail, nil
 }
 
 // AssetIDSlice returns the ids in [fromIndex, toIndex) of the compiled ordering —

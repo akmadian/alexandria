@@ -27,6 +27,7 @@ var modelManifest = []struct {
 	doc      string
 }{
 	{catalogPackage, "AssetRow", "The slim grid-card projection. The seam adapter layers thumbURL + the kind discriminator on top."},
+	{seamPackage, "AssetDetail", "The full-asset detail projection GetAsset returns — the inspector's read."},
 	{seamPackage, "Envelope", "The one C8 event envelope."},
 	{seamPackage, "CatalogChange", "catalog/changed payload."},
 	{seamPackage, "JobProgress", "jobs/progress payload (C9)."},

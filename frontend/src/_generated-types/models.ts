@@ -28,6 +28,45 @@ export interface AssetRow {
   failed?: EnrichmentKind[];
 }
 
+/** The full-asset detail projection GetAsset returns — the inspector's read. */
+export interface AssetDetail {
+  id: string;
+  sourceId: string;
+  filename: string;
+  extension: string;
+  mimeType: string;
+  fileType: FileType;
+  fileStatus: FileStatus;
+  relativePath: string;
+  sizeBytes: number;
+  mtime: string;
+  ingestedAt: string;
+  width: number | null;
+  height: number | null;
+  durationSecs: number | null;
+  capturedAt: string | null;
+  cameraMake: string | null;
+  cameraModel: string | null;
+  lensModel: string | null;
+  focalLengthMm: number | null;
+  aperture: number | null;
+  shutterSpeed: string | null;
+  iso: number | null;
+  gpsLat: number | null;
+  gpsLon: number | null;
+  colorSpace: string | null;
+  bitDepth: number | null;
+  title: string | null;
+  caption: string | null;
+  creator: string | null;
+  copyright: string | null;
+  rating: number | null;
+  colorLabel: ColorLabel | null;
+  flag: Flag | null;
+  note: string | null;
+  extendedMetadata?: Record<string, unknown>;
+}
+
 /** The one C8 event envelope. */
 export interface Envelope {
   topic: EventTopic;

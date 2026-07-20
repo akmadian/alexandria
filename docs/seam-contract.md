@@ -69,6 +69,13 @@ typed methods** through P2 is healthy; the number that matters is shape stabilit
 `AssetRow` stays the slim grid-card projection (~15 fields); full `Asset` is `getAsset` only.
 It gains a `kind` discriminator when asset groups land (already anticipated in contract.ts).
 
+*Dated note (2026-07-20, the inspector round):* `GetAsset` returns **`seam.AssetDetail`**, a
+json-tagged wire projection generated to TS like `AssetRow` — never the untagged
+`*domain.Asset` (judgment bookkeeping, sync cursors, and derived internals stay off the wire).
+It carries the full D11 promoted set, judgment values, and `extendedMetadata` (the exiftool
+`Group:Tag` blob). It is also the decoration point DEFERRED §13 predicts: per-asset transient
+enrichment state attaches to this detail response when the inspector renders it.
+
 ## Additions from the 2026-07-08 frontend redesign round
 
 Requirements the query/seam rounds must absorb (rationale in

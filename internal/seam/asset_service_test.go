@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/akmadian/alexandria/internal/ast"
 	"github.com/akmadian/alexandria/internal/catalog"
@@ -118,6 +119,96 @@ func TestGetAsset_NotFoundMapsToCode(t *testing.T) {
 
 	_, err := service.GetAsset("x")
 	assertDomainCode(t, err, "not_found")
+}
+
+func TestGetAsset_ProjectsFullDetail(t *testing.T) {
+	// Every same-typed field PAIR carries two DISTINCT values (width≠height,
+	// lat≠lon, title≠caption, creator≠copyright, make≠model) so a transposed
+	// assignment in the projection fails here instead of passing silently.
+	capturedAt := time.Date(2026, 5, 21, 20, 56, 10, 0, time.UTC)
+	rating, aperture, iso := 4, 3.2, 400
+	width, height := 7728, 5152
+	gpsLat, gpsLon := 47.6062, -122.3321
+	lens := "SIGMA 18-50mm F2.8 DC DN Contemporary 021"
+	cameraMake, cameraModel := "Fujifilm", "X-T5"
+	title, caption := "Loowit from Pahto", "The mountain at dusk"
+	creator, copyright := "Ari Madian", "ALL RIGHTS RESERVED"
+	label := domain.ColorLabelGreen
+	fake := &fakeAssets{asset: &domain.Asset{
+		ID: "a1", SourceID: "s1", Filename: "_DSF4926.RAF", Extension: "RAF",
+		MIMEType: "image/x-fuji-raf", FileType: domain.FileTypeRaw,
+		FileStatus: domain.FileStatusOnline, RelativePath: "Adams 2026/_DSF4926.RAF",
+		SizeBytes: 81_140_000,
+		Width:     &width, Height: &height,
+		CapturedAt: &capturedAt, LensModel: &lens, Aperture: &aperture, ISO: &iso,
+		CameraMake: &cameraMake, CameraModel: &cameraModel,
+		GPSLat: &gpsLat, GPSLon: &gpsLon,
+		Title: &title, Caption: &caption, Creator: &creator, Copyright: &copyright,
+		Rating: &rating, ColorLabel: &label,
+		ExtendedMetadata: map[string]any{"EXIF:Flash": "Did not fire"},
+	}}
+	service := seam.NewAssetService(fake, fake)
+
+	got, err := service.GetAsset("a1")
+	if err != nil {
+		t.Fatalf("GetAsset: %v", err)
+	}
+	if got.ID != "a1" || got.Filename != "_DSF4926.RAF" || got.FileType != domain.FileTypeRaw {
+		t.Fatalf("file facts not projected: %+v", got)
+	}
+	if got.CapturedAt == nil || !got.CapturedAt.Equal(capturedAt) {
+		t.Fatalf("capturedAt not projected: %+v", got.CapturedAt)
+	}
+	if got.Width == nil || *got.Width != width || got.Height == nil || *got.Height != height {
+		t.Fatalf("dimensions transposed or dropped: width=%v height=%v", got.Width, got.Height)
+	}
+	if got.GPSLat == nil || *got.GPSLat != gpsLat || got.GPSLon == nil || *got.GPSLon != gpsLon {
+		t.Fatalf("gps transposed or dropped: lat=%v lon=%v", got.GPSLat, got.GPSLon)
+	}
+	if got.CameraMake == nil || *got.CameraMake != cameraMake || got.CameraModel == nil || *got.CameraModel != cameraModel {
+		t.Fatalf("camera transposed or dropped: make=%v model=%v", got.CameraMake, got.CameraModel)
+	}
+	if got.Title == nil || *got.Title != title || got.Caption == nil || *got.Caption != caption {
+		t.Fatalf("title/caption transposed or dropped: title=%v caption=%v", got.Title, got.Caption)
+	}
+	if got.Creator == nil || *got.Creator != creator || got.Copyright == nil || *got.Copyright != copyright {
+		t.Fatalf("creator/copyright transposed or dropped: creator=%v copyright=%v", got.Creator, got.Copyright)
+	}
+	if got.LensModel == nil || *got.LensModel != lens {
+		t.Fatalf("lens not projected: %+v", got.LensModel)
+	}
+	if got.Aperture == nil || *got.Aperture != aperture || got.ISO == nil || *got.ISO != iso {
+		t.Fatalf("exposure fields not projected: aperture=%v iso=%v", got.Aperture, got.ISO)
+	}
+	if got.Rating == nil || *got.Rating != rating || got.ColorLabel == nil || *got.ColorLabel != label {
+		t.Fatalf("judgment not projected: rating=%v label=%v", got.Rating, got.ColorLabel)
+	}
+	if got.ExtendedMetadata["EXIF:Flash"] != "Did not fire" {
+		t.Fatalf("extended metadata not passed through: %+v", got.ExtendedMetadata)
+	}
+}
+
+func TestGetAsset_NilFieldsStayNil(t *testing.T) {
+	fake := &fakeAssets{asset: &domain.Asset{
+		ID: "a2", SourceID: "s1", Filename: "scan.jpg", Extension: "jpg",
+		MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
+		FileStatus: domain.FileStatusOnline, RelativePath: "scans/scan.jpg",
+	}}
+	service := seam.NewAssetService(fake, fake)
+
+	got, err := service.GetAsset("a2")
+	if err != nil {
+		t.Fatalf("GetAsset: %v", err)
+	}
+	// An undated scan with no extraction carries nulls, never zero values
+	// (4a: unrated = NULL end to end; same discipline for every optional field).
+	if got.CapturedAt != nil || got.CameraMake != nil || got.Rating != nil ||
+		got.Flag != nil || got.Note != nil || got.GPSLat != nil {
+		t.Fatalf("expected nil optionals, got %+v", got)
+	}
+	if got.ExtendedMetadata != nil {
+		t.Fatalf("expected nil extended metadata, got %+v", got.ExtendedMetadata)
+	}
 }
 
 func TestAssetIDSlice_ValidatesBeforeRepo(t *testing.T) {
@@ -328,10 +419,15 @@ func TestUpdateAssets_OverRealCatalog_PersistsJudgment(t *testing.T) {
 	if got.ColorLabel == nil || *got.ColorLabel != domain.ColorLabelGreen {
 		t.Fatalf("color label not persisted: %+v", got.ColorLabel)
 	}
-	// D8: a judgment write must bump judgment_modified_at. The fresh test asset
-	// leaves it NULL, so a non-nil value proves the judgment path ran (this write
-	// went through AssetJudgmentWriter, the sole path that bumps it).
-	if got.JudgmentModifiedAt == nil {
+	// D8: a judgment write must bump judgment_modified_at. The wire projection
+	// deliberately omits that bookkeeping column, so probe the repo directly —
+	// the fresh test asset leaves it NULL, so a non-nil value proves the write
+	// went through AssetJudgmentWriter, the sole path that bumps it.
+	stored, err := repo.Get(context.Background(), asset.ID)
+	if err != nil {
+		t.Fatalf("repo.Get: %v", err)
+	}
+	if stored.JudgmentModifiedAt == nil {
 		t.Fatal("judgment_modified_at not bumped by the triage write (D8)")
 	}
 }
