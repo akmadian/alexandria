@@ -407,6 +407,17 @@ spending hue. Dark-world duals of all rows exist for the dimmed loupe context
 this table — the table names no cursor row, and active (ceiling + frame) is the
 ratified reading; keyboard focus stays the separate focus-visible ring row.
 
+*Dated note (2026-07-19, cell-slots round — ratified by eye, D29 render-before-ratify):*
+the captured-face cell ships the **hybrid expanded-cell layout** (LrC anatomy): a 2×2
+configurable metadata header band above the thumbnail, flag top-left and type badge
+bottom-right as opaque corner chips on the thumb, and a footer lane carrying the
+five-position rating + label swatch. Corner-overlay-only and footer-lane-only
+treatments were rendered side by side and declined. And the **rating slot is always
+present**: unrated renders the five positions hollow at the ink ramp's faintest member
+(`ink.hairline`) — a deliberate exception to "normal is silent" (§10), because the
+empty readout is itself triage information in a culling grid. Type badges render
+through the tagRecipes chip (inline rung, gray, outline).
+
 ### §21 Themes
 
 A theme is a re-assignment of L values to the same roles, shipped only if it passes

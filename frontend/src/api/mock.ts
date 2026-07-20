@@ -55,7 +55,9 @@ function thumbDataUri(seed: number, ratio: [number, number]): string {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-const LABELS: (ColorLabel | null)[] = ["red", "yellow", "green", "blue", "purple", "orange", null, null, null];
+// The five assignable LrC labels (§5) — `orange` stays in the ColorLabel enum for
+// XMP round-trip but is not part of the palette, so the mock never seeds it.
+const LABELS: (ColorLabel | null)[] = ["red", "yellow", "green", "blue", "purple", null, null, null, null];
 const CAMERAS: [string, string][] = [
     ["Sony", "A7 IV"],
     ["Canon", "EOS R5"],

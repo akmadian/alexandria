@@ -71,6 +71,17 @@ interface CatalogViewState {
   range-committed(ids), all-selected, selection-cleared) · cursor (cursor-set, cursor-stepped) ·
   view-mode-set · data echoes (working-set-changed(total)).
 
+*Dated note (2026-07-19, cell-slots round):* three implementation rulings are sanctioned as
+built. (1) The cursor is stored as `cursorId` alone — the `{id, index}` index hint is derived
+at gesture time (`findIndex` over the loaded page today; `IndexOfAsset` at the block-model
+widen). (2) `asset-clicked` carries a semantic `additive` flag rather than raw modifiers:
+platform-modifier translation lives at the DOM edge, the reducer owns what the intent means;
+gesture handlers read the cursor NON-reactively (the store's `readCursorId`) so their identity
+survives cursor moves and memoized cells bail. (3) The component data rule is explicit:
+**primitives receive resolved presentation values; feature components may take domain
+objects** — the grid's CellFace takes `AssetRow` as a pure projection (no store/api access;
+identity, state, and gestures stay on the cell mat).
+
 ### Seam integration
 
 - `AlexandriaAPI` contract interface, Wails adapter + mock, all I/O confined to `api/`;

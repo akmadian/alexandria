@@ -10,17 +10,23 @@
 // token-gaps list (PanelSection's disclosure chevron forced it). `check` and
 // `mixed` (§25's em-dash state as a glyph) arrived with Checkbox the same day.
 
-import { Check, ChevronRight, Minus, type LucideIcon } from "lucide-react";
+import { Check, ChevronRight, Flag, FlagOff, Minus, Star, type LucideIcon } from "lucide-react";
 import { cx } from "@/lib/cx";
 import styles from "./icon.module.css";
 
-export type IconConcept = "check" | "disclose" | "mixed";
+export type IconConcept = "check" | "disclose" | "mixed" | "rating" | "flag" | "reject";
 
-// C10: a new concept fails to compile until it has exactly one glyph.
+// C10: a new concept fails to compile until it has exactly one glyph. Judgment
+// concepts (rating/flag/reject) seeded with the §19 cell slots — icons are ink,
+// fill = on (§14): a rated star / picked flag renders filled, unrated/unflagged
+// renders nothing (the slot is silent, §10).
 const GLYPHS = {
     check: Check,
     disclose: ChevronRight,
     mixed: Minus,
+    rating: Star,
+    flag: Flag,
+    reject: FlagOff,
 } as const satisfies Record<IconConcept, LucideIcon>;
 
 export function Icon({ concept, className }: { concept: IconConcept; className?: string }) {

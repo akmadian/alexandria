@@ -120,7 +120,13 @@ export function selectionSize(selection: Selection, total: number): number {
 
 export const useIsSelected = (id: AssetID): boolean => useCatalogStore((s) => selectionHas(s.selection, id));
 export const useIsCursor = (id: AssetID): boolean => useCatalogStore((s) => s.cursorId === id);
-export const useCursorId = (): AssetID | null => useCatalogStore((s) => s.cursorId);
+
+/** Non-reactive cursor read for EVENT HANDLERS (Zustand getState): gesture code
+ * needs the current cursor without subscribing its owner to every cursor move,
+ * so the grid's click handler stays referentially stable and memoized cells
+ * bail. Never call during render — reactive reads go through the curated hooks
+ * above (a whole-cursor `useCursorId` returns when Loupe needs its subject). */
+export const readCursorId = (): AssetID | null => useCatalogStore.getState().cursorId;
 export const useFilter = (): WhereNode | null => useCatalogStore((s) => s.filter);
 export const useViewMode = (): ViewMode => useCatalogStore((s) => s.viewMode);
 export const useCatalogDispatch = (): ((action: CatalogAction) => void) => useCatalogStore((s) => s.dispatch);

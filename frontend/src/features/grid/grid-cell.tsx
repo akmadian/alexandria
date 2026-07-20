@@ -1,17 +1,22 @@
-// The §19 grid cell: a mat carrying a letterboxed thumbnail. The mat rides the
-// RAISING cell family (§20/§7 declared exception — never a dark surround beside
-// a photograph); selection shades the MAT, never the photo (§11). The cursor
-// renders the ACTIVE row (family ceiling + ink hairline frame — ratified
-// interpretation, task 31). Each cell subscribes to its OWN selection/cursor
-// bits via the curated hooks, so a click re-renders two cells, not the grid.
+// The grid cell: the interaction mat around CellFace. The mat rides the RAISING
+// cell family (§20/§7 declared exception — never a dark surround beside a
+// photograph); selection shades the MAT, never the photo (§11); the cursor
+// renders the ACTIVE row (family ceiling + ink hairline frame — ratified task 31).
+// Each cell subscribes to its OWN selection/cursor bits via the curated hooks,
+// and the grid hands down a referentially stable click handler, so a click
+// re-renders two cells, not the viewport.
 //
-// Slots (index/rating/flag/label/badge/machinery dot) are the triage round's;
-// keyboard focus arrives with the actions registry. This is a captured-face
-// cell only — generated/glyph faces land with the assettype registry (§19).
+// Division of labor (frontend-architecture, 2026-07-19): identity, state, and
+// gestures live HERE; everything painted from the row lives in CellFace, a pure
+// projection of AssetRow. Keyboard focus arrives with the actions registry; the
+// machinery/attention marks with the enrichment inspector read (DEFERRED §13).
+// Captured-face cell only — generated/glyph faces land with the assettype
+// registry (§19).
 
 import { memo, type MouseEvent } from "react";
 import type { AssetRow } from "@/api/contract";
 import { useIsCursor, useIsSelected } from "@/stores/catalog-store";
+import { CellFace } from "./cell-face";
 import styles from "./grid-cell.module.css";
 
 export type CellClickHandler = (event: MouseEvent, id: string, index: number) => void;
@@ -22,8 +27,9 @@ export const GridCell = memo(function GridCell({
     onCellClick,
 }: {
     /** Undefined = the row's block hasn't landed — the grey placeholder mat.
-     * ponytail: unreachable under the single-page fetch (queries.ts loads the
-     * whole vertical); the block-model widen is what produces gaps. */
+     * Reachable TODAY on real catalogs past the 500-row page cap (queries.ts
+     * logs the truncation); the block-model widen makes it the normal
+     * mid-scroll state. */
     row: AssetRow | undefined;
     index: number;
     onCellClick: CellClickHandler;
@@ -58,7 +64,7 @@ function LoadedCell({
             data-cursor={cursor || undefined}
             onClick={(event) => onCellClick(event, row.id, index)}
         >
-            <img className={styles.thumb} src={row.thumbURL} alt={row.filename} draggable={false} />
+            <CellFace row={row} index={index} />
         </div>
     );
 }

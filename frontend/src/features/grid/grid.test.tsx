@@ -8,7 +8,9 @@ import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@te
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api } from "@/api/client";
+import type { AssetRow } from "@/api/contract";
 import { Providers } from "@/app/providers";
+import { log } from "@/lib/logger";
 import { leaf } from "@/query-model/registry";
 import { type CatalogAction, useCatalogDispatch } from "@/stores/catalog-store";
 import { columnsForWidth, Grid } from "./grid";
@@ -34,8 +36,9 @@ afterEach(() => {
 });
 
 async function loadedCells(): Promise<HTMLElement[]> {
-    const images = await screen.findAllByRole("img");
-    return images.map((image) => image.parentElement as HTMLElement);
+    // gridcells carry the selection/cursor state attributes; they only exist once
+    // the page loads (the pending/error/empty states render no cells).
+    return screen.findAllByRole("gridcell");
 }
 
 test("cells render from the mock page and the echo seeds the cursor to row one", async () => {
@@ -97,6 +100,37 @@ test("a failed fetch renders the error state; Retry recovers into the empty stat
     // so recovery lands in the explicit EMPTY state — three branches, one flow.
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("No assets match.")).toBeVisible();
+});
+
+test("the page-cap truncation logs loudly — the UI never pretends", async () => {
+    await loadedCells();
+    const truncatedRow: AssetRow = {
+        kind: "asset",
+        id: "cap-1",
+        sourceId: "cap",
+        filename: "cap.jpg",
+        fileType: "image",
+        fileStatus: "online",
+        rating: null,
+        colorLabel: null,
+        flag: null,
+        width: 100,
+        height: 100,
+        durationSecs: null,
+        cameraModel: null,
+        capturedAt: null,
+        ingestedAt: "2026-07-01T00:00:00Z",
+        thumbnailAt: null,
+        relativePath: "cap.jpg",
+        sizeBytes: 1,
+        thumbURL: "data:image/svg+xml,cap",
+    };
+    const warn = vi.spyOn(log, "warn");
+    vi.spyOn(api, "queryAssets").mockResolvedValueOnce({ items: [truncatedRow], total: 2 });
+    act(() => dispatch({ type: "filter-replaced", filter: leaf("filename", "contains", "cap-probe") }));
+    await waitFor(() =>
+        expect(warn).toHaveBeenCalledWith("api: page cap truncates the working set", { total: 2, loaded: 1 }),
+    );
 });
 
 test("an unloaded row renders the placeholder mat — no image, no interactivity", () => {

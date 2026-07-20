@@ -1,0 +1,53 @@
+/* Badge — the tagRecipes chip. Colors come inline from the recipe (per hue); this
+ * module owns structure, the size rungs, and the neutral `dot` style. The
+ * transparent base border reserves 1px so tint/fill and outline/dot are the same
+ * height (outline sets the border color inline; dot sets it here).
+ *
+ * Sizes are placement rungs (registries.json tagRecipes.sizes, 2026-07-19): each
+ * binds a full type role — never a bare font-size (§13 type units). `inline`
+ * rides a text line without expanding it (micro role, minimal pads); `standard`
+ * is the chip default; `prominent` stands alone. */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--alx-space-1);
+    width: fit-content;
+    border: var(--alx-stroke-hairline) solid transparent;
+    border-radius: var(--alx-radius-control);
+    white-space: nowrap;
+}
+
+.inline {
+    composes: alx-type-micro from global;
+    padding: 0 var(--alx-space-1);
+}
+
+.standard {
+    composes: alx-type-label-sm from global;
+    padding: 0 var(--alx-space-2);
+}
+
+.prominent {
+    composes: alx-type-label from global;
+    gap: var(--alx-space-2);
+    padding: var(--alx-space-1) var(--alx-space-3);
+}
+
+/* dot style: neutral chip (ink.1 text, hairline border) carrying a colored mark. */
+.dot {
+    color: var(--alx-ink-1);
+    border-color: var(--alx-ink-hairline);
+}
+
+.mark {
+    flex: none;
+    width: var(--alx-space-2);
+    height: var(--alx-space-2);
+    border-radius: var(--alx-radius-round);
+}
+
+.inline .mark {
+    width: var(--alx-space-1);
+    height: var(--alx-space-1);
+}

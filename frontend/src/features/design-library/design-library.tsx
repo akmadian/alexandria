@@ -7,9 +7,11 @@
 // surface; C14 keys arrive when product chrome adopts these strings.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Badge, type BadgeHue, type BadgeStyle } from "@/components/badge/badge";
 import { Button, type ButtonRung } from "@/components/button/button";
 import { Checkbox } from "@/components/checkbox/checkbox";
 import { PanelSection } from "@/components/panel-section/panel-section";
+import { Rating } from "@/components/rating/rating";
 import { Row } from "@/components/row/row";
 import { Switch } from "@/components/switch/switch";
 import { TextField } from "@/components/text-field/text-field";
@@ -443,6 +445,102 @@ function Scales() {
     );
 }
 
+function RatingMatrix() {
+    const [liveValue, setLiveValue] = useState<number | null>(3);
+    const displayValues: (number | null)[] = [null, 0, 1, 3, 5];
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Rating — the five-position readout/input (§14 fill = on)</h2>
+            <div className={styles.swatchRow}>
+                {displayValues.map((value) => (
+                    <span key={String(value)} className={styles.swatchEntry}>
+                        <span className={styles.matrixLabel}>{value === null ? "null" : String(value)}</span>
+                        <Rating value={value} />
+                    </span>
+                ))}
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>live — click the current value to clear</span>
+                    <Rating value={liveValue} onChange={setLiveValue} />
+                </span>
+            </div>
+            <p className={styles.note}>
+                Display mode (no onChange) renders zero tab stops, so grid cells stay pure readouts; the interactive
+                grammar proposes the next value, null for the clear.
+            </p>
+        </section>
+    );
+}
+
+const BADGE_STYLES = ["tint", "outline", "fill", "dot"] as const satisfies readonly BadgeStyle[];
+const BADGE_HUES = [
+    "red",
+    "peach",
+    "orange",
+    "amber",
+    "lime",
+    "green",
+    "teal",
+    "cyan",
+    "blue",
+    "indigo",
+    "purple",
+    "magenta",
+    "gray",
+] as const satisfies readonly BadgeHue[];
+
+function BadgeMatrix() {
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>Badge — the tagRecipes chip (§5 · tint · outline · fill · dot)</h2>
+            {BADGE_STYLES.map((style) => (
+                <div key={style} className={styles.matrix}>
+                    <span className={styles.matrixLabel}>{style}</span>
+                    <div className={styles.badgeRow}>
+                        {BADGE_HUES.map((hue) => (
+                            <Badge key={hue} hue={hue} style={style}>
+                                {hue}
+                            </Badge>
+                        ))}
+                    </div>
+                </div>
+            ))}
+            <div className={styles.matrix}>
+                <span className={styles.matrixLabel}>sizes</span>
+                <div className={styles.badgeRow}>
+                    <Badge hue="cyan" size="inline">
+                        inline
+                    </Badge>
+                    <Badge hue="cyan">standard</Badge>
+                    <Badge hue="cyan" size="prominent">
+                        prominent
+                    </Badge>
+                    <Badge hue="gray" style="outline" size="inline">
+                        RAW
+                    </Badge>
+                    <Badge hue="green" style="dot" size="prominent">
+                        exported
+                    </Badge>
+                </div>
+            </div>
+            <p className={styles.note}>
+                {/* One span = one flex item; inside it the badge flows INLINE —
+                    that inline flow is what the line-fit proof measures. */}
+                <span>
+                    Line fit: filed under{" "}
+                    <Badge hue="cyan" size="inline">
+                        RAW
+                    </Badge>{" "}
+                    pending review — the inline rung must not grow the line box.
+                </span>
+            </p>
+            <p className={styles.note}>
+                Role bindings (tagRecipes.sizes): inline = micro (10px) · standard = label-sm (11px) · prominent =
+                label (12px) — one point apart by design; the box, not the font, separates the rungs.
+            </p>
+        </section>
+    );
+}
+
 export function DesignLibrary() {
     return (
         <div className={styles.page}>
@@ -457,6 +555,8 @@ export function DesignLibrary() {
             <SwitchMatrix />
             <TextFieldMatrix />
             <RowSpecimens />
+            <RatingMatrix />
+            <BadgeMatrix />
             <TypeRoles />
             <ChromeSwatches />
             <HueGrid />

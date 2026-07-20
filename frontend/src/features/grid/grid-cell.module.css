@@ -2,16 +2,13 @@
  * specificity: hover < selected < cursor(active). Active is redundantly encoded
  * (ceiling + 1px ink hairline frame, §20) — one register step through a busy
  * thumbnail is at threshold. Interior padding keeps photos off every edge (§19)
- * even at zero inter-cell gap. */
+ * even at zero inter-cell gap. CellFace owns the expanded-cell face inside. */
 
 .cell {
     height: 100%;
     box-sizing: border-box;
     padding: var(--alx-size-cell-pad);
     background: var(--alx-cell-rest);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     overflow: hidden;
 }
 
@@ -28,18 +25,5 @@
      * keyboard focus ring (also an outline, §20) the frame moves to a border. */
     background: var(--alx-cell-active);
     outline: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
-    outline-offset: calc(-1 * var(--alx-stroke-hairline));
-}
-
-/* Shrink-wrapped (max-width/height, never object-fit on a full-size box) so the
- * element box IS the rendered pixels and the §19 inner hairline hugs the image.
- * The hairline is an outline drawn inward — an inset box-shadow would paint
- * UNDER the opaque pixels. Ink at the §30.9 alpha via relative color syntax. */
-.thumb {
-    display: block;
-    max-width: 100%;
-    max-height: 100%;
-    outline: var(--alx-stroke-hairline) solid
-        oklch(from var(--alx-ink-1) l c h / var(--alx-thumb-hairline-alpha));
     outline-offset: calc(-1 * var(--alx-stroke-hairline));
 }

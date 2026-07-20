@@ -20,6 +20,15 @@ export function useQueryAssets(query: Query, arrangement: Arrangement) {
             try {
                 const result = await api.queryAssets(query, arrangement, PAGE);
                 log.info("api: queryAssets resolved", { total: result.total, returned: result.items.length });
+                if (result.total > result.items.length) {
+                    // Real catalogs exceed the single-page cap TODAY: rows past
+                    // PAGE.limit render as permanent placeholder mats. Loud, not
+                    // silent (the UI never pretends). TRIGGER: the block-model widen.
+                    log.warn("api: page cap truncates the working set", {
+                        total: result.total,
+                        loaded: result.items.length,
+                    });
+                }
                 return result;
             } catch (error) {
                 log.error("api: queryAssets failed", { error: String(error) });

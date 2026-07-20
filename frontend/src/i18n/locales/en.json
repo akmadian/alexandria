@@ -80,6 +80,13 @@
         "empty": "No assets match this view",
         "loading": "Loading…"
     },
+    "cell": {
+        "labelSwatch": "{{label}} label"
+    },
+    "rating": {
+        "rated": "Rated {{value}}",
+        "unrated": "Unrated"
+    },
     "inspector": {
         "empty": "Select an asset to inspect it",
         "rating": "Rating",
@@ -120,6 +127,13 @@
         "document": "Document",
         "audio": "Audio",
         "unknown": "File"
+    },
+    "fileTypeBadge": {
+        "raw": "RAW",
+        "video": "VIDEO",
+        "vector": "VECTOR",
+        "audio": "AUDIO",
+        "document": "DOC"
     },
     "sourceKind": {
         "local": "Local disk",

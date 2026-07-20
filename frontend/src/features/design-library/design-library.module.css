@@ -125,6 +125,13 @@
     border-radius: var(--alx-radius-control);
 }
 
+.badgeRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--alx-space-2);
+}
+
 .hueGrid {
     display: flex;
     flex-direction: column;

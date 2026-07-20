@@ -13,14 +13,21 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { api } from "@/api/client";
 import { useQueryAssets } from "@/api/queries";
 import { Button } from "@/components/button/button";
-import { useCatalogDispatch, useCatalogQuery, useCursorId } from "@/stores/catalog-store";
+import { readCursorId, useCatalogDispatch, useCatalogQuery } from "@/stores/catalog-store";
 import { GridCell } from "./grid-cell";
 import { commitRange } from "./select-range";
 import styles from "./grid.module.css";
 
 // ponytail: one structural cell size; the density round mints the size-step
-// tokens (task-31 disposition in ideation/frontend-token-gaps.md).
-const TARGET_CELL_WIDTH = 160;
+// tokens (task-31 disposition in ideation/frontend-token-gaps.md). Wider than the
+// task-31 default (160) so the expanded cell's metadata header fits without heavy
+// truncation — the density slider owns the real scale.
+const TARGET_CELL_WIDTH = 210;
+
+// The expanded cell adds fixed-height bands above and below the square thumbnail
+// area — the metadata header (2 lines) + the rating footer. ponytail: structural
+// until the density round tokenizes cell geometry (token-gaps item 2).
+const CELL_BAND_HEIGHT = 52;
 
 /** Columns for a measured width — exported for tests; 0-width (unmeasured) → 1. */
 export function columnsForWidth(width: number): number {
@@ -31,7 +38,6 @@ export function Grid() {
     const { query, arrangement } = useCatalogQuery();
     const { data, isPending, isError, refetch } = useQueryAssets(query, arrangement);
     const dispatch = useCatalogDispatch();
-    const cursorId = useCursorId();
 
     // The data → store echo (frontend/09): seeds/clears the cursor with the
     // working set. The reducer no-ops when nothing changes, so this cannot loop.
@@ -59,7 +65,8 @@ export function Grid() {
     const total = data?.total ?? 0;
     const items = useMemo(() => data?.items ?? [], [data]);
     const columns = columnsForWidth(width);
-    const rowHeight = width > 0 ? width / columns : TARGET_CELL_WIDTH;
+    const thumbEdge = width > 0 ? width / columns : TARGET_CELL_WIDTH;
+    const rowHeight = thumbEdge + CELL_BAND_HEIGHT;
     const rowCount = Math.ceil(total / columns);
 
     const virtualizer = useVirtualizer({
@@ -74,8 +81,14 @@ export function Grid() {
         virtualizer.measure();
     }, [rowHeight, virtualizer]);
 
+    // The gesture layer: platform modifiers translate to semantic intent at the
+    // DOM edge; the reducer owns what the intent MEANS. The cursor anchor is
+    // read NON-reactively (readCursorId) so this handler — and with it every
+    // memoized cell — keeps its identity across cursor moves: a click
+    // re-renders two cells, not the viewport.
     const onCellClick = useCallback(
         (event: MouseEvent, id: string, index: number) => {
+            const cursorId = readCursorId();
             if (event.shiftKey && cursorId !== null) {
                 // ponytail: anchor index from the loaded page (single-page model);
                 // the block-model widen swaps this findIndex for IndexOfAsset.
@@ -87,7 +100,7 @@ export function Grid() {
             }
             dispatch({ type: "asset-clicked", id, additive: event.metaKey || event.ctrlKey });
         },
-        [cursorId, items, query, arrangement, dispatch],
+        [items, query, arrangement, dispatch],
     );
 
     // The states render INSIDE the scroll container so the measured element is

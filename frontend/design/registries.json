@@ -44,6 +44,12 @@
       "dot": { "mark": "color.<hue>.solid", "ink": "ink.1", "border": "ink.hairline" },
       "fill": { "background": "color.<hue>.solid", "ink": "color.<hue>.on-solid" }
     },
+    "sizes": {
+      "$comment": "Size axis (ratified 2026-07-19): placement-semantic rungs, orthogonal to style. Each binds a FULL type role — never a bare font-size (§13 type units). 'inline' rides a text line without expanding it (the line box, not the pads, is the contract); 'standard' is the chip default; 'prominent' stands alone. Pads in space quanta; runtime registry: frontend/src/components/badge. Values eye-tuned in the design-library matrix.",
+      "inline": { "role": "type.micro", "padX": "space.1" },
+      "standard": { "role": "type.label-sm", "padX": "space.2" },
+      "prominent": { "role": "type.label", "padX": "space.3", "padY": "space.1" }
+    },
     "hues": ["red", "peach", "orange", "amber", "lime", "green", "teal", "cyan", "blue", "indigo", "purple", "magenta", "gray"]
   },
 
@@ -55,11 +61,14 @@
   },
 
   "icons": {
-    "$comment": "§14 structural family: concept → Lucide glyph, ONE glyph per concept; components name concepts, never glyphs. Runtime registry: frontend/src/components/icon (C10-complete; the two lists grow together — compiler emission closes the gap when the count warrants). Seeded 2026-07-17: the disclosure chevron was the first per-need pull from the parked token-gaps list. Machinery states use the dot-matrix map above, never rows here.",
+    "$comment": "§14 structural family: concept → Lucide glyph, ONE glyph per concept; components name concepts, never glyphs. Runtime registry: frontend/src/components/icon (C10-complete; the two lists grow together — compiler emission closes the gap when the count warrants). Seeded 2026-07-17: the disclosure chevron was the first per-need pull from the parked token-gaps list. Judgment concepts (rating/flag/reject) added 2026-07-18 with the §19 cell slots — fill = on (a rated star / picked flag is filled ink, §14). Machinery states use the dot-matrix map above, never rows here.",
     "structural": {
       "check": "check",
       "disclose": "chevron-right",
-      "mixed": "minus"
+      "mixed": "minus",
+      "rating": "star",
+      "flag": "flag",
+      "reject": "flag-off"
     }
   },
 
