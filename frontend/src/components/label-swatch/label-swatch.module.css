@@ -1,0 +1,11 @@
+/* One swatch shape everywhere a color label marks a row or a cell: solid
+ * style only (§5), hairline containment for the light-on-light labels. */
+
+.swatch {
+    display: inline-block;
+    flex: none;
+    width: var(--alx-space-3);
+    height: var(--alx-space-3);
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    border-radius: var(--alx-radius-round);
+}

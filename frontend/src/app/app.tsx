@@ -1,16 +1,16 @@
-// The rebuild's app root (frontend/09). The shell is deliberately minimal while
-// primitives land: header, the (empty) grid well, a status bar — running against
-// the mock catalog (no Wails, no Go). The grid and filter bar layer in with
-// their feature rounds; until then the well points at the design library.
-//
-// ponytail: user-facing chrome strings ("Library", "selected") are literals for
-// now — they become i18n keys (C14) when the shell adopts the i18n scaffolding.
-// Data values (counts) already go through Intl.
+// The rebuild's app root (frontend/09). The shell is header, the grid well,
+// the inspector rail (the first §12 zone beyond the well), and a status bar —
+// running against the mock catalog under `bun run dev`, the real engine under
+// `wails dev`. The browser rail and filter bar layer in with their feature
+// rounds; the design library remains reachable at #/design-library.
 
 import { useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
 import { useQueryAssets } from "@/api/queries";
+import { PaneErrorBoundary } from "@/components/error-boundary/error-boundary";
 import { DesignLibrary } from "@/features/design-library/design-library";
 import { Grid } from "@/features/grid/grid";
+import { Inspector } from "@/features/inspector/inspector";
 import { formatNumber } from "@/lib/format";
 import { useCatalogQuery, useSelectionCount } from "@/stores/catalog-store";
 import s from "./app.module.css";
@@ -29,6 +29,7 @@ function useHash(): string {
 }
 
 function Shell() {
+    const { t } = useTranslation();
     const { query, arrangement } = useCatalogQuery();
     const { data } = useQueryAssets(query, arrangement);
     const total = data?.total ?? 0;
@@ -37,14 +38,29 @@ function Shell() {
     return (
         <div className={s.shell}>
             <header className={s.header}>
-                <span className={s.title}>Library</span>
-                {data && <span className={s.metric}>{formatNumber(total)} assets</span>}
+                <span className={s.title}>{t("shell.library")}</span>
+                {data && (
+                    <span className={s.metric}>
+                        {t("shell.assets", { count: total, formatted: formatNumber(total) })}
+                    </span>
+                )}
             </header>
             <main className={s.main}>
-                <Grid />
+                <PaneErrorBoundary>
+                    <Grid />
+                </PaneErrorBoundary>
             </main>
+            <aside className={s.rail}>
+                <PaneErrorBoundary>
+                    <Inspector />
+                </PaneErrorBoundary>
+            </aside>
             <footer className={s.status}>
-                <span className={s.metric}>{selected > 0 ? `${formatNumber(selected)} selected` : "—"}</span>
+                <span className={s.metric}>
+                    {selected > 0
+                        ? t("statusBar.selected", { count: selected, formatted: formatNumber(selected) })
+                        : "—"}
+                </span>
             </footer>
         </div>
     );

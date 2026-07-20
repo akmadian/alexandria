@@ -14,12 +14,17 @@
 // row), codes not strings (ApiError), forward-compatible enum handling.
 
 import type { ApiErrorKind, ErrorCode } from "@/_generated-types/errors";
-import type { AssetRow as AssetRowModel } from "@/_generated-types/models";
+import type { AssetDetail, AssetRow as AssetRowModel } from "@/_generated-types/models";
 import type { Arrangement, Page, Query } from "@/query-model/ast";
 
 // Re-export the AST so consumers have one door for the query types.
 export type { Arrangement, Page, Query };
 export type { Scope, WhereNode, GroupNode, Leaf } from "@/query-model/ast";
+
+// The detail read's wire model passes through unchanged (no presentation
+// layering — the inspector renders it directly); re-exported so features
+// import it from the contract, never the generated tree.
+export type { AssetDetail };
 
 /**
  * The slim grid-card projection (seam/01). The engine truth is the GENERATED
@@ -64,4 +69,7 @@ export interface AlexandriaAPI {
 
     /** Position of an asset in the ordered result, or null if absent — cursor keep-if-present. */
     indexOfAsset(query: Query, arrangement: Arrangement, id: string): Promise<number | null>;
+
+    /** The full-asset detail projection — the inspector's read (C7: a distinct result shape). */
+    getAsset(id: string): Promise<AssetDetail>;
 }

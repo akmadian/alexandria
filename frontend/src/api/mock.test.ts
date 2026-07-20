@@ -147,4 +147,24 @@ describe("mock query engine", () => {
         const slice = await mockApi.assetIdSlice(LIBRARY, DEFAULT_ARRANGEMENT, 0, 4);
         expect(slice).toEqual(items.slice(0, 5).map((row) => row.id)); // inclusive [0,4]
     });
+
+    it("serves the full detail projection by id (getAsset)", async () => {
+        // mock-0000 is a pinned seed fact (i = 0): dated, Sony camera, exposure
+        // set, extended blob present, folder segment on the path.
+        const detail = await mockApi.getAsset("mock-0000");
+        expect(detail.filename).toBe("DSC_04820.jpg");
+        expect(detail.relativePath).toBe("2026/DSC_04820.jpg");
+        expect(detail.mimeType).toBe("image/jpeg");
+        expect(detail.aperture).toBe(1.8);
+        expect(detail.shutterSpeed).toBe("1/1000");
+        expect(detail.extendedMetadata?.["EXIF:Flash"]).toBe("Did not fire");
+    });
+
+    it("rejects an unknown id with a not_found ApiError (getAsset)", async () => {
+        await expect(mockApi.getAsset("nope")).rejects.toMatchObject({
+            name: "ApiError",
+            kind: "domain",
+            code: "not_found",
+        });
+    });
 });

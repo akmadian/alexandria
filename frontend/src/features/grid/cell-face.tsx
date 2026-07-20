@@ -18,10 +18,11 @@
 // `off` rung), present but nearly silent.
 
 import { useTranslation } from "react-i18next";
-import type { ColorLabel, FileType } from "@/_generated-types/enums";
+import type { FileType } from "@/_generated-types/enums";
 import type { AssetRow } from "@/api/contract";
 import { Badge } from "@/components/badge/badge";
 import { Icon } from "@/components/icon/icon";
+import { LabelSwatch } from "@/components/label-swatch/label-swatch";
 import { Rating } from "@/components/rating/rating";
 import { cx } from "@/lib/cx";
 import { formatBytes, formatDate } from "@/lib/format";
@@ -58,20 +59,6 @@ function resolveField(field: CellField, row: AssetRow, index: number): string {
             return "";
     }
 }
-
-// ColorLabel → swatch color, complete over the generated union (C10 — a new label
-// fails to compile until mapped). The five assignable LrC labels resolve to their
-// §5 semantic roles; `orange` has no §5 role (dropped from the palette 2026-07-18)
-// but the enum keeps it for XMP round-trip, so an imported orange label still
-// renders — it falls back to the raw orange hue scale.
-const LABEL_SWATCH = {
-    red: "var(--alx-label-red)",
-    yellow: "var(--alx-label-yellow)",
-    green: "var(--alx-label-green)",
-    blue: "var(--alx-label-blue)",
-    purple: "var(--alx-label-purple)",
-    orange: "var(--alx-color-orange-solid)",
-} satisfies Record<ColorLabel, string>;
 
 // Type-badge i18n keys, complete over the union (C10/C14 — display text lives in
 // the catalog, never in code). The baseline image is silent; the rest chip the
@@ -134,9 +121,9 @@ export function CellFace({
             <div className={styles.footer}>
                 <Rating value={row.rating} />
                 {row.colorLabel !== null && (
-                    <span
+                    <LabelSwatch
+                        label={row.colorLabel}
                         className={styles.label}
-                        style={{ backgroundColor: LABEL_SWATCH[row.colorLabel] }}
                         aria-label={t("cell.labelSwatch", { label: t(`colorLabel.${row.colorLabel}`) })}
                     />
                 )}

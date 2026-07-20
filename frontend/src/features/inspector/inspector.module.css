@@ -1,0 +1,70 @@
+/* The inspector panel body — §12's one row grammar in the §8 row-text register.
+ * The panel owns its scroll (the shell's rail clips); sections stack with no
+ * gaps — PanelSection heads are the only separators (§3: cheapest sufficient
+ * separation). */
+
+.panel {
+    height: 100%;
+    overflow-y: auto;
+    padding-bottom: var(--alx-space-6);
+}
+
+.state {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--alx-space-4);
+    text-align: center;
+    color: var(--alx-ink-3);
+    composes: alx-type-label from global;
+}
+
+.stateColumn {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--alx-space-3);
+}
+
+.stateColumn .state {
+    height: auto;
+}
+
+/* §13 middle truncation: flexing head ellipsizes, rigid tail survives. */
+.middle {
+    display: flex;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.middleHead {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.middleTail {
+    flex: none;
+    white-space: pre;
+}
+
+/* Judgment value composites: swatch/glyph + word, never color alone (§10). */
+.labelValue {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    min-width: 0;
+}
+
+.flagGlyph {
+    flex: none;
+}
+
+.empty {
+    color: var(--alx-ink-3);
+}

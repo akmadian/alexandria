@@ -95,6 +95,21 @@ describe("wailsApi", () => {
         stubAssetService({ IndexOfAsset: vi.fn().mockResolvedValue(7) });
         await expect(wailsApi.indexOfAsset(LIBRARY, DEFAULT_ARRANGEMENT, "hit")).resolves.toBe(7);
     });
+
+    it("passes getAsset through and normalizes its rejection", async () => {
+        const detail = { id: "a1", filename: "a1.raf" };
+        const getAsset = vi.fn().mockResolvedValue(detail);
+        stubAssetService({ GetAsset: getAsset });
+        await expect(wailsApi.getAsset("a1")).resolves.toBe(detail);
+        expect(getAsset).toHaveBeenCalledWith("a1");
+
+        stubAssetService({
+            GetAsset: vi.fn().mockRejectedValue('{"kind":"domain","code":"not_found","detail":"asset a1"}'),
+        });
+        const failure = await wailsApi.getAsset("a1").catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(ApiError);
+        expect((failure as ApiError).code).toBe("not_found");
+    });
 });
 
 describe("toApiError", () => {

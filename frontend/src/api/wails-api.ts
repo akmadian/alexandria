@@ -11,7 +11,7 @@
 import type { ApiErrorKind, ErrorCode } from "@/_generated-types/errors";
 import type { AssetRow as AssetRowModel } from "@/_generated-types/models";
 import * as AssetServiceBinding from "../../wailsjs/go/seam/AssetService";
-import type { AlexandriaAPI, Arrangement, AssetQueryResult, AssetRow, Page, Query } from "./contract";
+import type { AlexandriaAPI, Arrangement, AssetDetail, AssetQueryResult, AssetRow, Page, Query } from "./contract";
 import { ApiError } from "./contract";
 
 const queryAssetsBound = AssetServiceBinding.QueryAssets as unknown as (
@@ -32,6 +32,8 @@ const indexOfAssetBound = AssetServiceBinding.IndexOfAsset as unknown as (
     arrangement: Arrangement,
     id: string,
 ) => Promise<number | null | undefined>;
+
+const getAssetBound = AssetServiceBinding.GetAsset as unknown as (id: string) => Promise<AssetDetail>;
 
 // Runtime bridge for the types-only generated union (C10 completeness): a new
 // kind in Go fails to compile here until it's added.
@@ -109,6 +111,14 @@ export const wailsApi: AlexandriaAPI = {
     async indexOfAsset(query: Query, arrangement: Arrangement, id: string): Promise<number | null> {
         try {
             return (await indexOfAssetBound(query, arrangement, id)) ?? null;
+        } catch (rejection) {
+            throw toApiError(rejection);
+        }
+    },
+
+    async getAsset(id: string): Promise<AssetDetail> {
+        try {
+            return await getAssetBound(id);
         } catch (rejection) {
             throw toApiError(rejection);
         }

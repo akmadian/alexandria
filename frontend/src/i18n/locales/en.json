@@ -89,6 +89,9 @@
     },
     "inspector": {
         "empty": "Select an asset to inspect it",
+        "loading": "Loading…",
+        "error": "Couldn't load this asset.",
+        "retry": "Try again",
         "rating": "Rating",
         "flag": "Flag",
         "colorLabel": "Label",
@@ -104,7 +107,31 @@
         "size": "Size",
         "location": "Location",
         "clearFlag": "Clear flag",
-        "close": "Close inspector"
+        "close": "Close inspector",
+        "sectionJudgment": "Judgment",
+        "sectionCapture": "Capture",
+        "sectionMetadata": "Metadata",
+        "sectionAll": "All metadata",
+        "filename": "File name",
+        "folder": "Folder",
+        "fileType": "File type",
+        "mime": "MIME type",
+        "status": "Status",
+        "modified": "Modified",
+        "ingested": "Added",
+        "duration": "Duration",
+        "colorSpace": "Color space",
+        "bitDepth": "Bit depth",
+        "creator": "Creator",
+        "copyright": "Copyright",
+        "title": "Title",
+        "caption": "Caption",
+        "iso": "ISO",
+        "focalLength": "Focal length",
+        "gps": "GPS",
+        "exposureValue": "{{shutter}} at {{aperture}}",
+        "isoValue": "ISO {{value}}",
+        "bitDepthValue": "{{bits}}-bit"
     },
     "flag": {
         "pick": "Pick",
@@ -146,9 +173,19 @@
         "active": "Online",
         "offline": "Offline"
     },
+    "fileStatus": {
+        "online": "Online",
+        "offline": "Offline",
+        "missing": "Missing"
+    },
+    "shell": {
+        "library": "Library",
+        "assets_one": "{{formatted}} asset",
+        "assets_other": "{{formatted}} assets"
+    },
     "statusBar": {
-        "selected_one": "{{count}} selected",
-        "selected_other": "{{count}} selected",
+        "selected_one": "{{formatted}} selected",
+        "selected_other": "{{formatted}} selected",
         "job": {
             "import": "Importing"
         }

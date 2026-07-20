@@ -597,6 +597,10 @@ validator + the 1× eyeball test on the Library-view mock (with the
    same date (library/type-probe.html): matched pair holds, no mono compensation;
    head = semibold 600. Still open: the Windows ClearType 1× check (10–12px).
 5. Quanta: control heights, row heights per surface, panel default/min widths.
+   *Dated note (2026-07-20, the inspector round):* the inspector rail's default width
+   is pinned at **280px** — a structural literal beside the 44/28px chrome heights
+   until the chrome-dimension tokens land — judged on the live Photos Slice render in
+   paper and carbon. Min width and the other panels stay open pins.
 6. Radius (3), shadows (2 recipes), motion tokens (durations + easings).
 7. *(closed 2026-07-13 — the twelve named hue scales, labels-as-solids, attention =
    magenta, error = red scale all live in the token source; survives only as

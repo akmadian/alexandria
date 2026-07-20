@@ -622,6 +622,11 @@ wants to show reason codes or distinguish blocked-vs-pending per artifact. Add t
 seam detail method (+ `EnrichmentError` wire projection) and `Engine.BlockedKinds`
 then; both build onto reads that already exist.
 
+*Dated note (2026-07-20, the inspector round):* the predicted detail wrapper now
+exists — `seam.AssetDetail`, GetAsset's wire projection (the read-only inspector
+ships without enrichment rows). When this trigger fires, the transient state
+decorates `AssetDetail`, exactly as the grid decorates `AssetRow`.
+
 ---
 
 ## 14. Enrichment snapshot: distributions & per-job cost — gospan's territory
@@ -715,3 +720,24 @@ here would rename `display: flex; gap: var(--alx-space-2)` without adding a guar
 
 **Trigger:** feature CSS sprawling near-identical ad-hoc flex containers with inconsistent gaps —
 promote the repeated pattern to a Stack primitive then, not before.
+
+---
+
+## 18. Inspector "Contained in": source name + collections membership
+
+**Surfaced:** the inspector round (2026-07-20, Ari + Claude). The FR Inspector Panel spec
+includes a "Contained in" section — folder path, source, and every collection the asset
+belongs to (clickable), plus membership management. The read-only v1 ships the folder path
+only. The narrows, each honest:
+
+- **Source name** — the panel holds `sourceId`; a display name needs the sources read on
+  the frontend, and `ListSources` still returns untagged `*domain.Source` (the same wire
+  problem `AssetDetail` just solved for assets). A raw UUID row violates §18; skipping the
+  row was cheaper than minting a `SourceSummary` projection with no other consumer.
+- **Collections membership** — no per-asset membership read exists on any seam service
+  (`CollectionService` lists/mutates collections; nothing answers "which collections hold
+  asset X"). New result shape ⇒ new method (C7-sanctioned), unbuilt.
+
+**Trigger:** the browser-rail / collections round — it needs the source tree and collection
+reads anyway; mint the wire projections there and the inspector rows follow. Membership
+*management* from the panel additionally waits for the judgment-writing round's mutation lane.

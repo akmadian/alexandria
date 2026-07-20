@@ -107,11 +107,7 @@
     min-height: var(--alx-size-icon);
 }
 
+/* Layout only — the swatch's look lives in components/label-swatch. */
 .label {
-    flex: none;
     margin-left: auto;
-    width: var(--alx-space-3);
-    height: var(--alx-space-3);
-    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
-    border-radius: var(--alx-radius-round);
 }

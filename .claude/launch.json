@@ -14,6 +14,12 @@
             "runtimeExecutable": "python3",
             "runtimeArgs": ["-m", "http.server", "8123"],
             "port": 8123
+        },
+        {
+            "name": "wails-dev",
+            "runtimeExecutable": "wails",
+            "runtimeArgs": ["dev"],
+            "port": 34115
         }
     ]
 }

@@ -9,7 +9,8 @@ import type { ColorLabel, FileStatus, FileType, Flag } from "@/_generated-types/
 import type { SortField, TokenField } from "@/_generated-types/vocabulary";
 import type { Arrangement, Leaf, Query, WhereNode } from "@/query-model/ast";
 import { isLeaf } from "@/query-model/ast";
-import type { AlexandriaAPI, AssetQueryResult, AssetRow } from "./contract";
+import type { AlexandriaAPI, AssetDetail, AssetQueryResult, AssetRow } from "./contract";
+import { ApiError } from "./contract";
 
 // Rich internal record the engine evaluates over — a superset of AssetRow plus the
 // filterable metadata fields (stands in for a catalog row).
@@ -37,6 +38,22 @@ interface MockAsset {
     sourceId: string;
     tagIds: string[];
     thumbURL: string;
+
+    // Detail-only fields (the getAsset read; never queried by the AST engine).
+    extension: string;
+    mimeType: string;
+    relativePath: string;
+    mtime: string;
+    focalLengthMm: number | null;
+    aperture: number | null;
+    shutterSpeed: string | null;
+    iso: number | null;
+    gpsLat: number | null;
+    gpsLon: number | null;
+    colorSpace: string | null;
+    bitDepth: number | null;
+    note: string | null;
+    extendedMetadata: Record<string, unknown> | undefined;
 }
 
 // --- seed --------------------------------------------------------------------
@@ -65,13 +82,18 @@ const CAMERAS: [string, string][] = [
     ["Fujifilm", "X-T5"],
     ["Leica", "Q3"],
 ];
-const KIND: { type: FileType; ext: string; ratio: [number, number]; temporal: boolean }[] = [
-    { type: "image", ext: "jpg", ratio: [3, 2], temporal: false },
-    { type: "raw", ext: "arw", ratio: [3, 2], temporal: false },
-    { type: "image", ext: "png", ratio: [1, 1], temporal: false },
-    { type: "video", ext: "mp4", ratio: [16, 9], temporal: true },
-    { type: "vector", ext: "svg", ratio: [4, 3], temporal: false },
+const KIND: { type: FileType; ext: string; mime: string; ratio: [number, number]; temporal: boolean }[] = [
+    { type: "image", ext: "jpg", mime: "image/jpeg", ratio: [3, 2], temporal: false },
+    { type: "raw", ext: "arw", mime: "image/x-sony-arw", ratio: [3, 2], temporal: false },
+    { type: "image", ext: "png", mime: "image/png", ratio: [1, 1], temporal: false },
+    { type: "video", ext: "mp4", mime: "video/mp4", ratio: [16, 9], temporal: true },
+    { type: "vector", ext: "svg", mime: "image/svg+xml", ratio: [4, 3], temporal: false },
 ];
+
+const APERTURES = [1.8, 2.8, 4, 5.6, 8];
+const SHUTTERS = ["1/1000", "1/250", "1/80", "1/30", "1/8000"];
+const ISOS = [100, 200, 400, 800, 3200];
+const FOCALS = [24, 35, 50, 85, 18.5];
 
 function seededAssets(count: number): MockAsset[] {
     const assets: MockAsset[] = [];
@@ -109,6 +131,40 @@ function seededAssets(count: number): MockAsset[] {
             sourceId: `src-${i % 3}`,
             tagIds: [],
             thumbURL: thumbDataUri(i + 1, kind.ratio),
+
+            extension: kind.ext,
+            mimeType: kind.mime,
+            // A real folder segment so the inspector's Folder row (and dirname
+            // logic) is exercisable against the mock, like the real catalog.
+            relativePath: `2026/${kind.temporal ? "CLIP" : "DSC"}_${String(4820 + i).padStart(5, "0")}.${kind.ext}`,
+            mtime: new Date(2026, 4, (i % 27) + 1, 12, (i * 11) % 60).toISOString(),
+            // Exposure travels with the camera: an undated scan carries none.
+            focalLengthMm: camera && !undatedScan ? FOCALS[i % FOCALS.length] : null,
+            aperture: camera && !undatedScan ? APERTURES[i % APERTURES.length] : null,
+            shutterSpeed: camera && !undatedScan ? SHUTTERS[i % SHUTTERS.length] : null,
+            iso: camera && !undatedScan ? ISOS[i % ISOS.length] : null,
+            gpsLat: i % 5 === 0 && !undatedScan ? 47.6 + (i % 10) / 100 : null,
+            gpsLon: i % 5 === 0 && !undatedScan ? -122.33 - (i % 10) / 100 : null,
+            colorSpace: undatedScan ? null : i % 2 === 0 ? "sRGB" : "Adobe RGB",
+            bitDepth: kind.type === "raw" ? 14 : kind.temporal ? 10 : 8,
+            note: i % 13 === 0 ? "Check focus on the eyes before export." : null,
+            extendedMetadata:
+                camera && !undatedScan
+                    ? {
+                          "EXIF:Flash": "Did not fire",
+                          "EXIF:MeteringMode": "Center-weighted average",
+                          "EXIF:ExposureProgram": "Aperture priority",
+                          "EXIF:ExposureCompensation": "-0.33",
+                          "EXIF:SerialNumber": `52E0${1900 + i}`,
+                          "EXIF:Software": `${camera[0]} Firmware 4.31`,
+                          // Structured value, mirroring the importer's
+                          // alexandria:extension_mismatch map — the renderer
+                          // must never show "[object Object]".
+                          ...(i % 10 === 0
+                              ? { "alexandria:extension_mismatch": { declared: "jpg", detected: "png" } }
+                              : {}),
+                      }
+                    : undefined,
         });
     }
     return assets;
@@ -135,8 +191,48 @@ function toRow(asset: MockAsset): AssetRow {
         capturedAt: asset.capturedAt,
         ingestedAt: asset.ingestedAt,
         thumbnailAt: null, // mock thumbs are data URIs, not generated files
-        relativePath: asset.filename,
+        relativePath: asset.relativePath,
         thumbURL: asset.thumbURL,
+    };
+}
+
+function toDetail(asset: MockAsset): AssetDetail {
+    return {
+        id: asset.id,
+        sourceId: asset.sourceId,
+        filename: asset.filename,
+        extension: asset.extension,
+        mimeType: asset.mimeType,
+        fileType: asset.fileType,
+        fileStatus: asset.fileStatus,
+        relativePath: asset.relativePath,
+        sizeBytes: asset.sizeBytes,
+        mtime: asset.mtime,
+        ingestedAt: asset.ingestedAt,
+        width: asset.width,
+        height: asset.height,
+        durationSecs: asset.durationSecs,
+        capturedAt: asset.capturedAt,
+        cameraMake: asset.cameraMake,
+        cameraModel: asset.cameraModel,
+        lensModel: asset.lensModel,
+        focalLengthMm: asset.focalLengthMm,
+        aperture: asset.aperture,
+        shutterSpeed: asset.shutterSpeed,
+        iso: asset.iso,
+        gpsLat: asset.gpsLat,
+        gpsLon: asset.gpsLon,
+        colorSpace: asset.colorSpace,
+        bitDepth: asset.bitDepth,
+        title: asset.title,
+        caption: asset.caption,
+        creator: asset.creator,
+        copyright: asset.copyright,
+        rating: asset.rating,
+        colorLabel: asset.colorLabel,
+        flag: asset.flag,
+        note: asset.note,
+        extendedMetadata: asset.extendedMetadata,
     };
 }
 
@@ -335,5 +431,14 @@ export const mockApi: AlexandriaAPI = {
     indexOfAsset(query, arrangement, id): Promise<number | null> {
         const index = orderedMatches(query, arrangement).findIndex((asset) => asset.id === id);
         return delay(index === -1 ? null : index);
+    },
+    getAsset(id): Promise<AssetDetail> {
+        const asset = CATALOG.find((candidate) => candidate.id === id);
+        if (!asset) {
+            return delay(id).then(() => {
+                throw new ApiError("domain", `asset ${id} not found`, "not_found");
+            });
+        }
+        return delay(toDetail(asset));
     },
 };

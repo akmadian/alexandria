@@ -120,6 +120,10 @@ export function selectionSize(selection: Selection, total: number): number {
 
 export const useIsSelected = (id: AssetID): boolean => useCatalogStore((s) => selectionHas(s.selection, id));
 export const useIsCursor = (id: AssetID): boolean => useCatalogStore((s) => s.cursorId === id);
+/** The whole cursor, reactively — for the surfaces whose SUBJECT it is (§15
+ * active: inspector today, Loupe when it lands). Cells keep using the per-id
+ * `useIsCursor` so a cursor move re-renders two cells, never the column. */
+export const useCursorId = (): AssetID | null => useCatalogStore((s) => s.cursorId);
 
 /** Non-reactive cursor read for EVENT HANDLERS (Zustand getState): gesture code
  * needs the current cursor without subscribing its owner to every cursor move,
