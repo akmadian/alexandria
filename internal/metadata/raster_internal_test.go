@@ -51,6 +51,48 @@ func TestExifGPS_DMSToDecimal(t *testing.T) {
 	}
 }
 
+// The committed fixtures exercise exifColorSpace's sRGB (code 1) and
+// Uncalibrated+R03 (Adobe RGB) paths; the remaining codes and the nil paths are
+// covered here against hand-built tag maps.
+func TestExifColorSpace_CodeMapping(t *testing.T) {
+	colorSpaceTag := func(code uint16) exif.ExifTag {
+		return exif.ExifTag{Value: []uint16{code}}
+	}
+	cases := []struct {
+		name    string
+		tags    map[string]exif.ExifTag
+		want    string
+		wantNil bool
+	}{
+		{name: "srgb", tags: map[string]exif.ExifTag{"ColorSpace": colorSpaceTag(1)}, want: "sRGB"},
+		{name: "adobe-rgb-nonstandard-code-2", tags: map[string]exif.ExifTag{"ColorSpace": colorSpaceTag(2)}, want: "Adobe RGB"},
+		{name: "uncalibrated-without-interop", tags: map[string]exif.ExifTag{"ColorSpace": colorSpaceTag(65535)}, want: "Uncalibrated"},
+		{name: "uncalibrated-r03-is-adobe-rgb", tags: map[string]exif.ExifTag{
+			"ColorSpace":            colorSpaceTag(65535),
+			"InteroperabilityIndex": {Value: "R03"},
+		}, want: "Adobe RGB"},
+		{name: "unknown-code-yields-nil", tags: map[string]exif.ExifTag{"ColorSpace": colorSpaceTag(3)}, wantNil: true},
+		{name: "missing-tag-yields-nil", tags: map[string]exif.ExifTag{}, wantNil: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := exifColorSpace(tc.tags)
+			if tc.wantNil {
+				if got != nil {
+					t.Fatalf("exifColorSpace = %q, want nil", *got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("exifColorSpace = nil, want %q", tc.want)
+			}
+			if *got != tc.want {
+				t.Errorf("exifColorSpace = %q, want %q", *got, tc.want)
+			}
+		})
+	}
+}
+
 // A coordinate with fewer than three rationals is malformed and must yield nil,
 // not a panic or a partial value.
 func TestExifGPS_MalformedYieldsNil(t *testing.T) {
