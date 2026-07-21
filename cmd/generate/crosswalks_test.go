@@ -14,6 +14,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +39,7 @@ var crosswalks = []struct {
 	{"catalog.FilePatch is a subset of domain.Asset", checkFilePatchSubset},
 	{"catalog triage shapes name domain.Asset judgment fields", checkTriageSubset},
 	{"seam.AssetDetail is a subset of domain.Asset", checkAssetDetailSubset},
+	{"seam.TriagePatchInput wire fields mirror catalog.TriagePatch", checkTriagePatchInputWire},
 	{"domain.EnrichmentKind matches the engine registry kinds", checkEnrichmentKinds},
 }
 
@@ -308,4 +310,42 @@ func checkTriageSubset(t *testing.T) {
 
 func checkAssetDetailSubset(t *testing.T) {
 	checkSubset(t, reflect.TypeOf(seam.AssetDetail{}), "seam.AssetDetail")
+}
+
+// checkTriagePatchInputWire pins the seam's triage WIRE struct's json field names
+// (the mutation contract the frontend TriagePatch mirrors, task 34) to
+// catalog.TriagePatch's fields, bidirectionally: every wire field names a patch
+// field and every patch field is exposed on the wire. The frontend TriagePatch is
+// a hand-authored composite (the three-state RawMessage fields can't be reflected
+// into typed nullable-optional TS), so this Go-side check is the mechanism (C15)
+// that keeps the wire vocabulary from drifting off the engine patch — add a field
+// to TriagePatch without wiring it, or rename a json tag, and this fails.
+func checkTriagePatchInputWire(t *testing.T) {
+	wire := reflect.TypeOf(seam.TriagePatchInput{})
+	patch := reflect.TypeOf(catalog.TriagePatch{})
+
+	wireNames := map[string]bool{}
+	for i := 0; i < wire.NumField(); i++ {
+		name := strings.Split(wire.Field(i).Tag.Get("json"), ",")[0]
+		if name == "" || name == "-" {
+			t.Errorf("seam.TriagePatchInput.%s has no json wire name", wire.Field(i).Name)
+			continue
+		}
+		wireNames[name] = true
+	}
+	patchNames := map[string]bool{}
+	for i := 0; i < patch.NumField(); i++ {
+		name := patch.Field(i).Name
+		patchNames[strings.ToLower(name[:1])+name[1:]] = true
+	}
+	for name := range wireNames {
+		if !patchNames[name] {
+			t.Errorf("seam wire field %q has no catalog.TriagePatch counterpart", name)
+		}
+	}
+	for name := range patchNames {
+		if !wireNames[name] {
+			t.Errorf("catalog.TriagePatch field %q is not exposed on the seam wire (seam.TriagePatchInput) — the triage wire must mirror the engine patch", name)
+		}
+	}
 }

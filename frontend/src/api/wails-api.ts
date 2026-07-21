@@ -10,8 +10,19 @@
 
 import type { ApiErrorKind, ErrorCode } from "@/_generated-types/errors";
 import type { AssetRow as AssetRowModel } from "@/_generated-types/models";
+import type { seam } from "../../wailsjs/go/models";
 import * as AssetServiceBinding from "../../wailsjs/go/seam/AssetService";
-import type { AlexandriaAPI, Arrangement, AssetDetail, AssetQueryResult, AssetRow, Page, Query } from "./contract";
+import type {
+    AlexandriaAPI,
+    Arrangement,
+    AssetDetail,
+    AssetQueryResult,
+    AssetRow,
+    Page,
+    Query,
+    TriagePatch,
+    UpdateTarget,
+} from "./contract";
 import { ApiError } from "./contract";
 
 const queryAssetsBound = AssetServiceBinding.QueryAssets as unknown as (
@@ -34,6 +45,28 @@ const indexOfAssetBound = AssetServiceBinding.IndexOfAsset as unknown as (
 ) => Promise<number | null | undefined>;
 
 const getAssetBound = AssetServiceBinding.GetAsset as unknown as (id: string) => Promise<AssetDetail>;
+
+// Rebound to the wire-truth shapes: the generated TriagePatchInput renders its
+// json.RawMessage fields as `number[]` (a []byte artifact), and UpdateTarget's
+// query is the PascalCase ast struct. The JSON that actually crosses is our
+// contract shape — a present key is a value (or null to clear), an absent key is
+// untouched — which Go's RawMessage fields decode into the three Opt states.
+const updateAssetsBound = AssetServiceBinding.UpdateAssets as unknown as (
+    target: UpdateTarget,
+    patch: TriagePatch,
+) => Promise<void>;
+
+// C15 drift mechanism for the hand-authored wire composites: the generated seam
+// namespace carries the authoritative KEY SETS (its VALUE types are the artifacts
+// the rebind above corrects, so only keys are pinned). Adding, removing, or
+// renaming a field on either side flips SameKeys to `false` and StaticAssert
+// stops compiling — the mechanism is the compile error. Types-only, zero runtime.
+// The Go-side crosswalk (checkTriagePatchInputWire) pins the same names onto
+// catalog.TriagePatch, closing the chain engine ⇔ seam wire ⇔ frontend contract.
+type SameKeys<A, B> = [keyof A] extends [keyof B] ? ([keyof B] extends [keyof A] ? true : false) : false;
+type StaticAssert<Assertion extends true> = Assertion;
+export type TriagePatchWireKeysPinned = StaticAssert<SameKeys<TriagePatch, seam.TriagePatchInput>>;
+export type UpdateTargetWireKeysPinned = StaticAssert<SameKeys<UpdateTarget, seam.UpdateTarget>>;
 
 // Runtime bridge for the types-only generated union (C10 completeness): a new
 // kind in Go fails to compile here until it's added.
@@ -119,6 +152,14 @@ export const wailsApi: AlexandriaAPI = {
     async getAsset(id: string): Promise<AssetDetail> {
         try {
             return await getAssetBound(id);
+        } catch (rejection) {
+            throw toApiError(rejection);
+        }
+    },
+
+    async updateAssets(target: UpdateTarget, patch: TriagePatch): Promise<void> {
+        try {
+            await updateAssetsBound(target, patch);
         } catch (rejection) {
             throw toApiError(rejection);
         }

@@ -110,9 +110,14 @@ type UpdateTarget struct {
 // encodes as `field?: value | null`: absent key = don't touch, explicit null =
 // clear, value = set (mirrors domain.Opt / catalog.TriagePatch).
 //
-// ponytail: raw-JSON fields decode the three states correctly but generate a loose
-// TS type; the final wire encoding is settled in the deferred contract.ts
-// reconciliation (needs the frontend types in hand), tracked in DEFERRED §7.
+// Final wire encoding (task 34): the frontend type is `TriagePatch` in
+// api/contract.ts — a hand-authored composite of the generated ColorLabel/Flag
+// unions, a sibling to the other hand-authored AST wire shapes (Query/Scope/Leaf
+// in query-model/ast.ts). The model emitter reflects concrete struct fields, so it
+// cannot express these three-state RawMessage fields as typed nullable-optional
+// keys; the composite therefore lives frontend-side. The wire field NAMES are
+// pinned to the engine patch by the crosswalk suite (checkTriagePatchInputWire)
+// and the enum spellings ride the generated unions.
 type TriagePatchInput struct {
 	Rating     json.RawMessage `json:"rating,omitempty"`
 	ColorLabel json.RawMessage `json:"colorLabel,omitempty"`

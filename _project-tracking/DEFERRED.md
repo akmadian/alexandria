@@ -408,9 +408,22 @@ the `ApiError` normalization layer + generated `errors.ts` code catalog.
 bind):** the frontend rebuild ran under Wails; `wails generate module` regenerated the
 bindings for all five bound services, and `api/wails-api.ts` consumes the asset read
 surface. Drift continues to be caught at the next `wails dev`/`build`, as impl/14
-ruled. **Still open from this block:** the `TriagePatchInput` raw-JSON wire encoding
-gets its final shape when the frontend consumes the MUTATION surface (the read slice
-doesn't touch it).
+ruled. ~~**Still open from this block:** the `TriagePatchInput` raw-JSON wire encoding
+gets its final shape when the frontend consumes the MUTATION surface.~~ **✅ RESOLVED
+(2026-07-20, the judgment-writes round, task 34):** the frontend consumed the mutation
+surface. The final wire shape is `TriagePatch` + `UpdateTarget` in `api/contract.ts` —
+hand-authored composites of the generated `ColorLabel`/`Flag` unions (and the AST
+`Query`), siblings to the hand-authored AST wire shapes in `query-model/ast.ts`. The
+model emitter reflects concrete struct fields, so it cannot project the three-state
+`json.RawMessage` fields into typed nullable-optional TS, nor reference the
+hand-authored `Query` without inverting the generated→hand dependency; the composites
+therefore live frontend-side. The vocabulary still has its mechanism (C15), twice over:
+a Go crosswalk row (`checkTriagePatchInputWire`: `seam.TriagePatchInput` json tags ⇔
+`catalog.TriagePatch` fields, bidirectional) pins the wire names to the engine patch, and
+types-only keyof-equality pins in `api/wails-api.ts` (`TriagePatchWireKeysPinned` /
+`UpdateTargetWireKeysPinned`) pin the hand-authored composites' keys to the generated
+`seam` namespace shapes — a drifted key on either side is a compile error. Enum
+spellings ride the generated unions.
 
 **Event PAYLOAD TypeScript types — ✅ DONE EARLY (2026-07-10, the D24 schema-compiler
 round).** The struct emitter landed ahead of its event-pump trigger: `cmd/generate`

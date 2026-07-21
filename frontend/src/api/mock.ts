@@ -8,8 +8,8 @@
 import type { ColorLabel, FileStatus, FileType, Flag } from "@/_generated-types/enums";
 import type { SortField, TokenField } from "@/_generated-types/vocabulary";
 import type { Arrangement, Leaf, Query, WhereNode } from "@/query-model/ast";
-import { isLeaf } from "@/query-model/ast";
-import type { AlexandriaAPI, AssetDetail, AssetQueryResult, AssetRow } from "./contract";
+import { DEFAULT_ARRANGEMENT, isLeaf } from "@/query-model/ast";
+import type { AlexandriaAPI, AssetDetail, AssetQueryResult, AssetRow, TriagePatch, UpdateTarget } from "./contract";
 import { ApiError } from "./contract";
 
 // Rich internal record the engine evaluates over — a superset of AssetRow plus the
@@ -415,6 +415,21 @@ function orderedMatches(query: Query, arrangement: Arrangement): MockAsset[] {
     );
 }
 
+// --- the write path (triage) -------------------------------------------------
+
+// Apply a sparse three-state patch to a seeded record IN PLACE — the SQL
+// UPDATE stand-in. A present key sets (a value) or clears (null). Gated on
+// `!== undefined`, not `in`: an explicitly-undefined key would be DROPPED by
+// JSON serialization at the real seam ("don't touch"), so the mock must treat
+// it the same, never as a clear. The frontend never sends 0 for rating (the
+// Rating primitive clears with null), so "0 is not a rating" holds unguarded.
+function applyPatch(asset: MockAsset, patch: TriagePatch): void {
+    if (patch.rating !== undefined) asset.rating = patch.rating;
+    if (patch.colorLabel !== undefined) asset.colorLabel = patch.colorLabel;
+    if (patch.flag !== undefined) asset.flag = patch.flag;
+    if (patch.note !== undefined) asset.note = patch.note;
+}
+
 // Simulate seam latency so loading states get exercised.
 const delay = <T>(value: T): Promise<T> => new Promise((resolve) => setTimeout(() => resolve(value), 80));
 
@@ -440,5 +455,40 @@ export const mockApi: AlexandriaAPI = {
             });
         }
         return delay(toDetail(asset));
+    },
+    updateAssets(target: UpdateTarget, patch: TriagePatch): Promise<void> {
+        // Mirrors the seam's target switch exactly (asset_service.go): NON-EMPTY
+        // ids win, else a query, else validation — so `{ids: []}` errors like the
+        // real seam, never a silent no-op.
+        if (target.ids !== undefined && target.ids.length > 0) {
+            // The frontend's only form this round (task 34 ruling). Resolve every
+            // id up front so an unknown id fails the whole write with not_found
+            // rather than half-applying (the seam is transactional).
+            const resolved: MockAsset[] = [];
+            for (const id of target.ids) {
+                const asset = CATALOG.find((candidate) => candidate.id === id);
+                if (!asset) {
+                    return delay(id).then(() => {
+                        throw new ApiError("domain", `asset ${id} not found`, "not_found");
+                    });
+                }
+                resolved.push(asset);
+            }
+            for (const asset of resolved) applyPatch(asset, patch);
+            return delay(undefined);
+        }
+        // Query form: apply to the ordered matches minus exceptIds. Unused by the
+        // frontend today, but kept faithful so a future undo-round consumer (and
+        // the mock⇄SQL parity work) exercises the same shape the seam accepts.
+        if (target.query !== undefined) {
+            const excepted = new Set(target.exceptIds ?? []);
+            for (const asset of orderedMatches(target.query, DEFAULT_ARRANGEMENT)) {
+                if (!excepted.has(asset.id)) applyPatch(asset, patch);
+            }
+            return delay(undefined);
+        }
+        return delay(undefined).then(() => {
+            throw new ApiError("domain", "update target requires either ids or a query", "validation");
+        });
     },
 };

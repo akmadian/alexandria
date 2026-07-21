@@ -10,6 +10,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
+import { useGridKeys } from "@/actions/use-grid-keys";
 import { api } from "@/api/client";
 import { type BlockModelOptions, useGridBlocks } from "@/api/queries";
 import { Button } from "@/components/button/button";
@@ -48,6 +49,9 @@ export function Grid({
         blockModelOptions,
     );
     const dispatch = useCatalogDispatch();
+    // Grid-context triage keys (0–5 rate, 6–9 label, P/X/U flag) against the C5
+    // target — cell faces stay read-only; the keys are the grid's write surface.
+    useGridKeys();
 
     // The data → store echo (frontend/09): seeds/clears the cursor with the
     // working set. The reducer no-ops when nothing changes, so this cannot loop.

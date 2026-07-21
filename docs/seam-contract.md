@@ -123,6 +123,17 @@ not strings; forward-compatible enum handling — are standing seam conventions.
   host mounts the catalog's thumbnail tree as asset-server middleware
   (`internal/app.ThumbnailMiddleware`; middleware, not the not-found handler, because the dev
   server's SPA fallback answers 200 for any GET).
+- The WRITE slice (triage) is bound for real (2026-07-20, judgment-writes round): `contract.ts`
+  gains `updateAssets(target, patch)`; the mock applies patches to its seeded assets (unknown
+  ids → `not_found`) and the Wails adapter binds `AssetService.UpdateAssets` through `toApiError`.
+  The wire patch is `TriagePatch` (`rating?`/`colorLabel?`/`flag?`/`note?`, three-state: absent =
+  don't touch, `null` = clear, value = set) and the target is `UpdateTarget` (`{ids} | {query,
+  exceptIds}`) — both hand-authored composites of generated unions (the seam struct's
+  `json.RawMessage` fields can't reflect into typed nullable-optional TS), with the wire field
+  names pinned twice: to `catalog.TriagePatch` by the crosswalk suite, and to the generated
+  bindings by types-only keyof pins in the Wails adapter. Writes are serialized through one
+  ordered lane and applied optimistically (frontend-architecture §Optimistic mutation × undo); the
+  frontend sends only the `ids` form until the undo round lands the net for mass writes.
 - Everything still pending has a trigger row in `../_project-tracking/DEFERRED.md` §7: the
   unbacked engine methods (tag management, folder tree, open-in, undo/redo, source removal,
   hard delete, presets, machine.json exposure), event-pump wiring (frontend/09 §Event pump),

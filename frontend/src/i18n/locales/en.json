@@ -198,7 +198,8 @@
         "reloadPanel": "Reload panel",
         "appCrashed": "Alexandria hit an unexpected error.",
         "copyDetails": "Copy error details",
-        "restartHint": "Restarting the app is the fastest fix. If it keeps happening, export logs from Help and attach them to a bug report."
+        "restartHint": "Restarting the app is the fastest fix. If it keeps happening, export logs from Help and attach them to a bug report.",
+        "writeFailed": "Couldn't save that change. It was reverted."
     },
     "actions": {
         "rate_0": "Clear rating",
@@ -210,6 +211,11 @@
         "flag_pick": "Flag as pick",
         "flag_reject": "Flag as reject",
         "clear_flag": "Clear flag",
+        "label_red": "Red label",
+        "label_yellow": "Yellow label",
+        "label_green": "Green label",
+        "label_blue": "Blue label",
+        "label_clear": "Clear label",
         "select_all": "Select all",
         "clear_selection": "Clear selection",
         "command_palette": "Command palette"

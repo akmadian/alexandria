@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useAssetTotal } from "@/api/queries";
 import { PaneErrorBoundary } from "@/components/error-boundary/error-boundary";
+import { NoticeRegion } from "@/components/notice/notice-region";
 import { DesignLibrary } from "@/features/design-library/design-library";
 import { Grid } from "@/features/grid/grid";
 import { Inspector } from "@/features/inspector/inspector";
@@ -61,6 +62,7 @@ function Shell() {
                         : "—"}
                 </span>
             </footer>
+            <NoticeRegion />
         </div>
     );
 }

@@ -1,0 +1,31 @@
+/* NoticeRegion — a transient overlay, so it earns a shadow (the elevation
+ * doctrine: shadow only on transient layers). Docked bottom-end, stacked. Minimal
+ * by decision (task 34 floor); the notice round owns the real positioning/motion. */
+
+.region {
+    position: fixed;
+    inset-block-end: var(--alx-space-4);
+    inset-inline-end: var(--alx-space-4);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-2);
+    max-width: 22rem;
+}
+
+.notice {
+    composes: alx-type-label from global;
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-3);
+    padding: var(--alx-space-2) var(--alx-space-3);
+    background: var(--alx-surface-transient);
+    color: var(--alx-ink-1);
+    border-radius: var(--alx-radius-transient);
+    box-shadow: var(--alx-shadow-occlusion);
+}
+
+.message {
+    flex: 1 1 auto;
+    min-width: 0;
+}

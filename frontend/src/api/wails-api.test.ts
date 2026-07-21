@@ -110,6 +110,24 @@ describe("wailsApi", () => {
         expect(failure).toBeInstanceOf(ApiError);
         expect((failure as ApiError).code).toBe("not_found");
     });
+
+    it("forwards updateAssets target + patch to the binding unchanged", async () => {
+        const updateAssets = vi.fn().mockResolvedValue(undefined);
+        stubAssetService({ UpdateAssets: updateAssets });
+        await expect(wailsApi.updateAssets({ ids: ["a", "b"] }, { rating: 3, colorLabel: null })).resolves.toBeUndefined();
+        // The contract shape crosses verbatim — a present key is a value or null,
+        // absent keys are omitted; Go's RawMessage fields decode the three states.
+        expect(updateAssets).toHaveBeenCalledWith({ ids: ["a", "b"] }, { rating: 3, colorLabel: null });
+    });
+
+    it("normalizes an updateAssets rejection into ApiError", async () => {
+        stubAssetService({
+            UpdateAssets: vi.fn().mockRejectedValue('{"kind":"domain","code":"not_found","detail":"asset z"}'),
+        });
+        const failure = await wailsApi.updateAssets({ ids: ["z"] }, { rating: 1 }).catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(ApiError);
+        expect((failure as ApiError).code).toBe("not_found");
+    });
 });
 
 describe("toApiError", () => {

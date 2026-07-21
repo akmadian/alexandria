@@ -53,18 +53,27 @@
     white-space: pre;
 }
 
-/* Judgment value composites: swatch/glyph + word, never color alone (§10). */
-.labelValue {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--alx-space-2);
-    min-width: 0;
-}
-
-.flagGlyph {
-    flex: none;
-}
-
 .empty {
     color: var(--alx-ink-3);
+}
+
+/* Judgment editors (task 34): the register grammar (rest/hover/pressed/selected
+ * fill, focus ring) is the ToggleButton primitive's own — only the swatch-pad
+ * GEOMETRY is overridden: a compact quantum pad instead of the toolbar control
+ * height/inset, so the pads sit inside the §8 text row. */
+.editorGroup {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--alx-space-1);
+}
+
+.judgmentToggle {
+    height: auto;
+    padding: var(--alx-space-1);
+    color: var(--alx-ink-2);
+}
+
+/* The note is a full-width field (its own label), not a label|value row. */
+.noteField {
+    padding: var(--alx-space-2) var(--alx-size-row-inset) 0;
 }

@@ -12,15 +12,15 @@
 
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { AssetDetail } from "@/api/contract";
+import type { AssetDetail, TriagePatch } from "@/api/contract";
+import { useUpdateAssets } from "@/api/mutations";
 import { useAsset } from "@/api/queries";
 import { Button } from "@/components/button/button";
-import { Icon } from "@/components/icon/icon";
-import { LabelSwatch } from "@/components/label-swatch/label-swatch";
 import { PanelSection } from "@/components/panel-section/panel-section";
-import { Rating } from "@/components/rating/rating";
 import { Row } from "@/components/row/row";
+import { FlagEditor, LabelEditor, NoteEditor, RatingEditor } from "./judgment-editors";
 import { cx } from "@/lib/cx";
+import { log } from "@/lib/logger";
 import {
     formatBytes,
     formatDateTime,
@@ -29,7 +29,7 @@ import {
     formatFocalLength,
     formatGps,
 } from "@/lib/format";
-import { useCursorId } from "@/stores/catalog-store";
+import { readTriageTargetIds, useCursorId } from "@/stores/catalog-store";
 import styles from "./inspector.module.css";
 
 /**
@@ -78,33 +78,35 @@ function folderOf(relativePath: string): string | null {
     return lastSlash > 0 ? relativePath.slice(0, lastSlash) : null;
 }
 
+// The Judgment editors are ALWAYS present (unlike the read-only convention where
+// label/flag showed only when set) — you can't set an unset value without its
+// control. They write the C5 target (selection if non-empty, else the cursor —
+// Ari ruling 2026-07-20: the panel is a verb surface like the keys, not a
+// single-subject exception), resolved at gesture time exactly as the triage keys
+// do. The DISPLAYED values are the subject's (the cursor asset); a mixed-value
+// display for differing selections is the deferred refinement the read-only
+// round flagged. An `all`-shaped selection is a gated no-op (no mass write
+// until the undo round lands the net).
 function JudgmentSection({ detail }: { detail: AssetDetail }) {
     const { t } = useTranslation();
-    const rows: FieldRow[] = [{ key: "rating", label: t("inspector.rating"), value: <Rating value={detail.rating} /> }];
-    if (detail.colorLabel !== null) {
-        pushRow(
-            rows,
-            "colorLabel",
-            t("inspector.colorLabel"),
-            <span className={styles.labelValue}>
-                <LabelSwatch label={detail.colorLabel} />
-                {t(`colorLabel.${detail.colorLabel}`)}
-            </span>,
-        );
-    }
-    if (detail.flag !== null) {
-        pushRow(
-            rows,
-            "flag",
-            t("inspector.flag"),
-            <span className={styles.labelValue}>
-                <Icon concept={detail.flag === "reject" ? "reject" : "flag"} className={styles.flagGlyph} />
-                {t(`flag.${detail.flag}`)}
-            </span>,
-        );
-    }
-    pushRow(rows, "note", t("inspector.note"), detail.note);
-    return <Section head={t("inspector.sectionJudgment")} rows={rows} />;
+    const { writeTriage } = useUpdateAssets();
+    const write = (patch: TriagePatch): void => {
+        const targetIds = readTriageTargetIds();
+        if (targetIds === null || targetIds.length === 0) {
+            log.debug("inspector: judgment write skipped (all-shaped or empty target)");
+            return;
+        }
+        writeTriage({ ids: targetIds }, patch);
+    };
+    return (
+        <PanelSection head={t("inspector.sectionJudgment")} intent="text">
+            <Row label={t("inspector.rating")} value={<RatingEditor value={detail.rating} write={write} />} />
+            <Row label={t("inspector.colorLabel")} value={<LabelEditor value={detail.colorLabel} write={write} />} />
+            <Row label={t("inspector.flag")} value={<FlagEditor value={detail.flag} write={write} />} />
+            {/* Keyed by id so switching subject remounts the note draft (§13 full-width field). */}
+            <NoteEditor key={detail.id} value={detail.note} write={write} />
+        </PanelSection>
+    );
 }
 
 function FileSection({ detail }: { detail: AssetDetail }) {

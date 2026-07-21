@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WhereNode } from "@/query-model/ast";
 import { leaf } from "@/query-model/registry";
-import { reduce, type Selection, selectionHas, selectionSize } from "./catalog-store";
+import { reduce, type Selection, selectionHas, selectionSize, triageTargetIds } from "./catalog-store";
 
 const ids = (...values: string[]): Selection => ({ kind: "ids", ids: new Set(values) });
 const all = (...except: string[]): Selection => ({ kind: "all", except: new Set(except) });
@@ -99,5 +99,21 @@ describe("selectionSize", () => {
     it("sizes an all-selection against the working-set total", () => {
         expect(selectionSize(all("a"), 10)).toBe(9);
         expect(selectionSize(all(), 10)).toBe(10);
+    });
+});
+
+describe("triageTargetIds (C5 targeting)", () => {
+    it("targets a non-empty selection", () => {
+        expect(triageTargetIds(ids("a", "b"), "a")?.sort()).toEqual(["a", "b"]);
+    });
+    it("falls back to the cursor when the selection is empty", () => {
+        expect(triageTargetIds(ids(), "c")).toEqual(["c"]);
+    });
+    it("targets nothing when there's no selection and no cursor", () => {
+        expect(triageTargetIds(ids(), null)).toEqual([]);
+    });
+    it("gates an all-shaped selection (null = mass write not sent this round)", () => {
+        expect(triageTargetIds(all(), "a")).toBeNull();
+        expect(triageTargetIds(all("x"), "a")).toBeNull();
     });
 });

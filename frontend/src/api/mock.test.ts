@@ -168,3 +168,89 @@ describe("mock query engine", () => {
         });
     });
 });
+
+describe("mock updateAssets (the write path)", () => {
+    // The mock mutates its shared seed in place (the SQL UPDATE stand-in), so each
+    // case snapshots the subject's judgment and restores it, keeping the suite
+    // order-independent.
+    async function withRestored(id: string, body: () => Promise<void>): Promise<void> {
+        const before = await mockApi.getAsset(id);
+        try {
+            await body();
+        } finally {
+            await mockApi.updateAssets(
+                { ids: [id] },
+                { rating: before.rating, colorLabel: before.colorLabel, flag: before.flag, note: before.note },
+            );
+        }
+    }
+
+    it("sets a value field (rating) and leaves absent fields untouched", async () => {
+        await withRestored("mock-0002", async () => {
+            const before = await mockApi.getAsset("mock-0002");
+            await mockApi.updateAssets({ ids: ["mock-0002"] }, { rating: 5 });
+            const after = await mockApi.getAsset("mock-0002");
+            expect(after.rating).toBe(5);
+            expect(after.colorLabel).toBe(before.colorLabel); // absent key untouched
+            expect(after.flag).toBe(before.flag);
+        });
+    });
+
+    it("clears a field with an explicit null (three-state: null = clear)", async () => {
+        await withRestored("mock-0003", async () => {
+            expect((await mockApi.getAsset("mock-0003")).rating).toBe(5); // pinned seed
+            await mockApi.updateAssets({ ids: ["mock-0003"] }, { rating: null });
+            expect((await mockApi.getAsset("mock-0003")).rating).toBeNull();
+        });
+    });
+
+    it("applies label and flag together, and a note", async () => {
+        await withRestored("mock-0006", async () => {
+            await mockApi.updateAssets({ ids: ["mock-0006"] }, { colorLabel: "green", flag: "pick", note: "keep" });
+            const after = await mockApi.getAsset("mock-0006");
+            expect(after.colorLabel).toBe("green");
+            expect(after.flag).toBe("pick");
+            expect(after.note).toBe("keep");
+        });
+    });
+
+    it("applies to every listed id and is visible in the query result too", async () => {
+        await withRestored("mock-0000", async () => {
+            await withRestored("mock-0001", async () => {
+                await mockApi.updateAssets({ ids: ["mock-0000", "mock-0001"] }, { rating: 4 });
+                const { items } = await mockApi.queryAssets(LIBRARY, DEFAULT_ARRANGEMENT, ALL);
+                const byId = new Map(items.map((row) => [row.id, row]));
+                expect(byId.get("mock-0000")?.rating).toBe(4);
+                expect(byId.get("mock-0001")?.rating).toBe(4);
+            });
+        });
+    });
+
+    it("rejects with not_found when any id is unknown, without half-applying", async () => {
+        const before = await mockApi.getAsset("mock-0004");
+        await expect(mockApi.updateAssets({ ids: ["mock-0004", "nope"] }, { rating: 1 })).rejects.toMatchObject({
+            name: "ApiError",
+            kind: "domain",
+            code: "not_found",
+        });
+        expect((await mockApi.getAsset("mock-0004")).rating).toBe(before.rating); // untouched
+    });
+
+    it("rejects an empty ids target with validation, like the real seam's target switch", async () => {
+        await expect(mockApi.updateAssets({ ids: [] }, { rating: 1 })).rejects.toMatchObject({
+            name: "ApiError",
+            kind: "domain",
+            code: "validation",
+        });
+    });
+
+    it("treats an explicitly-undefined key as don't-touch, never a clear (JSON drops it at the seam)", async () => {
+        await withRestored("mock-0003", async () => {
+            expect((await mockApi.getAsset("mock-0003")).rating).toBe(5); // pinned seed
+            await mockApi.updateAssets({ ids: ["mock-0003"] }, { rating: undefined, flag: "pick" });
+            const after = await mockApi.getAsset("mock-0003");
+            expect(after.rating).toBe(5); // undefined ≠ null: not cleared
+            expect(after.flag).toBe("pick");
+        });
+    });
+});

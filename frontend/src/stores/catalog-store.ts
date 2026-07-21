@@ -131,6 +131,26 @@ export const useCursorId = (): AssetID | null => useCatalogStore((s) => s.cursor
  * bail. Never call during render — reactive reads go through the curated hooks
  * above (a whole-cursor `useCursorId` returns when Loupe needs its subject). */
 export const readCursorId = (): AssetID | null => useCatalogStore.getState().cursorId;
+
+/**
+ * The C5 write target as PURE selection math (exported for tests): the selection
+ * if non-empty, else the cursor as a singleton. `[]` = nothing to act on (no
+ * selection, no cursor); `null` = an `all`-shaped selection, a mass write the
+ * frontend deliberately does NOT send until the undo round lands the net (task 34
+ * ruling; the seam accepts the query form, the frontend gates it).
+ */
+export function triageTargetIds(selection: Selection, cursorId: AssetID | null): AssetID[] | null {
+    if (selection.kind === "all") return null;
+    if (selection.ids.size > 0) return [...selection.ids];
+    return cursorId === null ? [] : [cursorId];
+}
+
+/** The C5 write target resolved NON-reactively for verb dispatch (keyboard triage) —
+ * a getState read for event handlers, like readCursorId. Never call during render. */
+export function readTriageTargetIds(): AssetID[] | null {
+    const { selection, cursorId } = useCatalogStore.getState();
+    return triageTargetIds(selection, cursorId);
+}
 export const useFilter = (): WhereNode | null => useCatalogStore((s) => s.filter);
 export const useViewMode = (): ViewMode => useCatalogStore((s) => s.viewMode);
 export const useCatalogDispatch = (): ((action: CatalogAction) => void) => useCatalogStore((s) => s.dispatch);
