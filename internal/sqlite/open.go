@@ -39,8 +39,18 @@ func Open(dir string) (*Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
+	// _txlock=immediate takes the write lock at BEGIN. Every InTx is a write
+	// transaction (plain reads go through s.DB, never a tx), so this costs nothing
+	// and buys busy-handler coverage: a DEFERRED tx that reads first (the D28
+	// enrichment staleness guard) then upgrades to a write fails SQLITE_BUSY
+	// *instantly* under contention — SQLite refuses to wait on a lock upgrade to
+	// avoid deadlock, so busy_timeout never fires. IMMEDIATE never upgrades, so the
+	// busy handler covers it and the two writer goroutines (ingest + enrichment)
+	// take orderly turns at the WAL lock, as D28 promises. busy_timeout is the
+	// per-writer wait ceiling on that turn-taking (30s: a queued backlog drain with
+	// synchronous=FULL can hold the lock past a few seconds).
 	dsn := filepath.Join(dir, CatalogDBFile) +
-		"?_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+		"?_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(30000)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err == nil {
 		err = db.Ping() // sql.Open is lazy; surface open failures now

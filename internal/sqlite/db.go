@@ -51,11 +51,9 @@ func reposFor(queryer DBTX) Repos {
 // InTx runs fn with repositories bound to a single transaction: commit on
 // success, roll back on any error (or panic). This is the unit of atomicity for
 // multi-statement writes (relink = UpdatePath + SetFileStatus; duplicate =
-// Create + Dups.Log) and for the pipeline's batched commits.
-//
-// ponytail: uses the driver's default BEGIN (deferred). Upgrade to BEGIN
-// IMMEDIATE via the "_txlock=immediate" DSN param (set in Open) if write-lock
-// contention ever surfaces; deferred is correct, just lazier about the lock.
+// Create + Dups.Log) and for the pipeline's batched commits. Every InTx is a
+// write transaction, which is why Open sets _txlock=immediate — see that DSN's
+// comment for the contention story.
 func (s *Store) InTx(ctx context.Context, operation func(Repos) error) (err error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
