@@ -73,8 +73,8 @@ interface CatalogViewState {
 
 *Dated note (2026-07-19, cell-slots round):* three implementation rulings are sanctioned as
 built. (1) The cursor is stored as `cursorId` alone — the `{id, index}` index hint is derived
-at gesture time (`findIndex` over the loaded page today; `IndexOfAsset` at the block-model
-widen). (2) `asset-clicked` carries a semantic `additive` flag rather than raw modifiers:
+at gesture time: the grid's resident blocks answer locally, else `indexOfAsset` at the seam.
+(2) `asset-clicked` carries a semantic `additive` flag rather than raw modifiers:
 platform-modifier translation lives at the DOM edge, the reducer owns what the intent means;
 gesture handlers read the cursor NON-reactively (the store's `readCursorId`) so their identity
 survives cursor moves and memoized cells bail. (3) The component data rule is explicit:

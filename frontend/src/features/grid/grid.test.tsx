@@ -4,13 +4,13 @@
 // cursor to the first row. fireEvent (not userEvent) carries the modifier
 // flags — these are bespoke divs, no RAC press routing involved.
 
-import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api } from "@/api/client";
-import type { AssetRow } from "@/api/contract";
 import { Providers } from "@/app/providers";
 import { log } from "@/lib/logger";
+import { DEFAULT_ARRANGEMENT, type Query } from "@/query-model/ast";
 import { leaf } from "@/query-model/registry";
 import { type CatalogAction, useCatalogDispatch } from "@/stores/catalog-store";
 import { columnsForWidth, Grid } from "./grid";
@@ -78,10 +78,56 @@ test("shift-click materializes the range through the seam and lands the cursor o
     expect(cells[0]?.hasAttribute("data-selected")).toBe(false);
 });
 
-test("shift-click with the anchor gone falls back to a plain single select", async () => {
+test("a shift-click anchor outside the resident blocks resolves through the seam", async () => {
+    // Re-render with dev-sized blocks (the Grid's test seam) so the 64-row mock
+    // spans eight blocks and an asset can genuinely live OUTSIDE residency.
+    cleanup();
+    render(
+        <Providers>
+            <Grid blockModelOptions={{ blockSize: 8, bufferBlocks: 0, residentCap: 10, debounceMs: 0 }} />
+        </Providers>,
+    );
+    // Wait past block 0 alone: an index-8+ cell rendering proves block 1 landed.
+    await waitFor(() => expect(screen.getAllByRole("gridcell").length).toBeGreaterThanOrEqual(12));
+    const cells = screen.getAllByRole("gridcell");
+    const library: Query = { version: 1, scope: { kind: "library" }, where: null };
+    const { items } = await api.queryAssets(library, DEFAULT_ARRANGEMENT, { offset: 0, limit: 64 });
+    const anchorId = items[60]?.id;
+    if (anchorId === undefined) throw new Error("mock catalog shrank below 61 rows");
+    // The anchor sits at index 60 — block 7, resident nowhere near the viewport's
+    // blocks — so localIndexOf misses and indexOfAsset places it over the seam.
+    act(() => dispatch({ type: "cursor-set", id: anchorId, select: false }));
+    fireEvent.click(cells[2] as HTMLElement, { shiftKey: true });
+    await waitFor(() => expect(cells[2]?.hasAttribute("data-selected")).toBe(true));
+    // The full 2..60 range landed: every rendered cell from the clicked end on is
+    // selected, the rows before it are not, and the clicked end carries the cursor.
+    expect(cells[2]?.hasAttribute("data-cursor")).toBe(true);
+    expect(cells[10]?.hasAttribute("data-selected")).toBe(true);
+    expect(cells[0]?.hasAttribute("data-selected")).toBe(false);
+    expect(cells[1]?.hasAttribute("data-selected")).toBe(false);
+});
+
+test("a failed anchor lookup degrades the shift-click to a plain single select", async () => {
     const cells = await loadedCells();
-    // A cursor id no loaded row carries — the block-model scenario the
-    // ponytail'd findIndex lookup cannot resolve.
+    const errorSpy = vi.spyOn(log, "error");
+    // The cursor's id is in no resident block, and the seam lookup REJECTS —
+    // the gesture must not die as an unhandled rejection.
+    vi.spyOn(api, "indexOfAsset").mockRejectedValueOnce(new Error("catalog busy"));
+    act(() => dispatch({ type: "cursor-set", id: "not-a-loaded-asset", select: false }));
+    fireEvent.click(cells[2] as HTMLElement, { shiftKey: true });
+    await waitFor(() => expect(cells[2]?.hasAttribute("data-selected")).toBe(true));
+    expect(cells[2]?.hasAttribute("data-cursor")).toBe(true);
+    expect(cells.filter((cell) => cell.hasAttribute("data-selected"))).toHaveLength(1);
+    expect(errorSpy).toHaveBeenCalledWith("grid: anchor index lookup failed — degrading to single select", {
+        error: "Error: catalog busy",
+    });
+});
+
+test("shift-click with the anchor absent falls back to a plain single select", async () => {
+    const cells = await loadedCells();
+    // A cursor id no resident block carries AND the seam can't place — the block
+    // model resolves the anchor via indexOfAsset (mock returns null here), so the
+    // gesture has no other end and degrades to a plain single select.
     act(() => dispatch({ type: "cursor-set", id: "not-a-loaded-asset", select: false }));
     fireEvent.click(cells[2] as HTMLElement, { shiftKey: true });
     await waitFor(() => expect(cells[2]?.hasAttribute("data-selected")).toBe(true));
@@ -100,37 +146,6 @@ test("a failed fetch renders the error state; Retry recovers into the empty stat
     // so recovery lands in the explicit EMPTY state — three branches, one flow.
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("No assets match.")).toBeVisible();
-});
-
-test("the page-cap truncation logs loudly — the UI never pretends", async () => {
-    await loadedCells();
-    const truncatedRow: AssetRow = {
-        kind: "asset",
-        id: "cap-1",
-        sourceId: "cap",
-        filename: "cap.jpg",
-        fileType: "image",
-        fileStatus: "online",
-        rating: null,
-        colorLabel: null,
-        flag: null,
-        width: 100,
-        height: 100,
-        durationSecs: null,
-        cameraModel: null,
-        capturedAt: null,
-        ingestedAt: "2026-07-01T00:00:00Z",
-        thumbnailAt: null,
-        relativePath: "cap.jpg",
-        sizeBytes: 1,
-        thumbURL: "data:image/svg+xml,cap",
-    };
-    const warn = vi.spyOn(log, "warn");
-    vi.spyOn(api, "queryAssets").mockResolvedValueOnce({ items: [truncatedRow], total: 2 });
-    act(() => dispatch({ type: "filter-replaced", filter: leaf("filename", "contains", "cap-probe") }));
-    await waitFor(() =>
-        expect(warn).toHaveBeenCalledWith("api: page cap truncates the working set", { total: 2, loaded: 1 }),
-    );
 });
 
 test("an unloaded row renders the placeholder mat — no image, no interactivity", () => {

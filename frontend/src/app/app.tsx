@@ -6,7 +6,7 @@
 
 import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryAssets } from "@/api/queries";
+import { useAssetTotal } from "@/api/queries";
 import { PaneErrorBoundary } from "@/components/error-boundary/error-boundary";
 import { DesignLibrary } from "@/features/design-library/design-library";
 import { Grid } from "@/features/grid/grid";
@@ -31,15 +31,14 @@ function useHash(): string {
 function Shell() {
     const { t } = useTranslation();
     const { query, arrangement } = useCatalogQuery();
-    const { data } = useQueryAssets(query, arrangement);
-    const total = data?.total ?? 0;
-    const selected = useSelectionCount(total);
+    const total = useAssetTotal(query, arrangement);
+    const selected = useSelectionCount(total ?? 0);
 
     return (
         <div className={s.shell}>
             <header className={s.header}>
                 <span className={s.title}>{t("shell.library")}</span>
-                {data && (
+                {total !== undefined && (
                     <span className={s.metric}>
                         {t("shell.assets", { count: total, formatted: formatNumber(total) })}
                     </span>

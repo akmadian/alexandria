@@ -26,10 +26,9 @@ export const GridCell = memo(function GridCell({
     index,
     onCellClick,
 }: {
-    /** Undefined = the row's block hasn't landed — the grey placeholder mat.
-     * Reachable TODAY on real catalogs past the 500-row page cap (queries.ts
-     * logs the truncation); the block-model widen makes it the normal
-     * mid-scroll state. */
+    /** Undefined = the row's block isn't resident — the grey placeholder mat.
+     * The normal mid-scroll state under the block model: rows outside the
+     * viewport's resident blocks render this until their block lands. */
     row: AssetRow | undefined;
     index: number;
     onCellClick: CellClickHandler;

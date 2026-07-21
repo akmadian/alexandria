@@ -9,10 +9,11 @@
 // same sanction as app.tsx.
 
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { api } from "@/api/client";
-import { useQueryAssets } from "@/api/queries";
+import { type BlockModelOptions, useGridBlocks } from "@/api/queries";
 import { Button } from "@/components/button/button";
+import { log } from "@/lib/logger";
 import { readCursorId, useCatalogDispatch, useCatalogQuery } from "@/stores/catalog-store";
 import { GridCell } from "./grid-cell";
 import { commitRange } from "./select-range";
@@ -34,21 +35,26 @@ export function columnsForWidth(width: number): number {
     return Math.max(1, Math.floor(width / TARGET_CELL_WIDTH));
 }
 
-export function Grid() {
+export function Grid({
+    blockModelOptions,
+}: {
+    /** Test seam mirroring useGridBlocks' own: small blocks so the 64-row mock crosses block boundaries. */
+    blockModelOptions?: BlockModelOptions;
+} = {}) {
     const { query, arrangement } = useCatalogQuery();
-    const { data, isPending, isError, refetch } = useQueryAssets(query, arrangement);
+    const { total, rowAt, localIndexOf, isPending, isError, refetch, setViewport } = useGridBlocks(
+        query,
+        arrangement,
+        blockModelOptions,
+    );
     const dispatch = useCatalogDispatch();
 
     // The data → store echo (frontend/09): seeds/clears the cursor with the
     // working set. The reducer no-ops when nothing changes, so this cannot loop.
+    const firstId = rowAt(0)?.id ?? null;
     useEffect(() => {
-        if (data === undefined) return;
-        dispatch({
-            type: "working-set-changed",
-            total: data.total,
-            firstId: data.items[0]?.id ?? null,
-        });
-    }, [data, dispatch]);
+        dispatch({ type: "working-set-changed", total, firstId });
+    }, [total, firstId, dispatch]);
 
     const scrollReference = useRef<HTMLDivElement>(null);
     const [width, setWidth] = useState(0);
@@ -62,8 +68,6 @@ export function Grid() {
         return () => observer.disconnect();
     }, []);
 
-    const total = data?.total ?? 0;
-    const items = useMemo(() => data?.items ?? [], [data]);
     const columns = columnsForWidth(width);
     const thumbEdge = width > 0 ? width / columns : TARGET_CELL_WIDTH;
     const rowHeight = thumbEdge + CELL_BAND_HEIGHT;
@@ -81,6 +85,41 @@ export function Grid() {
         virtualizer.measure();
     }, [rowHeight, virtualizer]);
 
+    // Report the visible working-set index span so the block model fetches the
+    // viewport's blocks (+buffer). The virtual row range × columns → asset indices.
+    const virtualItems = virtualizer.getVirtualItems();
+    const firstVirtualRow = virtualItems[0]?.index ?? 0;
+    const lastVirtualRow = virtualItems.at(-1)?.index ?? 0;
+    useEffect(() => {
+        if (total === 0) return;
+        setViewport(firstVirtualRow * columns, lastVirtualRow * columns + (columns - 1));
+    }, [firstVirtualRow, lastVirtualRow, columns, total, setViewport]);
+
+    // A shift-click needs the cursor's index to name the range's other end. Resident
+    // blocks answer locally; outside them the seam does (indexOfAsset) — the anchor
+    // index no longer has to be on screen (the single-page model's constraint).
+    const beginRange = useCallback(
+        async (cursorId: string, clickedId: string, targetIndex: number) => {
+            let anchorIndex: number | null;
+            try {
+                anchorIndex = localIndexOf(cursorId) ?? (await api.indexOfAsset(query, arrangement, cursorId));
+            } catch (error) {
+                // A failed seam lookup must not kill the gesture silently (the
+                // select-range discipline): log loudly, then degrade below.
+                log.error("grid: anchor index lookup failed — degrading to single select", { error: String(error) });
+                anchorIndex = null;
+            }
+            if (anchorIndex === null) {
+                // No anchor — the cursor's asset isn't placeable in this working
+                // set — so the shift-click degrades to a plain single select.
+                dispatch({ type: "asset-clicked", id: clickedId, additive: false });
+                return;
+            }
+            await commitRange(api, query, arrangement, anchorIndex, targetIndex, dispatch);
+        },
+        [localIndexOf, query, arrangement, dispatch],
+    );
+
     // The gesture layer: platform modifiers translate to semantic intent at the
     // DOM edge; the reducer owns what the intent MEANS. The cursor anchor is
     // read NON-reactively (readCursorId) so this handler — and with it every
@@ -90,17 +129,12 @@ export function Grid() {
         (event: MouseEvent, id: string, index: number) => {
             const cursorId = readCursorId();
             if (event.shiftKey && cursorId !== null) {
-                // ponytail: anchor index from the loaded page (single-page model);
-                // the block-model widen swaps this findIndex for IndexOfAsset.
-                const anchorIndex = items.findIndex((row) => row.id === cursorId);
-                if (anchorIndex !== -1) {
-                    void commitRange(api, query, arrangement, anchorIndex, index, dispatch);
-                    return;
-                }
+                void beginRange(cursorId, id, index);
+                return;
             }
             dispatch({ type: "asset-clicked", id, additive: event.metaKey || event.ctrlKey });
         },
-        [items, query, arrangement, dispatch],
+        [beginRange, dispatch],
     );
 
     // The states render INSIDE the scroll container so the measured element is
@@ -134,7 +168,7 @@ export function Grid() {
     return (
         <div ref={scrollReference} className={styles.scroll} role="grid" aria-rowcount={rowCount}>
             <div className={styles.canvas} style={{ height: virtualizer.getTotalSize() }}>
-                {virtualizer.getVirtualItems().map((virtualRow) => (
+                {virtualItems.map((virtualRow) => (
                     <div
                         key={virtualRow.key}
                         role="row"
@@ -152,7 +186,7 @@ export function Grid() {
                             return (
                                 <GridCell
                                     key={index}
-                                    row={items[index]}
+                                    row={rowAt(index)}
                                     index={index}
                                     onCellClick={onCellClick}
                                 />
