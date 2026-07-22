@@ -1,0 +1,221 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Alexandria — control-container unification probe</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: oklch(0.86 0 0); font-family: Geist, sans-serif; padding: 28px 28px 60px; color: oklch(0.2 0 0); }
+  h1 { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  .sub { font-size: 11px; color: oklch(0.45 0 0); font-family: "Geist Mono", monospace; margin-bottom: 22px; max-width: 1000px; line-height: 16px; }
+  .themerow { margin-bottom: 26px; }
+  .themelabel { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.35 0 0); margin-bottom: 8px; }
+  .cols { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 6px; }
+  .collabel { font-size: 11px; font-family: "Geist Mono", monospace; color: oklch(0.4 0 0); }
+  .collabel b { color: oklch(0.2 0 0); font-family: Geist; font-weight: 600; }
+  .delta { font-size: 10px; font-family: "Geist Mono", monospace; color: oklch(0.5 0 0); }
+
+  /* ============ treatment maps: holders → role vars (role vars set inline per theme) ============ */
+  .before  { --well: var(--field); --dropdown: var(--field); --chip: var(--pill);  --track: var(--sunken); --tracksel: var(--raised); --tintbtn: var(--hover); }
+  .after-a { --well: var(--field); --dropdown: var(--field); --chip: var(--field); --track: var(--field);  --tracksel: var(--raised); --tintbtn: var(--field); }
+  .after-b { --well: var(--field); --dropdown: var(--field); --chip: var(--field); --track: var(--sunken); --tracksel: var(--raised); --tintbtn: var(--field); }
+
+  /* ============ the mini inspector panel ============ */
+  .panel { width: 288px; background: var(--panel); color: var(--ink1);
+           border-radius: 10px; outline: 1px solid var(--hairline); padding-bottom: 10px; overflow: hidden; }
+  .phead { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--hairline); }
+  .phead b { font-size: 12px; font-weight: 600; }
+  .phead .sp { margin-left: auto; }
+  .phead .ic { color: var(--ink3); font-size: 13px; }
+  .sect { font-size: 12px; font-weight: 600; padding: 12px 12px 6px; }
+  .well { background: var(--well); border: 1px solid transparent; border-radius: 6px; height: 28px;
+          display: flex; align-items: center; padding: 0 10px; margin: 0 12px; font-size: 12px; color: var(--ink1); }
+  .frow { display: flex; align-items: center; height: 34px; padding: 0 12px; font-size: 12px; }
+  .frow .k { color: var(--ink2); }
+  .frow .ctl { margin-left: auto; }
+  .dropdown { background: var(--dropdown); border: 1px solid transparent; border-radius: 6px; height: 24px;
+              display: inline-flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--ink1); }
+  .dropdown .chev { color: var(--ink3); font-size: 10px; }
+  .seg { background: var(--track); border-radius: 8px; padding: 2px; display: inline-flex; gap: 2px; }
+  .seg .opt { height: 20px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 6px; color: var(--ink3); font-size: 11px; }
+  .seg .opt.on { background: var(--tracksel); color: var(--ink1); font-weight: 600; }
+  .chip { background: var(--chip); border: 1px solid transparent; border-radius: 6px; padding: 2px 9px; font-size: 11px; color: var(--ink1); }
+  .vrow { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; margin: 0 12px 4px; font-size: 12px;
+          background: var(--vfill); border-radius: 6px; }
+  .before .vrow { background: transparent; border-radius: 0; margin: 0 12px; border-bottom: 1px solid var(--hairline); }
+  .after-a .vrow, .after-b .vrow { --vfill: var(--field); }
+  .vrow .g { color: var(--ink3); font-family: "Geist Mono", monospace; font-size: 12px; }
+  .foot { padding: 10px 12px 0; }
+  .tintbtn { background: var(--tintbtn); border: 1px solid transparent; border-radius: 6px; height: 26px;
+             display: inline-flex; align-items: center; padding: 0 12px; font-size: 12px; font-weight: 500; color: var(--ink1); }
+
+  /* ============ size-ladder view ============ */
+  .ladderwrap { margin-bottom: 20px; }
+  .ladderpanel { display: flex; gap: 20px; padding: 16px; border-radius: 10px; width: max-content;
+                 background: var(--panel); color: var(--ink1); outline: 1px solid var(--hairline); }
+  .sizecol { display: flex; flex-direction: column; gap: 9px; width: 158px; }
+  .sizecol .sl { font-size: 11px; font-family: "Geist Mono", monospace; color: var(--ink3); }
+  .le { background: var(--field); border-radius: 6px; display: flex; align-items: center; color: var(--ink1); }
+  .le.dd { justify-content: space-between; }
+  .le.dd .chev { color: var(--ink3); }
+  .le.vr { gap: 8px; }
+  .le.vr .g { color: var(--ink3); font-family: "Geist Mono", monospace; }
+  .le.chip { display: inline-flex; width: max-content; }
+  .lseg { background: var(--sunken); border-radius: 8px; padding: 2px; display: inline-flex; gap: 2px; width: max-content; }
+  .lseg .o { display: inline-flex; align-items: center; border-radius: 6px; color: var(--ink3); }
+  .lseg .o.on { background: var(--raised); color: var(--ink1); font-weight: 600; }
+  .lseg.na { background: transparent; color: var(--ink4); font-family: "Geist Mono", monospace; font-size: 10px; padding: 0; }
+
+  /* ============ isolated diagnostic ============ */
+  .diagwrap { margin-bottom: 20px; }
+  .diagpanel { background: var(--panel); color: var(--ink1); border-radius: 10px; outline: 1px solid var(--hairline);
+               padding: 18px; display: flex; flex-direction: column; gap: 18px; width: max-content; }
+  .dh { font-size: 11px; font-family: "Geist Mono", monospace; color: var(--ink3); margin-bottom: 7px; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sw { width: 116px; height: 54px; border-radius: 6px; outline: 1px solid var(--hairline);
+        display: flex; flex-direction: column; justify-content: flex-end; padding: 5px 8px;
+        font-size: 9px; font-family: "Geist Mono", monospace; color: var(--ink1); }
+  .sw .n { font-weight: 600; }
+  .drow { display: flex; gap: 28px; align-items: flex-start; }
+  .dcap { font-size: 10px; font-family: "Geist Mono", monospace; color: var(--ink3); margin-top: 6px; }
+</style>
+</head>
+<body>
+  <h1>Control-container unification — before / after</h1>
+  <div class="sub">Same mini inspector, three ways, across all four themes (real Geist, real committed OKLCH). BEFORE = today's six-source fragmentation (field 0.955 · sunken track 0.91 · value-chip pill 0.945 · tint-button hover 0.97 · bare rows). AFTER-A = one shallow container for everything incl. the segmented track, raised pill carries selection (sunken retired). AFTER-B = one container everywhere + the segmented track kept one step deeper (the single exception, so the borderless pill pops harder). Watch the "pill pop" ΔL — that's the A-vs-B tradeoff. Nothing in the token system has changed; this is inline values only.</div>
+  <h2 style="font-size:13px;font-weight:600;margin:4px 0 2px">What actually changes (isolated)</h2>
+  <div class="sub" style="margin-bottom:14px">Three things, big, on paper + graphite. (1) The six "sources" as tone swatches — on paper they're nearly the same gray (that's why the panels look identical); on graphite they visibly split. (2) The value row: bare hairline text → filled recessed chip (the real cohesion win). (3) A vs B is ONLY the segmented track depth — watch the "Pro" pill pop.</div>
+  <div id="diag"></div>
+
+  <h2 style="font-size:13px;font-weight:600;margin:22px 0 2px">Size ladder — the unified container at xs/sm/md/lg (AFTER-B material)</h2>
+  <div class="sub" style="margin-bottom:14px">Same recessed container across the four control tiers (16/20/24/28). Height, inline pad (4/8/12/16), and type (value 10/11/12/13) step per tier; radius is flat at 6px and recess depth is flat. The eye-gate: does one radius + one recess depth read cohesive from dense 16 to prominent 28, or does the small end want less radius? SegmentedControl excludes xs (a 16 track crops its segment — D33).</div>
+  <div id="ladder"></div>
+
+  <h2 style="font-size:13px;font-weight:600;margin:22px 0 2px">Full panel — before / after, four themes</h2>
+  <div class="sub" style="margin-bottom:14px">The material comparison (all at the md tier).</div>
+  <div id="root"></div>
+
+<script>
+  const THEMES = {
+    paper:    { panel:1.00, field:0.955, sunken:0.910, hover:0.970, pill:0.945, raised:1.00, ink1:0.15, ink2:0.42, ink3:0.56, ink4:0.68, hairline:0.885 },
+    linen:    { panel:0.905, field:0.885, sunken:0.850, hover:0.883, pill:0.930, raised:0.98, ink1:0.23, ink2:0.39, ink3:0.52, ink4:0.63, hairline:0.815 },
+    graphite: { panel:0.30, field:0.272, sunken:0.240, hover:0.330, pill:0.405, raised:0.44, ink1:0.93, ink2:0.75, ink3:0.655, ink4:0.585, hairline:0.40 },
+    carbon:   { panel:0.215, field:0.190, sunken:0.155, hover:0.245, pill:0.320, raised:0.36, ink1:0.90, ink2:0.74, ink3:0.635, ink4:0.56, hairline:0.32 },
+  };
+  const TREATMENTS = [
+    { cls:"before",  label:'<b>BEFORE</b> — six sources', track:"sunken" },
+    { cls:"after-a", label:'<b>AFTER-A</b> — one material', track:"field" },
+    { cls:"after-b", label:'<b>AFTER-B</b> — one + deeper track', track:"sunken" },
+  ];
+  const panelHTML = `
+    <div class="phead"><b>Chart</b><span class="sp"></span><span class="ic">···</span><span class="ic">×</span></div>
+    <div class="sect">Range</div>
+    <div class="well">A1:B20</div>
+    <div class="frow"><span class="k">Type</span><span class="ctl dropdown">Line <span class="chev">▾</span></span></div>
+    <div class="frow"><span class="k">Style</span><span class="ctl seg"><span class="opt on">Pro</span><span class="opt">Modern</span></span></div>
+    <div class="frow"><span class="k">Quality</span><span class="ctl chip">auto</span></div>
+    <div class="sect">Values</div>
+    <div class="vrow"><span class="g">▦</span>Salesperson</div>
+    <div class="vrow"><span class="g">▦</span>SUM of Units</div>
+    <div class="foot"><span class="tintbtn">Export…</span></div>`;
+
+  // ---- isolated diagnostic ----
+  const diag = document.getElementById("diag");
+  for (const name of ["paper", "graphite"]) {
+    const v = THEMES[name];
+    const wrap = document.createElement("div");
+    wrap.className = "diagwrap";
+    wrap.innerHTML = `<div class="themelabel">${name}</div>`;
+    const p = document.createElement("div");
+    p.className = "diagpanel";
+    for (const [k, val] of Object.entries(v)) p.style.setProperty("--" + k, `oklch(${val} 0 0)`);
+    const sw = (role, L, use) =>
+      `<div class="sw" style="background:oklch(${L} 0 0)"><span class="n">${role}</span><span>${L} · ${use}</span></div>`;
+    const before = [
+      sw("field", v.field, "well"), sw("sunken", v.sunken, "seg track"), sw("pill", v.pill, "chip"),
+      sw("hover", v.hover, "tint btn"), sw("raised", v.raised, "selection"),
+    ].join("");
+    const seg = (track, pop) =>
+      `<div><div class="lseg" style="background:oklch(${track} 0 0)"><span class="o on" style="height:20px;padding:0 12px;font-size:12px;background:oklch(${v.raised} 0 0)">Pro</span><span class="o" style="height:20px;padding:0 12px;font-size:12px">Modern</span></div><div class="dcap">pill pop ΔL ${(v.raised-track).toFixed(3)}</div></div>`;
+    p.innerHTML =
+      `<div><div class="dh">1 · today's six sources — different roles, one job</div><div class="swatches">${before}</div>` +
+      `<div class="dh" style="margin-top:12px">→ AFTER: one container for all of them</div><div class="swatches">${sw("container", v.field, "field 0.955-tier")}</div></div>` +
+      `<div><div class="dh">2 · the value row</div><div class="drow">` +
+        `<div><div class="le vr" style="height:28px;padding:0 10px;font-size:12px;background:transparent;border-radius:0;border-bottom:1px solid oklch(${v.hairline} 0 0);width:200px"><span class="g">▦</span>Salesperson</div><div class="dcap">BEFORE — bare</div></div>` +
+        `<div><div class="le vr" style="height:28px;padding:0 10px;font-size:12px;width:200px"><span class="g">▦</span>Salesperson</div><div class="dcap">AFTER — filled chip</div></div>` +
+      `</div></div>` +
+      `<div><div class="dh">3 · A vs B — segmented track only</div><div class="drow">` +
+        `<div>${seg(v.field)}<div class="dcap">A · track = container</div></div>` +
+        `<div>${seg(v.sunken)}<div class="dcap">B · track = deeper</div></div>` +
+      `</div></div>`;
+    wrap.appendChild(p);
+    diag.appendChild(wrap);
+  }
+
+  // ---- size-ladder view (AFTER-B material) ----
+  const SIZES = [
+    { key:"xs · 16", h:16, pad:4,  font:10, seg:false },
+    { key:"sm · 20", h:20, pad:8,  font:11, seg:true, segH:16 },
+    { key:"md · 24", h:24, pad:12, font:12, seg:true, segH:20 },
+    { key:"lg · 28", h:28, pad:16, font:13, seg:true, segH:24 },
+  ];
+  const ladder = document.getElementById("ladder");
+  for (const name of ["paper", "graphite"]) {
+    const v = THEMES[name];
+    const wrap = document.createElement("div");
+    wrap.className = "ladderwrap";
+    wrap.innerHTML = `<div class="themelabel">${name}</div>`;
+    const panel = document.createElement("div");
+    panel.className = "ladderpanel";
+    for (const [k, val] of Object.entries(v)) panel.style.setProperty("--" + k, `oklch(${val} 0 0)`);
+    for (const s of SIZES) {
+      const seg = s.seg
+        ? `<div class="lseg"><span class="o on" style="height:${s.segH}px;padding:0 ${s.pad+2}px;font-size:${s.font}px">Pro</span><span class="o" style="height:${s.segH}px;padding:0 ${s.pad+2}px;font-size:${s.font}px">Modern</span></div>`
+        : `<div class="lseg na">— (no xs segment)</div>`;
+      const col = document.createElement("div");
+      col.className = "sizecol";
+      col.innerHTML =
+        `<div class="sl">${s.key}</div>` +
+        `<div class="le" style="height:${s.h}px;padding:0 ${s.pad}px;font-size:${s.font}px">A1:B20</div>` +
+        `<div class="le dd" style="height:${s.h}px;padding:0 ${s.pad}px;font-size:${s.font}px">Line <span class="chev">▾</span></div>` +
+        `<div class="le chip" style="height:${s.h}px;padding:0 ${s.pad+2}px;font-size:${s.font}px">auto</div>` +
+        seg +
+        `<div class="le vr" style="height:${s.h}px;padding:0 ${s.pad}px;font-size:${s.font}px"><span class="g">▦</span>Salesperson</div>`;
+      panel.appendChild(col);
+    }
+    wrap.appendChild(panel);
+    ladder.appendChild(wrap);
+  }
+
+  const root = document.getElementById("root");
+  for (const [name, v] of Object.entries(THEMES)) {
+    const row = document.createElement("div");
+    row.className = "themerow";
+    row.innerHTML = `<div class="themelabel">${name}</div>`;
+    const cols = document.createElement("div");
+    cols.className = "cols";
+    for (const t of TREATMENTS) {
+      const pop = (v.raised - v[t.track]).toFixed(3);
+      const col = document.createElement("div");
+      col.className = "col";
+      const panel = document.createElement("div");
+      panel.className = "panel " + t.cls;
+      for (const [k, val] of Object.entries(v)) panel.style.setProperty("--" + k, `oklch(${val} 0 0)`);
+      panel.innerHTML = panelHTML;
+      col.innerHTML = `<div class="collabel">${t.label}</div>`;
+      col.appendChild(panel);
+      const d = document.createElement("div");
+      d.className = "delta";
+      d.textContent = `pill pop ΔL ${pop}  (track ${v[t.track]})`;
+      col.appendChild(d);
+      cols.appendChild(col);
+    }
+    row.appendChild(cols);
+    root.appendChild(row);
+  }
+</script>
+</body>
+</html>

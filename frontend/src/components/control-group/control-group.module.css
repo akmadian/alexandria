@@ -1,0 +1,9 @@
+/* ControlGroup — rows stack flush (no inter-row gap): §8 puts space inside rows, not
+ * between them, and the grouped-list idiom separates GROUPS, not rows (that gap is the
+ * parent's). The shared label-column width rides down as --control-row-label, set inline
+ * from the labelWidth prop, so every row's label aligns into one column. */
+
+.group {
+    display: flex;
+    flex-direction: column;
+}

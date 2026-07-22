@@ -10,6 +10,8 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Badge, type BadgeHue, type BadgeSize, type BadgeStyle } from "@/components/badge/badge";
 import { Button, type ButtonRung, type ButtonSize } from "@/components/button/button";
 import { Checkbox } from "@/components/checkbox/checkbox";
+import { ControlGroup } from "@/components/control-group/control-group";
+import { ControlRow } from "@/components/control-row/control-row";
 import { Icon } from "@/components/icon/icon";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Rating } from "@/components/rating/rating";
@@ -653,6 +655,102 @@ function BadgeMatrix({ id }: SectionProps) {
     );
 }
 
+function ControlRowMatrix({ id }: SectionProps) {
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>ControlRow — label + any control, on the control-size height ladder</h2>
+            <p className={styles.subHead}>the height ladder (16/20/24/28) — each row hosts a different primitive at its own size</p>
+            <div className={styles.panelSpecimen}>
+                <ControlRow size="xs" label="Sharpen">
+                    <Badge hue="gray">auto</Badge>
+                </ControlRow>
+                <ControlRow size="sm" label="Watch folder">
+                    <Switch aria-label="Watch folder" size="sm" />
+                </ControlRow>
+                <ControlRow size="md" label="View">
+                    <SegmentedControl aria-label="View" defaultValue="loupe" size="md">
+                        <Segment id="grid">Grid</Segment>
+                        <Segment id="loupe">Loupe</Segment>
+                        <Segment id="compare">Compare</Segment>
+                    </SegmentedControl>
+                </ControlRow>
+                <ControlRow size="lg" label="Export">
+                    <Button size="lg">Export…</Button>
+                </ControlRow>
+            </div>
+            <p className={styles.subHead}>one row height (md), content of any size — the row never resizes its content</p>
+            <div className={styles.panelSpecimen}>
+                <ControlRow label="Rating">
+                    <Rating value={3} />
+                </ControlRow>
+                <ControlRow label="Flag">
+                    <ToggleButton aria-label="Pick"><Icon concept="flag" /></ToggleButton>
+                </ControlRow>
+                <ControlRow label="Reject">
+                    <Checkbox aria-label="Reject" />
+                </ControlRow>
+                <ControlRow label="A label long enough that it must end-truncate before it crowds the value">
+                    <Badge hue="cyan">RAW</Badge>
+                </ControlRow>
+                <ControlRow label="Filename">IMG_0421.RAF</ControlRow>
+            </div>
+            <p className={styles.note}>
+                The row owns only its height + its label role; the hosted control brings its own size (no cascade, D33).
+                Read-only metadata rows stay on the intent-bound Row below.
+            </p>
+        </section>
+    );
+}
+
+function ControlGroupSpecimens({ id }: SectionProps) {
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>ControlGroup — a flush stack of ControlRows sharing one label column</h2>
+            <p className={styles.subHead}>uniform size, aligned labels (form style: fixed label column, control fills)</p>
+            <div className={styles.panelSpecimen}>
+                <ControlGroup>
+                    <ControlRow label="View">
+                        <SegmentedControl aria-label="View" defaultValue="loupe" size="md">
+                            <Segment id="grid">Grid</Segment>
+                            <Segment id="loupe">Loupe</Segment>
+                            <Segment id="compare">Compare</Segment>
+                        </SegmentedControl>
+                    </ControlRow>
+                    <ControlRow label="Watch folder">
+                        <Switch aria-label="Watch folder" size="md" />
+                    </ControlRow>
+                    <ControlRow label="Sharpen">
+                        <Switch aria-label="Sharpen" size="md" defaultSelected />
+                    </ControlRow>
+                    <ControlRow label="Quality">
+                        <Badge hue="gray">auto</Badge>
+                    </ControlRow>
+                </ControlGroup>
+            </div>
+            <p className={styles.subHead}>two groups stacked — space between groups, flush within (labelWidth 30%)</p>
+            <div className={styles.panelSpecimen}>
+                <div className={styles.groupStack}>
+                    <ControlGroup labelWidth="30%">
+                        <ControlRow label="Rating"><Rating value={3} /></ControlRow>
+                        <ControlRow label="Flag">
+                            <ToggleButton aria-label="Pick"><Icon concept="flag" /></ToggleButton>
+                        </ControlRow>
+                    </ControlGroup>
+                    <ControlGroup labelWidth="30%">
+                        <ControlRow label="ISO">3200</ControlRow>
+                        <ControlRow label="Aperture">ƒ/1.8</ControlRow>
+                        <ControlRow label="Shutter">1/250 s</ControlRow>
+                    </ControlGroup>
+                </div>
+            </div>
+            <p className={styles.note}>
+                The group owns the shared label-column width (labelWidth, default 40%) so rows align; between-group space
+                is the parent's gap. Rows within a group stack flush — §8 (space inside rows, not between).
+            </p>
+        </section>
+    );
+}
+
 function RowSpecimens({ id }: SectionProps) {
     return (
         <section id={id} className={styles.section}>
@@ -799,6 +897,8 @@ const SECTIONS: readonly { id: string; label: string; render: (id: string) => Re
     { id: "switch", label: "Switch", render: (id) => <SwitchMatrix id={id} /> },
     { id: "rating", label: "Rating", render: (id) => <RatingMatrix id={id} /> },
     { id: "badge", label: "Badge", render: (id) => <BadgeMatrix id={id} /> },
+    { id: "controlrow", label: "ControlRow", render: (id) => <ControlRowMatrix id={id} /> },
+    { id: "controlgroup", label: "ControlGroup", render: (id) => <ControlGroupSpecimens id={id} /> },
     { id: "row", label: "Row + PanelSection", render: (id) => <RowSpecimens id={id} /> },
     { id: "type", label: "Type roles", render: (id) => <TypeRoles id={id} /> },
     { id: "chrome", label: "Chrome roles", render: (id) => <ChromeSwatches id={id} /> },

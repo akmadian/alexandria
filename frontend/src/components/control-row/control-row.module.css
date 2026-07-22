@@ -1,0 +1,52 @@
+/* ControlRow — arrangement mirrors Row (vertical centering, label left / value right,
+ * generous fixed side insets: density is VERTICAL only, §8). The difference is the
+ * height ladder: it steps on the CONTROL sizes (16/20/24/28), not the row intents. */
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    padding: 0 var(--alx-size-row-inset);
+}
+
+.label {
+    /* Form style (D34): the label reserves a column; a ControlGroup sets
+     * --control-row-label to a shared width so a stack of rows aligns. Standalone it
+     * is natural width, capped so a long label can't crowd out the control. */
+    flex: 0 0 var(--control-row-label, auto);
+    min-width: 0;
+    max-width: 60%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.value {
+    /* The control fills the remaining width, left-aligned (form style). The content is
+     * arbitrary (a control, a badge, or text) and carries its own size; a full-width
+     * control sets its own width. No text truncation — that's the content's concern. */
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--alx-space-1);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Height ladder (§8/D33): the tier sets ONLY the row height — the hosted control's size
+ * is independent. Breathe comes from centering, per §8. */
+.controlXsmall {
+    height: var(--alx-size-control-xs);
+}
+
+.controlSmall {
+    height: var(--alx-size-control-sm);
+}
+
+.controlMedium {
+    height: var(--alx-size-control-md);
+}
+
+.controlLarge {
+    height: var(--alx-size-control-lg);
+}

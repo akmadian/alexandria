@@ -1130,3 +1130,86 @@ labels (buttons / toggles / tabs / segments) ride the **medium** `control-text` 
 (TextField input, Checkbox / Switch labels) rides a parallel **regular** `value-text` ramp
 (value-xs 10 / value-sm 11 / value 12 / value-lg 13) — same sizes, the weight each context wants.
 **All px values (text 10–13, icon 12–18) are first-pass PIN** — eye-gate on real Geist pending.
+
+## D34 — ControlRow: a control-hosting row sized on the control ladder (2026-07-22)
+
+**Decision.** A new `ControlRow` primitive pairs a left label with a right value/control
+(any primitive — Button, SegmentedControl, Switch, Checkbox, Rating, Badge, or plain text),
+on a row whose **height is its own `size`** on the *control* ladder (16/20/24/28), decoupled
+from the read-only *intent* ladder. The row owns its height and its label's type role; the
+hosted control keeps **its own** size — the row never resizes it (no cascade, per D33's
+"size set explicitly per control"). Content is centered vertically; label left, value right.
+
+**Why not the existing `Row`.** `Row` is intent-driven (§8: `control` 28 / `list` 24 /
+`text` 16), and each intent **binds height to permitted type roles** so read-only metadata
+rows can't put body type in a 16px row — load-bearing for the inspector, kept intact. A
+control-hosting row needs the opposite: a free height decoupled from that binding, because
+its value is an arbitrary control that carries its own size. Fusing "one size scales the row
+and its control together" was rejected — it reverses the no-cascade rule and orphans the
+20px rung (no row intent exists there). Separating "row height" from "control size" dissolves
+both problems: the row is a sized, centering container; the control is sized independently.
+
+**Amends** §8: names a **control-row** as a distinct row kind that sizes on the control
+ladder (16/20/24/28), decoupled from the intent-bound read-only ladder — its height carries
+no type-role binding (the hosted control brings its own size; the row's own label steps with
+height via the medium control-text ramp). Read-only metadata rows remain intent-bound.
+
+**Scope.** Primitive + design-library specimen only; no product surface wired yet (the repo's
+"every primitive lands its matrix in `#/design-library`, product wiring later" method). Reuses
+existing tokens (`size.control-*`, `size.row-inset`, the `control-text` roles) — no design-source
+or compiler change. Deferred (no consumer): an optional label info-tooltip slot; `role="group"`
++ `aria-labelledby` to associate the visible label with the hosted control.
+
+**Addendum (same day) — form-style arrangement + the ControlGroup container.** Two follow-on
+calls, grounded in how property inspectors are built (Apple HIG grouped lists / SwiftUI Form
+Section; the Figma / Unity `labelWidth` / Zoho form-level convention that the label-column width
+is set at the form level, not per field):
+
+- **Arrangement = form style, not inspector style.** ControlRow's default flips from "value
+  right-aligned to the edge" (the read-only `Row` look) to **fixed label column + control fills
+  left-aligned** — the dominant idiom for a row hosting editable controls, so a stack reads as
+  aligned columns. The label column width rides a component-local CSS var `--control-row-label`
+  (default `auto` standalone; capped at 60% so a long label can't crowd the control). Tunable
+  either way by overriding the var.
+- **ControlGroup** (new sibling primitive): a flush stack of ControlRows that owns the shared
+  label-column width (`labelWidth` prop → `--control-row-label`, default 40%), so every row's
+  label aligns. Rows stack flush — §8 puts space *inside* rows, not between them; separation is
+  BETWEEN groups (the parent's gap), matching the grouped-list idiom. Still presentational.
+  Deferred (no consumer): an opt-in §8-style hairline divider between rows; auto-fit-to-longest-
+  label column (needs subgrid or measurement) — the explicit width covers today's need.
+
+## D35 — One control-container material (2026-07-22)
+
+**Decision.** Everything neutral that *holds* a value or a control — input wells, dropdown/select
+triggers, neutral value chips, filled value-rows — uses the SAME recessed material, `surface.field`
+(the canonical *control-container*). Components never source a neutral container from `surface.pill`,
+`surface.hover`, or a per-hue `tint`. Two sanctioned exceptions, each because tone must stand in for
+the §6-forbidden chrome shadow: the grouped-control **track** alone deepens to `surface.sunken` (so
+the borderless in-well selection pill pops by tone), and **selection** leaves the container entirely
+(`surface.pill` on panel / `surface.raised` out of a well, D32). Chrome reads as one material with two
+named exceptions, not six near-materials.
+
+**Why.** A material audit found six sources backing "container-ish" things — `surface.field` (0.955),
+`surface.sunken` (0.91), `surface.pill` (0.945), `surface.hover` (0.97), per-hue `color.*.tint`, and
+`cell.well`. On the light worlds these are within ~0.01 (visually one material, but named six ways and
+free to drift); on the DARK worlds they split by *direction* — `pill`/`hover`/`raised` sit ABOVE panel
+(rise) while `field`/`sunken` sit below (recess), so a value chip and a quiet button currently float up
+while the field beside them sinks. Reference inspector panels (Hex/Attio) read cohesive because one
+recessed chip repeats for every holder; this closes the gap toward that at the role level.
+
+**Scope (honest).** This is a **naming + enforcement consolidation and a dark-world fix, not a re-tint**
+— no theme L value changes. The eye-gate (a before/after probe, `library/control-container-probe.html`,
+four themes) confirmed the surface change is near-invisible on the light worlds; the *visible* cohesion
+win is a separate lever (filled value-rows, generous density, softer radius). Chosen path is **AFTER-B**
+(keep `surface.sunken` as the sole deeper exception for the segmented track, over AFTER-A which retired
+it — A's pill pop fell to 0.045 on paper, too weak for the borderless chip without a §6-forbidden shadow).
+
+**Amends** §7 (the one-control-container clause + its two exceptions). Dated role notes on
+`surface.field` (reframed input-well → canonical container) and `surface.sunken` (narrowed to the sole
+exception).
+
+**Deferred to the component-convergence round (code):** repointing Badge (neutral chip → container, off
+per-hue tint), giving Row/ControlRow a filled value-row material, the dropdown/select trigger primitive
+(absent today — the material's biggest future consumer), unifying the two selection substrates, and the
+`surface.field` → `surface.container` rename (bundled there because it touches every consumer). The
+visible payoff lands with that round; a usage-lint (containers must reach for the role) lands with it too.

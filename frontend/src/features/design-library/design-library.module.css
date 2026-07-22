@@ -148,6 +148,14 @@
     background: var(--alx-surface-panel);
 }
 
+/* Between-group spacing is the parent's job (groups stack flush within). */
+.groupStack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-4);
+    padding: var(--alx-space-2) 0;
+}
+
 .matrixRow {
     display: grid;
     grid-template-columns: 80px repeat(6, 120px);

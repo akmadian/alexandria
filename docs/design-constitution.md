@@ -136,6 +136,21 @@ and pressed keep the small toward-ink register move; only *selected* is exempt. 
 the old "selected = +2 register steps" ratification (§29 2026-07-13), which produced a dark
 slab on light themes — the backwards direction.
 
+**One control-container material (D35, 2026-07-22).** Everything neutral that *holds* a value
+or a control — input wells, dropdown/select triggers, neutral value chips, filled value-rows —
+is the **same** recessed material: `surface.field`, the canonical *control-container* (the name
+predates the generalization; it recesses one register step below panel). Components never source
+a neutral container from `surface.pill`, `surface.hover`, or a per-hue `tint` — those are
+*selection*, *state*, and *tag* respectively, and reaching for one as a container is the
+fragmentation D35 closes (on the dark themes it makes a chip or a quiet button *rise* off the
+panel while the field beside it *recesses* — same job, opposite directions). Two sanctioned
+departures, each because tone must substitute for a shadow §6 forbids on docked chrome: the
+grouped-control **track** alone deepens to `surface.sunken` so the borderless in-well selection
+pill pops by tone; and **selection** leaves the container entirely (`surface.pill` on panel,
+`surface.raised` out of a well — D32). Chrome reads as one material with two named exceptions,
+not six near-materials. (The values are already near-identical on the light worlds — this is a
+naming/enforcement consolidation and a dark-world fix, not a re-tint.)
+
 ---
 
 ## Part II — Space, type, structure
@@ -174,6 +189,13 @@ slab on light themes — the backwards direction.
   across intents — and switches at section boundaries, never row-by-row. Where we
   cramp and where we breathe is a first-class design decision, taken deliberately
   per surface.
+- **The control-row exception** (D34): a **control-row** (label + an interactive
+  control/value) is a distinct row kind that sizes on the *control* ladder
+  (16/20/24/28), **decoupled** from the intent-bound read-only ladder above. Its
+  height carries no type-role binding — the hosted control brings its own size (the
+  row never resizes it, per D33's no-cascade rule); only the row's own label steps
+  with the height (the medium control-text ramp). Read-only metadata rows stay
+  intent-bound; this exception is only for rows whose value is an arbitrary control.
 - **The register-step quantum:** one perceptual step of ΔL, tokenized per world
   (light 0.018, dark ~2×). State deltas are authored and adjusted in multiples of
   it — OKLCH's perceptually uniform L is what makes "one step" mean the same thing
