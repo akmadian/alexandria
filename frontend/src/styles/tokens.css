@@ -111,7 +111,7 @@
     --alx-fun-gradient: linear-gradient(100deg, oklch(0.72 0.16 15) 0%, oklch(0.8 0.14 95) 20%, oklch(0.72 0.14 165) 40%, oklch(0.68 0.14 255) 60%, oklch(0.7 0.15 315) 80%, oklch(0.72 0.16 15) 100%);
     --alx-fun-ink: oklch(1 0 0);
     --alx-fun-text-shadow: 0px 1px 2px 0px oklch(0 0 0 / 0.3);
-    --alx-ink-1: oklch(0.25 0 0);
+    --alx-ink-1: oklch(0.15 0 0);
     --alx-ink-2: oklch(0.42 0 0);
     --alx-ink-3: oklch(0.56 0 0);
     --alx-ink-4: oklch(0.68 0 0);
@@ -121,13 +121,14 @@
     --alx-label-purple: oklch(0.56 0.18 305);
     --alx-label-red: oklch(0.58 0.2 25);
     --alx-label-yellow: oklch(0.78 0.16 85);
-    --alx-radius-control: 4px;
+    --alx-radius-control: 6px;
     --alx-radius-docked: 0px;
     --alx-radius-round: 999px;
-    --alx-radius-transient: 8px;
+    --alx-radius-transient: 12px;
     --alx-shadow-occlusion: 0px 4px 16px 0px oklch(0 0 0 / 0.16), 0px 1px 3px 0px oklch(0 0 0 / 0.1);
     --alx-shadow-tunnel: inset 0px 6px 8px -6px oklch(0 0 0 / 0.25);
     --alx-size-cell-pad: 8px;
+    --alx-size-control-inset: 2px;
     --alx-size-control-lg: 28px;
     --alx-size-control: 24px;
     --alx-size-hit-target: 24px;
@@ -154,11 +155,14 @@
     --alx-stroke-hairline: 1px;
     --alx-stroke-thick: 2px;
     --alx-surface-field: oklch(0.955 0 0);
-    --alx-surface-hover: oklch(0.952 0 0);
-    --alx-surface-panel: oklch(0.975 0 0);
+    --alx-surface-hover: oklch(0.97 0 0);
+    --alx-surface-panel: oklch(1 0 0);
+    --alx-surface-pill: oklch(0.945 0 0);
     --alx-surface-pressed: oklch(0.938 0 0);
+    --alx-surface-raised: oklch(1 0 0);
     --alx-surface-selected: oklch(0.888 0 0);
-    --alx-surface-transient: oklch(0.975 0 0);
+    --alx-surface-sunken: oklch(0.91 0 0);
+    --alx-surface-transient: oklch(1 0 0);
     --alx-thumb-hairline-alpha: 0.07;
     --alx-type-role-caption-font-family: Geist, system-ui, sans-serif;
     --alx-type-role-caption-font-size: 11px;
@@ -304,8 +308,11 @@
     --alx-surface-field: oklch(0.885 0 0);
     --alx-surface-hover: oklch(0.883 0 0);
     --alx-surface-panel: oklch(0.905 0 0);
+    --alx-surface-pill: oklch(0.93 0 0);
     --alx-surface-pressed: oklch(0.869 0 0);
+    --alx-surface-raised: oklch(0.98 0 0);
     --alx-surface-selected: oklch(0.822 0 0);
+    --alx-surface-sunken: oklch(0.85 0 0);
     --alx-surface-transient: oklch(0.905 0 0);
     --alx-world-register-step: 0.018;
 }
@@ -378,8 +385,11 @@
     --alx-surface-field: oklch(0.272 0 0);
     --alx-surface-hover: oklch(0.33 0 0);
     --alx-surface-panel: oklch(0.3 0 0);
+    --alx-surface-pill: oklch(0.405 0 0);
     --alx-surface-pressed: oklch(0.35 0 0);
+    --alx-surface-raised: oklch(0.44 0 0);
     --alx-surface-selected: oklch(0.405 0 0);
+    --alx-surface-sunken: oklch(0.24 0 0);
     --alx-surface-transient: oklch(0.34 0 0);
     --alx-world-register-step: 0.035;
 }
@@ -452,8 +462,11 @@
     --alx-surface-field: oklch(0.19 0 0);
     --alx-surface-hover: oklch(0.245 0 0);
     --alx-surface-panel: oklch(0.215 0 0);
+    --alx-surface-pill: oklch(0.32 0 0);
     --alx-surface-pressed: oklch(0.265 0 0);
+    --alx-surface-raised: oklch(0.36 0 0);
     --alx-surface-selected: oklch(0.32 0 0);
+    --alx-surface-sunken: oklch(0.155 0 0);
     --alx-surface-transient: oklch(0.26 0 0);
     --alx-world-register-step: 0.035;
 }

@@ -124,6 +124,18 @@ freely:
 The validator checks per-family monotonicity in the declared direction. Discrete
 pinned steps, not alpha overlays (checkable contracts beat computed composites).
 
+**Selection is not a register step (D32, 2026-07-22).** A *selected* chrome item is a
+distinct object, not a deeper hover — so it leaves the register entirely and is
+direction-EXEMPT (never in a family's `stepOrder`). It reads by rising toward the theme's
+light extreme + an ink jump to `ink.1` + semibold; the tone carries findability, so no
+enclosure is needed. Two selection surfaces by substrate: `surface.pill` for selection sitting
+directly **on** panel (a dab just below the anchor, so it reads on a white panel), and
+`surface.raised` for selection rising **out of a well** (the grouped-control pill on
+`surface.sunken` — at-or-above panel in every theme, the brightest element, borderless). Hover
+and pressed keep the small toward-ink register move; only *selected* is exempt. This refines
+the old "selected = +2 register steps" ratification (§29 2026-07-13), which produced a dark
+slab on light themes — the backwards direction.
+
 ---
 
 ## Part II — Space, type, structure
@@ -576,6 +588,16 @@ on re-inventing mechanics users already know.
   class per type role carrying its paired ink; `type-scale` composites are not
   emitted (roles supersede them); accent/attention carry their bound hue's
   on-solid and ring pairings (`--alx-accent-on` / `--alx-accent-ring`).
+- Ratified 2026-07-22 (the material round, Stage A; D32): chrome **selection is a light
+  pill, split out of the register** (§7 refinement) — `surface.pill` (on-panel) +
+  `surface.raised` (in-well, borderless, the brightest element) rising from `surface.sunken`,
+  carried by `ink.1` + semibold; retires the "selected = +2 dark slab" for chrome (the
+  asset-cell raise stands). Paper **pole-anchored** (panel → 1.0, `ink.1` → 0.15);
+  `radius.control` 4→6, `radius.transient` 8→12; `size.control-inset` (2px sub-grid
+  exception). Stage B controls: fill-only fields, tint machinery chips, flat-white buttons via
+  the anchor. Spatial model held docked + tonal — the floating-card/shadow look explicitly not
+  adopted. Linen + the dark themes stay non-pole-anchored (the raised ceiling gives selection
+  its read without it); their full anchor + the page canvas are their own rounds.
 
 ---
 

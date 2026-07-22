@@ -51,8 +51,11 @@
 }
 
 .tab[data-selected] {
-    background: var(--alx-surface-selected);
+    /* Current tab = the light selection pill (material round, D32): a light fill off the
+     * panel anchor + ink.1 + semibold, not the dark slab. */
+    background: var(--alx-surface-pill);
     color: var(--alx-ink-1);
+    font-weight: 600;
 }
 
 .tab[data-focus-visible] {

@@ -5,9 +5,12 @@
     "$type": "color",
     "panel": { "$value": { "colorSpace": "oklch", "components": [0.905, 0, 0] } },
     "field": { "$value": { "colorSpace": "oklch", "components": [0.885, 0, 0] } },
+    "sunken": { "$value": { "colorSpace": "oklch", "components": [0.85, 0, 0] }, "$extensions": { "alx": { "role": "deep grouped-control well (material round 2026-07-22): the segmented track, a solid step below panel so the pill separates by tone." } } },
     "hover": { "$value": { "colorSpace": "oklch", "components": [0.883, 0, 0] } },
     "pressed": { "$value": { "colorSpace": "oklch", "components": [0.869, 0, 0] } },
-    "selected": { "$value": { "colorSpace": "oklch", "components": [0.822, 0, 0] }, "$extensions": { "alx": { "role": "+2 register steps (2026-07-13)" } } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.822, 0, 0] }, "$extensions": { "alx": { "role": "the deep register step / tint pressed (no longer selection — see surface.pill). +2 register steps (2026-07-13)" } } },
+    "pill": { "$value": { "colorSpace": "oklch", "components": [0.93, 0, 0] }, "$extensions": { "alx": { "role": "ON-PANEL selection fill (material round 2026-07-22): tabs/toggles, a light dab lifting above linen's dim panel. Carried by ink.1 + semibold." } } },
+    "raised": { "$value": { "colorSpace": "oklch", "components": [0.98, 0, 0] }, "$extensions": { "alx": { "role": "IN-WELL selection ceiling (material round 2026-07-22): the segmented pill, lifted to near-white ABOVE linen's dim panel so it is the brightest element and reads by value — the pole the compressed ramp couldn't give it, without re-tuning the whole theme." } } },
     "transient": { "$value": { "colorSpace": "oklch", "components": [0.905, 0, 0] }, "$extensions": { "alx": { "role": "equals panel on light themes (§6)" } } }
   },
 

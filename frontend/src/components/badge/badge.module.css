@@ -34,10 +34,11 @@
     padding: var(--alx-space-1) var(--alx-space-3);
 }
 
-/* dot style: neutral chip (ink.1 text, hairline border) carrying a colored mark. */
+/* dot style: neutral machinery chip carrying a colored mark. Quiet TINT fill, no border
+ * (material round D32 / Draft D: fill XOR border, the machinery chip default is tint). */
 .dot {
     color: var(--alx-ink-1);
-    border-color: var(--alx-ink-hairline);
+    background: var(--alx-surface-field);
 }
 
 .mark {

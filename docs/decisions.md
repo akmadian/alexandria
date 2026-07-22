@@ -971,3 +971,81 @@ token-gaps round's call, with Ari's eye at the gate.
 zero selector specificity, so the class supplies role DEFAULTS and any component declaration
 wins regardless of stylesheet injection order. Found live in the browser pass: equal
 specificity left the fill rung's label ink-on-ink on carbon.
+
+## D32 — The material round, Stage A: chrome selection is a light pill, split from the register (2026-07-22)
+
+**Decision.** The reference vocabulary (the `Figma-ish` set) renders a selected chrome item
+as a **light "pill" just off the surface anchor + an ink/weight jump**, not a dark fill. Our
+system did the opposite because `surface.selected` (paper 0.888) was **overloaded**: it was
+both the selection fill (tabs, toggle-ON, list rows) *and* the deepest register step (the tint
+Button's pressed fill), and on light themes the §7 "interaction moves toward ink" invariant
+made the selection *darken* — a dark slab, the backwards direction.
+
+**The split.** Selection leaves the register and becomes its own token. Added `surface.pill`
+(a light selection fill, direction-EXEMPT — deliberately NOT in the surface `stepOrder`, so
+monotonicity is untouched); `surface.selected` stays as the deep register step. Selection is
+carried by **`ink.1` + semibold** — the ink/weight does the findability work, the pill fill
+stays calm. Paper was pole-anchored so the pill has a ground to rise from: `surface.panel`
+0.975→1.0, `surface.hover`→0.97, `surface.transient`→1.0, `ink.1` 0.25→0.15; `radius.control`
+re-pinned 4→6.
+
+**Eye-gate.** Paper ratified by Ari against `frontend/design/library/material-probe.html`
+(the L-A / pole-anchor candidate). `linen` + the dark themes got `surface.pill` ONLY: linen's
+full pole-anchor is deferred (pole-anchoring its panel fights the hairline seam contract's ΔL
+band and erases its warm-dim identity — the "wrong tier, reframe" rule); the dark themes
+already RAISE (§7), so their selection reuses the existing raised step. Contracts hold; the
+compiler's fixture tests were updated to the new ratified values.
+
+**Spatial model reaffirmed (the frame for this whole round).** Docked + tonal. The Figma
+*floating-card + shadow* look is explicitly NOT adopted — shadow needs a canvas to fall onto,
+which a dense docked layout does not have; dimension comes from tone (pole anchor + pill), not
+elevation. §2 (cliff), §3 (separation ladder), §6 (shadow = occlusion, transient-only) stand.
+
+**Deferred to their own stages/rounds:** the CODE round migrating consumers onto `surface.pill`
++ ink/weight + radius 6 (workspace tab, ToggleButton, and the SegmentedControl rebuild); two
+line grades (§3, Draft C); flat-white buttons / fill-only fields / tint chips (Stage B); canvas
+dots + transient r12 (Stage C); the linen + dark anchor eye-gate; and the eventual
+`surface.selected`→`surface.sunken` rename cleanup. The §7/§29 constitution prose still needs
+the refinement written in (this entry is the authority meanwhile, per D27).
+
+**Revisit trigger:** if the pill fails "findable at a glance" at real density, promote to a
+stronger step (the probe carried a 0.925 "CAND stronger" variant).
+
+*Dated note (2026-07-22, the same round, carried through code + eye-gate on all four themes).*
+The split resolved into a **three-token selection vocabulary**, learned by rendering the
+segmented control across every theme:
+
+- `surface.pill` — **on-panel** selection (tabs, toggles, list rows sitting directly on
+  panel): a dab just *below* the anchor so it reads on paper's white panel. paper 0.945 /
+  linen 0.93 / graphite 0.405 / carbon 0.32.
+- `surface.raised` — the **in-well** selection ceiling (the segmented-control pill, rising out
+  of a recessed track): sits *at-or-above* panel in EVERY theme, so it is the **brightest
+  element** and reads by value alone — **borderless**. paper 1.0 / linen 0.98 / graphite 0.44
+  / carbon 0.36. The two tokens diverge only because paper's pole-anchored 1.0 panel leaves no
+  headroom for on-panel selection; on dark they nearly coincide.
+- `surface.sunken` — the **deep track** grouped controls rise from (distinct from `surface.field`,
+  the shallow input well): a solid register step below panel in every theme so the pill
+  separates tonally. paper 0.91 / linen 0.85 / graphite 0.24 / carbon 0.155.
+
+**The load-bearing diagnosis (why this shape):** the pill communicates "selected" by being the
+brightest thing above a dropped ground — figure/ground by pure value. That only works if the
+selection surface reaches the theme's light extreme, which a *compressed* (non-pole-anchored)
+ramp cannot give it — hence the border was doing the work on linen/dark. `surface.raised`
+manufactures that ceiling per-theme without re-tuning whole ramps, so linen/dark keep their
+identity and stay non-pole-anchored. Confirms: the borderless selection read REQUIRES the
+raised ceiling; the earlier `pill = panel` attempt failed on every theme but paper (whose panel
+*is* the ceiling).
+
+Also landed this round: `size.control-inset` (2px, registered sub-grid exception like
+icon-stroke) — the grouped-control track inset at the dense 24px height, size-proportional
+(control-inset on `control`, `space-1` on `control-lg`, both a 20px segment); the code round
+migrating workspace tab + ToggleButton onto `surface.pill` and rebuilding SegmentedControl on
+the pill/sunken/raised grammar; Stage B controls (fill-only fields on `surface.field` fixing a
+`cell.well` misuse, the neutral machinery chip → tint, buttons already flat-white via the
+anchor); `radius.transient` 8→12.
+
+**Still deferred:** the broader page **canvas** (dropped grey + Draft-G dots) is untouched, so
+the pill-vs-page read only exists locally (pill-vs-track) — a full canvas is the layout round;
+moving tabs/toggles onto the lifted read for consistency; and the `surface.selected`→`sunken`
+rename cleanup (blocked only by naming, `surface.selected` is now purely the tint-pressed deep
+step).

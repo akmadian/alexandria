@@ -26,7 +26,10 @@
 }
 
 .toggleButton[data-selected] {
-    background: var(--alx-surface-selected);
+    /* ON = the light selection pill (material round, D32): a fill just off the anchor +
+     * a weight jump to semibold carries "on" — no longer the dark surface.selected slab. */
+    background: var(--alx-surface-pill);
+    font-weight: 600;
 }
 
 .toggleButton[data-focus-visible] {

@@ -4,12 +4,15 @@
   "surface": {
     "$type": "color",
     "$description": "Chrome family. Direction: recess (derived — interaction moves toward ink, §7). Fields always recess; transient = panel on light themes (§6).",
-    "panel": { "$value": { "colorSpace": "oklch", "components": [0.975, 0, 0] }, "$extensions": { "alx": { "role": "rails, inspector, bars — the anchor" } } },
+    "panel": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] }, "$extensions": { "alx": { "role": "rails, inspector, bars — the anchor. Pole-anchored to pure white (material round, 2026-07-22 eye-gate): figure/ground needs a ground; the old 0.975 compressed the family into one near-white sheet." } } },
     "field": { "$value": { "colorSpace": "oklch", "components": [0.955, 0, 0] }, "$extensions": { "alx": { "role": "input wells (recessed)" } } },
-    "hover": { "$value": { "colorSpace": "oklch", "components": [0.952, 0, 0] } },
+    "sunken": { "$value": { "colorSpace": "oklch", "components": [0.91, 0, 0] }, "$extensions": { "alx": { "role": "the deep well for grouped controls (material round 2026-07-22): a segmented track the selection pill rises OUT of. Distinct from field (input wells): sits a solid register jump below panel in EVERY theme so the pill separates by tone, not a line. Deepened 0.95→0.91 (eye-gate) so the borderless white pill (surface.raised 1.0) pops at a ~0.09 gap." } } },
+    "hover": { "$value": { "colorSpace": "oklch", "components": [0.97, 0, 0] } },
     "pressed": { "$value": { "colorSpace": "oklch", "components": [0.938, 0, 0] } },
-    "selected": { "$value": { "colorSpace": "oklch", "components": [0.888, 0, 0] }, "$extensions": { "alx": { "role": "bumped +2 register steps from the first hypothesis (ratified 2026-07-13: findable at a glance). Sits ≈ hairline (0.885) — lawful, seams never draw inside selected fills; validator watch." } } },
-    "transient": { "$value": { "colorSpace": "oklch", "components": [0.975, 0, 0] }, "$extensions": { "alx": { "role": "popover/menu/dialog surface (§6): equals panel on light themes" } } }
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.888, 0, 0] }, "$extensions": { "alx": { "role": "the deep register step — tint Button's pressed fill. NO LONGER the selection fill (that is surface.pill, material round 2026-07-22): selection is a light object off the anchor, not a dark slab. Rename to surface.sunken is deferred cleanup." } } },
+    "pill": { "$value": { "colorSpace": "oklch", "components": [0.945, 0, 0] }, "$extensions": { "alx": { "role": "ON-PANEL selection fill (§7, material round 2026-07-22): tabs / toggles / list rows sitting directly ON panel — a light dab just BELOW the anchor so it reads on white. Carried by ink.1 + semibold. Direction-exempt (not in the surface stepOrder)." } } },
+    "raised": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] }, "$extensions": { "alx": { "role": "IN-WELL selection ceiling (material round 2026-07-22): the segmented-control pill, which rises out of a sunken track to the theme's light extreme — at-or-above panel in EVERY theme, so it is the BRIGHTEST element and reads by value alone (borderless). On paper = the 1.0 ceiling; on non-anchored themes it lifts ABOVE panel. Distinct from surface.pill (which must stay below paper's white panel for on-panel tabs)." } } },
+    "transient": { "$value": { "colorSpace": "oklch", "components": [1, 0, 0] }, "$extensions": { "alx": { "role": "popover/menu/dialog surface (§6): equals panel on light themes" } } }
   },
 
   "cell": {
@@ -25,7 +28,7 @@
   "ink": {
     "$type": "color",
     "$description": "4-step ink ramp + hairline (§3), pure neutral. Ordinal names pending the type-roles round.",
-    "1": { "$value": { "colorSpace": "oklch", "components": [0.25, 0, 0] }, "$extensions": { "alx": { "role": "primary: values, names" } } },
+    "1": { "$value": { "colorSpace": "oklch", "components": [0.15, 0, 0] }, "$extensions": { "alx": { "role": "primary: values, names. Deepened 0.25→0.15 (material round 2026-07-22): the top rung must sit near the pole for hierarchy to register, and it carries the selection pill's ink jump." } } },
     "2": { "$value": { "colorSpace": "oklch", "components": [0.42, 0, 0] }, "$extensions": { "alx": { "role": "secondary: labels" } } },
     "3": { "$value": { "colorSpace": "oklch", "components": [0.56, 0, 0] }, "$extensions": { "alx": { "role": "muted: placeholders, counts" } } },
     "4": { "$value": { "colorSpace": "oklch", "components": [0.68, 0, 0] }, "$extensions": { "alx": { "role": "disabled" } } },

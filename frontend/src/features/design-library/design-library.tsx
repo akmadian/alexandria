@@ -10,9 +10,11 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Badge, type BadgeHue, type BadgeStyle } from "@/components/badge/badge";
 import { Button, type ButtonRung } from "@/components/button/button";
 import { Checkbox } from "@/components/checkbox/checkbox";
+import { Icon } from "@/components/icon/icon";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Rating } from "@/components/rating/rating";
 import { Row } from "@/components/row/row";
+import { Segment, SegmentedControl } from "@/components/segmented-control/segmented-control";
 import { Switch } from "@/components/switch/switch";
 import { TextField } from "@/components/text-field/text-field";
 import { ToggleButton } from "@/components/toggle-button/toggle-button";
@@ -176,6 +178,55 @@ function ToggleButtonMatrix() {
                 <span className={styles.swatchEntry}>
                     <span className={styles.matrixLabel}>control-lg</span>
                     <ToggleButton size="control-lg" defaultSelected>Raw</ToggleButton>
+                </span>
+            </div>
+        </section>
+    );
+}
+
+function SegmentedControlSpecimens() {
+    return (
+        <section className={styles.section}>
+            <h2 className={styles.sectionHead}>SegmentedControl — pick exactly one (single-select track)</h2>
+            <div className={styles.swatchRow}>
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>text</span>
+                    <SegmentedControl aria-label="View mode" defaultValue="grid">
+                        <Segment id="grid">Grid</Segment>
+                        <Segment id="loupe">Loupe</Segment>
+                        <Segment id="compare">Compare</Segment>
+                    </SegmentedControl>
+                </span>
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>icon</span>
+                    <SegmentedControl aria-label="Flag" defaultValue="none">
+                        <Segment id="reject" aria-label="Reject"><Icon concept="reject" /></Segment>
+                        <Segment id="none" aria-label="No flag"><Icon concept="mixed" /></Segment>
+                        <Segment id="flag" aria-label="Flag"><Icon concept="flag" /></Segment>
+                    </SegmentedControl>
+                </span>
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>icon + text</span>
+                    <SegmentedControl aria-label="Flag" defaultValue="flag">
+                        <Segment id="reject"><Icon concept="reject" />Reject</Segment>
+                        <Segment id="flag"><Icon concept="flag" />Flag</Segment>
+                    </SegmentedControl>
+                </span>
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>control-lg</span>
+                    <SegmentedControl aria-label="View mode" size="control-lg" defaultValue="loupe">
+                        <Segment id="grid">Grid</Segment>
+                        <Segment id="loupe">Loupe</Segment>
+                        <Segment id="compare">Compare</Segment>
+                    </SegmentedControl>
+                </span>
+                <span className={styles.swatchEntry}>
+                    <span className={styles.matrixLabel}>disabled</span>
+                    <SegmentedControl aria-label="View mode" defaultValue="grid" isDisabled>
+                        <Segment id="grid">Grid</Segment>
+                        <Segment id="loupe">Loupe</Segment>
+                        <Segment id="compare">Compare</Segment>
+                    </SegmentedControl>
                 </span>
             </div>
         </section>
@@ -551,6 +602,7 @@ export function DesignLibrary() {
             </header>
             <ButtonMatrix />
             <ToggleButtonMatrix />
+            <SegmentedControlSpecimens />
             <CheckboxMatrix />
             <SwitchMatrix />
             <TextFieldMatrix />

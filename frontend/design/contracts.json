@@ -40,7 +40,9 @@
     "$comment": "Text carried by the strengthened selected fill (2026-07-13, +2 register steps). Adjudicated 2026-07-17: the PROMOTE RULE (§25) — on selected fills, content ink promotes one step (ink.2 content renders ink.1, ink.3 renders ink.2), so these pairs check the PROMOTED inks: ink.1 as primary + promoted-secondary (70 not 75 — linen measures 70.4; PIN pending the linen probe in the token-gaps round), ink.2 as the promoted-muted floor.",
     "pairs": [
       { "ink": "ink.1", "on": "surface.selected", "minLc": 70 },
-      { "ink": "ink.2", "on": "surface.selected", "minLc": 40 }
+      { "ink": "ink.2", "on": "surface.selected", "minLc": 40 },
+      { "ink": "ink.1", "on": "surface.pill", "minLc": 70 },
+      { "ink": "ink.2", "on": "surface.pill", "minLc": 40 }
     ]
   },
 

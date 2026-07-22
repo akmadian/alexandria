@@ -46,7 +46,7 @@ export interface ValidationResult {
 const FAMILY_DIRECTION_KEY: Record<string, string> = { surface: "chrome", cell: "cell" };
 
 const QUANTUM_PX = 4;
-const QUANTUM_EXEMPT_PATHS = new Set(["size.icon-stroke"]);
+const QUANTUM_EXEMPT_PATHS = new Set(["size.icon-stroke", "size.control-inset"]);
 const DEAD_BAND: [number, number] = [0.45, 0.65];
 const REGISTER_STEP_TOLERANCE = 0.0015;
 

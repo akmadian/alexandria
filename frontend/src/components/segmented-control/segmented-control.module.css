@@ -1,0 +1,73 @@
+/* SegmentedControl — the pill grammar (material round, D32): a deep recessed track
+ * (surface.sunken — a well a solid register step below panel in EVERY theme) holds the
+ * segments; the SELECTED segment rises to the panel-level pill inset from the track, its
+ * ink jumping ink.3 → ink.1 + a hairline edge. The tone gap (pill vs sunken) carries the
+ * read — no lines around everything (§3). Flat/tonal, no shadow (§6). Inset is
+ * size-proportional so neither control height crops the segment below ~20px. */
+
+.segmentedControl {
+    display: inline-flex;
+    align-items: center;
+    background: var(--alx-surface-sunken);
+}
+
+.segment {
+    composes: alx-type-control from global;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--alx-space-1);
+    /* Reserve the pill's hairline edge so selecting never reflows the row. */
+    border: var(--alx-stroke-hairline) solid transparent;
+    border-radius: var(--alx-radius-control);
+    background: transparent;
+    color: var(--alx-ink-3);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.segment[data-hovered] {
+    background: var(--alx-surface-hover);
+    color: var(--alx-ink-2);
+}
+
+.segment[data-selected] {
+    /* Rises out of the well to the selection CEILING (surface.raised) — the brightest
+     * element in every theme, so it reads by value alone: no border (§3, D32). The ink
+     * jump to ink.1 carries "current". */
+    background: var(--alx-surface-raised);
+    color: var(--alx-ink-1);
+}
+
+.segment[data-focus-visible] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+
+.segment[data-disabled] {
+    color: var(--alx-ink-4);
+}
+
+/* Size = track class → track inset + radius + segment height (track height = segment +
+ * 2·inset). control gets the 2px sub-grid inset (a 4px inset crops the segment to 16px);
+ * control-lg affords the full quantum. Both land a 20px segment. */
+.control {
+    gap: var(--alx-size-control-inset);
+    padding: var(--alx-size-control-inset);
+    border-radius: calc(var(--alx-radius-control) + var(--alx-size-control-inset));
+}
+
+.control .segment {
+    height: calc(var(--alx-size-control) - 2 * var(--alx-size-control-inset));
+    padding: 0 var(--alx-space-3);
+}
+
+.controlLarge {
+    gap: var(--alx-space-1);
+    padding: var(--alx-space-1);
+    border-radius: calc(var(--alx-radius-control) + var(--alx-space-1));
+}
+
+.controlLarge .segment {
+    height: calc(var(--alx-size-control-lg) - 2 * var(--alx-space-1));
+    padding: 0 var(--alx-space-4);
+}

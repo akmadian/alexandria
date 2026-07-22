@@ -19,9 +19,12 @@
     composes: alx-type-value from global;
     box-sizing: border-box;
     padding: 0 var(--alx-space-2);
-    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    /* Fill-only well (material round, D32 grammar): the recessed chrome field, no rest
+     * border — the border is reserved transparent and only appears red on invalid.
+     * surface.field is the chrome input-well role; cell.* is the asset family (§20). */
+    border: var(--alx-stroke-hairline) solid transparent;
     border-radius: var(--alx-radius-control);
-    background: var(--alx-cell-well);
+    background: var(--alx-surface-field);
     min-width: 0;
 }
 
@@ -31,7 +34,7 @@
 }
 
 .input[data-hovered] {
-    background: var(--alx-cell-hover);
+    background: var(--alx-surface-hover);
 }
 
 .input[data-focused] {

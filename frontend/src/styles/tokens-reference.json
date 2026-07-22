@@ -952,9 +952,9 @@
       "path": "ink.1",
       "type": "color",
       "varying": true,
-      "role": "primary: values, names",
+      "role": "primary: values, names. Deepened 0.25→0.15 (material round 2026-07-22): the top rung must sit near the pole for hierarchy to register, and it carries the selection pill's ink jump.",
       "css": {
-        "paper": "oklch(0.25 0 0)",
+        "paper": "oklch(0.15 0 0)",
         "linen": "oklch(0.23 0 0)",
         "graphite": "oklch(0.93 0 0)",
         "carbon": "oklch(0.9 0 0)"
@@ -1042,8 +1042,9 @@
       "path": "radius.control",
       "type": "dimension",
       "varying": false,
+      "role": "re-pinned 4→6 (material round 2026-07-22 eye-gate): the reference control/pill radius.",
       "pin": "hypothesis (§30.6)",
-      "css": "4px"
+      "css": "6px"
     },
     {
       "path": "radius.docked",
@@ -1061,7 +1062,8 @@
       "path": "radius.transient",
       "type": "dimension",
       "varying": false,
-      "css": "8px"
+      "role": "re-pinned 8→12 (material round 2026-07-22): the reference transient/overlay radius, rounder than docked controls (§24 detachment).",
+      "css": "12px"
     },
     {
       "path": "shadow.occlusion",
@@ -1089,6 +1091,14 @@
       "varying": false,
       "role": "THE default control height (ratified 2026-07-13, was control-sm): buttons, fields, toolbar chrome — the dense-tool default; = the hit-target floor. A 24 control inside a 28 row-control is the canonical field-row rhythm.",
       "css": "24px"
+    },
+    {
+      "path": "size.control-inset",
+      "type": "dimension",
+      "varying": false,
+      "role": "registered sub-grid exception (material round 2026-07-22): the grouped-control track inset at the dense control height. 2px is below the 4px quantum by design — a full quantum crops a 24px control's segment to 16px (cramped); 2px keeps a 20px segment. control-lg affords the full space-1.",
+      "pin": "hypothesis (§30.5)",
+      "css": "2px"
     },
     {
       "path": "size.control-lg",
@@ -1261,7 +1271,7 @@
       "type": "color",
       "varying": true,
       "css": {
-        "paper": "oklch(0.952 0 0)",
+        "paper": "oklch(0.97 0 0)",
         "linen": "oklch(0.883 0 0)",
         "graphite": "oklch(0.33 0 0)",
         "carbon": "oklch(0.245 0 0)"
@@ -1271,12 +1281,24 @@
       "path": "surface.panel",
       "type": "color",
       "varying": true,
-      "role": "rails, inspector, bars — the anchor",
+      "role": "rails, inspector, bars — the anchor. Pole-anchored to pure white (material round, 2026-07-22 eye-gate): figure/ground needs a ground; the old 0.975 compressed the family into one near-white sheet.",
       "css": {
-        "paper": "oklch(0.975 0 0)",
+        "paper": "oklch(1 0 0)",
         "linen": "oklch(0.905 0 0)",
         "graphite": "oklch(0.3 0 0)",
         "carbon": "oklch(0.215 0 0)"
+      }
+    },
+    {
+      "path": "surface.pill",
+      "type": "color",
+      "varying": true,
+      "role": "ON-PANEL selection fill (§7, material round 2026-07-22): tabs / toggles / list rows sitting directly ON panel — a light dab just BELOW the anchor so it reads on white. Carried by ink.1 + semibold. Direction-exempt (not in the surface stepOrder).",
+      "css": {
+        "paper": "oklch(0.945 0 0)",
+        "linen": "oklch(0.93 0 0)",
+        "graphite": "oklch(0.405 0 0)",
+        "carbon": "oklch(0.32 0 0)"
       }
     },
     {
@@ -1291,10 +1313,22 @@
       }
     },
     {
+      "path": "surface.raised",
+      "type": "color",
+      "varying": true,
+      "role": "IN-WELL selection ceiling (material round 2026-07-22): the segmented-control pill, which rises out of a sunken track to the theme's light extreme — at-or-above panel in EVERY theme, so it is the BRIGHTEST element and reads by value alone (borderless). On paper = the 1.0 ceiling; on non-anchored themes it lifts ABOVE panel. Distinct from surface.pill (which must stay below paper's white panel for on-panel tabs).",
+      "css": {
+        "paper": "oklch(1 0 0)",
+        "linen": "oklch(0.98 0 0)",
+        "graphite": "oklch(0.44 0 0)",
+        "carbon": "oklch(0.36 0 0)"
+      }
+    },
+    {
       "path": "surface.selected",
       "type": "color",
       "varying": true,
-      "role": "bumped +2 register steps from the first hypothesis (ratified 2026-07-13: findable at a glance). Sits ≈ hairline (0.885) — lawful, seams never draw inside selected fills; validator watch.",
+      "role": "the deep register step — tint Button's pressed fill. NO LONGER the selection fill (that is surface.pill, material round 2026-07-22): selection is a light object off the anchor, not a dark slab. Rename to surface.sunken is deferred cleanup.",
       "css": {
         "paper": "oklch(0.888 0 0)",
         "linen": "oklch(0.822 0 0)",
@@ -1303,12 +1337,24 @@
       }
     },
     {
+      "path": "surface.sunken",
+      "type": "color",
+      "varying": true,
+      "role": "the deep well for grouped controls (material round 2026-07-22): a segmented track the selection pill rises OUT of. Distinct from field (input wells): sits a solid register jump below panel in EVERY theme so the pill separates by tone, not a line. Deepened 0.95→0.91 (eye-gate) so the borderless white pill (surface.raised 1.0) pops at a ~0.09 gap.",
+      "css": {
+        "paper": "oklch(0.91 0 0)",
+        "linen": "oklch(0.85 0 0)",
+        "graphite": "oklch(0.24 0 0)",
+        "carbon": "oklch(0.155 0 0)"
+      }
+    },
+    {
       "path": "surface.transient",
       "type": "color",
       "varying": true,
       "role": "popover/menu/dialog surface (§6): equals panel on light themes",
       "css": {
-        "paper": "oklch(0.975 0 0)",
+        "paper": "oklch(1 0 0)",
         "linen": "oklch(0.905 0 0)",
         "graphite": "oklch(0.34 0 0)",
         "carbon": "oklch(0.26 0 0)"

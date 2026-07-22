@@ -5,9 +5,12 @@
     "$type": "color",
     "panel": { "$value": { "colorSpace": "oklch", "components": [0.3, 0, 0] } },
     "field": { "$value": { "colorSpace": "oklch", "components": [0.272, 0, 0] } },
+    "sunken": { "$value": { "colorSpace": "oklch", "components": [0.24, 0, 0] }, "$extensions": { "alx": { "role": "deep grouped-control well (material round 2026-07-22): the segmented track, darker than panel so the panel-level pill rises out of it by tone." } } },
     "hover": { "$value": { "colorSpace": "oklch", "components": [0.33, 0, 0] } },
     "pressed": { "$value": { "colorSpace": "oklch", "components": [0.35, 0, 0] } },
-    "selected": { "$value": { "colorSpace": "oklch", "components": [0.405, 0, 0] }, "$extensions": { "alx": { "role": "+2 register steps (2026-07-13); sits ≈ hairline (0.40) — lawful, validator watch" } } },
+    "selected": { "$value": { "colorSpace": "oklch", "components": [0.405, 0, 0] }, "$extensions": { "alx": { "role": "the deep register step / tint pressed (no longer selection — see surface.pill). +2 register steps (2026-07-13); sits ≈ hairline (0.40) — lawful, validator watch" } } },
+    "pill": { "$value": { "colorSpace": "oklch", "components": [0.405, 0, 0] }, "$extensions": { "alx": { "role": "ON-PANEL selection fill (material round 2026-07-22): dark worlds RAISE, so selection lifts above panel — used by tabs/toggles. Carried by ink.1 + semibold." } } },
+    "raised": { "$value": { "colorSpace": "oklch", "components": [0.44, 0, 0] }, "$extensions": { "alx": { "role": "IN-WELL selection ceiling (material round 2026-07-22): the segmented pill, lifted above panel (0.30) and well above the sunken track (0.24) so it reads by value alone (borderless). A touch above surface.pill for the stronger in-well lift dark needs." } } },
     "transient": { "$value": { "colorSpace": "oklch", "components": [0.34, 0, 0] }, "$extensions": { "alx": { "role": "raised above panel (§6): shadow alone does not read on dark chrome" } } }
   },
 

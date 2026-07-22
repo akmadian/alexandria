@@ -113,14 +113,16 @@ describe("validate — broken fixtures fail with named violations", () => {
 
     test("a register step below the ΔL floor fails separation", () => {
         const broken = cloneSource(realSource);
-        setComponent(broken, "paper", "surface.hover", 0, 0.974);
+        setComponent(broken, "paper", "surface.hover", 0, 0.999);
         const result = validate(broken, contracts, registries);
         expect(result.failures.join("\n")).toMatch(/paper: surface\.panel → surface\.hover — ΔL 0\.001 outside/);
     });
 
     test("a step moving against the family direction fails monotonicity", () => {
         const broken = cloneSource(realSource);
-        setComponent(broken, "paper", "surface.hover", 0, 0.99);
+        // paper hover is 0.97; raising the NEXT step (pressed) above it moves against
+        // recess with an in-band ΔL, so monotonicity fails rather than separation.
+        setComponent(broken, "paper", "surface.pressed", 0, 0.99);
         const result = validate(broken, contracts, registries);
         expect(result.failures.join("\n")).toMatch(/moves against the family direction "recess"/);
     });
@@ -180,9 +182,9 @@ describe("emit", () => {
     const files = emit(realSource, ["blue"]);
 
     test(":root carries the complete default theme", () => {
-        expect(files.css).toContain(`--alx-surface-panel: oklch(0.975 0 0);`);
+        expect(files.css).toContain(`--alx-surface-panel: oklch(1 0 0);`);
         expect(files.css).toContain(`--alx-space-3: 12px;`);
-        expect(files.css).toContain(`--alx-radius-control: 4px;`);
+        expect(files.css).toContain(`--alx-radius-control: 6px;`);
         expect(files.css).toContain(`--alx-duration-fast: 80ms;`);
         expect(files.css).toContain(`--alx-easing-out: cubic-bezier(0.16, 1, 0.3, 1);`);
         expect(files.css).toContain(`--alx-font-mono: "Geist Mono", ui-monospace, monospace;`);
