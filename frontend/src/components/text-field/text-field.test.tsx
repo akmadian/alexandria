@@ -35,10 +35,15 @@ test("the error message renders only while invalid", () => {
 
 test("disabled blocks typing and the size class applies", async () => {
     const onChange = vi.fn();
-    render(<TextField label="Locked" size="control-lg" isDisabled onChange={onChange} />);
+    render(<TextField label="Locked" size="lg" isDisabled onChange={onChange} />);
     const input = screen.getByRole("textbox", { name: "Locked" });
     await userEvent.type(input, "nope");
     expect(onChange).not.toHaveBeenCalled();
     expect(input).toBeDisabled();
     expect(input.className).toContain("controlLarge");
+});
+
+test("the xs rung lands its class on the input (the inline-edit tier)", () => {
+    render(<TextField label="ISO" size="xs" defaultValue="400" />);
+    expect(screen.getByRole("textbox", { name: "ISO" }).className).toContain("controlXsmall");
 });

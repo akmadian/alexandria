@@ -49,3 +49,8 @@ test("invalid lands as the data-attribute the error hairline keys on", () => {
     const { container } = render(<Checkbox isInvalid>Required</Checkbox>);
     expect(container.querySelector("label")?.hasAttribute("data-invalid")).toBe(true);
 });
+
+test("the size prop maps to its tier class", () => {
+    const { container } = render(<Checkbox size="xs">Dense</Checkbox>);
+    expect(container.querySelector("label")?.className).toContain("sizeXs");
+});

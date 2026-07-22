@@ -31,15 +31,44 @@
     text-decoration-color: var(--alx-ink-hairline);
 }
 
-.switcher {
+.toc {
+    /* Sticky in-page nav; .page is the scroll container so top:0 pins it there. */
+    position: sticky;
+    top: 0;
+    z-index: 3;
     display: flex;
-    gap: var(--alx-space-1);
+    flex-wrap: wrap;
+    gap: var(--alx-space-1) var(--alx-space-3);
+    padding: var(--alx-space-2) 0;
+    background: var(--alx-surface-panel);
+    border-bottom: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+.tocLink {
+    composes: alx-type-label-sm from global;
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--alx-accent);
+    cursor: pointer;
+}
+
+.tocLink:hover {
+    text-decoration: underline;
 }
 
 .section {
     display: flex;
     flex-direction: column;
     gap: var(--alx-space-3);
+    /* Clears the sticky TOC when a link scrolls this section to the top. */
+    scroll-margin-top: var(--alx-space-12);
+}
+
+.subHead {
+    composes: alx-type-label-sm from global;
+    margin: 0;
+    color: var(--alx-ink-3);
 }
 
 .sectionHead {
@@ -53,6 +82,64 @@
     display: flex;
     flex-direction: column;
     gap: var(--alx-space-2);
+}
+
+/* Generic size×state grid (SizeStateGrid). Column template is set inline from the
+ * column count; wide grids scroll inside their own box (§13 — the page never does). */
+.grid2d {
+    display: grid;
+    align-items: center;
+    gap: var(--alx-space-2) var(--alx-space-3);
+    overflow-x: auto;
+}
+
+.formula {
+    composes: alx-type-data-sm from global;
+    padding: 0 var(--alx-space-1);
+    background: var(--alx-surface-field);
+    border-radius: var(--alx-radius-control);
+}
+
+.sizeTableWrap {
+    overflow-x: auto;
+}
+
+.sizeTable {
+    border-collapse: collapse;
+}
+
+.sizeTable th,
+.sizeTable td {
+    text-align: left;
+    padding: var(--alx-space-1) var(--alx-space-4) var(--alx-space-1) 0;
+    vertical-align: baseline;
+}
+
+.sizeTable th {
+    color: var(--alx-ink-3);
+    border-bottom: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+.floorRow td {
+    border-top: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    color: var(--alx-ink-3);
+}
+
+.sizeStrip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alx-space-3);
+}
+
+.sizeStripRow {
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-3);
+}
+
+/* The size label leads each strip row; fix its width so the controls align. */
+.sizeStripRow > span:first-child {
+    min-width: 104px;
 }
 
 .panelSpecimen {

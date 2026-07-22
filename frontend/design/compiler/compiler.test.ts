@@ -129,10 +129,10 @@ describe("validate — broken fixtures fail with named violations", () => {
 
     test("an off-quantum size is rejected", () => {
         const broken = cloneSource(realSource);
-        const token = broken.themes.get("paper")?.get("size.control");
+        const token = broken.themes.get("paper")?.get("size.control-md");
         (token?.value as { value: number }).value = 13;
         const result = validate(broken, contracts, registries);
-        expect(result.failures.join("\n")).toMatch(/size\.control — 13px is not a 4px quantum multiple/);
+        expect(result.failures.join("\n")).toMatch(/size\.control-md — 13px is not a 4px quantum multiple/);
     });
 
     test("a surface in the dead band is rejected", () => {

@@ -37,3 +37,8 @@ test("interactive: clicking the current value proposes null (the clear)", () => 
     fireEvent.click(screen.getByRole("button", { name: "Clear rating" }));
     expect(onChange).toHaveBeenCalledWith(null);
 });
+
+test("the size prop maps to its tier class", () => {
+    const { container } = render(<Rating value={3} size="xs" />);
+    expect((container.firstChild as HTMLElement).className).toContain("sizeXs");
+});

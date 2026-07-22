@@ -21,12 +21,16 @@ import { cx } from "@/lib/cx";
 import type { ToggleButtonSize } from "@/components/toggle-button/toggle-button";
 import styles from "./segmented-control.module.css";
 
-// C10: exhaustive by construction. Size is the control-height family, shared with
-// ToggleButton — control = 24px (dense default), control-lg = 28px.
+// The control-height family shared with ToggleButton, minus only the xs rung: a 16px
+// track would crop the segment below readable. sm (20 track → 16 segment) is the floor.
+export type SegmentedControlSize = Exclude<ToggleButtonSize, "xs">;
+
+// C10: exhaustive by construction — sm = 20px, md = 24px (dense default), lg = 28px.
 const SIZE_CLASSES = {
-    control: styles.control,
-    "control-lg": styles.controlLarge,
-} as const satisfies Record<ToggleButtonSize, string>;
+    sm: styles.controlSmall,
+    md: styles.controlMedium,
+    lg: styles.controlLarge,
+} as const satisfies Record<SegmentedControlSize, string>;
 
 export interface SegmentedControlProps {
     /** The lit segment's id (controlled). */
@@ -37,7 +41,7 @@ export interface SegmentedControlProps {
     onChange?: (key: Key) => void;
     /** Disables the whole group (segments keep their fill so state stays readable). */
     isDisabled?: boolean;
-    size?: ToggleButtonSize;
+    size?: SegmentedControlSize;
     /** Required — the group needs an accessible name (or aria-labelledby). */
     "aria-label"?: string;
     "aria-labelledby"?: string;
@@ -50,7 +54,7 @@ export function SegmentedControl({
     value,
     defaultValue,
     onChange,
-    size = "control",
+    size = "md",
     className,
     children,
     ...labeling

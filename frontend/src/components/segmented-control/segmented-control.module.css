@@ -12,7 +12,8 @@
 }
 
 .segment {
-    composes: alx-type-control from global;
+    /* Font is inherited from the track's tier role (set on .segmentedControl by the size
+     * class, D33 proportional) — font properties cascade, so segments scale with the tier. */
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -47,21 +48,38 @@
     color: var(--alx-ink-4);
 }
 
-/* Size = track class → track inset + radius + segment height (track height = segment +
- * 2·inset). control gets the 2px sub-grid inset (a 4px inset crops the segment to 16px);
- * control-lg affords the full quantum. Both land a 20px segment. */
-.control {
+/* Size (D33 proportional) = track class → tier text role + icon size + track inset + radius
+ * + segment height (track height = segment + 2·inset). The 2px sub-grid inset holds the
+ * segment off the cramped floor. sm is the smallest the segments tolerate (16px segment);
+ * xs is excluded (a 16px track would crop the segment below readable). */
+.controlSmall {
+    composes: alx-type-control-sm from global;
+    --alx-size-icon: var(--alx-size-icon-sm);
     gap: var(--alx-size-control-inset);
     padding: var(--alx-size-control-inset);
     border-radius: calc(var(--alx-radius-control) + var(--alx-size-control-inset));
 }
 
-.control .segment {
-    height: calc(var(--alx-size-control) - 2 * var(--alx-size-control-inset));
+.controlSmall .segment {
+    height: calc(var(--alx-size-control-sm) - 2 * var(--alx-size-control-inset));
+    padding: 0 var(--alx-space-2);
+}
+
+.controlMedium {
+    composes: alx-type-control from global;
+    gap: var(--alx-size-control-inset);
+    padding: var(--alx-size-control-inset);
+    border-radius: calc(var(--alx-radius-control) + var(--alx-size-control-inset));
+}
+
+.controlMedium .segment {
+    height: calc(var(--alx-size-control-md) - 2 * var(--alx-size-control-inset));
     padding: 0 var(--alx-space-3);
 }
 
 .controlLarge {
+    composes: alx-type-control-lg from global;
+    --alx-size-icon: var(--alx-size-icon-lg);
     gap: var(--alx-space-1);
     padding: var(--alx-space-1);
     border-radius: calc(var(--alx-radius-control) + var(--alx-space-1));

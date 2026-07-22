@@ -5,18 +5,45 @@
  * the interaction rules: on a selected switch, selected tops out. */
 
 .switch {
-    composes: alx-type-value from global;
     display: inline-flex;
     align-items: center;
     gap: var(--alx-space-2);
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Track 28×16, thumb 12: 1px hairline + 1px inset each side makes the travel
- * symmetric (structural geometry, deliberately ungated). */
+/* Size ladder (§8/D33 proportional): the tier scales the label role, the track/thumb
+ * geometry (all derived from --alx-size-icon, reassigned per tier), and the min-height
+ * carrying the hit target. */
+.sizeXs {
+    composes: alx-type-value-xs from global;
+    min-height: var(--alx-size-control-xs);
+    gap: var(--alx-space-1);
+    --alx-size-icon: var(--alx-size-icon-xs);
+}
+
+.sizeSm {
+    composes: alx-type-value-sm from global;
+    min-height: var(--alx-size-control-sm);
+    --alx-size-icon: var(--alx-size-icon-sm);
+}
+
+.sizeMd {
+    composes: alx-type-value from global;
+    min-height: var(--alx-size-control-md);
+}
+
+.sizeLg {
+    composes: alx-type-value-lg from global;
+    min-height: var(--alx-size-control-lg);
+    --alx-size-icon: var(--alx-size-icon-lg);
+}
+
+/* Track and thumb derive from --alx-size-icon (the tier's icon size, D33 proportional):
+ * height = icon, width = 2·icon − 4, thumb = icon − 4, travel = icon − 4 (1px hairline +
+ * 1px inset each side). At md (icon 16) this is the ratified 28×16 track / 12 thumb. */
 .track {
     position: relative;
-    width: 28px;
+    width: calc(2 * var(--alx-size-icon) - 4px);
     height: var(--alx-size-icon);
     flex: none;
     box-sizing: border-box;
@@ -32,8 +59,8 @@
     position: absolute;
     top: 1px;
     left: 1px;
-    width: 12px;
-    height: 12px;
+    width: calc(var(--alx-size-icon) - 4px);
+    height: calc(var(--alx-size-icon) - 4px);
     border-radius: var(--alx-radius-round);
     background: var(--alx-ink-3);
     transition: transform var(--alx-duration-fast);
@@ -54,7 +81,7 @@
 
 .switch[data-selected] .thumb {
     background: var(--alx-accent-on);
-    transform: translateX(12px);
+    transform: translateX(calc(var(--alx-size-icon) - 4px));
 }
 
 .switch[data-focus-visible] .track {

@@ -46,7 +46,14 @@ export interface ValidationResult {
 const FAMILY_DIRECTION_KEY: Record<string, string> = { surface: "chrome", cell: "cell" };
 
 const QUANTUM_PX = 4;
-const QUANTUM_EXEMPT_PATHS = new Set(["size.icon-stroke", "size.control-inset"]);
+// icon-sm/lg (14/18) are 2px sub-grid — the icon ramp scales proportionally with the
+// control tiers (D33 proportional round), same sanctioned sub-grid basis as control-inset.
+const QUANTUM_EXEMPT_PATHS = new Set([
+    "size.icon-stroke",
+    "size.control-inset",
+    "size.icon-sm",
+    "size.icon-lg",
+]);
 const DEAD_BAND: [number, number] = [0.45, 0.65];
 const REGISTER_STEP_TOLERANCE = 0.0015;
 

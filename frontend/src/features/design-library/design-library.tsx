@@ -6,15 +6,19 @@
 // ponytail: copy is literal by sanction (task-24 spec) — this is a dev-facing
 // surface; C14 keys arrive when product chrome adopts these strings.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Badge, type BadgeHue, type BadgeStyle } from "@/components/badge/badge";
-import { Button, type ButtonRung } from "@/components/button/button";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Badge, type BadgeHue, type BadgeSize, type BadgeStyle } from "@/components/badge/badge";
+import { Button, type ButtonRung, type ButtonSize } from "@/components/button/button";
 import { Checkbox } from "@/components/checkbox/checkbox";
 import { Icon } from "@/components/icon/icon";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Rating } from "@/components/rating/rating";
 import { Row } from "@/components/row/row";
-import { Segment, SegmentedControl } from "@/components/segmented-control/segmented-control";
+import {
+    Segment,
+    SegmentedControl,
+    type SegmentedControlSize,
+} from "@/components/segmented-control/segmented-control";
 import { Switch } from "@/components/switch/switch";
 import { TextField } from "@/components/text-field/text-field";
 import { ToggleButton } from "@/components/toggle-button/toggle-button";
@@ -27,6 +31,28 @@ const RUNGS = ["ghost", "outline", "tint", "fill", "hero"] as const satisfies re
 const FORCED_STATES = ["rest", "hovered", "pressed", "focus-visible"] as const;
 /** "focused" exists for the text-input family, whose ring shows on ANY focus. */
 type ForcedState = (typeof FORCED_STATES)[number] | "focused";
+
+/** The control-height ladder (§8/D33), shared by every sized chrome primitive. */
+const CONTROL_SIZES = [
+    { key: "xs", label: "xs · 16" },
+    { key: "sm", label: "sm · 20" },
+    { key: "md", label: "md · 24" },
+    { key: "lg", label: "lg · 28" },
+] as const satisfies readonly { key: ButtonSize; label: string }[];
+
+/** One column of a size×state grid: a size row is crossed with these. Flags are a
+ * superset across primitives; each cell closure reads the ones it needs. */
+interface StateCol {
+    key: string;
+    label: string;
+    forced?: ForcedState;
+    selected?: boolean;
+    checked?: boolean;
+    mixed?: boolean;
+    on?: boolean;
+    invalid?: boolean;
+    disabled?: boolean;
+}
 
 /** Freezes one RAC interaction state onto the specimen inside, so every matrix
  * cell exercises the product's own CSS. RAC computes data-attributes from its
@@ -54,6 +80,45 @@ function ForcedStateCell({ state, children }: { state: ForcedState; children: Re
     );
 }
 
+/** A cell that carries no forced state (disabled, static). Mirrors ForcedStateCell's
+ * wrapper so both flow as grid items. */
+function StaticCell({ children }: { children: ReactNode }) {
+    return <span className={styles.matrixCell}>{children}</span>;
+}
+
+/** Generic size×state grid: rows (usually the size ladder) × cols (states), one
+ * specimen per intersection. The cell closure owns rendering — it decides whether
+ * a column is a forced interaction state or a prop-driven one. */
+function SizeStateGrid<R extends { key: string; label: string }, C extends { key: string; label: string }>({
+    rows,
+    cols,
+    cell,
+}: {
+    rows: readonly R[];
+    cols: readonly C[];
+    cell: (row: R, col: C) => ReactNode;
+}) {
+    return (
+        <div
+            className={styles.grid2d}
+            style={{ gridTemplateColumns: `72px repeat(${cols.length}, max-content)` }}
+        >
+            <span />
+            {cols.map((col) => (
+                <span key={col.key} className={styles.matrixLabel}>{col.label}</span>
+            ))}
+            {rows.map((row) => (
+                <Fragment key={row.key}>
+                    <span className={styles.matrixLabel}>{row.label}</span>
+                    {cols.map((col) => (
+                        <Fragment key={col.key}>{cell(row, col)}</Fragment>
+                    ))}
+                </Fragment>
+            ))}
+        </div>
+    );
+}
+
 interface ReferenceToken {
     path: string;
     type: string;
@@ -71,6 +136,9 @@ const tokens = reference.tokens as ReferenceToken[];
 const byPrefix = (prefix: string): ReferenceToken[] =>
     tokens.filter((token) => token.path.startsWith(prefix));
 
+/** The invariant CSS string for a token path (size/space rungs are theme-invariant). */
+const invariantCss = (path: string): string => String(tokens.find((token) => token.path === path)?.css ?? "");
+
 /** color.<hue>.<step> paths → the hue list, in SPECTRAL order (the reference file
  * is alphabetical by path; a palette reads by hue angle, gray last). */
 const hueAngle = (hue: string): number => {
@@ -87,28 +155,161 @@ const HUE_STEPS = ["solid", "tint", "line", "ring"] as const;
 function ThemeSwitcher() {
     const [activeTheme, setActiveTheme] = useState<Theme>(() => getTheme());
     return (
-        <div className={styles.switcher} role="group" aria-label="Theme">
+        <SegmentedControl
+            aria-label="Theme"
+            value={activeTheme}
+            onChange={(key) => {
+                const next = key as Theme;
+                setTheme(next);
+                setActiveTheme(next);
+            }}
+        >
             {themes.map((theme) => (
-                <Button
-                    key={theme}
-                    rung={theme === activeTheme ? "tint" : "ghost"}
-                    onPress={() => {
-                        setTheme(theme);
-                        setActiveTheme(theme);
-                    }}
-                >
-                    {theme}
-                </Button>
+                <Segment key={theme} id={theme}>{theme}</Segment>
             ))}
-        </div>
+        </SegmentedControl>
     );
 }
 
-function ButtonMatrix() {
-    const [pressCount, setPressCount] = useState(0);
+// ── The sizing system (§8/D33) ────────────────────────────────────────────────
+
+interface SizingRung {
+    token: string;
+    name: string;
+    size: ButtonSize;
+    text: string;
+    icon: string;
+    pad: string;
+    target: string;
+    use: string;
+}
+
+const SIZING_RUNGS: readonly SizingRung[] = [
+    {
+        token: "size.control-xs",
+        name: "control-xs",
+        size: "xs",
+        text: "control-xs · 10",
+        icon: "12",
+        pad: "space.1 · 4",
+        target: "16 · mouse-only (§28)",
+        use: "inspector inline-edit — matches the read-only row (zero-shift)",
+    },
+    {
+        token: "size.control-sm",
+        name: "control-sm",
+        size: "sm",
+        text: "control-sm · 11",
+        icon: "14",
+        pad: "space.2 · 8",
+        target: "24 (fills its row)",
+        use: "dense chips, secondary icon-buttons",
+    },
+    {
+        token: "size.control-md",
+        name: "control-md",
+        size: "md",
+        text: "control · 12",
+        icon: "16",
+        pad: "space.3 · 12",
+        target: "24",
+        use: "the default — buttons, fields, toolbar chrome",
+    },
+    {
+        token: "size.control-lg",
+        name: "control-lg",
+        size: "lg",
+        text: "control-lg · 13",
+        icon: "18",
+        pad: "space.4 · 16",
+        target: "28",
+        use: "prominent — dialog CTAs, hero spots",
+    },
+];
+
+function SizingSystem({ id }: SectionProps) {
     return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>Button — rungs × states</h2>
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Sizing system — the proportional ladder (§8/D33)</h2>
+            <p className={styles.note}>
+                <code className={styles.formula}>16 / 20 / 24 / 28</code>
+                <span>Each tier is a full bundle — text, icon, indicator, pad, height — that scales into the
+                    tier height. Text + icon values are first-pass, eye-tune on render.</span>
+            </p>
+            <div className={styles.sizeTableWrap}>
+                <table className={styles.sizeTable}>
+                    <thead>
+                        <tr className="alx-type-label-sm">
+                            <th>token</th>
+                            <th>height</th>
+                            <th>text</th>
+                            <th>icon</th>
+                            <th>inline pad</th>
+                            <th>hit target</th>
+                            <th>use for</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {SIZING_RUNGS.map((rung) => (
+                            <tr key={rung.token}>
+                                <td className="alx-type-data-sm">{rung.name}</td>
+                                <td className="alx-type-data-sm">{invariantCss(rung.token)}</td>
+                                <td className="alx-type-data-sm">{rung.text}</td>
+                                <td className="alx-type-data-sm">{rung.icon}</td>
+                                <td className="alx-type-data-sm">{rung.pad}</td>
+                                <td className="alx-type-data-sm">{rung.target}</td>
+                                <td className="alx-type-caption">{rung.use}</td>
+                            </tr>
+                        ))}
+                        <tr className={styles.floorRow}>
+                            <td className="alx-type-data-sm">row-text</td>
+                            <td className="alx-type-data-sm">{invariantCss("size.row-text")}</td>
+                            <td className="alx-type-data-sm">data-sm · 11</td>
+                            <td className="alx-type-data-sm">—</td>
+                            <td className="alx-type-data-sm">—</td>
+                            <td className="alx-type-data-sm">— (read-only)</td>
+                            <td className="alx-type-caption">the display floor — EXIF values (ISO, ƒ, shutter); not a control</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p className={styles.note}>
+                One rung, three primitives — text, icon, and control all scale together at each height:
+            </p>
+            <div className={styles.sizeStrip}>
+                {SIZING_RUNGS.map((rung) => (
+                    <div key={rung.token} className={styles.sizeStripRow}>
+                        <span className={styles.matrixLabel}>{rung.name} · {invariantCss(rung.token)}</span>
+                        <Button size={rung.size}>Import</Button>
+                        <ToggleButton size={rung.size} defaultSelected>Raw</ToggleButton>
+                        <TextField label="ISO" size={rung.size} defaultValue="400" />
+                    </div>
+                ))}
+            </div>
+            <p className={styles.note}>
+                Checkbox / Switch / Rating scale their indicator too — the box, track, and star ride the icon
+                ramp (12/14/16/18) via the tier's <code className={styles.formula}>--alx-size-icon</code>
+                reassignment. control-xs (16) and the row-text floor (16) share a height: one is the interactive
+                inline-edit tier (mouse-only), the other the read-only display floor.
+            </p>
+        </section>
+    );
+}
+
+// ── Primitives ────────────────────────────────────────────────────────────────
+
+function ButtonMatrix({ id }: SectionProps) {
+    const [pressCount, setPressCount] = useState(0);
+    const sizeCols: readonly StateCol[] = [
+        { key: "rest", label: "rest", forced: "rest" },
+        { key: "hovered", label: "hovered", forced: "hovered" },
+        { key: "pressed", label: "pressed", forced: "pressed" },
+        { key: "focus", label: "focus-visible", forced: "focus-visible" },
+        { key: "disabled", label: "disabled", disabled: true },
+    ];
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Button — rungs × states, and the size ladder × states</h2>
             <div className={styles.matrix}>
                 <div className={styles.matrixRow}>
                     <span className={styles.matrixLabel} />
@@ -137,57 +338,89 @@ function ButtonMatrix() {
                     </div>
                 ))}
             </div>
+            <p className={styles.subHead}>size × states (outline rung)</p>
+            <SizeStateGrid
+                rows={CONTROL_SIZES}
+                cols={sizeCols}
+                cell={(size, col) => {
+                    const button = (
+                        <Button rung="outline" size={size.key} isDisabled={col.disabled}>Import</Button>
+                    );
+                    return col.forced
+                        ? <ForcedStateCell state={col.forced}>{button}</ForcedStateCell>
+                        : <StaticCell>{button}</StaticCell>;
+                }}
+            />
             <p className={styles.note}>
-                Sizes: <Button size="control">control 24</Button>{" "}
-                <Button size="control-lg">control-lg 28</Button>{" "}
                 <span className={styles.pressReadout}>{pressCount > 0 ? `${pressCount} presses` : ""}</span>
             </p>
         </section>
     );
 }
 
-function ToggleButtonMatrix() {
-    const specimens: { name: string; state: ForcedState; selected: boolean; disabled?: boolean }[] = [
-        { name: "rest", state: "rest", selected: false },
-        { name: "hovered", state: "hovered", selected: false },
-        { name: "pressed", state: "pressed", selected: false },
-        { name: "focus-visible", state: "focus-visible", selected: false },
-        { name: "selected", state: "rest", selected: true },
-        { name: "selected+hovered", state: "hovered", selected: true },
-        { name: "disabled", state: "rest", selected: false, disabled: true },
-        { name: "disabled on", state: "rest", selected: true, disabled: true },
+function ToggleButtonMatrix({ id }: SectionProps) {
+    const cols: readonly StateCol[] = [
+        { key: "rest", label: "rest", forced: "rest" },
+        { key: "hovered", label: "hovered", forced: "hovered" },
+        { key: "selected", label: "selected", forced: "rest", selected: true },
+        { key: "selhover", label: "sel+hover", forced: "hovered", selected: true },
+        { key: "disabled", label: "disabled", disabled: true },
+        { key: "dison", label: "disabled on", disabled: true, selected: true },
     ];
     return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>ToggleButton — the boolean register (§14: on = fill)</h2>
-            <div className={styles.swatchRow}>
-                {specimens.map((specimen) => (
-                    <span key={specimen.name} className={styles.swatchEntry}>
-                        <span className={styles.matrixLabel}>{specimen.name}</span>
-                        <ForcedStateCell state={specimen.state}>
-                            <ToggleButton defaultSelected={specimen.selected} isDisabled={specimen.disabled}>
-                                Raw
-                            </ToggleButton>
-                        </ForcedStateCell>
-                    </span>
-                ))}
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>live</span>
-                    <ToggleButton>Raw</ToggleButton>
-                </span>
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>control-lg</span>
-                    <ToggleButton size="control-lg" defaultSelected>Raw</ToggleButton>
-                </span>
-            </div>
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>ToggleButton — the boolean register × size (§14: on = fill)</h2>
+            <SizeStateGrid
+                rows={CONTROL_SIZES}
+                cols={cols}
+                cell={(size, col) => {
+                    const toggle = (
+                        <ToggleButton size={size.key} defaultSelected={col.selected} isDisabled={col.disabled}>
+                            Raw
+                        </ToggleButton>
+                    );
+                    return col.forced
+                        ? <ForcedStateCell state={col.forced}>{toggle}</ForcedStateCell>
+                        : <StaticCell>{toggle}</StaticCell>;
+                }}
+            />
         </section>
     );
 }
 
-function SegmentedControlSpecimens() {
+const SEGMENTED_SIZES = [
+    { key: "sm", label: "sm · 20" },
+    { key: "md", label: "md · 24" },
+    { key: "lg", label: "lg · 28" },
+] as const satisfies readonly { key: SegmentedControlSize; label: string }[];
+
+function SegmentedControlSpecimens({ id }: SectionProps) {
+    const cols: readonly StateCol[] = [
+        { key: "rest", label: "rest" },
+        { key: "disabled", label: "disabled", disabled: true },
+    ];
     return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>SegmentedControl — pick exactly one (single-select track)</h2>
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>SegmentedControl — single-select track × size</h2>
+            <SizeStateGrid
+                rows={SEGMENTED_SIZES}
+                cols={cols}
+                cell={(size, col) => (
+                    <StaticCell>
+                        <SegmentedControl
+                            aria-label={`View ${size.key} ${col.key}`}
+                            size={size.key}
+                            defaultValue="loupe"
+                            isDisabled={col.disabled}
+                        >
+                            <Segment id="grid">Grid</Segment>
+                            <Segment id="loupe">Loupe</Segment>
+                            <Segment id="compare">Compare</Segment>
+                        </SegmentedControl>
+                    </StaticCell>
+                )}
+            />
+            <p className={styles.subHead}>content — text · icon · icon+text (md)</p>
             <div className={styles.swatchRow}>
                 <span className={styles.swatchEntry}>
                     <span className={styles.matrixLabel}>text</span>
@@ -212,170 +445,223 @@ function SegmentedControlSpecimens() {
                         <Segment id="flag"><Icon concept="flag" />Flag</Segment>
                     </SegmentedControl>
                 </span>
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>control-lg</span>
-                    <SegmentedControl aria-label="View mode" size="control-lg" defaultValue="loupe">
-                        <Segment id="grid">Grid</Segment>
-                        <Segment id="loupe">Loupe</Segment>
-                        <Segment id="compare">Compare</Segment>
-                    </SegmentedControl>
-                </span>
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>disabled</span>
-                    <SegmentedControl aria-label="View mode" defaultValue="grid" isDisabled>
-                        <Segment id="grid">Grid</Segment>
-                        <Segment id="loupe">Loupe</Segment>
-                        <Segment id="compare">Compare</Segment>
-                    </SegmentedControl>
-                </span>
             </div>
         </section>
     );
 }
 
-function CheckboxMatrix() {
-    const specimens: {
-        name: string;
-        state: ForcedState;
-        checked?: boolean;
-        mixed?: boolean;
-        disabled?: boolean;
-        invalid?: boolean;
-    }[] = [
-        { name: "rest", state: "rest" },
-        { name: "hovered", state: "hovered" },
-        { name: "pressed", state: "pressed" },
-        { name: "focus-visible", state: "focus-visible" },
-        { name: "checked", state: "rest", checked: true },
-        { name: "checked+hovered", state: "hovered", checked: true },
-        { name: "mixed", state: "rest", mixed: true },
-        { name: "invalid", state: "rest", invalid: true },
-        { name: "disabled", state: "rest", disabled: true },
-        { name: "disabled checked", state: "rest", checked: true, disabled: true },
+function CheckboxMatrix({ id }: SectionProps) {
+    const cols: readonly StateCol[] = [
+        { key: "rest", label: "rest", forced: "rest" },
+        { key: "hovered", label: "hovered", forced: "hovered" },
+        { key: "checked", label: "checked", forced: "rest", checked: true },
+        { key: "chkhover", label: "chk+hover", forced: "hovered", checked: true },
+        { key: "mixed", label: "mixed", forced: "rest", mixed: true },
+        { key: "invalid", label: "invalid", forced: "rest", invalid: true },
+        { key: "disabled", label: "disabled", disabled: true },
+        { key: "discheck", label: "dis+checked", disabled: true, checked: true },
     ];
     return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>Checkbox — the toggles-on ledger row (§5)</h2>
-            <div className={styles.swatchRow}>
-                {specimens.map((specimen) => (
-                    <span key={specimen.name} className={styles.swatchEntry}>
-                        <span className={styles.matrixLabel}>{specimen.name}</span>
-                        <ForcedStateCell state={specimen.state}>
-                            <Checkbox
-                                defaultSelected={specimen.checked}
-                                isIndeterminate={specimen.mixed}
-                                isDisabled={specimen.disabled}
-                                isInvalid={specimen.invalid}
-                            >
-                                Reject
-                            </Checkbox>
-                        </ForcedStateCell>
-                    </span>
-                ))}
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>live</span>
-                    <Checkbox>Reject</Checkbox>
-                </span>
-            </div>
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Checkbox — the toggles-on ledger row × size (§5)</h2>
+            <SizeStateGrid
+                rows={CONTROL_SIZES}
+                cols={cols}
+                cell={(size, col) => {
+                    const checkbox = (
+                        <Checkbox
+                            size={size.key}
+                            defaultSelected={col.checked}
+                            isIndeterminate={col.mixed}
+                            isInvalid={col.invalid}
+                            isDisabled={col.disabled}
+                        >
+                            Reject
+                        </Checkbox>
+                    );
+                    return col.forced
+                        ? <ForcedStateCell state={col.forced}>{checkbox}</ForcedStateCell>
+                        : <StaticCell>{checkbox}</StaticCell>;
+                }}
+            />
+            <p className={styles.note}>The box rides the icon ramp (12/14/16/18); label, box, and hit-row scale together.</p>
         </section>
     );
 }
 
-function SwitchMatrix() {
-    const specimens: {
-        name: string;
-        state: ForcedState;
-        on?: boolean;
-        disabled?: boolean;
-    }[] = [
-        { name: "rest", state: "rest" },
-        { name: "hovered", state: "hovered" },
-        { name: "pressed", state: "pressed" },
-        { name: "focus-visible", state: "focus-visible" },
-        { name: "on", state: "rest", on: true },
-        { name: "on+hovered", state: "hovered", on: true },
-        { name: "disabled", state: "rest", disabled: true },
-        { name: "disabled on", state: "rest", on: true, disabled: true },
+function SwitchMatrix({ id }: SectionProps) {
+    const cols: readonly StateCol[] = [
+        { key: "rest", label: "rest", forced: "rest" },
+        { key: "hovered", label: "hovered", forced: "hovered" },
+        { key: "on", label: "on", forced: "rest", on: true },
+        { key: "onhover", label: "on+hover", forced: "hovered", on: true },
+        { key: "disabled", label: "disabled", disabled: true },
+        { key: "dison", label: "disabled on", disabled: true, on: true },
     ];
     return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>Switch — the immediate-effect boolean (§5)</h2>
-            <div className={styles.swatchRow}>
-                {specimens.map((specimen) => (
-                    <span key={specimen.name} className={styles.swatchEntry}>
-                        <span className={styles.matrixLabel}>{specimen.name}</span>
-                        <ForcedStateCell state={specimen.state}>
-                            <Switch defaultSelected={specimen.on} isDisabled={specimen.disabled}>
-                                Watch
-                            </Switch>
-                        </ForcedStateCell>
-                    </span>
-                ))}
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>live</span>
-                    <Switch>Watch</Switch>
-                </span>
-            </div>
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Switch — the immediate-effect boolean × size (§5)</h2>
+            <SizeStateGrid
+                rows={CONTROL_SIZES}
+                cols={cols}
+                cell={(size, col) => {
+                    const toggle = (
+                        <Switch size={size.key} defaultSelected={col.on} isDisabled={col.disabled}>
+                            Watch
+                        </Switch>
+                    );
+                    return col.forced
+                        ? <ForcedStateCell state={col.forced}>{toggle}</ForcedStateCell>
+                        : <StaticCell>{toggle}</StaticCell>;
+                }}
+            />
+            <p className={styles.note}>The track derives from the icon ramp (height = icon, width = 2·icon−4); it scales with the tier.</p>
         </section>
     );
 }
 
-function TextFieldMatrix() {
-    const specimens: {
-        name: string;
-        state: ForcedState;
-        invalid?: boolean;
-        disabled?: boolean;
-        description?: string;
-    }[] = [
-        { name: "rest", state: "rest" },
-        { name: "hovered", state: "hovered" },
-        { name: "focused", state: "focused" },
-        { name: "invalid", state: "rest", invalid: true },
-        { name: "described", state: "rest", description: "Shown in the panel tree" },
-        { name: "disabled", state: "rest", disabled: true },
+function TextFieldMatrix({ id }: SectionProps) {
+    const cols: readonly StateCol[] = [
+        { key: "rest", label: "rest", forced: "rest" },
+        { key: "focused", label: "focused", forced: "focused" },
+        { key: "invalid", label: "invalid", forced: "rest", invalid: true },
+        { key: "disabled", label: "disabled", disabled: true },
     ];
     return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>TextField — the field composite (§25)</h2>
-            <div className={styles.swatchRow}>
-                {specimens.map((specimen) => (
-                    <span key={specimen.name} className={styles.swatchEntry}>
-                        <span className={styles.matrixLabel}>{specimen.name}</span>
-                        <ForcedStateCell state={specimen.state}>
-                            <TextField
-                                label="Collection"
-                                defaultValue="2024 — Iceland"
-                                description={specimen.description}
-                                errorMessage="Name is taken"
-                                isInvalid={specimen.invalid}
-                                isDisabled={specimen.disabled}
-                            />
-                        </ForcedStateCell>
-                    </span>
-                ))}
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>live</span>
-                    <TextField label="Collection" placeholder="Type here…" />
-                </span>
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>control-lg</span>
-                    <TextField label="Collection" size="control-lg" defaultValue="Selects" />
-                </span>
-            </div>
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>TextField — the field composite × size (§25)</h2>
+            <SizeStateGrid
+                rows={CONTROL_SIZES}
+                cols={cols}
+                cell={(size, col) => {
+                    const field = (
+                        <TextField
+                            label="ISO"
+                            size={size.key}
+                            defaultValue="400"
+                            errorMessage="Out of range"
+                            isInvalid={col.invalid}
+                            isDisabled={col.disabled}
+                        />
+                    );
+                    return col.forced
+                        ? <ForcedStateCell state={col.forced}>{field}</ForcedStateCell>
+                        : <StaticCell>{field}</StaticCell>;
+                }}
+            />
+            <p className={styles.note}>
+                The <code className={styles.formula}>sm</code> field is the inline-edit control — dropped in a
+                row-list (24) row, its click target fills the row for the §8 24px hit-target floor.
+            </p>
         </section>
     );
 }
 
-function RowSpecimens() {
+function RatingMatrix({ id }: SectionProps) {
+    const [liveValue, setLiveValue] = useState<number | null>(3);
+    const valueCols = [
+        { key: "null", label: "null", value: null },
+        { key: "1", label: "1", value: 1 },
+        { key: "3", label: "3", value: 3 },
+        { key: "5", label: "5", value: 5 },
+    ] as const satisfies readonly { key: string; label: string; value: number | null }[];
     return (
-        <section className={styles.section}>
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Rating — the five-position readout × size (§14 fill = on)</h2>
+            <SizeStateGrid
+                rows={CONTROL_SIZES}
+                cols={valueCols}
+                cell={(size, col) => (
+                    <StaticCell>
+                        <Rating value={col.value} size={size.key} />
+                    </StaticCell>
+                )}
+            />
+            <p className={styles.note}>
+                Stars ride the icon ramp (12/14/16/18); the tier scales them + the hit-row. Live — click the current value to clear:
+                <Rating value={liveValue} onChange={setLiveValue} />
+            </p>
+        </section>
+    );
+}
+
+const BADGE_STYLES = ["tint", "outline", "fill", "dot"] as const satisfies readonly BadgeStyle[];
+const BADGE_HUES = [
+    "red",
+    "peach",
+    "orange",
+    "amber",
+    "lime",
+    "green",
+    "teal",
+    "cyan",
+    "blue",
+    "indigo",
+    "purple",
+    "magenta",
+    "gray",
+] as const satisfies readonly BadgeHue[];
+const BADGE_SIZES = [
+    { key: "inline", label: "inline · micro" },
+    { key: "standard", label: "standard · label-sm" },
+    { key: "prominent", label: "prominent · label" },
+] as const satisfies readonly { key: BadgeSize; label: string }[];
+
+function BadgeMatrix({ id }: SectionProps) {
+    const styleCols = BADGE_STYLES.map((style) => ({ key: style, label: style }));
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Badge — the tagRecipes chip: size × style, then style × hue (§5)</h2>
+            <SizeStateGrid
+                rows={BADGE_SIZES}
+                cols={styleCols}
+                cell={(size, col) => (
+                    <StaticCell>
+                        <Badge hue="cyan" style={col.key} size={size.key}>{col.key}</Badge>
+                    </StaticCell>
+                )}
+            />
+            <p className={styles.subHead}>style × hue (standard)</p>
+            {BADGE_STYLES.map((style) => (
+                <div key={style} className={styles.matrix}>
+                    <span className={styles.matrixLabel}>{style}</span>
+                    <div className={styles.badgeRow}>
+                        {BADGE_HUES.map((hue) => (
+                            <Badge key={hue} hue={hue} style={style}>
+                                {hue}
+                            </Badge>
+                        ))}
+                    </div>
+                </div>
+            ))}
+            <p className={styles.note}>
+                {/* One span = one flex item; inside it the badge flows INLINE —
+                    that inline flow is what the line-fit proof measures. */}
+                <span>
+                    Line fit: filed under{" "}
+                    <Badge hue="cyan" size="inline">
+                        RAW
+                    </Badge>{" "}
+                    pending review — the inline rung must not grow the line box.
+                </span>
+            </p>
+            <p className={styles.note}>
+                Role bindings (tagRecipes.sizes): inline = micro (10px) · standard = label-sm (11px) · prominent =
+                label (12px) — one point apart by design; the box, not the font, separates the rungs.
+            </p>
+        </section>
+    );
+}
+
+function RowSpecimens({ id }: SectionProps) {
+    return (
+        <section id={id} className={styles.section}>
             <h2 className={styles.sectionHead}>Row + PanelSection — the §12 grammar, at panel width</h2>
             <div className={styles.panelSpecimen}>
                 <PanelSection head="Judgment" intent="control">
                     <Row intent="control" label="Rating" value="unrated" />
                     <Row intent="control" label="Flag">
-                        <Button size="control">Pick</Button>
+                        <Button size="md">Pick</Button>
                     </Row>
                 </PanelSection>
                 <PanelSection head="Collections" intent="list">
@@ -394,10 +680,10 @@ function RowSpecimens() {
     );
 }
 
-function TypeRoles() {
+function TypeRoles({ id }: SectionProps) {
     const roles = byPrefix("type-role.");
     return (
-        <section className={styles.section}>
+        <section id={id} className={styles.section}>
             <h2 className={styles.sectionHead}>Type roles — each is a unit (§9)</h2>
             {roles.map((token) => {
                 const roleName = token.path.split(".").at(-1) ?? "";
@@ -419,10 +705,10 @@ function Swatch({ path }: { path: string }) {
     return <span className={styles.swatch} style={{ background: `var(--alx-${path.replaceAll(".", "-")})` }} />;
 }
 
-function ChromeSwatches() {
+function ChromeSwatches({ id }: SectionProps) {
     const groups = ["surface.", "cell.", "ink."];
     return (
-        <section className={styles.section}>
+        <section id={id} className={styles.section}>
             <h2 className={styles.sectionHead}>Chrome roles — live on the active theme</h2>
             {groups.map((prefix) => (
                 <div key={prefix} className={styles.swatchRow}>
@@ -438,9 +724,9 @@ function ChromeSwatches() {
     );
 }
 
-function HueGrid() {
+function HueGrid({ id }: SectionProps) {
     return (
-        <section className={styles.section}>
+        <section id={id} className={styles.section}>
             <h2 className={styles.sectionHead}>
                 Hue scales — accent-eligible: {reference.accentEligible.join(", ")}
             </h2>
@@ -459,12 +745,12 @@ function HueGrid() {
     );
 }
 
-function Scales() {
+function Scales({ id }: SectionProps) {
     const spaces = byPrefix("space.").sort(
         (first, second) => Number(first.path.split(".")[1]) - Number(second.path.split(".")[1]),
     );
     return (
-        <section className={styles.section}>
+        <section id={id} className={styles.section}>
             <h2 className={styles.sectionHead}>Space · radius · shadows</h2>
             <div className={styles.swatchRow}>
                 {spaces.map((token) => (
@@ -496,99 +782,44 @@ function Scales() {
     );
 }
 
-function RatingMatrix() {
-    const [liveValue, setLiveValue] = useState<number | null>(3);
-    const displayValues: (number | null)[] = [null, 0, 1, 3, 5];
-    return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>Rating — the five-position readout/input (§14 fill = on)</h2>
-            <div className={styles.swatchRow}>
-                {displayValues.map((value) => (
-                    <span key={String(value)} className={styles.swatchEntry}>
-                        <span className={styles.matrixLabel}>{value === null ? "null" : String(value)}</span>
-                        <Rating value={value} />
-                    </span>
-                ))}
-                <span className={styles.swatchEntry}>
-                    <span className={styles.matrixLabel}>live — click the current value to clear</span>
-                    <Rating value={liveValue} onChange={setLiveValue} />
-                </span>
-            </div>
-            <p className={styles.note}>
-                Display mode (no onChange) renders zero tab stops, so grid cells stay pure readouts; the interactive
-                grammar proposes the next value, null for the clear.
-            </p>
-        </section>
-    );
+// ── Assembly ──────────────────────────────────────────────────────────────────
+
+interface SectionProps {
+    id: string;
 }
 
-const BADGE_STYLES = ["tint", "outline", "fill", "dot"] as const satisfies readonly BadgeStyle[];
-const BADGE_HUES = [
-    "red",
-    "peach",
-    "orange",
-    "amber",
-    "lime",
-    "green",
-    "teal",
-    "cyan",
-    "blue",
-    "indigo",
-    "purple",
-    "magenta",
-    "gray",
-] as const satisfies readonly BadgeHue[];
+/** ONE source of truth for section order, anchor ids, and the table of contents. */
+const SECTIONS: readonly { id: string; label: string; render: (id: string) => ReactNode }[] = [
+    { id: "sizing", label: "Sizing system", render: (id) => <SizingSystem id={id} /> },
+    { id: "button", label: "Button", render: (id) => <ButtonMatrix id={id} /> },
+    { id: "toggle", label: "ToggleButton", render: (id) => <ToggleButtonMatrix id={id} /> },
+    { id: "segmented", label: "SegmentedControl", render: (id) => <SegmentedControlSpecimens id={id} /> },
+    { id: "textfield", label: "TextField", render: (id) => <TextFieldMatrix id={id} /> },
+    { id: "checkbox", label: "Checkbox", render: (id) => <CheckboxMatrix id={id} /> },
+    { id: "switch", label: "Switch", render: (id) => <SwitchMatrix id={id} /> },
+    { id: "rating", label: "Rating", render: (id) => <RatingMatrix id={id} /> },
+    { id: "badge", label: "Badge", render: (id) => <BadgeMatrix id={id} /> },
+    { id: "row", label: "Row + PanelSection", render: (id) => <RowSpecimens id={id} /> },
+    { id: "type", label: "Type roles", render: (id) => <TypeRoles id={id} /> },
+    { id: "chrome", label: "Chrome roles", render: (id) => <ChromeSwatches id={id} /> },
+    { id: "hue", label: "Hue scales", render: (id) => <HueGrid id={id} /> },
+    { id: "scales", label: "Space · radius · shadows", render: (id) => <Scales id={id} /> },
+];
 
-function BadgeMatrix() {
+function TableOfContents() {
     return (
-        <section className={styles.section}>
-            <h2 className={styles.sectionHead}>Badge — the tagRecipes chip (§5 · tint · outline · fill · dot)</h2>
-            {BADGE_STYLES.map((style) => (
-                <div key={style} className={styles.matrix}>
-                    <span className={styles.matrixLabel}>{style}</span>
-                    <div className={styles.badgeRow}>
-                        {BADGE_HUES.map((hue) => (
-                            <Badge key={hue} hue={hue} style={style}>
-                                {hue}
-                            </Badge>
-                        ))}
-                    </div>
-                </div>
+        <nav className={styles.toc} aria-label="Sections">
+            {SECTIONS.map((section) => (
+                <button
+                    key={section.id}
+                    type="button"
+                    className={styles.tocLink}
+                    onClick={() => document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth" })}
+                >
+                    {section.label}
+                </button>
             ))}
-            <div className={styles.matrix}>
-                <span className={styles.matrixLabel}>sizes</span>
-                <div className={styles.badgeRow}>
-                    <Badge hue="cyan" size="inline">
-                        inline
-                    </Badge>
-                    <Badge hue="cyan">standard</Badge>
-                    <Badge hue="cyan" size="prominent">
-                        prominent
-                    </Badge>
-                    <Badge hue="gray" style="outline" size="inline">
-                        RAW
-                    </Badge>
-                    <Badge hue="green" style="dot" size="prominent">
-                        exported
-                    </Badge>
-                </div>
-            </div>
-            <p className={styles.note}>
-                {/* One span = one flex item; inside it the badge flows INLINE —
-                    that inline flow is what the line-fit proof measures. */}
-                <span>
-                    Line fit: filed under{" "}
-                    <Badge hue="cyan" size="inline">
-                        RAW
-                    </Badge>{" "}
-                    pending review — the inline rung must not grow the line box.
-                </span>
-            </p>
-            <p className={styles.note}>
-                Role bindings (tagRecipes.sizes): inline = micro (10px) · standard = label-sm (11px) · prominent =
-                label (12px) — one point apart by design; the box, not the font, separates the rungs.
-            </p>
-        </section>
+        </nav>
     );
 }
 
@@ -600,19 +831,10 @@ export function DesignLibrary() {
                 <ThemeSwitcher />
                 <a className={styles.backLink} href="#/">← app shell</a>
             </header>
-            <ButtonMatrix />
-            <ToggleButtonMatrix />
-            <SegmentedControlSpecimens />
-            <CheckboxMatrix />
-            <SwitchMatrix />
-            <TextFieldMatrix />
-            <RowSpecimens />
-            <RatingMatrix />
-            <BadgeMatrix />
-            <TypeRoles />
-            <ChromeSwatches />
-            <HueGrid />
-            <Scales />
+            <TableOfContents />
+            {SECTIONS.map((section) => (
+                <Fragment key={section.id}>{section.render(section.id)}</Fragment>
+            ))}
         </div>
     );
 }

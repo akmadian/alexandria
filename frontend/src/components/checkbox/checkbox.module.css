@@ -5,11 +5,37 @@
  * drained + the ramp's disabled rung). Emitted tokens only. */
 
 .checkbox {
-    composes: alx-type-value from global;
     display: inline-flex;
     align-items: center;
     gap: var(--alx-space-2);
     -webkit-tap-highlight-color: transparent;
+}
+
+/* Size ladder (§8/D33 proportional): the tier scales EVERYTHING — the label role, the
+ * box (via --alx-size-icon, which .box reads), and the min-height carrying the hit target.
+ * The box tracks the icon ramp (12/14/16/18); the glyph fills it. */
+.sizeXs {
+    composes: alx-type-value-xs from global;
+    min-height: var(--alx-size-control-xs);
+    gap: var(--alx-space-1);
+    --alx-size-icon: var(--alx-size-icon-xs);
+}
+
+.sizeSm {
+    composes: alx-type-value-sm from global;
+    min-height: var(--alx-size-control-sm);
+    --alx-size-icon: var(--alx-size-icon-sm);
+}
+
+.sizeMd {
+    composes: alx-type-value from global;
+    min-height: var(--alx-size-control-md);
+}
+
+.sizeLg {
+    composes: alx-type-value-lg from global;
+    min-height: var(--alx-size-control-lg);
+    --alx-size-icon: var(--alx-size-icon-lg);
 }
 
 .box {

@@ -1086,13 +1086,6 @@
       "css": "8px"
     },
     {
-      "path": "size.control",
-      "type": "dimension",
-      "varying": false,
-      "role": "THE default control height (ratified 2026-07-13, was control-sm): buttons, fields, toolbar chrome — the dense-tool default; = the hit-target floor. A 24 control inside a 28 row-control is the canonical field-row rhythm.",
-      "css": "24px"
-    },
-    {
       "path": "size.control-inset",
       "type": "dimension",
       "varying": false,
@@ -1104,8 +1097,31 @@
       "path": "size.control-lg",
       "type": "dimension",
       "varying": false,
-      "role": "prominent controls only (was control-md, demoted from default 2026-07-13): dialog CTAs, hero spots",
+      "role": "prominent controls only: dialog CTAs, hero spots. Inline pad space.4 (16).",
       "css": "28px"
+    },
+    {
+      "path": "size.control-md",
+      "type": "dimension",
+      "varying": false,
+      "role": "THE default control height (renamed control→control-md, control-size round 2026-07-22; the sole default since 2026-07-13): buttons, fields, toolbar chrome — the dense-tool default; = the hit-target floor. 20-in-24 (control-sm in row-list) and 24-in-28 (control-md in row-control) are the canonical field-row rhythm. Inline pad space.3 (12).",
+      "css": "24px"
+    },
+    {
+      "path": "size.control-sm",
+      "type": "dimension",
+      "varying": false,
+      "role": "dense control (control-size round, 2026-07-22): inline-edit fields + their trigger icons, dense chips, secondary icon-buttons in packed chrome. Visual 20 = 16 line-box + 2px breathe each side; INTERACTIVE hit target still fills 24 (§8 floor) — fills its row-list (24) row, or expands via transparent block padding when standalone. Not for primary CTAs / touch / first-run-critical targets. Inline pad space.2 (8); icon 16 → 2px inset.",
+      "pin": "hypothesis (§30.5)",
+      "css": "20px"
+    },
+    {
+      "path": "size.control-xs",
+      "type": "dimension",
+      "varying": false,
+      "role": "the inline-edit / inspector-dense tier (control-size round B, 2026-07-22): visual 16 = the line-box exactly (breathe 0), so a read-only value → editable field is ZERO layout shift. INTERACTIVE but below the 24 hit-target floor BY DESIGN — a sanctioned mouse-only exception (§28: desktop-only) for full-width inspector controls, whose horizontal target is large even at 16 tall. Not for standalone chrome / touch / first-run-critical. Inline pad space.1 (4); icon 16 (flush).",
+      "pin": "hypothesis (§30.5)",
+      "css": "16px"
     },
     {
       "path": "size.hit-target",
@@ -1117,7 +1133,24 @@
       "path": "size.icon",
       "type": "dimension",
       "varying": false,
+      "role": "icon ramp: the mark at control-md (the default; the original single chrome size)",
       "css": "16px"
+    },
+    {
+      "path": "size.icon-lg",
+      "type": "dimension",
+      "varying": false,
+      "role": "icon ramp: the mark at control-lg",
+      "pin": "hypothesis (§30.5)",
+      "css": "18px"
+    },
+    {
+      "path": "size.icon-sm",
+      "type": "dimension",
+      "varying": false,
+      "role": "icon ramp: the mark at control-sm",
+      "pin": "hypothesis (§30.5)",
+      "css": "14px"
     },
     {
       "path": "size.icon-stroke",
@@ -1125,6 +1158,14 @@
       "varying": false,
       "pin": "hypothesis (§30.9) — in tension with the §8 1× floor; empirical check pending",
       "css": "1.5px"
+    },
+    {
+      "path": "size.icon-xs",
+      "type": "dimension",
+      "varying": false,
+      "role": "icon ramp (proportional round, 2026-07-22): the mark at control-xs. §14 'one chrome size' relaxed to a per-tier ramp — everything scales into the tier height.",
+      "pin": "hypothesis (§30.5)",
+      "css": "12px"
     },
     {
       "path": "size.panel-left",
@@ -1384,13 +1425,52 @@
       "path": "type-role.control",
       "type": "typography",
       "varying": false,
-      "role": "buttons, menu items, tabs",
+      "role": "control-text ramp: the label at control-md (24, default) — buttons, menu items, tabs",
       "variables": {
         "--alx-type-role-control-font-family": "Geist, system-ui, sans-serif",
         "--alx-type-role-control-font-size": "12px",
         "--alx-type-role-control-font-weight": "500",
         "--alx-type-role-control-line-height": "16px",
         "--alx-type-role-control-letter-spacing": "0.005em"
+      }
+    },
+    {
+      "path": "type-role.control-lg",
+      "type": "typography",
+      "varying": false,
+      "role": "control-text ramp: the label at control-lg (28)",
+      "variables": {
+        "--alx-type-role-control-lg-font-family": "Geist, system-ui, sans-serif",
+        "--alx-type-role-control-lg-font-size": "13px",
+        "--alx-type-role-control-lg-font-weight": "500",
+        "--alx-type-role-control-lg-line-height": "18px",
+        "--alx-type-role-control-lg-letter-spacing": "0em"
+      }
+    },
+    {
+      "path": "type-role.control-sm",
+      "type": "typography",
+      "varying": false,
+      "role": "control-text ramp: the label at control-sm (20)",
+      "variables": {
+        "--alx-type-role-control-sm-font-family": "Geist, system-ui, sans-serif",
+        "--alx-type-role-control-sm-font-size": "11px",
+        "--alx-type-role-control-sm-font-weight": "500",
+        "--alx-type-role-control-sm-line-height": "16px",
+        "--alx-type-role-control-sm-letter-spacing": "0.01em"
+      }
+    },
+    {
+      "path": "type-role.control-xs",
+      "type": "typography",
+      "varying": false,
+      "role": "control-text ramp (proportional round, 2026-07-22): the label at control-xs (16). The 'two sizes do the work' rule is superseded for CONTROL text — each tier scales its label so everything fits the tier height (§8). Eye-tune on real Geist.",
+      "variables": {
+        "--alx-type-role-control-xs-font-family": "Geist, system-ui, sans-serif",
+        "--alx-type-role-control-xs-font-size": "10px",
+        "--alx-type-role-control-xs-font-weight": "500",
+        "--alx-type-role-control-xs-line-height": "14px",
+        "--alx-type-role-control-xs-letter-spacing": "0.01em"
       }
     },
     {
@@ -1527,13 +1607,52 @@
       "path": "type-role.value",
       "type": "typography",
       "varying": false,
-      "role": "content: names, editable values",
+      "role": "value-text ramp: content text at control-md (24, default) — names, editable values",
       "variables": {
         "--alx-type-role-value-font-family": "Geist, system-ui, sans-serif",
         "--alx-type-role-value-font-size": "12px",
         "--alx-type-role-value-font-weight": "400",
         "--alx-type-role-value-line-height": "16px",
         "--alx-type-role-value-letter-spacing": "0.005em"
+      }
+    },
+    {
+      "path": "type-role.value-lg",
+      "type": "typography",
+      "varying": false,
+      "role": "value-text ramp: content text at control-lg (28)",
+      "variables": {
+        "--alx-type-role-value-lg-font-family": "Geist, system-ui, sans-serif",
+        "--alx-type-role-value-lg-font-size": "13px",
+        "--alx-type-role-value-lg-font-weight": "400",
+        "--alx-type-role-value-lg-line-height": "18px",
+        "--alx-type-role-value-lg-letter-spacing": "0em"
+      }
+    },
+    {
+      "path": "type-role.value-sm",
+      "type": "typography",
+      "varying": false,
+      "role": "value-text ramp: content text at control-sm (20)",
+      "variables": {
+        "--alx-type-role-value-sm-font-family": "Geist, system-ui, sans-serif",
+        "--alx-type-role-value-sm-font-size": "11px",
+        "--alx-type-role-value-sm-font-weight": "400",
+        "--alx-type-role-value-sm-line-height": "16px",
+        "--alx-type-role-value-sm-letter-spacing": "0.01em"
+      }
+    },
+    {
+      "path": "type-role.value-xs",
+      "type": "typography",
+      "varying": false,
+      "role": "value-text ramp (proportional round, 2026-07-22): CONTENT text at control-xs (16) — the regular-weight twin of control-xs. Field values, checkbox/switch labels scale with their control tier but stay regular (medium is for interactive control labels). Values PIN, eye-gate pending.",
+      "variables": {
+        "--alx-type-role-value-xs-font-family": "Geist, system-ui, sans-serif",
+        "--alx-type-role-value-xs-font-size": "10px",
+        "--alx-type-role-value-xs-font-weight": "400",
+        "--alx-type-role-value-xs-line-height": "14px",
+        "--alx-type-role-value-xs-letter-spacing": "0.01em"
       }
     },
     {

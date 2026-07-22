@@ -1,14 +1,53 @@
 /* Rating — five star positions on the ink ramp (§14): filled = on (solid ink),
- * empty = the faint outline rung. Stars ride the one §14 chrome icon size
- * (Icon's --alx-size-icon; the 12px override this file once carried was a §14
- * violation the pre-commit review caught). Interactive buttons are bare glyph
- * hits with a quantum pad — chrome surfaces tab through them; the display mode
- * grid cells use renders no buttons at all. */
+ * empty = the faint outline rung. Stars ride --alx-size-icon, which the size tier
+ * reassigns per rung (D33 proportional: the icon ramp 12/14/16/18) — so a rating
+ * scales like every other sized control. Interactive buttons are bare glyph hits;
+ * chrome surfaces tab through them; display mode renders no buttons at all. */
 
 .rating {
     display: inline-flex;
     align-items: center;
     color: var(--alx-ink-2);
+}
+
+/* Size ladder (§8/D33 proportional): the tier scales the stars (via --alx-size-icon,
+ * which the star Icon reads) AND the hit-row height — the container in display mode, each
+ * star button's target in interactive mode (via centering, not a padding token). */
+.sizeXs {
+    min-height: var(--alx-size-control-xs);
+    --alx-size-icon: var(--alx-size-icon-xs);
+}
+
+.sizeSm {
+    min-height: var(--alx-size-control-sm);
+    --alx-size-icon: var(--alx-size-icon-sm);
+}
+
+.sizeMd {
+    min-height: var(--alx-size-control-md);
+}
+
+.sizeLg {
+    min-height: var(--alx-size-control-lg);
+    --alx-size-icon: var(--alx-size-icon-lg);
+}
+
+/* Interactive star buttons take their height from the tier's min-height; the star (an
+ * icon, so it rides --alx-size-icon) centers in it. No padding — that's the base. */
+.sizeXs .starButton {
+    min-height: var(--alx-size-control-xs);
+}
+
+.sizeSm .starButton {
+    min-height: var(--alx-size-control-sm);
+}
+
+.sizeMd .starButton {
+    min-height: var(--alx-size-control-md);
+}
+
+.sizeLg .starButton {
+    min-height: var(--alx-size-control-lg);
 }
 
 /* fill = on (§14): a rated star is solid ink, not an outline. */
@@ -26,14 +65,14 @@
  * 2026-07-19 — button pads doubled it); display mode stays flush like the
  * grid cells. */
 .interactive {
-    gap: var(--alx-space-1);
+    /* gap: var(--alx-space-1); */
 }
 
 .starButton {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: var(--alx-space-1) 0;
+    padding: 0;
     border: 0;
     background: none;
     color: inherit;

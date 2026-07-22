@@ -54,7 +54,7 @@
   },
 
   "rowIntents": {
-    "$comment": "The row grammar (ratified 2026-07-13): each intent binds a height to the type roles allowed inside it — density and type step down TOGETHER or not at all (body type in a 16px row is zero-slack; dense type in a 28px row is limp). Role-in-row enforcement is usage-side (the Row primitive's API and a future usage lint), not the token validator's (clarified 2026-07-17). Density switches at section boundaries only (§8); horizontal insets identical across all intents.",
+    "$comment": "The row grammar (ratified 2026-07-13): each intent binds a height to the type roles allowed inside it — density and type step down TOGETHER or not at all (body type in a 16px row is zero-slack; dense type in a 28px row is limp). Role-in-row enforcement is usage-side (the Row primitive's API and a future usage lint), not the token validator's (clarified 2026-07-17). Density switches at section boundaries only (§8); horizontal insets identical across all intents. Control-size rhythm (D33): a control sits one rung below its row — list(24)→control-sm(20), control(28)→control-md(24), both a 2px-each-side breathe; text(16) hosts no control. Size is set explicitly per control (no cascade), so this rhythm is usage discipline.",
     "control": { "height": "size.row-control", "typeRoles": ["control", "value", "label", "placeholder"], "interactive": true },
     "list": { "height": "size.row-list", "typeRoles": ["value", "data-sm", "caption"], "interactive": true },
     "text": { "height": "size.row-text", "typeRoles": ["label-sm", "data-sm", "caption", "micro"], "interactive": false }

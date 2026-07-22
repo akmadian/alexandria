@@ -1049,3 +1049,84 @@ the pill-vs-page read only exists locally (pill-vs-track) — a full canvas is t
 moving tabs/toggles onto the lifted read for consistency; and the `surface.selected`→`sunken`
 rename cleanup (blocked only by naming, `surface.selected` is now purely the tint-pressed deep
 step).
+
+## D33 — The control-size round: a three-rung derived ladder (2026-07-22)
+
+**Decision.** Chrome sizing was two magic height literals — `size.control` (24) and
+`size.control-lg` (28), pinned by §8 as "two control heights." Two problems: there was **no
+interactive control below the 24px hit-target floor** (the inspector renders read-only metadata
+dense at the 16px line-box, but had no control small enough to sit inline — e.g. a click-to-edit
+field), and heights were **hand-maintained literals**, so "scale it down" meant inventing and
+reconciling more numbers.
+
+**The formula.** Every dense type role already shares `line-height: 16` (the ratified "two sizes
+do the work, both lh 16" decision). So the whole vertical ramp is **one derivation**:
+`height = 16 (the dense line-box) + 2·breathe`, breathe ∈ {0, 2, 4, 6} → **16 / 20 / 24 / 28**.
+Breathe is **realized by centering** (`align-items: center`), never authored as a vertical
+padding token — so heights stay on the 4px grid and no off-grid rung is minted. To scale a
+control down you drop a rung (and, if needed, step its type role to a smaller line-box); only the
+horizontal inline pad steps by tier (`space.2`/`space.3`/`space.4`). This is the Primer control-
+sizing pattern (`height = lineBox + 2·padBlock`), grounded further in native pro-desktop density
+(macOS regular/small/mini; Lightroom/IDE ~18–22px rows), not web-framework defaults (which bottom
+out at 24 — Ant/Spectrum — or 28/32 — Primer/Carbon).
+
+**The tokens.** Added `size.control-sm` = 20; renamed `size.control` → `size.control-md` (24, the
+default); kept `size.control-lg` = 28. 16 is **not** minted as a control size — it is the line-box
+atom the ladder derives from and stays display-only (`row-text`), because a 16px interactive
+control would break the 24px hit-target floor. `control-sm` is display-dense's interactive twin:
+read-only stays `row-text` (16); **editable** dense sits in `row-list` (24) hosting a `control-sm`
+(20). `control-sm` is visual 20 but its interactive hit target still fills 24 (fills its row, or
+transparent block padding standalone) — no interactive element drops below the §8 floor.
+
+**The usage API.** A t-shirt `size` prop — `sm` | `md` | `lg` (default `md`) — set **explicitly
+per control** (no density cascade). SegmentedControl offers `md`/`lg` only: a 20px track crops its
+segment to a cramped 16px. Consequence: §8's "density switches at section boundaries, not
+row-by-row" is now **usage discipline**, not enforced by construction — a future usage-lint if
+drift shows. Migrated Button / ToggleButton / TextField / SegmentedControl + every call site and
+test off the old `control`/`control-lg` prop values.
+
+**Amends** §8 (two → three control heights + the derivation rule) and closes the control-height
+half of §30 item 5, disambiguating the stale "44/28px" note (44 = the top-chrome *bar* band, a
+separate open axis, never a control height). Icon stays one chrome size (16px; 2px inset in a 20).
+
+**Still deferred:** the **inspector inline-edit** affordance itself (the motivating consumer) —
+its own surface. It will also extend the `Row` grammar, which today restricts children to
+`control`-intent (28) rows; hosting a `control-sm` in a `row-list` (24) row lands with that
+consumer. Standalone `control-sm` hit-area expansion ships when the first standalone dense
+icon-button lands (documented on the token; no consumer yet).
+
+**Addendum (same day) — the fourth rung + sizing the indicator primitives.** 20px still read
+too large for the metadata inspector, so the ladder gained a fourth rung: `control-xs` = 16 (=
+the line-box, breathe 0), the **inspector inline-edit tier** — visual 16 matches the read-only
+`row-text` row exactly, so a display→edit swap is zero layout shift. It is interactive *below*
+the 24px hit-target floor by design: a sanctioned **desktop-mouse-only** exception (§28), justified
+because the inspector's inline controls are full-width (large horizontal target even at 16 tall).
+§8's hit-target rule was amended to name this lane rather than let it read as a silent violation.
+`xs` was added to Button / ToggleButton / TextField (SegmentedControl still excludes it *and* `sm`
+— a 16–20 track crops the segment). Checkbox / Switch / Rating gained the same `size` ladder, but
+**§14 pins their 16px indicator** (box / track / star are chrome icons) — so their tier scales the
+label role + the min-height that carries the hit target, never the mark. A useful side effect: it
+lifts those three off their old flat-16 (sub-floor) targets at sm/md/lg. Whether the indicators
+should ever scale (a §14 amendment) is left open — parked until an eye-gate says the pinned mark
+reads wrong at a tier.
+
+**Addendum 2 (same day) — the proportional pivot.** The eye-gate came immediately: a tier that
+scales only its height (constant text/icon/indicator) reads as the *same control stretched*, not a
+smaller one — xs and sm text were indistinguishable. So the model moved from **A (Primer: constant
+line-box, height = text + padding)** to **B (proportional: the tier height is a container every
+metric scales into)** — how Spectrum / Carbon / Ant work. A tier is now a full bundle: **text**
+(a `control-text` type ramp — control-xs 10 / control-sm 11 / control 12 / control-lg 13, medium),
+**icon** (a `size.icon` ramp — 12 / 14 / 16 / 18; 14 and 18 are 2px sub-grid, added to the quantum
+exemption like control-inset), **indicator** (checkbox box / switch track+thumb / rating star, all
+derived from the reassigned local `--alx-size-icon`), **inline pad**, and **height**. Mechanism:
+each component's size class composes its tier's `control-*` text role and reassigns `--alx-size-icon`
+— everything reading that var (the Icon, the checkbox box, the switch geometry `calc`s, the rating
+stars) scales for free. SegmentedControl extended down to `sm` (20 track → 16 segment, the floor;
+xs excluded). This **reverses Addendum 1's §14 indicator-pin** and **amends §14** (one icon size →
+a per-tier ramp) and the **"two sizes do the work" type rule** (control text is now a 4-step ramp).
+The height formula `16 + 2·breathe` survives as the height rung; the other metrics get their own
+per-tier ramps. The text ramp is **split by the pre-existing weight convention**: interactive
+labels (buttons / toggles / tabs / segments) ride the **medium** `control-text` ramp; CONTENT text
+(TextField input, Checkbox / Switch labels) rides a parallel **regular** `value-text` ramp
+(value-xs 10 / value-sm 11 / value 12 / value-lg 13) — same sizes, the weight each context wants.
+**All px values (text 10–13, icon 12–18) are first-pass PIN** — eye-gate on real Geist pending.

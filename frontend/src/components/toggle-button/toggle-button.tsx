@@ -11,21 +11,24 @@ import {
 import { cx } from "@/lib/cx";
 import styles from "./toggle-button.module.css";
 
-export type ToggleButtonSize = "control" | "control-lg";
+export type ToggleButtonSize = "xs" | "sm" | "md" | "lg";
 
 // C10: exhaustive by construction, mirroring Button.
 const SIZE_CLASSES = {
-    control: styles.control,
-    "control-lg": styles.controlLarge,
+    xs: styles.controlXsmall,
+    sm: styles.controlSmall,
+    md: styles.controlMedium,
+    lg: styles.controlLarge,
 } as const satisfies Record<ToggleButtonSize, string>;
 
 export interface ToggleButtonProps extends Omit<AriaToggleButtonProps, "className" | "style"> {
-    /** control = 24px (the dense-tool default); control-lg = 28px. */
+    /** §8 size ladder: xs = 16px (inspector inline-dense), sm = 20px (dense/inline),
+     * md = 24px (default), lg = 28px. */
     size?: ToggleButtonSize;
     className?: string;
 }
 
-export function ToggleButton({ size = "control", className, ...ariaProps }: ToggleButtonProps) {
+export function ToggleButton({ size = "md", className, ...ariaProps }: ToggleButtonProps) {
     return (
         <AriaToggleButton
             {...ariaProps}

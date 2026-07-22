@@ -8,7 +8,7 @@ import { cx } from "@/lib/cx";
 import styles from "./button.module.css";
 
 export type ButtonRung = "ghost" | "outline" | "tint" | "fill" | "hero";
-export type ButtonSize = "control" | "control-lg";
+export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 // C10: exhaustive by construction — a new rung fails to compile until it has a class.
 const RUNG_CLASSES = {
@@ -20,19 +20,23 @@ const RUNG_CLASSES = {
 } as const satisfies Record<ButtonRung, string>;
 
 const SIZE_CLASSES = {
-    control: styles.control,
-    "control-lg": styles.controlLarge,
+    xs: styles.controlXsmall,
+    sm: styles.controlSmall,
+    md: styles.controlMedium,
+    lg: styles.controlLarge,
 } as const satisfies Record<ButtonSize, string>;
 
 export interface ButtonProps extends Omit<AriaButtonProps, "className" | "style"> {
     /** §4 prominence rung. Outline is the default affordance; ghost is opt-in quiet. */
     rung?: ButtonRung;
-    /** control = 24px (the dense-tool default); control-lg = 28px (dialog CTAs, hero spots). */
+    /** §8 size ladder: xs = 16px (inspector inline-edit; mouse-only sub-floor), sm = 20px
+     * (dense/inline; keeps a 24px hit target), md = 24px (the dense-tool default), lg = 28px
+     * (dialog CTAs, hero spots). */
     size?: ButtonSize;
     className?: string;
 }
 
-export function Button({ rung = "outline", size = "control", className, ...ariaProps }: ButtonProps) {
+export function Button({ rung = "outline", size = "md", className, ...ariaProps }: ButtonProps) {
     return (
         <AriaButton
             {...ariaProps}

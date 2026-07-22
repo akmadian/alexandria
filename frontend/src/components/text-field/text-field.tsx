@@ -15,12 +15,14 @@ import {
 import { cx } from "@/lib/cx";
 import styles from "./text-field.module.css";
 
-export type TextFieldSize = "control" | "control-lg";
+export type TextFieldSize = "xs" | "sm" | "md" | "lg";
 
 // C10: exhaustive by construction, mirroring Button.
 const SIZE_CLASSES = {
-    control: styles.control,
-    "control-lg": styles.controlLarge,
+    xs: styles.controlXsmall,
+    sm: styles.controlSmall,
+    md: styles.controlMedium,
+    lg: styles.controlLarge,
 } as const satisfies Record<TextFieldSize, string>;
 
 export interface TextFieldProps
@@ -32,7 +34,8 @@ export interface TextFieldProps
     /** Shown only while invalid — the §25 message row, in ink. */
     errorMessage?: string;
     placeholder?: string;
-    /** control = 24px (the dense-tool default); control-lg = 28px. */
+    /** §8 size ladder: xs = 16px (inspector inline-edit — matches the read-only row),
+     * sm = 20px (dense inline-edit), md = 24px (the dense-tool default), lg = 28px. */
     size?: TextFieldSize;
     className?: string;
 }
@@ -42,7 +45,7 @@ export function TextField({
     description,
     errorMessage,
     placeholder,
-    size = "control",
+    size = "md",
     className,
     ...ariaProps
 }: TextFieldProps) {

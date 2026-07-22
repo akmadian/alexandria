@@ -15,16 +15,30 @@ import { Icon } from "@/components/icon/icon";
 import { cx } from "@/lib/cx";
 import styles from "./checkbox.module.css";
 
+export type CheckboxSize = "xs" | "sm" | "md" | "lg";
+
+// C10: exhaustive by construction, mirroring the control primitives. The tier scales
+// everything (D33 proportional): label role, the box (via --alx-size-icon), min-height.
+const SIZE_CLASSES = {
+    xs: styles.sizeXs,
+    sm: styles.sizeSm,
+    md: styles.sizeMd,
+    lg: styles.sizeLg,
+} as const satisfies Record<CheckboxSize, string>;
+
 export interface CheckboxProps
     extends Omit<AriaCheckboxProps, "children" | "className" | "style"> {
-    /** The label text, in the value role. */
+    /** The label text, in the value-text ramp (regular). */
     children?: ReactNode;
+    /** §8 size ladder: xs = 16px (inspector dense), sm/md/lg = 20/24/28. Scales the label,
+     * the box (via the icon ramp), and the hit-row together (D33 proportional). */
+    size?: CheckboxSize;
     className?: string;
 }
 
-export function Checkbox({ children, className, ...ariaProps }: CheckboxProps) {
+export function Checkbox({ children, size = "md", className, ...ariaProps }: CheckboxProps) {
     return (
-        <AriaCheckbox {...ariaProps} className={cx(styles.checkbox, className)}>
+        <AriaCheckbox {...ariaProps} className={cx(styles.checkbox, SIZE_CLASSES[size], className)}>
             {({ isSelected, isIndeterminate }) => (
                 <>
                     <span className={styles.box}>

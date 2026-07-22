@@ -38,3 +38,8 @@ test("disabled blocks the toggle and keeps an ON track readable", async () => {
     expect(screen.getByRole("switch", { name: "Locked" })).toBeChecked();
     expect(container.querySelector("label")?.hasAttribute("data-disabled")).toBe(true);
 });
+
+test("the size prop maps to its tier class", () => {
+    const { container } = render(<Switch size="xs">Dense</Switch>);
+    expect(container.querySelector("label")?.className).toContain("sizeXs");
+});

@@ -146,9 +146,22 @@ slab on light themes — the backwards direction.
   generous side insets; text never touches an edge), not between blocks. Gutters
   between assets are waste; padding inside cells is structure.
 - **One quantum: 4px.** Every spacing value is a multiple; the validator enforces.
-- **Two control heights** in chrome (**PIN**, hypothesis 24/28px), one icon size
-  (16px) in ≥24px hit targets, uniform row heights per surface. Ragged heights read
-  cramped at any density; uniform rhythm reads calm at almost any density.
+- **Four control heights** in chrome (**PIN**, 16/20/24/28px), on ONE derivation (D33):
+  `height = 16 (the dense line-box shared by the dense type roles) + 2·breathe`, breathe ∈
+  {0, 2, 4, 6} realized by **centering** — never a vertical padding token, so heights stay
+  on the 4px grid and no off-grid rung is minted. `control-xs` 16 (the inspector inline-edit
+  tier: visual 16 = the read-only row exactly, so display→edit is zero-shift; a **sanctioned
+  mouse-only sub-floor** — see the hit-target rule) · `control-sm` 20 (dense/inline: dense
+  chips, secondary icon-buttons — visual 20, hit target still fills 24: it fills its `row-list`
+  row, or expands via transparent block padding standalone) · `control-md` 24 (the default; =
+  the hit-target floor) · `control-lg` 28 (prominent: dialog CTAs, hero). **A tier is a full
+  proportional bundle** (D33 proportional round): text (the control-text ramp, §9), icon (the
+  icon ramp, §14), indicator, and inline pad all scale into the tier height — not just the
+  height. Height's breathe still comes from centering; the other metrics come from their own
+  per-tier ramps. Interactive targets are ≥24 **except** the `control-xs` lane, a documented
+  desktop-mouse-only exception (§28) for full-width inspector controls, whose horizontal target
+  is large even at 16 tall. Uniform row heights per surface. Ragged heights read cramped at any
+  density; uniform rhythm reads calm at almost any density.
 - **Row density is an intent, not a number** (ratified 2026-07-13; values closed
   same date): `row-control` 28 (controls breathe) · `row-list` 24 (interactive
   dense — the tree; sits ON the hit-target floor) · `row-text` 16 (read-only
@@ -264,11 +277,18 @@ left, value/count right (mono, muted), uniform height, disclosure chevrons.
 Two families, two jobs, never mixed:
 
 - **Structural** (things you can do): Lucide-sourced, stroke-based, one stroke
-  constant (**PIN** ~1.5px logical at 16px), one chrome size (16px; 20px only in
-  toolbar hero spots). Icons are ink — they ride the ink ramp and interaction
-  states like text; never bring their own color (ledger only). **Fill = on**
-  (flag picked, star rated); state never by color alone. Every icon is a registered
-  concept beside the vocabulary: same glyph = same meaning, one glyph per concept.
+  constant (**PIN** ~1.5px logical at 16px). Icons are ink — they ride the ink ramp
+  and interaction states like text; never bring their own color (ledger only).
+  **Fill = on** (flag picked, star rated); state never by color alone. Every icon is
+  a registered concept beside the vocabulary: same glyph = same meaning, one glyph
+  per concept.
+  **Icon size is a per-tier ramp** (D33 proportional round): the old one-size rule is
+  superseded — icons scale with their control tier so everything fits the tier height.
+  Ramp `12 / 14 / 16 / 18` for control-xs/sm/md/lg (**PIN** — first pass, eye-gate on
+  real Geist pending); 16 stays the default (md) and the toolbar size, 20 the hero
+  exception. A sized Checkbox / Switch / Rating scales its indicator (box / track /
+  star) with the tier via the local `--alx-size-icon` reassignment — the mark scales,
+  it is no longer pinned.
 - **Machinery** (things happening): the 5×5 dot-matrix family, sourced from
   dot-matrix-animations.vercel.app (60 loaders; spinner/progress/ambient/agent/
   status ≈ our machinery taxonomy). Appear only while working (§10). Dots vs
@@ -598,6 +618,17 @@ on re-inventing mechanics users already know.
   the anchor. Spatial model held docked + tonal — the floating-card/shadow look explicitly not
   adopted. Linen + the dark themes stay non-pole-anchored (the raised ceiling gives selection
   its read without it); their full anchor + the page canvas are their own rounds.
+- Ratified 2026-07-22 (the control-size round; D33): control heights close at a **four-rung
+  derived ladder** — `control-xs` 16 / `control-sm` 20 / `control-md` 24 (default) /
+  `control-lg` 28 — on the single formula `height = 16 + 2·breathe` (breathe via centering, §8).
+  Renames `size.control`→`control-md`; usage API is a t-shirt `size` prop (`xs`/`sm`/`md`/`lg`)
+  set explicitly per control (no density cascade — the §8 section-boundary rule is usage
+  discipline, a future usage-lint if drift shows). `control-xs` (16) is the inspector inline-edit
+  tier — visual 16 matches the read-only `row-text` row for a zero-shift display→edit swap, a
+  sanctioned mouse-only sub-floor (§28). The round then went **fully proportional** (D33 Addendum 2):
+  a tier scales text (a `control-text` type ramp), icon (a per-tier icon ramp — amends §14),
+  indicator, and pad — not just height. Checkbox / Switch / Rating scale their whole indicator with
+  the tier. All text/icon px are first-pass PIN (eye-gate on real Geist pending).
 
 ---
 
@@ -620,9 +651,14 @@ validator + the 1× eyeball test on the Library-view mock (with the
    head = semibold 600. Still open: the Windows ClearType 1× check (10–12px).
 5. Quanta: control heights, row heights per surface, panel default/min widths.
    *Dated note (2026-07-20, the inspector round):* the inspector rail's default width
-   is pinned at **280px** — a structural literal beside the 44/28px chrome heights
+   is pinned at **280px** — a structural literal beside the 44px top-chrome-*bar* height
    until the chrome-dimension tokens land — judged on the live Photos Slice render in
    paper and carbon. Min width and the other panels stay open pins.
+   *Dated note (2026-07-22, the control-size round; D33):* control heights are **closed** —
+   the four-rung derived ladder `control-xs` 16 / `control-sm` 20 / `control-md` 24 /
+   `control-lg` 28 (`height = 16 + 2·breathe`, §8). The **44px** figure above is the top-chrome
+   *bar* band (app titlebar/toolbar), a separate axis still open — not a control height; the
+   earlier "44/28px" phrasing conflated the two.
 6. Radius (3), shadows (2 recipes), motion tokens (durations + easings).
 7. *(closed 2026-07-13 — the twelve named hue scales, labels-as-solids, attention =
    magenta, error = red scale all live in the token source; survives only as

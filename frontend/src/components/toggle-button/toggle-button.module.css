@@ -5,12 +5,10 @@
  * but the focus ring. */
 
 .toggleButton {
-    composes: alx-type-control from global;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--alx-space-1);
-    padding: 0 var(--alx-space-3);
     border: none;
     border-radius: var(--alx-radius-control);
     background: transparent;
@@ -43,11 +41,31 @@
     color: var(--alx-ink-4);
 }
 
-.control {
-    height: var(--alx-size-control);
+/* Size ladder (§8/D33 proportional): each tier bundles its control-text role + icon size
+ * + pad + height. [data-selected] bumps weight to 600 on top of whichever tier role. */
+.controlXsmall {
+    composes: alx-type-control-xs from global;
+    height: var(--alx-size-control-xs);
+    padding: 0 var(--alx-space-1);
+    --alx-size-icon: var(--alx-size-icon-xs);
+}
+
+.controlSmall {
+    composes: alx-type-control-sm from global;
+    height: var(--alx-size-control-sm);
+    padding: 0 var(--alx-space-2);
+    --alx-size-icon: var(--alx-size-icon-sm);
+}
+
+.controlMedium {
+    composes: alx-type-control from global;
+    height: var(--alx-size-control-md);
+    padding: 0 var(--alx-space-3);
 }
 
 .controlLarge {
+    composes: alx-type-control-lg from global;
     height: var(--alx-size-control-lg);
     padding: 0 var(--alx-space-4);
+    --alx-size-icon: var(--alx-size-icon-lg);
 }

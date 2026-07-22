@@ -130,9 +130,14 @@
     --alx-size-cell-pad: 8px;
     --alx-size-control-inset: 2px;
     --alx-size-control-lg: 28px;
-    --alx-size-control: 24px;
+    --alx-size-control-md: 24px;
+    --alx-size-control-sm: 20px;
+    --alx-size-control-xs: 16px;
     --alx-size-hit-target: 24px;
+    --alx-size-icon-lg: 18px;
+    --alx-size-icon-sm: 14px;
     --alx-size-icon-stroke: 1.5px;
+    --alx-size-icon-xs: 12px;
     --alx-size-icon: 16px;
     --alx-size-panel-left-min: 200px;
     --alx-size-panel-left: 260px;
@@ -173,7 +178,22 @@
     --alx-type-role-control-font-size: 12px;
     --alx-type-role-control-font-weight: 500;
     --alx-type-role-control-letter-spacing: 0.005em;
+    --alx-type-role-control-lg-font-family: Geist, system-ui, sans-serif;
+    --alx-type-role-control-lg-font-size: 13px;
+    --alx-type-role-control-lg-font-weight: 500;
+    --alx-type-role-control-lg-letter-spacing: 0em;
+    --alx-type-role-control-lg-line-height: 18px;
     --alx-type-role-control-line-height: 16px;
+    --alx-type-role-control-sm-font-family: Geist, system-ui, sans-serif;
+    --alx-type-role-control-sm-font-size: 11px;
+    --alx-type-role-control-sm-font-weight: 500;
+    --alx-type-role-control-sm-letter-spacing: 0.01em;
+    --alx-type-role-control-sm-line-height: 16px;
+    --alx-type-role-control-xs-font-family: Geist, system-ui, sans-serif;
+    --alx-type-role-control-xs-font-size: 10px;
+    --alx-type-role-control-xs-font-weight: 500;
+    --alx-type-role-control-xs-letter-spacing: 0.01em;
+    --alx-type-role-control-xs-line-height: 14px;
     --alx-type-role-data-font-family: "Geist Mono", ui-monospace, monospace;
     --alx-type-role-data-font-size: 12px;
     --alx-type-role-data-font-weight: 400;
@@ -228,7 +248,22 @@
     --alx-type-role-value-font-size: 12px;
     --alx-type-role-value-font-weight: 400;
     --alx-type-role-value-letter-spacing: 0.005em;
+    --alx-type-role-value-lg-font-family: Geist, system-ui, sans-serif;
+    --alx-type-role-value-lg-font-size: 13px;
+    --alx-type-role-value-lg-font-weight: 400;
+    --alx-type-role-value-lg-letter-spacing: 0em;
+    --alx-type-role-value-lg-line-height: 18px;
     --alx-type-role-value-line-height: 16px;
+    --alx-type-role-value-sm-font-family: Geist, system-ui, sans-serif;
+    --alx-type-role-value-sm-font-size: 11px;
+    --alx-type-role-value-sm-font-weight: 400;
+    --alx-type-role-value-sm-letter-spacing: 0.01em;
+    --alx-type-role-value-sm-line-height: 16px;
+    --alx-type-role-value-xs-font-family: Geist, system-ui, sans-serif;
+    --alx-type-role-value-xs-font-size: 10px;
+    --alx-type-role-value-xs-font-weight: 400;
+    --alx-type-role-value-xs-letter-spacing: 0.01em;
+    --alx-type-role-value-xs-line-height: 14px;
     --alx-weight-medium: 500;
     --alx-weight-regular: 400;
     --alx-weight-semibold: 600;
@@ -489,6 +524,33 @@
     color: var(--alx-ink-1);
 }
 
+:where(.alx-type-control-lg) {
+    font-family: var(--alx-type-role-control-lg-font-family);
+    font-size: var(--alx-type-role-control-lg-font-size);
+    font-weight: var(--alx-type-role-control-lg-font-weight);
+    line-height: var(--alx-type-role-control-lg-line-height);
+    letter-spacing: var(--alx-type-role-control-lg-letter-spacing);
+    color: var(--alx-ink-1);
+}
+
+:where(.alx-type-control-sm) {
+    font-family: var(--alx-type-role-control-sm-font-family);
+    font-size: var(--alx-type-role-control-sm-font-size);
+    font-weight: var(--alx-type-role-control-sm-font-weight);
+    line-height: var(--alx-type-role-control-sm-line-height);
+    letter-spacing: var(--alx-type-role-control-sm-letter-spacing);
+    color: var(--alx-ink-1);
+}
+
+:where(.alx-type-control-xs) {
+    font-family: var(--alx-type-role-control-xs-font-family);
+    font-size: var(--alx-type-role-control-xs-font-size);
+    font-weight: var(--alx-type-role-control-xs-font-weight);
+    line-height: var(--alx-type-role-control-xs-line-height);
+    letter-spacing: var(--alx-type-role-control-xs-letter-spacing);
+    color: var(--alx-ink-1);
+}
+
 :where(.alx-type-data) {
     font-family: var(--alx-type-role-data-font-family);
     font-size: var(--alx-type-role-data-font-size);
@@ -587,5 +649,32 @@
     font-weight: var(--alx-type-role-value-font-weight);
     line-height: var(--alx-type-role-value-line-height);
     letter-spacing: var(--alx-type-role-value-letter-spacing);
+    color: var(--alx-ink-1);
+}
+
+:where(.alx-type-value-lg) {
+    font-family: var(--alx-type-role-value-lg-font-family);
+    font-size: var(--alx-type-role-value-lg-font-size);
+    font-weight: var(--alx-type-role-value-lg-font-weight);
+    line-height: var(--alx-type-role-value-lg-line-height);
+    letter-spacing: var(--alx-type-role-value-lg-letter-spacing);
+    color: var(--alx-ink-1);
+}
+
+:where(.alx-type-value-sm) {
+    font-family: var(--alx-type-role-value-sm-font-family);
+    font-size: var(--alx-type-role-value-sm-font-size);
+    font-weight: var(--alx-type-role-value-sm-font-weight);
+    line-height: var(--alx-type-role-value-sm-line-height);
+    letter-spacing: var(--alx-type-role-value-sm-letter-spacing);
+    color: var(--alx-ink-1);
+}
+
+:where(.alx-type-value-xs) {
+    font-family: var(--alx-type-role-value-xs-font-family);
+    font-size: var(--alx-type-role-value-xs-font-size);
+    font-weight: var(--alx-type-role-value-xs-font-weight);
+    line-height: var(--alx-type-role-value-xs-line-height);
+    letter-spacing: var(--alx-type-role-value-xs-letter-spacing);
     color: var(--alx-ink-1);
 }

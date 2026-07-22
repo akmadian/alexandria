@@ -15,23 +15,36 @@ import styles from "./rating.module.css";
 
 const STAR_POSITIONS = [1, 2, 3, 4, 5] as const;
 
+export type RatingSize = "xs" | "sm" | "md" | "lg";
+
+// C10: exhaustive by construction. The tier scales the stars (via --alx-size-icon, the
+// icon ramp) and the hit-row height (D33 proportional).
+const SIZE_CLASSES = {
+    xs: styles.sizeXs,
+    sm: styles.sizeSm,
+    md: styles.sizeMd,
+    lg: styles.sizeLg,
+} as const satisfies Record<RatingSize, string>;
+
 export interface RatingProps {
     /** 1–5, or null = unrated. A defensive 0 renders like null (five empty
      * positions) — the contract's truth is that 0 is not a rating. */
     value: number | null;
     /** Present = interactive: five buttons reporting the next rating (null = clear). */
     onChange?: (next: number | null) => void;
+    /** §8 size ladder: xs = 16px … lg = 28px — scales the stars (icon ramp) and hit-row. */
+    size?: RatingSize;
     className?: string;
 }
 
-export function Rating({ value, onChange, className }: RatingProps) {
+export function Rating({ value, onChange, size = "md", className }: RatingProps) {
     const { t } = useTranslation();
     const filled = value ?? 0;
     const stateLabel = filled > 0 ? t("rating.rated", { value: filled }) : t("rating.unrated");
 
     if (onChange === undefined) {
         return (
-            <span className={cx(styles.rating, className)} aria-label={stateLabel}>
+            <span className={cx(styles.rating, SIZE_CLASSES[size], className)} aria-label={stateLabel}>
                 {STAR_POSITIONS.map((position) => (
                     <Icon
                         key={position}
@@ -44,7 +57,7 @@ export function Rating({ value, onChange, className }: RatingProps) {
     }
 
     return (
-        <span role="group" className={cx(styles.rating, styles.interactive, className)} aria-label={stateLabel}>
+        <span role="group" className={cx(styles.rating, styles.interactive, SIZE_CLASSES[size], className)} aria-label={stateLabel}>
             {STAR_POSITIONS.map((position) => (
                 <button
                     key={position}

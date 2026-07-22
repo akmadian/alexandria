@@ -1,4 +1,6 @@
-/* One chrome size, one stroke constant (§14; stroke value is a §30.9 PIN token). */
+/* Size rides --alx-size-icon — the md default (16), reassigned per control tier by a
+ * sized container (D33 proportional icon ramp 12/14/16/18, §14). One stroke constant
+ * (§14; stroke value is a §30.9 PIN token). */
 .icon {
     width: var(--alx-size-icon);
     height: var(--alx-size-icon);

@@ -21,7 +21,7 @@ test("pressing toggles the selected state both ways", async () => {
 });
 
 test("defaultSelected renders on, and the size class applies", () => {
-    render(<ToggleButton defaultSelected size="control-lg">Raw only</ToggleButton>);
+    render(<ToggleButton defaultSelected size="lg">Raw only</ToggleButton>);
     const toggle = screen.getByRole("button", { name: "Raw only" });
     expect(toggle.hasAttribute("data-selected")).toBe(true);
     expect(toggle.className).toContain("controlLarge");
@@ -39,4 +39,9 @@ test("disabled blocks the toggle and keeps a selected fill readable", async () =
     expect(onChange).not.toHaveBeenCalled();
     expect(toggle.hasAttribute("data-selected")).toBe(true);
     expect(toggle).toBeDisabled();
+});
+
+test("the xs rung lands its class", () => {
+    render(<ToggleButton size="xs">Raw</ToggleButton>);
+    expect(screen.getByRole("button", { name: "Raw" }).className).toContain("controlXsmall");
 });

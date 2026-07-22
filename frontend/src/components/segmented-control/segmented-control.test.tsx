@@ -41,7 +41,7 @@ test("the lit segment cannot be un-lit — empty selection is impossible", async
 
 test("the size class lands on the track", () => {
     render(
-        <SegmentedControl aria-label="View" size="control-lg" defaultValue="a">
+        <SegmentedControl aria-label="View" size="lg" defaultValue="a">
             <Segment id="a">A</Segment>
             <Segment id="b">B</Segment>
         </SegmentedControl>,
@@ -49,4 +49,14 @@ test("the size class lands on the track", () => {
     // The group element carries the size class; segments inherit height via descendant CSS.
     const group = screen.getByRole("radiogroup", { name: "View" });
     expect(group.className).toContain("controlLarge");
+});
+
+test("the sm rung lands its class on the track (the ladder floor for a track)", () => {
+    render(
+        <SegmentedControl aria-label="Density" size="sm" defaultValue="a">
+            <Segment id="a">A</Segment>
+            <Segment id="b">B</Segment>
+        </SegmentedControl>,
+    );
+    expect(screen.getByRole("radiogroup", { name: "Density" }).className).toContain("controlSmall");
 });
