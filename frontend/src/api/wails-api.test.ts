@@ -130,6 +130,63 @@ describe("wailsApi", () => {
     });
 });
 
+describe("wailsApi sources, import, and events", () => {
+    it("lists and creates sources through the SourceService bindings", async () => {
+        const source = { ID: "src-9", Name: "New", Kind: "local", BasePath: "/x" };
+        const listSources = vi.fn().mockResolvedValue([source]);
+        const createSource = vi.fn().mockResolvedValue(source);
+        vi.stubGlobal("go", { seam: { SourceService: { ListSources: listSources, CreateSource: createSource } } });
+
+        await expect(wailsApi.listSources()).resolves.toEqual([source]);
+        const input = { name: "New", basePath: "/x" };
+        await expect(wailsApi.createSource(input)).resolves.toBe(source);
+        expect(createSource).toHaveBeenCalledWith(input);
+    });
+
+    it("starts and cancels imports through the ImportService bindings", async () => {
+        const startImport = vi.fn().mockResolvedValue("job-42");
+        const cancelJob = vi.fn().mockResolvedValue(undefined);
+        vi.stubGlobal("go", { seam: { ImportService: { StartImport: startImport, CancelJob: cancelJob } } });
+
+        await expect(wailsApi.startImport("src-0")).resolves.toBe("job-42");
+        expect(startImport).toHaveBeenCalledWith("src-0");
+        await expect(wailsApi.cancelJob("job-42")).resolves.toBeUndefined();
+        expect(cancelJob).toHaveBeenCalledWith("job-42");
+    });
+
+    it("normalizes a source rejection into ApiError", async () => {
+        vi.stubGlobal("go", {
+            seam: { ImportService: { StartImport: vi.fn().mockRejectedValue('{"kind":"domain","code":"source_offline","detail":"src-0"}') } },
+        });
+        const failure = await wailsApi.startImport("src-0").catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(ApiError);
+        expect((failure as ApiError).code).toBe("source_offline");
+    });
+
+    it("subscribes one listener per topic channel and tears them all down", () => {
+        // Wails' EventsOn delegates to EventsOnMultiple(name, cb, -1) on the
+        // runtime global, so that's the seam to stub.
+        const unsubscribe = vi.fn();
+        const eventsOnMultiple =
+            vi.fn<(name: string, callback: (data: unknown) => void, max: number) => () => void>().mockReturnValue(unsubscribe);
+        vi.stubGlobal("runtime", { EventsOnMultiple: eventsOnMultiple });
+
+        const handler = vi.fn();
+        const teardown = wailsApi.subscribe(handler);
+        // One listener per topic: catalog, jobs, watcher, sync.
+        expect(eventsOnMultiple).toHaveBeenCalledTimes(4);
+        expect(eventsOnMultiple.mock.calls.map((call) => call[0])).toEqual(["catalog", "jobs", "watcher", "sync"]);
+
+        // The channel callback forwards the whole envelope to the handler.
+        const envelope = { topic: "jobs", type: "progress", payload: { jobId: "j1" }, timestamp: "t" };
+        (eventsOnMultiple.mock.calls[1][1] as (data: unknown) => void)(envelope);
+        expect(handler).toHaveBeenCalledWith(envelope);
+
+        teardown();
+        expect(unsubscribe).toHaveBeenCalledTimes(4);
+    });
+});
+
 describe("toApiError", () => {
     it("parses the seam's JSON error shape from a string rejection", () => {
         const error = toApiError('{"kind":"degraded","detail":"engine catching up"}');

@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import type { Envelope, JobDone, JobProgress } from "@/_generated-types/models";
 import { DEFAULT_ARRANGEMENT, type Arrangement, type Query } from "@/query-model/ast";
 import { leaf } from "@/query-model/registry";
 import type { Page } from "./contract";
-import { mockApi } from "./mock";
+import { configureMockImport, mockApi } from "./mock";
 
 const LIBRARY: Query = { version: 1, scope: { kind: "library" }, where: null };
 const ALL: Page = { offset: 0, limit: 1000 };
@@ -252,5 +253,99 @@ describe("mock updateAssets (the write path)", () => {
             expect(after.rating).toBe(5); // undefined ≠ null: not cleared
             expect(after.flag).toBe("pick");
         });
+    });
+});
+
+describe("mock sources", () => {
+    it("lists the seeded sources matching the asset sourceIds", async () => {
+        const sources = await mockApi.listSources();
+        expect(sources.length).toBeGreaterThanOrEqual(3);
+        expect(sources.map((source) => source.ID)).toEqual(expect.arrayContaining(["src-0", "src-1", "src-2"]));
+        expect(sources.every((source) => source.Enabled && source.Connectivity === "online")).toBe(true);
+    });
+
+    it("mints a source from an input and appends it, emitting a catalog change", async () => {
+        const events: Envelope[] = [];
+        const unsubscribe = mockApi.subscribe((envelope) => events.push(envelope));
+        const before = (await mockApi.listSources()).length;
+
+        const created = await mockApi.createSource({ name: "New Drive", basePath: "/Volumes/New" });
+        expect(created.Name).toBe("New Drive");
+        expect(created.Kind).toBe("local"); // empty kind defaults to local
+        expect(created.Enabled).toBe(true);
+        expect((await mockApi.listSources())).toHaveLength(before + 1);
+        expect(events.some((envelope) => envelope.topic === "catalog" && envelope.type === "changed")).toBe(true);
+        unsubscribe();
+    });
+});
+
+describe("mock import lifecycle (the ticking job)", () => {
+    // Zero-delay ticks so the job runs through in a handful of macrotasks; the
+    // default watchable pace is restored after each case.
+    afterEach(() => configureMockImport({ tickMs: 350 }));
+
+    // Drive an import to its terminal event, collecting every envelope. Cancel is
+    // requested from within the first progress tick, using the envelope's own
+    // jobId (startImport's resolved id races the ticker).
+    function runImport(sourceId: string, cancel = false): Promise<Envelope[]> {
+        configureMockImport({ tickMs: 0 });
+        return new Promise((resolve, reject) => {
+            const seen: Envelope[] = [];
+            let cancelPending = cancel;
+            const unsubscribe = mockApi.subscribe((envelope) => {
+                seen.push(envelope);
+                if (cancelPending && envelope.type === "progress") {
+                    cancelPending = false;
+                    void mockApi.cancelJob((envelope.payload as JobProgress).jobId);
+                }
+                if (envelope.type === "done") {
+                    unsubscribe();
+                    resolve(seen);
+                }
+            });
+            mockApi.startImport(sourceId).catch(reject);
+        });
+    }
+
+    it("ticks an indeterminate scan, flips totalKnown, climbs to done, and carries the summary", async () => {
+        const events = await runImport("src-0");
+        const progress = events.filter((envelope) => envelope.type === "progress").map((envelope) => envelope.payload as JobProgress);
+        const terminal = events.at(-1)?.payload as JobDone;
+
+        // Every progress envelope rides the jobs topic and one jobId.
+        expect(events.filter((envelope) => envelope.type === "progress").every((envelope) => envelope.topic === "jobs")).toBe(true);
+        // The scan phase is indeterminate (totalKnown false), then the flip.
+        expect(progress[0].totalKnown).toBe(false);
+        expect(progress[0].stage).toBe("scan");
+        expect(progress.some((frame) => frame.totalKnown)).toBe(true);
+        expect(progress.at(-1)?.stage).toBe("write");
+        // done climbs to the total by the last progress frame.
+        expect(progress.at(-1)?.done).toBe(progress.at(-1)?.total);
+        // The terminal done carries the four-count summary that sums to the total.
+        expect(terminal.state).toBe("done");
+        const { added, updated, skipped, errors } = terminal.summary ?? { added: 0, updated: 0, skipped: 0, errors: 0 };
+        expect(added + updated + skipped + errors).toBe(progress.at(-1)?.total);
+    });
+
+    it("rejects an unknown source with not_found", async () => {
+        await expect(mockApi.startImport("no-such-source")).rejects.toMatchObject({
+            name: "ApiError",
+            kind: "domain",
+            code: "not_found",
+        });
+    });
+
+    it("cancels mid-run, producing a cancelled terminal with the partial tally", async () => {
+        const events = await runImport("src-1", true);
+        const terminal = events.at(-1)?.payload as JobDone;
+        expect(terminal.state).toBe("cancelled");
+        expect(terminal.summary?.added).toBeGreaterThanOrEqual(0);
+        // Cancelled short-circuits before the full write climb finishes.
+        const progress = events.filter((envelope) => envelope.type === "progress");
+        expect(progress.length).toBeLessThan(7);
+    });
+
+    it("cancelJob is a no-op for an unknown job (never rejects)", async () => {
+        await expect(mockApi.cancelJob("mock-job-9999")).resolves.toBeUndefined();
     });
 });

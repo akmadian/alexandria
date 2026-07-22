@@ -178,8 +178,19 @@
         "offline": "Offline",
         "missing": "Missing"
     },
+    "workspace": {
+        "tabsLabel": "Workspace",
+        "settings": "Settings",
+        "tab": {
+            "catalog": "Catalog",
+            "import": "Import"
+        }
+    },
+    "import": {
+        "title": "Import",
+        "placeholder": "The import flow lands here."
+    },
     "shell": {
-        "library": "Library",
         "assets_one": "{{formatted}} asset",
         "assets_other": "{{formatted}} assets"
     },

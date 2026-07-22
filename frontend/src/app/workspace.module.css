@@ -1,0 +1,107 @@
+/* The workspace shell: a docked tab strip (control-row height, §7) over the active
+ * panel. The strip is docked chrome — flat, hue-free, radius-docked (0); a hairline
+ * seam separates it from the body. Selection reads through the chrome family's +2
+ * fill (§29), the same "selected" step the toggle family uses — the accent appears
+ * nowhere but the focus ring.
+ *
+ * C3 keep-mounting: the force-mounted Catalog panel and the active panel are
+ * stacked in the same grid cell; the inert one is visually hidden but keeps its
+ * layout box, so its virtualizer never re-measures from zero and scroll survives a
+ * tab switch. Inert panels get RAC's [data-inert] + the `inert` attribute (no
+ * pointer/focus reaches them regardless). */
+
+.shell {
+    height: 100%;
+    display: grid;
+    grid-template-rows: var(--alx-size-control-lg) 1fr;
+    background: var(--alx-surface-panel);
+}
+
+.header {
+    grid-row: 1;
+    display: flex;
+    align-items: stretch;
+    padding: 0 var(--alx-size-row-inset);
+    border-bottom: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+.tabList {
+    display: flex;
+    align-items: stretch;
+    gap: var(--alx-space-1);
+    min-width: 0;
+}
+
+.tab {
+    composes: alx-type-control from global;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--alx-space-3);
+    border: none;
+    border-radius: var(--alx-radius-docked);
+    background: transparent;
+    color: var(--alx-ink-3);
+    cursor: default;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.tab[data-hovered] {
+    background: var(--alx-surface-hover);
+    color: var(--alx-ink-1);
+}
+
+.tab[data-selected] {
+    background: var(--alx-surface-selected);
+    color: var(--alx-ink-1);
+}
+
+.tab[data-focus-visible] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    /* Inset: the strip is docked, so the ring sits inside the tab rather than
+     * bleeding over the seam. */
+    outline-offset: calc(-1 * var(--alx-focus-ring-width));
+}
+
+/* The gear sits in the corner (§12 header-right). Ghost chrome — no container at
+ * rest, states ride the surface family. Square to the control-row height. */
+.gear {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--alx-size-control-lg);
+    border: none;
+    border-radius: var(--alx-radius-docked);
+    background: transparent;
+    color: var(--alx-ink-3);
+    cursor: default;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.gear[data-hovered] {
+    background: var(--alx-surface-hover);
+    color: var(--alx-ink-1);
+}
+
+.gear[data-pressed] {
+    background: var(--alx-surface-pressed);
+}
+
+.gear[data-focus-visible] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: calc(-1 * var(--alx-focus-ring-width));
+}
+
+/* Every panel occupies the one body cell; force-mounted + active stack here. */
+.panel {
+    grid-row: 2;
+    grid-column: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* The inert (force-mounted, unselected) panel keeps its layout box so scroll
+ * survives — hidden, not collapsed. */
+.panel[data-inert] {
+    visibility: hidden;
+}

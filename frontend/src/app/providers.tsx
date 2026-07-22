@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
+import { startEventPump } from "@/api/event-pump";
 
 // TanStack defaults per frontend/09: we own the freshness signal (the engine
 // pushes C8 events → targeted invalidation), so focus/reconnect refetching is off
@@ -19,5 +20,9 @@ const queryClient = new QueryClient({
 });
 
 export function Providers({ children }: { children: ReactNode }) {
+    // The event pump is THE one subscriber to the C8 stream, mounted where the
+    // QueryClient lives: catalog events invalidate this client, jobs events land
+    // in the jobs store. The effect's cleanup tears the subscription down.
+    useEffect(() => startEventPump(queryClient), []);
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

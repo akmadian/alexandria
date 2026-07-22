@@ -1,0 +1,609 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Alexandria material probe v2 — tonal, not material</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: oklch(0.87 0 0); font-family: Geist, sans-serif; padding: 28px; color: oklch(0.25 0 0); }
+  h1 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  h2 { font-size: 12px; font-weight: 600; margin: 28px 0 2px; }
+  .note { font-size: 10px; color: oklch(0.45 0 0); font-family: "Geist Mono", monospace; margin: 2px 0 10px; max-width: 1100px; }
+  .mono { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+  .pair { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .spec > .tag { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.06em; color: oklch(0.40 0 0); margin-bottom: 6px; }
+
+  /* ================= frame scopes =================
+     v2 doctrine: NO gradients, NO inner highlights, NO control shadows.
+     Dimension = pole anchoring + two-grade lines + fills-as-objects + steeper ink. */
+
+  /* L-CUR: committed paper (tokens-reference 2026-07-17). One hairline grade. */
+  .l-cur {
+    --canvas: oklch(0.944 0 0); --panel: oklch(0.975 0 0);
+    --field: oklch(0.955 0 0); --field-border: 1px solid oklch(0.885 0 0);
+    --line-c: oklch(0.885 0 0); --line-s: oklch(0.885 0 0);
+    --ink1: oklch(0.25 0 0); --ink2: oklch(0.42 0 0); --ink3: oklch(0.56 0 0); --ink4: oklch(0.68 0 0);
+    --hover: oklch(0.952 0 0);
+    --sel: oklch(0.888 0 0); --sel-ink: oklch(0.25 0 0); --sel-weight: 400; --sel-r: 0;
+    --mat: oklch(0.958 0 0); --r-ctl: 4px; --r-card: 0px; --r-mat: 2px;
+    --dots: none;
+    --seg-track: oklch(0.955 0 0); --pill: oklch(0.975 0 0); --pill-border: 1px solid oklch(0.885 0 0);
+    --btn-bg: oklch(0.955 0 0); --btn-border: 1px solid oklch(0.885 0 0);
+    --chip-bg: transparent; --chip-border: 1px solid oklch(0.80 0 0); --chip-ink: oklch(0.42 0 0);
+    --card-border: 1px solid oklch(0.885 0 0);
+  }
+  /* L-A: pole anchor at pure white (the reference construction). */
+  .l-a {
+    --canvas: oklch(0.96 0 0); --panel: oklch(1 0 0);
+    --field: oklch(0.955 0 0); --field-border: none;
+    --line-c: oklch(0.87 0 0); --line-s: oklch(0.925 0 0);
+    --ink1: oklch(0.15 0 0); --ink2: oklch(0.42 0 0); --ink3: oklch(0.56 0 0); --ink4: oklch(0.68 0 0);
+    --hover: oklch(0.97 0 0);
+    --sel: oklch(0.945 0 0); --sel-ink: oklch(0.15 0 0); --sel-weight: 600; --sel-r: 6px;
+    --mat: oklch(1 0 0); --r-ctl: 6px; --r-card: 10px; --r-mat: 4px;
+    --dots: radial-gradient(oklch(0 0 0 / 0.06) 1px, transparent 1px);
+    --seg-track: oklch(0.945 0 0); --pill: oklch(1 0 0); --pill-border: 1px solid oklch(0.885 0 0);
+    --btn-bg: oklch(1 0 0); --btn-border: 1px solid oklch(0.87 0 0);
+    --chip-bg: oklch(0.93 0 0); --chip-border: none; --chip-ink: oklch(0.35 0 0);
+    --card-border: 1px solid oklch(0.87 0 0);
+  }
+  /* L-B: same structure, anchor kept at paper's off-white (does the warmth survive?). */
+  .l-b {
+    --canvas: oklch(0.945 0 0); --panel: oklch(0.985 0 0);
+    --field: oklch(0.945 0 0); --field-border: none;
+    --line-c: oklch(0.865 0 0); --line-s: oklch(0.92 0 0);
+    --ink1: oklch(0.15 0 0); --ink2: oklch(0.42 0 0); --ink3: oklch(0.56 0 0); --ink4: oklch(0.68 0 0);
+    --hover: oklch(0.96 0 0);
+    --sel: oklch(0.93 0 0); --sel-ink: oklch(0.15 0 0); --sel-weight: 600; --sel-r: 6px;
+    --mat: oklch(0.985 0 0); --r-ctl: 6px; --r-card: 10px; --r-mat: 4px;
+    --dots: radial-gradient(oklch(0 0 0 / 0.06) 1px, transparent 1px);
+    --seg-track: oklch(0.935 0 0); --pill: oklch(0.985 0 0); --pill-border: 1px solid oklch(0.875 0 0);
+    --btn-bg: oklch(0.985 0 0); --btn-border: 1px solid oklch(0.865 0 0);
+    --chip-bg: oklch(0.92 0 0); --chip-border: none; --chip-ink: oklch(0.35 0 0);
+    --card-border: 1px solid oklch(0.865 0 0);
+  }
+  /* D-CUR: committed graphite. */
+  .d-cur {
+    --canvas: oklch(0.26 0 0); --panel: oklch(0.30 0 0);
+    --field: oklch(0.272 0 0); --field-border: 1px solid oklch(0.40 0 0);
+    --line-c: oklch(0.40 0 0); --line-s: oklch(0.40 0 0);
+    --ink1: oklch(0.93 0 0); --ink2: oklch(0.75 0 0); --ink3: oklch(0.655 0 0); --ink4: oklch(0.585 0 0);
+    --hover: oklch(0.33 0 0);
+    --sel: oklch(0.405 0 0); --sel-ink: oklch(0.93 0 0); --sel-weight: 400; --sel-r: 0;
+    --mat: oklch(0.30 0 0); --r-ctl: 4px; --r-card: 0px; --r-mat: 2px;
+    --dots: none;
+    --seg-track: oklch(0.272 0 0); --pill: oklch(0.30 0 0); --pill-border: 1px solid oklch(0.40 0 0);
+    --btn-bg: oklch(0.33 0 0); --btn-border: 1px solid oklch(0.40 0 0);
+    --chip-bg: transparent; --chip-border: 1px solid oklch(0.50 0 0); --chip-ink: oklch(0.75 0 0);
+    --card-border: 1px solid oklch(0.40 0 0);
+    color: var(--ink1);
+  }
+  /* D-A: graphite re-spread — canvas deeper, fills-as-objects, two-grade lines, no strokes. */
+  .d-a {
+    --canvas: oklch(0.24 0 0); --panel: oklch(0.30 0 0);
+    --field: oklch(0.26 0 0); --field-border: none;
+    --line-c: oklch(0.40 0 0); --line-s: oklch(0.345 0 0);
+    --ink1: oklch(0.97 0 0); --ink2: oklch(0.75 0 0); --ink3: oklch(0.655 0 0); --ink4: oklch(0.585 0 0);
+    --hover: oklch(0.335 0 0);
+    --sel: oklch(0.37 0 0); --sel-ink: oklch(0.97 0 0); --sel-weight: 600; --sel-r: 6px;
+    --mat: oklch(0.345 0 0); --r-ctl: 6px; --r-card: 10px; --r-mat: 4px;
+    --dots: radial-gradient(oklch(1 0 0 / 0.05) 1px, transparent 1px);
+    --seg-track: oklch(0.25 0 0); --pill: oklch(0.38 0 0); --pill-border: none;
+    --btn-bg: oklch(0.35 0 0); --btn-border: none;
+    --chip-bg: oklch(0.37 0 0); --chip-border: none; --chip-ink: oklch(0.80 0 0);
+    --card-border: 1px solid oklch(0.40 0 0);
+    color: var(--ink1);
+  }
+  /* D-B: near-black world (the Filters/Tree reference: page #08–#0A, chips #16–18). */
+  .d-b {
+    --canvas: oklch(0.135 0 0); --panel: oklch(0.175 0 0);
+    --field: oklch(0.225 0 0); --field-border: none;
+    --line-c: oklch(0.30 0 0); --line-s: oklch(0.245 0 0);
+    --ink1: oklch(0.95 0 0); --ink2: oklch(0.78 0 0); --ink3: oklch(0.66 0 0); --ink4: oklch(0.56 0 0);
+    --hover: oklch(0.235 0 0);
+    --sel: oklch(0.27 0 0); --sel-ink: oklch(0.97 0 0); --sel-weight: 600; --sel-r: 6px;
+    --mat: oklch(0.215 0 0); --r-ctl: 6px; --r-card: 10px; --r-mat: 4px;
+    --dots: radial-gradient(oklch(1 0 0 / 0.045) 1px, transparent 1px);
+    --seg-track: oklch(0.145 0 0); --pill: oklch(0.26 0 0); --pill-border: none;
+    --btn-bg: oklch(0.25 0 0); --btn-border: none;
+    --chip-bg: oklch(0.26 0 0); --chip-border: none; --chip-ink: oklch(0.80 0 0);
+    --card-border: 1px solid oklch(0.28 0 0);
+    color: var(--ink1);
+  }
+
+  /* ================= the mini app frame ================= */
+  .af { width: 460px; height: 330px; display: grid; grid-template-rows: 30px 1fr 22px;
+        background: var(--panel); font-size: 12px; line-height: 16px; color: var(--ink1);
+        overflow: hidden; border-radius: 6px; outline: 1px solid oklch(0 0 0 / 0.10); }
+  .af .strip { display: flex; align-items: center; padding: 0 8px; border-bottom: 1px solid var(--line-c); }
+  .af .tab { display: inline-flex; align-items: center; height: 22px; padding: 0 11px; margin-right: 2px;
+             border-radius: var(--sel-r); color: var(--ink3); }
+  .af .tab.on { background: var(--sel); color: var(--sel-ink); font-weight: var(--sel-weight); }
+  .l-cur .af .tab.on, .d-cur .af .tab.on { height: 100%; border-radius: 0; }
+  .af .body { display: grid; grid-template-columns: 1fr 148px; min-height: 0; }
+  .af .well { background-color: var(--canvas); background-image: var(--dots); background-size: 15px 15px;
+              padding: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-content: start; }
+  .af .cell { background: var(--mat); border-radius: var(--r-mat); padding: 3px; }
+  .af .thumb { height: 46px; border-radius: 2px; }
+  .af .cellmeta { display: flex; justify-content: space-between; align-items: center; font-size: 8px; padding: 3px 1px 1px; color: var(--ink3); }
+  .af .stars { letter-spacing: 1px; font-size: 8px; color: var(--ink2); }
+  .af .rail { border-left: 1px solid var(--line-c); background: var(--panel); padding: 10px 12px; font-size: 11px; line-height: 15px; }
+  .af .rail .head { font-weight: 600; font-size: 11px; margin-bottom: 5px; color: var(--ink1); }
+  .af .rail .row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .af .rail .k { color: var(--ink2); } .af .rail .v { font-family: "Geist Mono", monospace; font-size: 10px; }
+  .af .rail .input { margin-top: 6px; height: 22px; border-radius: var(--r-ctl); background: var(--field);
+                     border: var(--field-border); display: flex; align-items: center; padding: 0 8px; color: var(--ink4); font-size: 10px; }
+  .af .status { display: flex; align-items: center; padding: 0 10px; border-top: 1px solid var(--line-c);
+                font-family: "Geist Mono", monospace; font-size: 10px; color: var(--ink3); background: var(--panel); }
+  .dotlbl { display: inline-flex; gap: 3px; }
+  .dotlbl i { width: 7px; height: 7px; border-radius: 999px; display: block; }
+
+  /* ================= tree (selected-state study) ================= */
+  .tree { width: 300px; background: var(--panel); border-radius: 8px; outline: 1px solid oklch(0 0 0 / 0.10);
+          padding: 8px 6px; font-size: 12px; line-height: 16px; color: var(--ink1); }
+  .tree .trow { display: flex; align-items: center; height: 28px; padding: 0 10px; border-radius: var(--sel-r); color: var(--ink2); }
+  .tree .trow .n { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 10px; color: var(--ink4); }
+  .tree .trow.on { background: var(--sel); color: var(--sel-ink); font-weight: var(--sel-weight); }
+  .tree .trow.in { padding-left: 26px; }
+
+  /* ================= inspector card (line-discipline study) ================= */
+  .insp { width: 300px; background: var(--panel); border-radius: var(--r-card); border: var(--card-border);
+          font-size: 11px; line-height: 15px; color: var(--ink1); }
+  .insp .sect { padding: 10px 12px; }
+  .insp .sect + .sect { border-top: 1px solid var(--line-s); }
+  .insp .head { font-weight: 600; margin-bottom: 5px; color: var(--ink1); }
+  .insp .row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .insp .k { color: var(--ink2); } .insp .v { font-family: "Geist Mono", monospace; font-size: 10px; }
+  .insp.liberal .row { border-bottom: 1px solid var(--line-s); padding-bottom: 3px; }
+  .insp .input { margin-top: 6px; height: 22px; border-radius: var(--r-ctl); background: var(--field);
+                 border: var(--field-border); display: flex; align-items: center; padding: 0 8px; color: var(--ink4); font-size: 10px; }
+
+  /* ================= control strip ================= */
+  .ctl-card { width: 500px; padding: 14px; border-radius: 8px; background-color: var(--canvas);
+              background-image: var(--dots); background-size: 15px 15px; outline: 1px solid oklch(0 0 0 / 0.10); }
+  .ctl-panel { background: var(--panel); border-radius: var(--r-card); border: var(--card-border); padding: 14px; color: var(--ink1); }
+  .ctl-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; line-height: 16px; }
+  .btn { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: var(--r-ctl);
+         background: var(--btn-bg); border: var(--btn-border); font-size: 12px; font-weight: 500; color: var(--ink1); }
+  .field { display: inline-flex; align-items: center; height: 24px; width: 150px; padding: 0 8px; border-radius: var(--r-ctl);
+           background: var(--field); border: var(--field-border); color: var(--ink4); }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: calc(var(--r-ctl) + 2px); background: var(--seg-track); }
+  .seg span { display: inline-flex; align-items: center; height: 20px; padding: 0 9px; border-radius: var(--r-ctl); color: var(--ink3); font-size: 11px; }
+  .seg .on { background: var(--pill); border: var(--pill-border); color: var(--ink1); font-weight: 500; }
+  kbd { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border-radius: 4px; background: var(--pill);
+        border: var(--pill-border); font-family: "Geist Mono", monospace; font-size: 10px; color: var(--ink2); }
+  .chip { display: inline-flex; align-items: center; height: 16px; padding: 0 6px; border-radius: 999px;
+          background: var(--chip-bg); border: var(--chip-border); font-family: "Geist Mono", monospace; font-size: 9px;
+          letter-spacing: 0.04em; color: var(--chip-ink); }
+  .krow { display: flex; justify-content: space-between; font-size: 11px; line-height: 15px; }
+  .krow .k { color: var(--ink2); } .krow .v { font-family: "Geist Mono", monospace; font-size: 10px; }
+
+  /* ================= transients ================= */
+  .tr-stage { width: 500px; height: 180px; border-radius: 8px; outline: 1px solid oklch(0 0 0 / 0.10);
+              background-color: var(--canvas); background-image: var(--dots); background-size: 15px 15px;
+              display: flex; align-items: center; justify-content: center; }
+  .menu { width: 210px; background: var(--tr-bg); border-radius: var(--tr-r); box-shadow: var(--tr-shadow);
+          border: var(--tr-border); padding: 4px; font-size: 12px; line-height: 16px; color: var(--ink1); }
+  .menu .mi { display: flex; align-items: center; height: 24px; padding: 0 8px; border-radius: calc(var(--tr-r) - 5px); }
+  .menu .mi.hov { background: var(--hover); }
+  .menu .mi kbd { margin-left: auto; }
+  .menu .sep { height: 1px; background: var(--line-s); margin: 4px 6px; }
+  /* committed shadow.occlusion everywhere — v2 changes ONLY surface anchor + radius */
+  .l-cur { --tr-bg: oklch(0.975 0 0); --tr-r: 8px; --tr-border: 1px solid oklch(0.885 0 0);
+           --tr-shadow: 0 4px 16px oklch(0 0 0 / 0.16), 0 1px 3px oklch(0 0 0 / 0.10); }
+  .l-a   { --tr-bg: oklch(1 0 0); --tr-r: 12px; --tr-border: 1px solid oklch(0.90 0 0);
+           --tr-shadow: 0 4px 16px oklch(0 0 0 / 0.16), 0 1px 3px oklch(0 0 0 / 0.10); }
+  .l-b   { --tr-bg: oklch(0.99 0 0); --tr-r: 12px; --tr-border: 1px solid oklch(0.90 0 0);
+           --tr-shadow: 0 4px 16px oklch(0 0 0 / 0.16), 0 1px 3px oklch(0 0 0 / 0.10); }
+  .d-cur { --tr-bg: oklch(0.34 0 0); --tr-r: 8px; --tr-border: 1px solid oklch(0.40 0 0);
+           --tr-shadow: 0 4px 16px oklch(0 0 0 / 0.16), 0 1px 3px oklch(0 0 0 / 0.10); }
+  .d-a   { --tr-bg: oklch(0.36 0 0); --tr-r: 12px; --tr-border: 1px solid oklch(0.46 0 0);
+           --tr-shadow: 0 4px 16px oklch(0 0 0 / 0.30), 0 1px 3px oklch(0 0 0 / 0.20); }
+  .d-b   { --tr-bg: oklch(0.235 0 0); --tr-r: 12px; --tr-border: 1px solid oklch(0.33 0 0);
+           --tr-shadow: 0 4px 16px oklch(0 0 0 / 0.40), 0 1px 3px oklch(0 0 0 / 0.25); }
+
+  /* ================= sweeps ================= */
+  .sweep { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .sw-card { background: var(--panel); border: var(--card-border); padding: 12px 14px; font-size: 11px; color: var(--ink1); width: 132px; }
+  .swatch { width: 240px; height: 140px; border-radius: 8px; outline: 1px solid oklch(0 0 0 / 0.10);
+            display: flex; align-items: center; justify-content: center; }
+  .float { width: 130px; height: 60px; background: oklch(1 0 0); border-radius: 10px; border: 1px solid oklch(0.87 0 0);
+           display: flex; align-items: center; justify-content: center; font-size: 10px; color: oklch(0.45 0 0); font-family: "Geist Mono", monospace; }
+</style>
+</head>
+<body>
+
+<h1>Material probe v2 — tonal, not material</h1>
+<div class="note">v2 after the neumorphism veto: NO gradients, NO inner highlights, NO control shadows. Dimension =
+pole anchoring (surfaces at the pole, ink near the other pole, fills 2–8% off) + two-grade lines used sparingly +
+fills-as-objects (fill XOR border, rounded) + steeper ink ladder. Measured from the reference set: db-browser panels
+#FFFFFF, selected pill #EBECF0 with #010005 ink, field #F6F6F6 fill-only, container lines #D6–DD vs separators #E8–EC,
+dark refs #08 page / #16–18 chips. CURRENT columns render committed token values exactly. Nothing here is ratified.</div>
+
+<h2>1 · The catalog frame, light world — committed vs two anchor candidates</h2>
+<div class="note">A: pole anchor (panel 1.0 · canvas .96 + dots · ink1 .15 · selected = light pill) ·
+B: same grammar anchored at paper off-white (panel .985 · canvas .945) — does the warmth survive the move?</div>
+<div class="pair">
+  <div class="spec l-cur"><div class="tag">CURRENT · paper (.975 / .944 / sel .888 slab)</div>
+    <div class="af">
+      <div class="strip"><span class="tab on">Catalog</span><span class="tab">Import</span></div>
+      <div class="body">
+        <div class="well">
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.65 0.12 130),oklch(0.45 0.10 150))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">RAW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.10 250),oklch(0.40 0.09 270))"></div><div class="cellmeta"><span class="stars">★★★★★</span><span class="mono">JPG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.13 310),oklch(0.42 0.11 330))"></div><div class="cellmeta"><span class="stars">★☆☆☆☆</span><span class="mono">MP4</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.70 0.10 90),oklch(0.52 0.09 110))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">ARW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.62 0.09 180),oklch(0.47 0.08 200))"></div><div class="cellmeta"><span class="stars">☆☆☆☆☆</span><span class="mono">SVG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.58 0.11 20),oklch(0.44 0.10 350))"></div><div class="cellmeta"><span class="stars">★★★★☆</span><span class="mono">RAF</span></div></div>
+        </div>
+        <div class="rail">
+          <div class="head">Judgment</div>
+          <div class="row"><span class="k">Rating</span><span class="stars" style="font-size:10px">★★★☆☆</span></div>
+          <div class="row"><span class="k">Label</span><span class="dotlbl"><i style="background:oklch(0.60 0.20 25)"></i><i style="background:oklch(0.75 0.15 90)"></i><i style="background:oklch(0.60 0.15 145)"></i><i style="background:oklch(0.55 0.16 255)"></i></span></div>
+          <div class="input">Add a note…</div>
+          <div class="head" style="margin-top:12px">File</div>
+          <div class="row"><span class="k">Name</span><span class="v">DSC_04831.arw</span></div>
+          <div class="row"><span class="k">Size</span><span class="v">42 MB</span></div>
+          <div class="row"><span class="k">Type</span><span class="v">RAW</span></div>
+        </div>
+      </div>
+      <div class="status">64 assets · 1 selected</div>
+    </div>
+  </div>
+  <div class="spec l-a"><div class="tag">CAND A · pole anchor (1.0 / .96 / pill .945 + ink .15)</div>
+    <div class="af">
+      <div class="strip"><span class="tab on">Catalog</span><span class="tab">Import</span></div>
+      <div class="body">
+        <div class="well">
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.65 0.12 130),oklch(0.45 0.10 150))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">RAW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.10 250),oklch(0.40 0.09 270))"></div><div class="cellmeta"><span class="stars">★★★★★</span><span class="mono">JPG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.13 310),oklch(0.42 0.11 330))"></div><div class="cellmeta"><span class="stars">★☆☆☆☆</span><span class="mono">MP4</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.70 0.10 90),oklch(0.52 0.09 110))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">ARW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.62 0.09 180),oklch(0.47 0.08 200))"></div><div class="cellmeta"><span class="stars">☆☆☆☆☆</span><span class="mono">SVG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.58 0.11 20),oklch(0.44 0.10 350))"></div><div class="cellmeta"><span class="stars">★★★★☆</span><span class="mono">RAF</span></div></div>
+        </div>
+        <div class="rail">
+          <div class="head">Judgment</div>
+          <div class="row"><span class="k">Rating</span><span class="stars" style="font-size:10px">★★★☆☆</span></div>
+          <div class="row"><span class="k">Label</span><span class="dotlbl"><i style="background:oklch(0.60 0.20 25)"></i><i style="background:oklch(0.75 0.15 90)"></i><i style="background:oklch(0.60 0.15 145)"></i><i style="background:oklch(0.55 0.16 255)"></i></span></div>
+          <div class="input">Add a note…</div>
+          <div class="head" style="margin-top:12px">File</div>
+          <div class="row"><span class="k">Name</span><span class="v">DSC_04831.arw</span></div>
+          <div class="row"><span class="k">Size</span><span class="v">42 MB</span></div>
+          <div class="row"><span class="k">Type</span><span class="v">RAW</span></div>
+        </div>
+      </div>
+      <div class="status">64 assets · 1 selected</div>
+    </div>
+  </div>
+  <div class="spec l-b"><div class="tag">CAND B · off-white anchor (.985 / .945)</div>
+    <div class="af">
+      <div class="strip"><span class="tab on">Catalog</span><span class="tab">Import</span></div>
+      <div class="body">
+        <div class="well">
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.65 0.12 130),oklch(0.45 0.10 150))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">RAW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.10 250),oklch(0.40 0.09 270))"></div><div class="cellmeta"><span class="stars">★★★★★</span><span class="mono">JPG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.13 310),oklch(0.42 0.11 330))"></div><div class="cellmeta"><span class="stars">★☆☆☆☆</span><span class="mono">MP4</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.70 0.10 90),oklch(0.52 0.09 110))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">ARW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.62 0.09 180),oklch(0.47 0.08 200))"></div><div class="cellmeta"><span class="stars">☆☆☆☆☆</span><span class="mono">SVG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.58 0.11 20),oklch(0.44 0.10 350))"></div><div class="cellmeta"><span class="stars">★★★★☆</span><span class="mono">RAF</span></div></div>
+        </div>
+        <div class="rail">
+          <div class="head">Judgment</div>
+          <div class="row"><span class="k">Rating</span><span class="stars" style="font-size:10px">★★★☆☆</span></div>
+          <div class="row"><span class="k">Label</span><span class="dotlbl"><i style="background:oklch(0.60 0.20 25)"></i><i style="background:oklch(0.75 0.15 90)"></i><i style="background:oklch(0.60 0.15 145)"></i><i style="background:oklch(0.55 0.16 255)"></i></span></div>
+          <div class="input">Add a note…</div>
+          <div class="head" style="margin-top:12px">File</div>
+          <div class="row"><span class="k">Name</span><span class="v">DSC_04831.arw</span></div>
+          <div class="row"><span class="k">Size</span><span class="v">42 MB</span></div>
+          <div class="row"><span class="k">Type</span><span class="v">RAW</span></div>
+        </div>
+      </div>
+      <div class="status">64 assets · 1 selected</div>
+    </div>
+  </div>
+</div>
+
+<h2>2 · The catalog frame, dark world — committed vs re-spread vs near-black</h2>
+<div class="note">A: graphite re-spread (canvas .24 · fills-as-objects · pill .37 · no strokes) ·
+B: near-black world from the dark references (canvas .135 · panel .175 · fills .22–.27)</div>
+<div class="pair">
+  <div class="spec d-cur"><div class="tag">CURRENT · graphite (.30 / .26 / sel .405 slab)</div>
+    <div class="af">
+      <div class="strip"><span class="tab on">Catalog</span><span class="tab">Import</span></div>
+      <div class="body">
+        <div class="well">
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.65 0.12 130),oklch(0.45 0.10 150))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">RAW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.10 250),oklch(0.40 0.09 270))"></div><div class="cellmeta"><span class="stars">★★★★★</span><span class="mono">JPG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.13 310),oklch(0.42 0.11 330))"></div><div class="cellmeta"><span class="stars">★☆☆☆☆</span><span class="mono">MP4</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.70 0.10 90),oklch(0.52 0.09 110))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">ARW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.62 0.09 180),oklch(0.47 0.08 200))"></div><div class="cellmeta"><span class="stars">☆☆☆☆☆</span><span class="mono">SVG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.58 0.11 20),oklch(0.44 0.10 350))"></div><div class="cellmeta"><span class="stars">★★★★☆</span><span class="mono">RAF</span></div></div>
+        </div>
+        <div class="rail">
+          <div class="head">Judgment</div>
+          <div class="row"><span class="k">Rating</span><span class="stars" style="font-size:10px">★★★☆☆</span></div>
+          <div class="row"><span class="k">Label</span><span class="dotlbl"><i style="background:oklch(0.60 0.20 25)"></i><i style="background:oklch(0.75 0.15 90)"></i><i style="background:oklch(0.60 0.15 145)"></i><i style="background:oklch(0.55 0.16 255)"></i></span></div>
+          <div class="input">Add a note…</div>
+          <div class="head" style="margin-top:12px">File</div>
+          <div class="row"><span class="k">Name</span><span class="v">DSC_04831.arw</span></div>
+          <div class="row"><span class="k">Size</span><span class="v">42 MB</span></div>
+          <div class="row"><span class="k">Type</span><span class="v">RAW</span></div>
+        </div>
+      </div>
+      <div class="status">64 assets · 1 selected</div>
+    </div>
+  </div>
+  <div class="spec d-a"><div class="tag">CAND A · graphite re-spread</div>
+    <div class="af">
+      <div class="strip"><span class="tab on">Catalog</span><span class="tab">Import</span></div>
+      <div class="body">
+        <div class="well">
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.65 0.12 130),oklch(0.45 0.10 150))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">RAW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.10 250),oklch(0.40 0.09 270))"></div><div class="cellmeta"><span class="stars">★★★★★</span><span class="mono">JPG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.13 310),oklch(0.42 0.11 330))"></div><div class="cellmeta"><span class="stars">★☆☆☆☆</span><span class="mono">MP4</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.70 0.10 90),oklch(0.52 0.09 110))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">ARW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.62 0.09 180),oklch(0.47 0.08 200))"></div><div class="cellmeta"><span class="stars">☆☆☆☆☆</span><span class="mono">SVG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.58 0.11 20),oklch(0.44 0.10 350))"></div><div class="cellmeta"><span class="stars">★★★★☆</span><span class="mono">RAF</span></div></div>
+        </div>
+        <div class="rail">
+          <div class="head">Judgment</div>
+          <div class="row"><span class="k">Rating</span><span class="stars" style="font-size:10px">★★★☆☆</span></div>
+          <div class="row"><span class="k">Label</span><span class="dotlbl"><i style="background:oklch(0.60 0.20 25)"></i><i style="background:oklch(0.75 0.15 90)"></i><i style="background:oklch(0.60 0.15 145)"></i><i style="background:oklch(0.55 0.16 255)"></i></span></div>
+          <div class="input">Add a note…</div>
+          <div class="head" style="margin-top:12px">File</div>
+          <div class="row"><span class="k">Name</span><span class="v">DSC_04831.arw</span></div>
+          <div class="row"><span class="k">Size</span><span class="v">42 MB</span></div>
+          <div class="row"><span class="k">Type</span><span class="v">RAW</span></div>
+        </div>
+      </div>
+      <div class="status">64 assets · 1 selected</div>
+    </div>
+  </div>
+  <div class="spec d-b"><div class="tag">CAND B · near-black (the Filters/Tree refs)</div>
+    <div class="af">
+      <div class="strip"><span class="tab on">Catalog</span><span class="tab">Import</span></div>
+      <div class="body">
+        <div class="well">
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.65 0.12 130),oklch(0.45 0.10 150))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">RAW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.10 250),oklch(0.40 0.09 270))"></div><div class="cellmeta"><span class="stars">★★★★★</span><span class="mono">JPG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.55 0.13 310),oklch(0.42 0.11 330))"></div><div class="cellmeta"><span class="stars">★☆☆☆☆</span><span class="mono">MP4</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.70 0.10 90),oklch(0.52 0.09 110))"></div><div class="cellmeta"><span class="stars">★★★☆☆</span><span class="mono">ARW</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.62 0.09 180),oklch(0.47 0.08 200))"></div><div class="cellmeta"><span class="stars">☆☆☆☆☆</span><span class="mono">SVG</span></div></div>
+          <div class="cell"><div class="thumb" style="background:linear-gradient(135deg,oklch(0.58 0.11 20),oklch(0.44 0.10 350))"></div><div class="cellmeta"><span class="stars">★★★★☆</span><span class="mono">RAF</span></div></div>
+        </div>
+        <div class="rail">
+          <div class="head">Judgment</div>
+          <div class="row"><span class="k">Rating</span><span class="stars" style="font-size:10px">★★★☆☆</span></div>
+          <div class="row"><span class="k">Label</span><span class="dotlbl"><i style="background:oklch(0.60 0.20 25)"></i><i style="background:oklch(0.75 0.15 90)"></i><i style="background:oklch(0.60 0.15 145)"></i><i style="background:oklch(0.55 0.16 255)"></i></span></div>
+          <div class="input">Add a note…</div>
+          <div class="head" style="margin-top:12px">File</div>
+          <div class="row"><span class="k">Name</span><span class="v">DSC_04831.arw</span></div>
+          <div class="row"><span class="k">Size</span><span class="v">42 MB</span></div>
+          <div class="row"><span class="k">Type</span><span class="v">RAW</span></div>
+        </div>
+      </div>
+      <div class="status">64 assets · 1 selected</div>
+    </div>
+  </div>
+</div>
+
+<h2>3 · The selected state — slab vs pill (the single biggest read)</h2>
+<div class="note">the db-browser move: selected = rounded LIGHT pill just off panel + ink jump to black + semibold.
+current: a dark slab (.888) with unchanged ink. same tree, three treatments.</div>
+<div class="pair">
+  <div class="spec l-cur"><div class="tag">CURRENT · slab .888 · ink .25 · r 0</div>
+    <div class="tree">
+      <div class="trow on">Folders<span class="n">240</span></div>
+      <div class="trow in">2026<span class="n">132</span></div>
+      <div class="trow in">Dolomites<span class="n">33</span></div>
+      <div class="trow in">Studio<span class="n">14</span></div>
+      <div class="trow">Collections<span class="n">6</span></div>
+    </div>
+  </div>
+  <div class="spec l-a"><div class="tag">CAND · pill .945 · ink .15 600 · r 6</div>
+    <div class="tree">
+      <div class="trow on">Folders<span class="n">240</span></div>
+      <div class="trow in">2026<span class="n">132</span></div>
+      <div class="trow in">Dolomites<span class="n">33</span></div>
+      <div class="trow in">Studio<span class="n">14</span></div>
+      <div class="trow">Collections<span class="n">6</span></div>
+    </div>
+  </div>
+  <div class="spec l-a" style="--sel: oklch(0.925 0 0)"><div class="tag">CAND stronger · pill .925</div>
+    <div class="tree">
+      <div class="trow on">Folders<span class="n">240</span></div>
+      <div class="trow in">2026<span class="n">132</span></div>
+      <div class="trow in">Dolomites<span class="n">33</span></div>
+      <div class="trow in">Studio<span class="n">14</span></div>
+      <div class="trow">Collections<span class="n">6</span></div>
+    </div>
+  </div>
+  <div class="spec d-a"><div class="tag">CAND dark · pill .37 · ink .97 600</div>
+    <div class="tree">
+      <div class="trow on">Folders<span class="n">240</span></div>
+      <div class="trow in">2026<span class="n">132</span></div>
+      <div class="trow in">Dolomites<span class="n">33</span></div>
+      <div class="trow in">Studio<span class="n">14</span></div>
+      <div class="trow">Collections<span class="n">6</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>4 · Line discipline — one liberal grade vs two grades, culled</h2>
+<div class="note">left: today's habit — one hairline everywhere, under every row, border+fill on the input ·
+right: container border (.87) + rare separators (.925) only between sections, whitespace between rows, fill-only input</div>
+<div class="pair">
+  <div class="spec l-cur"><div class="tag">CURRENT · liberal, one grade</div>
+    <div class="insp liberal">
+      <div class="sect">
+        <div class="head">Judgment</div>
+        <div class="row"><span class="k">Rating</span><span class="v">★★★☆☆</span></div>
+        <div class="row"><span class="k">Label</span><span class="v">Green</span></div>
+        <div class="row"><span class="k">Flag</span><span class="v">Picked</span></div>
+        <div class="input">Add a note…</div>
+      </div>
+      <div class="sect">
+        <div class="head">Capture</div>
+        <div class="row"><span class="k">Aperture</span><span class="v">f/8.0</span></div>
+        <div class="row"><span class="k">Shutter</span><span class="v">1/250s</span></div>
+        <div class="row"><span class="k">ISO</span><span class="v">400</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="spec l-a"><div class="tag">CAND · two grades, culled</div>
+    <div class="insp">
+      <div class="sect">
+        <div class="head">Judgment</div>
+        <div class="row"><span class="k">Rating</span><span class="v">★★★☆☆</span></div>
+        <div class="row"><span class="k">Label</span><span class="v">Green</span></div>
+        <div class="row"><span class="k">Flag</span><span class="v">Picked</span></div>
+        <div class="input">Add a note…</div>
+      </div>
+      <div class="sect">
+        <div class="head">Capture</div>
+        <div class="row"><span class="k">Aperture</span><span class="v">f/8.0</span></div>
+        <div class="row"><span class="k">Shutter</span><span class="v">1/250s</span></div>
+        <div class="row"><span class="k">ISO</span><span class="v">400</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="spec d-a"><div class="tag">CAND dark · same discipline</div>
+    <div class="insp">
+      <div class="sect">
+        <div class="head">Judgment</div>
+        <div class="row"><span class="k">Rating</span><span class="v">★★★☆☆</span></div>
+        <div class="row"><span class="k">Label</span><span class="v">Green</span></div>
+        <div class="row"><span class="k">Flag</span><span class="v">Picked</span></div>
+        <div class="input">Add a note…</div>
+      </div>
+      <div class="sect">
+        <div class="head">Capture</div>
+        <div class="row"><span class="k">Aperture</span><span class="v">f/8.0</span></div>
+        <div class="row"><span class="k">Shutter</span><span class="v">1/250s</span></div>
+        <div class="row"><span class="k">ISO</span><span class="v">400</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>5 · Control grammar — fill XOR border, fills as objects</h2>
+<div class="note">v2: button = flat white + container border (no gradient) · field = fill-only well · segmented = well track +
+bordered white pill (no shadow) · chips = quiet tint (no outline) · all r 6. CURRENT keeps committed treatment.</div>
+<div class="pair">
+  <div class="spec l-cur"><div class="tag">CURRENT · paper</div>
+    <div class="ctl-card"><div class="ctl-panel">
+      <div class="ctl-row"><span class="btn">Save changes</span><span class="field">Search or filter…</span><span class="seg"><span class="on">Grid</span><span>Loupe</span><span>Compare</span></span></div>
+      <div class="ctl-row" style="margin-top:12px"><kbd>⌘K</kbd><span class="chip">VIDEO</span><span class="chip">RAW</span>
+        <span style="margin-left:auto" class="krow"><span class="k">Aperture&nbsp;</span><span class="v mono">f/8.0</span></span></div>
+    </div></div>
+  </div>
+  <div class="spec l-a"><div class="tag">CAND · tonal grammar</div>
+    <div class="ctl-card"><div class="ctl-panel">
+      <div class="ctl-row"><span class="btn">Save changes</span><span class="field">Search or filter…</span><span class="seg"><span class="on">Grid</span><span>Loupe</span><span>Compare</span></span></div>
+      <div class="ctl-row" style="margin-top:12px"><kbd>⌘K</kbd><span class="chip">VIDEO</span><span class="chip">RAW</span>
+        <span style="margin-left:auto" class="krow"><span class="k">Aperture&nbsp;</span><span class="v mono">f/8.0</span></span></div>
+    </div></div>
+  </div>
+</div>
+<div class="pair" style="margin-top:14px">
+  <div class="spec d-cur"><div class="tag">CURRENT · graphite</div>
+    <div class="ctl-card"><div class="ctl-panel">
+      <div class="ctl-row"><span class="btn">Save changes</span><span class="field">Search or filter…</span><span class="seg"><span class="on">Grid</span><span>Loupe</span><span>Compare</span></span></div>
+      <div class="ctl-row" style="margin-top:12px"><kbd>⌘K</kbd><span class="chip">VIDEO</span><span class="chip">RAW</span>
+        <span style="margin-left:auto" class="krow"><span class="k">Aperture&nbsp;</span><span class="v mono">f/8.0</span></span></div>
+    </div></div>
+  </div>
+  <div class="spec d-a"><div class="tag">CAND · graphite re-spread</div>
+    <div class="ctl-card"><div class="ctl-panel">
+      <div class="ctl-row"><span class="btn">Save changes</span><span class="field">Search or filter…</span><span class="seg"><span class="on">Grid</span><span>Loupe</span><span>Compare</span></span></div>
+      <div class="ctl-row" style="margin-top:12px"><kbd>⌘K</kbd><span class="chip">VIDEO</span><span class="chip">RAW</span>
+        <span style="margin-left:auto" class="krow"><span class="k">Aperture&nbsp;</span><span class="v mono">f/8.0</span></span></div>
+    </div></div>
+  </div>
+  <div class="spec d-b"><div class="tag">CAND · near-black</div>
+    <div class="ctl-card"><div class="ctl-panel">
+      <div class="ctl-row"><span class="btn">Save changes</span><span class="field">Search or filter…</span><span class="seg"><span class="on">Grid</span><span>Loupe</span><span>Compare</span></span></div>
+      <div class="ctl-row" style="margin-top:12px"><kbd>⌘K</kbd><span class="chip">VIDEO</span><span class="chip">RAW</span>
+        <span style="margin-left:auto" class="krow"><span class="k">Aperture&nbsp;</span><span class="v mono">f/8.0</span></span></div>
+    </div></div>
+  </div>
+</div>
+
+<h2>6 · Transients — committed shadow, only the anchor and radius move</h2>
+<div class="note">shadow.occlusion unchanged (§6 survives). v2: surface to the pole (1.0 light / raised dark) + r 12 + line-s border.</div>
+<div class="pair">
+  <div class="spec l-cur"><div class="tag">CURRENT · paper (.975 · r 8)</div>
+    <div class="tr-stage"><div class="menu">
+      <div class="mi">Open in Loupe<kbd>⏎</kbd></div>
+      <div class="mi hov">Rename…<kbd>R</kbd></div>
+      <div class="mi">Reveal in Finder</div>
+      <div class="sep"></div>
+      <div class="mi">Remove from catalog</div>
+    </div></div>
+  </div>
+  <div class="spec l-a"><div class="tag">CAND · white 1.0 · r 12</div>
+    <div class="tr-stage"><div class="menu">
+      <div class="mi">Open in Loupe<kbd>⏎</kbd></div>
+      <div class="mi hov">Rename…<kbd>R</kbd></div>
+      <div class="mi">Reveal in Finder</div>
+      <div class="sep"></div>
+      <div class="mi">Remove from catalog</div>
+    </div></div>
+  </div>
+  <div class="spec d-cur"><div class="tag">CURRENT · graphite (.34 · r 8)</div>
+    <div class="tr-stage"><div class="menu">
+      <div class="mi">Open in Loupe<kbd>⏎</kbd></div>
+      <div class="mi hov">Rename…<kbd>R</kbd></div>
+      <div class="mi">Reveal in Finder</div>
+      <div class="sep"></div>
+      <div class="mi">Remove from catalog</div>
+    </div></div>
+  </div>
+  <div class="spec d-a"><div class="tag">CAND · .36 · r 12 · line .46</div>
+    <div class="tr-stage"><div class="menu">
+      <div class="mi">Open in Loupe<kbd>⏎</kbd></div>
+      <div class="mi hov">Rename…<kbd>R</kbd></div>
+      <div class="mi">Reveal in Finder</div>
+      <div class="sep"></div>
+      <div class="mi">Remove from catalog</div>
+    </div></div>
+  </div>
+</div>
+
+<h2>7 · Radius sweep — flat construction held constant</h2>
+<div class="note">controls r 4 / 6 / 8 · cards r 8 / 10 / 12 / 16 (committed: control 4 · transient 8 · docked 0)</div>
+<div class="l-a">
+  <div class="sweep">
+    <span class="btn" style="--r-ctl:4px">Save changes</span>
+    <span class="btn" style="--r-ctl:6px">Save changes</span>
+    <span class="btn" style="--r-ctl:8px">Save changes</span>
+    <span class="seg" style="--r-ctl:4px"><span class="on">Grid</span><span>Loupe</span></span>
+    <span class="seg" style="--r-ctl:6px"><span class="on">Grid</span><span>Loupe</span></span>
+    <span class="seg" style="--r-ctl:8px"><span class="on">Grid</span><span>Loupe</span></span>
+  </div>
+  <div class="note" style="margin-top:6px">r4 · r6 · r8</div>
+  <div class="sweep" style="margin-top:8px">
+    <div class="sw-card" style="border-radius:8px">card r8<div class="krow"><span class="k">Aperture</span><span class="v mono">f/8.0</span></div></div>
+    <div class="sw-card" style="border-radius:10px">card r10<div class="krow"><span class="k">Aperture</span><span class="v mono">f/8.0</span></div></div>
+    <div class="sw-card" style="border-radius:12px">card r12<div class="krow"><span class="k">Aperture</span><span class="v mono">f/8.0</span></div></div>
+    <div class="sw-card" style="border-radius:16px">card r16<div class="krow"><span class="k">Aperture</span><span class="v mono">f/8.0</span></div></div>
+  </div>
+</div>
+
+<h2>8 · Canvas texture — dots on the dropped canvas</h2>
+<div class="note">plain committed well (.944) · candidate canvas .96 with dots α.05 / α.06 / α.08 at 15px — measured ref: #EFEFEF on white ≈ α.06</div>
+<div class="sweep">
+  <div class="swatch" style="background:oklch(0.944 0 0)"><div class="float">plain · .944</div></div>
+  <div class="swatch" style="background-color:oklch(0.96 0 0);background-image:radial-gradient(oklch(0 0 0/.05) 1px,transparent 1px);background-size:15px 15px"><div class="float">.96 · α.05</div></div>
+  <div class="swatch" style="background-color:oklch(0.96 0 0);background-image:radial-gradient(oklch(0 0 0/.06) 1px,transparent 1px);background-size:15px 15px"><div class="float">.96 · α.06</div></div>
+  <div class="swatch" style="background-color:oklch(0.96 0 0);background-image:radial-gradient(oklch(0 0 0/.08) 1px,transparent 1px);background-size:15px 15px"><div class="float">.96 · α.08</div></div>
+</div>
+
+<div class="note" style="margin-top:24px">Amendment drafts: _project-tracking/ideation/material-round.md · not ratified — Ari's eye is the gate ·
+after ratification: tokens/themes re-spread + semantic radius + role remaps → bun run generate:tokens (contracts re-checked) → §29.</div>
+
+</body>
+</html>

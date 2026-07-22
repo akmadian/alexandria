@@ -5,11 +5,23 @@
 // adapter binds, the contract is unchanged — this file is simply not selected in
 // ./client.ts.
 
+import type { EventType, JobState } from "@/_generated-types/events";
 import type { ColorLabel, FileStatus, FileType, Flag } from "@/_generated-types/enums";
+import type { Envelope, JobDone, JobProgress } from "@/_generated-types/models";
 import type { SortField, TokenField } from "@/_generated-types/vocabulary";
+import { log } from "@/lib/logger";
 import type { Arrangement, Leaf, Query, WhereNode } from "@/query-model/ast";
 import { DEFAULT_ARRANGEMENT, isLeaf } from "@/query-model/ast";
-import type { AlexandriaAPI, AssetDetail, AssetQueryResult, AssetRow, TriagePatch, UpdateTarget } from "./contract";
+import type {
+    AlexandriaAPI,
+    AssetDetail,
+    AssetQueryResult,
+    AssetRow,
+    Source,
+    SourceInput,
+    TriagePatch,
+    UpdateTarget,
+} from "./contract";
 import { ApiError } from "./contract";
 
 // Rich internal record the engine evaluates over — a superset of AssetRow plus the
@@ -430,6 +442,143 @@ function applyPatch(asset: MockAsset, patch: TriagePatch): void {
     if (patch.note !== undefined) asset.note = patch.note;
 }
 
+// --- sources -----------------------------------------------------------------
+
+// Seeded sources matching the assets' sourceIds (src-0..src-2), so the browser
+// sidebar (widen) and the import flow have real records to render. Shaped as
+// domain.Source (PascalCase, no json tags on the Go struct — the wire truth).
+function seededSources(): Source[] {
+    const now = new Date(2026, 5, 1).toISOString();
+    const names = ["Studio SSD", "Field Drive", "Archive NAS"];
+    return names.map((name, index) => ({
+        ID: `src-${index}`,
+        Name: name,
+        Kind: index === 2 ? "smb" : index === 1 ? "external_drive" : "local",
+        BasePath: `/Volumes/${name.replace(/\s+/g, "")}`,
+        ScanRecursively: true,
+        Enabled: true,
+        Connectivity: "online",
+        CreatedAt: now,
+        UpdatedAt: now,
+    }));
+}
+
+const SOURCES: Source[] = seededSources();
+
+// --- the event bus (C8) ------------------------------------------------------
+//
+// The mock's stand-in for the Wails runtime channels: subscribers register here
+// and the ticking import (below) pushes envelopes to them, so the whole event
+// pump → jobs store / invalidation path runs under `bun run dev` and in tests
+// with no Wails. One envelope shape, four topics (spec §Events).
+
+type Subscriber = (envelope: Envelope) => void;
+const subscribers = new Set<Subscriber>();
+
+function emit(type: EventType, payload: JobProgress | JobDone | { scope: string }): void {
+    // Topic is derived from the type the same way the Go catalog does (a type
+    // can't ride the wrong topic): progress/done → jobs, changed → catalog.
+    const topic = type === "changed" ? "catalog" : "jobs";
+    const envelope: Envelope = { topic, type, payload, timestamp: new Date().toISOString() };
+    for (const subscriber of subscribers) subscriber(envelope);
+}
+
+// --- the ticking import job (C9) ---------------------------------------------
+//
+// A faithful stand-in for the pipeline's progress: an indeterminate SCAN phase
+// (totalKnown false, total climbing as the walk emits files), the flip to a
+// known total, then a WRITE phase whose `done` climbs to the total, then a
+// terminal jobs/done carrying the summary. Cancel mid-run yields a cancelled
+// terminal event with the partial tally. Stages mirror the real emitter
+// (pipeline.go: "scan" / "write").
+
+interface MockImportConfig {
+    /** Delay between ticks. A few hundred ms in dev (watchable); ~0 in tests. */
+    tickMs: number;
+}
+
+const mockImportConfig: MockImportConfig = { tickMs: 350 };
+
+/** Test seam: set the tick pace (and reset it) so suites run fast without fake timers. */
+export function configureMockImport(config: Partial<MockImportConfig>): void {
+    Object.assign(mockImportConfig, config);
+}
+
+// Running jobs → their cancel flag. Present only while ticking; deleted on any
+// terminal event. CancelJob flips the flag and the next tick finishes cancelled.
+const runningImports = new Map<string, { cancelled: boolean }>();
+let jobCounter = 0;
+
+const IMPORT_TOTAL = 40;
+
+function progressFrame(jobId: string, stage: string, done: number, total: number, totalKnown: boolean): JobProgress {
+    return {
+        jobId,
+        kind: "import",
+        label: "jobs.kind.import", // i18n KEY (C14); jobLabelKey mirror
+        state: "running",
+        done,
+        total,
+        totalKnown,
+        stage,
+        cancelable: true,
+    };
+}
+
+function doneFrame(jobId: string, state: JobState, done: number): JobDone {
+    // A cancelled run still committed `done` assets; a completed run splits the
+    // total across the four-count summary (added/updated/skipped/errors).
+    const summary =
+        state === "cancelled"
+            ? { added: done, updated: 0, skipped: 0, errors: 0 }
+            : { added: IMPORT_TOTAL - 6, updated: 3, skipped: 3, errors: 0 };
+    return { jobId, kind: "import", state, summary };
+}
+
+function runMockImport(jobId: string): void {
+    const control = { cancelled: false };
+    runningImports.set(jobId, control);
+
+    // The frame script: three indeterminate scan ticks, then determinate write
+    // ticks climbing to the total.
+    const frames: JobProgress[] = [
+        progressFrame(jobId, "scan", 0, 8, false),
+        progressFrame(jobId, "scan", 0, 22, false),
+        progressFrame(jobId, "scan", 0, IMPORT_TOTAL, false),
+        progressFrame(jobId, "write", 8, IMPORT_TOTAL, true),
+        progressFrame(jobId, "write", 20, IMPORT_TOTAL, true),
+        progressFrame(jobId, "write", 32, IMPORT_TOTAL, true),
+        progressFrame(jobId, "write", IMPORT_TOTAL, IMPORT_TOTAL, true),
+    ];
+
+    let index = 0;
+    let lastDone = 0;
+    const step = (): void => {
+        const active = runningImports.get(jobId);
+        if (active === undefined) return; // defensively: already finished
+        if (active.cancelled) {
+            runningImports.delete(jobId);
+            emit("done", doneFrame(jobId, "cancelled", lastDone));
+            log.info("mock: import cancelled", { jobId, done: lastDone });
+            return;
+        }
+        if (index >= frames.length) {
+            runningImports.delete(jobId);
+            emit("done", doneFrame(jobId, "done", IMPORT_TOTAL));
+            // The import changed the catalog — mirror the engine's coincident
+            // invalidation so the grid refetches after an import (spec §Jobs).
+            emit("changed", { scope: "assets" });
+            log.info("mock: import complete", { jobId });
+            return;
+        }
+        const frame = frames[index++];
+        lastDone = frame.done;
+        emit("progress", frame);
+        setTimeout(step, mockImportConfig.tickMs);
+    };
+    setTimeout(step, mockImportConfig.tickMs);
+}
+
 // Simulate seam latency so loading states get exercised.
 const delay = <T>(value: T): Promise<T> => new Promise((resolve) => setTimeout(() => resolve(value), 80));
 
@@ -490,5 +639,66 @@ export const mockApi: AlexandriaAPI = {
         return delay(undefined).then(() => {
             throw new ApiError("domain", "update target requires either ids or a query", "validation");
         });
+    },
+
+    listSources(): Promise<Source[]> {
+        return delay(SOURCES.map((source) => ({ ...source })));
+    },
+
+    createSource(input: SourceInput): Promise<Source> {
+        // Mirrors the seam's CreateSource: mint an enabled/online record. Kind
+        // defaults to local when empty, matching SourceInput's Go default.
+        const now = new Date().toISOString();
+        const source: Source = {
+            ID: `src-${SOURCES.length}`,
+            Name: input.name,
+            Kind: input.kind !== undefined && input.kind !== "" ? input.kind : "local",
+            BasePath: input.basePath,
+            ScanRecursively: input.scanRecursively ?? true,
+            Enabled: true,
+            Connectivity: "online",
+            CreatedAt: now,
+            UpdatedAt: now,
+        };
+        SOURCES.push(source);
+        log.info("mock: source created", { id: source.ID, name: source.Name });
+        // A new source is a catalog change (scope sources) — invalidate any
+        // source-derived reads, faithful to the seam's coincident event.
+        emit("changed", { scope: "sources" });
+        return delay({ ...source });
+    },
+
+    startImport(sourceId: string): Promise<string> {
+        const source = SOURCES.find((candidate) => candidate.ID === sourceId);
+        if (source === undefined) {
+            return delay(sourceId).then(() => {
+                throw new ApiError("domain", `source ${sourceId} not found`, "not_found");
+            });
+        }
+        if (source.Connectivity === "offline") {
+            return delay(sourceId).then(() => {
+                throw new ApiError("domain", `source ${sourceId} is offline`, "source_offline");
+            });
+        }
+        jobCounter += 1;
+        const jobId = `mock-job-${String(jobCounter).padStart(4, "0")}`;
+        log.info("mock: import started", { jobId, sourceId });
+        runMockImport(jobId);
+        return delay(jobId);
+    },
+
+    cancelJob(jobId: string): Promise<void> {
+        // No-op for an unknown or already-terminal job (matches the seam); a
+        // running job's next tick sees the flag and emits the cancelled terminal.
+        const active = runningImports.get(jobId);
+        if (active !== undefined) active.cancelled = true;
+        return delay(undefined);
+    },
+
+    subscribe(handler: (envelope: Envelope) => void): () => void {
+        subscribers.add(handler);
+        return () => {
+            subscribers.delete(handler);
+        };
     },
 };

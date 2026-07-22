@@ -1,0 +1,40 @@
+/* The Catalog panel body: the grid well (§2) beside the inspector rail (§12's
+ * right zone), with a docked status bar (§19) spanning the bottom. Docked
+ * surfaces are flat — hairline seams, never shadows.
+ * ponytail: the 28px status height and the 280px rail width are structural
+ * literals until the token-gaps round mints chrome-dimension tokens (§30.5 — the
+ * rail width is the PIN inherited from the old shell). The FilterBar's top row
+ * joins this grid with its own round (frontend-import epic). */
+
+.catalog {
+    height: 100%;
+    display: grid;
+    grid-template-rows: 1fr 28px;
+    grid-template-columns: 1fr 280px;
+    background: var(--alx-surface-panel);
+}
+
+.main {
+    min-height: 0;
+    background: var(--alx-cell-well);
+}
+
+.rail {
+    min-height: 0;
+    min-width: 0;
+    border-left: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    background: var(--alx-surface-panel);
+}
+
+.status {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-4);
+    padding: 0 var(--alx-size-row-inset);
+    border-top: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+.metric {
+    composes: alx-type-data-sm from global;
+}

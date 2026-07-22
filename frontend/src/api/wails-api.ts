@@ -8,10 +8,15 @@
 // shadow structs — exactly our Query/Arrangement/Page shapes. Each binding is
 // rebound once to that wire truth; the JSON that crosses is identical.
 
+import type { EventTopic } from "@/_generated-types/events";
 import type { ApiErrorKind, ErrorCode } from "@/_generated-types/errors";
-import type { AssetRow as AssetRowModel } from "@/_generated-types/models";
+import type { AssetRow as AssetRowModel, Envelope } from "@/_generated-types/models";
+import { log } from "@/lib/logger";
 import type { seam } from "../../wailsjs/go/models";
 import * as AssetServiceBinding from "../../wailsjs/go/seam/AssetService";
+import * as ImportServiceBinding from "../../wailsjs/go/seam/ImportService";
+import * as SourceServiceBinding from "../../wailsjs/go/seam/SourceService";
+import { EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
     AlexandriaAPI,
     Arrangement,
@@ -20,6 +25,8 @@ import type {
     AssetRow,
     Page,
     Query,
+    Source,
+    SourceInput,
     TriagePatch,
     UpdateTarget,
 } from "./contract";
@@ -123,6 +130,12 @@ function toGridRow(row: AssetRowModel): AssetRow {
     return { ...row, kind: "asset", thumbURL: thumbnailURL(row.id) };
 }
 
+// The four C8 topics are Wails channel names (events_wails.go emits on
+// `string(topic)`), so subscribing is one EventsOn per topic; the envelope rides
+// as the single event datum. Kept as EventTopic[] so a new generated topic fails
+// to compile until it's listed here.
+const EVENT_TOPICS: readonly EventTopic[] = ["catalog", "jobs", "watcher", "sync"];
+
 export const wailsApi: AlexandriaAPI = {
     async queryAssets(query: Query, arrangement: Arrangement, page: Page): Promise<AssetQueryResult> {
         try {
@@ -163,5 +176,50 @@ export const wailsApi: AlexandriaAPI = {
         } catch (rejection) {
             throw toApiError(rejection);
         }
+    },
+
+    async listSources(): Promise<Source[]> {
+        try {
+            return await SourceServiceBinding.ListSources();
+        } catch (rejection) {
+            throw toApiError(rejection);
+        }
+    },
+
+    async createSource(input: SourceInput): Promise<Source> {
+        try {
+            return await SourceServiceBinding.CreateSource(input);
+        } catch (rejection) {
+            throw toApiError(rejection);
+        }
+    },
+
+    async startImport(sourceId: string): Promise<string> {
+        try {
+            return await ImportServiceBinding.StartImport(sourceId);
+        } catch (rejection) {
+            throw toApiError(rejection);
+        }
+    },
+
+    async cancelJob(jobId: string): Promise<void> {
+        try {
+            await ImportServiceBinding.CancelJob(jobId);
+        } catch (rejection) {
+            throw toApiError(rejection);
+        }
+    },
+
+    subscribe(handler: (envelope: Envelope) => void): () => void {
+        // One listener per topic channel; each fires with the whole envelope as
+        // its single datum. Unsubscribe tears every listener down.
+        const unsubscribers = EVENT_TOPICS.map((topic) =>
+            EventsOn(topic, (envelope: Envelope) => handler(envelope)),
+        );
+        log.info("wails: subscribed to event topics", { topics: EVENT_TOPICS.length });
+        return () => {
+            for (const unsubscribe of unsubscribers) unsubscribe();
+            log.info("wails: unsubscribed from event topics");
+        };
     },
 };

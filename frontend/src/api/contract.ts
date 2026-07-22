@@ -15,8 +15,9 @@
 
 import type { ColorLabel, Flag } from "@/_generated-types/enums";
 import type { ApiErrorKind, ErrorCode } from "@/_generated-types/errors";
-import type { AssetDetail, AssetRow as AssetRowModel } from "@/_generated-types/models";
+import type { AssetDetail, AssetRow as AssetRowModel, Envelope } from "@/_generated-types/models";
 import type { Arrangement, Page, Query } from "@/query-model/ast";
+import type { domain, seam } from "../../wailsjs/go/models";
 
 // Re-export the AST so consumers have one door for the query types.
 export type { Arrangement, Page, Query };
@@ -26,6 +27,22 @@ export type { Scope, WhereNode, GroupNode, Leaf } from "@/query-model/ast";
 // layering — the inspector renders it directly); re-exported so features
 // import it from the contract, never the generated tree.
 export type { AssetDetail };
+
+// The C8 event envelope (generated: internal/seam/events.go → _generated-types).
+// `subscribe` delivers these whole; the event pump routes on topic+type. Payload
+// is `unknown` on the wire — consumers narrow by topic (jobs → JobProgress|JobDone,
+// catalog → CatalogChange).
+export type { Envelope };
+
+// The source model and its create input. Sources have no `_generated-types/`
+// projection yet (the Go-struct→TS model emitter covers catalog rows + events, not
+// domain aggregates — DEFERRED §7), so the generated source of truth is the Wails
+// binding models: `domain.Source` is wire-accurate (the Go struct carries no json
+// tags, so its JSON is the PascalCase field names Wails reflects), and
+// `seam.SourceInput` is the json-tagged create shape. Re-exported here so features
+// and the adapters share one door, never the wailsjs tree (C13: never hand-authored).
+export type Source = domain.Source;
+export type SourceInput = seam.SourceInput;
 
 /**
  * The slim grid-card projection (seam/01). The engine truth is the GENERATED
@@ -116,4 +133,35 @@ export interface AlexandriaAPI {
      * the mutation lane's job (api/mutation-lane.ts), not this contract's.
      */
     updateAssets(target: UpdateTarget, patch: TriagePatch): Promise<void>;
+
+    /** Every configured source (SourceService.ListSources). */
+    listSources(): Promise<Source[]>;
+
+    /** Create a source and return the minted record (SourceService.CreateSource). */
+    createSource(input: SourceInput): Promise<Source>;
+
+    /**
+     * Launch a cancelable import over a source, resolving with the job id
+     * immediately (ImportService.StartImport). Progress arrives over `subscribe`
+     * as jobs/progress envelopes, completion as a jobs/done envelope carrying the
+     * summary — the C9 no-private-progress-paths rule. An offline source rejects
+     * with source_offline; an unknown id with not_found.
+     */
+    startImport(sourceId: string): Promise<string>;
+
+    /**
+     * Request cancellation of a running job (ImportService.CancelJob). A no-op for
+     * an unknown or already-terminal job; the cancel surfaces as a terminal
+     * jobs/done envelope with state "cancelled", never a rejection.
+     */
+    cancelJob(jobId: string): Promise<void>;
+
+    /**
+     * Subscribe to the C8 event stream — every backend→frontend envelope across
+     * the four topics (jobs/catalog/watcher/sync) delivered whole, in emit order.
+     * Returns an unsubscribe function. The event pump (api/event-pump.ts) is the
+     * ONE subscriber; features read the routed sinks (jobs store, query cache),
+     * never this stream directly.
+     */
+    subscribe(handler: (envelope: Envelope) => void): () => void;
 }
