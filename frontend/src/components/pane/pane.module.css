@@ -1,0 +1,84 @@
+/* Pane — docked chrome: flat, hue-free, radius-docked (0), a single hairline seam on the docked
+ * edge. No §6 shadow (that's for transient overlays; this is docked). Width rides the inline
+ * `--pane-width` var so the JS owns the one source of truth. The handle is an overlay grip on the
+ * seam with a widened hit area (§28); at rest it is invisible — the seam is the hairline border. */
+
+.pane {
+    position: relative;
+    width: var(--pane-width);
+    height: 100%;
+    min-height: 0;
+    flex: none;
+    background: var(--alx-surface-panel);
+    /* Collapse is instant — no width transition (banned layout motion, §26). */
+}
+
+.left {
+    border-right: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+.right {
+    border-left: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+}
+
+/* The contents fill the pane and clip; hidden (not unmounted) when collapsed so a re-open is
+ * instant and any inner scroll state survives. */
+.body {
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Belt-and-suspenders with the `hidden` attribute the component sets (some resets re-`display`
+ * elements and would defeat the bare UA rule). */
+.body[hidden] {
+    display: none;
+}
+
+/* The resize grip sits over the docked seam, straddling it, with a target wider than the hairline
+ * (§28). `touch-action: none` is required by useMove so touch-drag isn't stolen by scrolling. */
+.handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: var(--alx-space-2);
+    z-index: 1;
+    cursor: col-resize;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    /* A thin accent line, painted centered over the seam, revealed on hover/focus only. */
+    background: transparent;
+}
+
+.left .handle {
+    right: calc(-0.5 * var(--alx-space-2));
+}
+
+.right .handle {
+    left: calc(-0.5 * var(--alx-space-2));
+}
+
+/* Hover/drag: the seam thickens to an accent line (centered in the hit area). */
+.handle::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 50%;
+    width: var(--alx-focus-ring-width);
+    transform: translateX(-50%);
+    background: var(--alx-accent-ring);
+    opacity: 0;
+}
+
+.handle:hover::after {
+    opacity: 1;
+}
+
+.handle:focus-visible {
+    outline: none;
+}
+
+.handle:focus-visible::after {
+    opacity: 1;
+}

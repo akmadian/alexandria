@@ -204,6 +204,9 @@
     "modal": {
         "close": "Close"
     },
+    "pane": {
+        "resize": "Resize {{name}}"
+    },
     "errors": {
         "panelCrashed": "This panel hit an error.",
         "reloadPanel": "Reload panel",
