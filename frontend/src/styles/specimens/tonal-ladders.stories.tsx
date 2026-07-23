@@ -21,6 +21,33 @@ const FAMILIES: Family[] = [
     { key: "stage", label: "Stage", hint: "the backdrop — material-round anchors (fixed across themes)", anchor: "stage.default" },
 ];
 
+// Per-rung usage — what each tone is actually for. Summarized faithfully from the
+// token roles (full role text on hover); obvious state rungs filled from the name.
+const USAGE: Record<string, string> = {
+    "ink.1": "Values, names — primary text",
+    "ink.2": "Labels — secondary text",
+    "ink.3": "Placeholders, counts — muted",
+    "ink.4": "Disabled text",
+    "ink.hairline": "Seams & separators (§3)",
+    "surface.panel": "Rails, inspector, bars — the ground",
+    "surface.field": "Control containers: input wells, select triggers, value chips (D35)",
+    "surface.raised": "In-well selection ceiling — the segmented pill",
+    "surface.sunken": "Grouped-control track the pill rises out of",
+    "surface.pill": "On-panel selection: tabs, toggles, list rows (§7)",
+    "surface.selected": "Tint button's pressed fill (deep register)",
+    "surface.transient": "Popovers, menus, dialogs (§6)",
+    "surface.hover": "Hover state on neutral surfaces",
+    "surface.pressed": "Pressed state on neutral surfaces",
+    "cell.rest": "Resting asset cell — the default mat",
+    "cell.hover": "Asset cell under the pointer",
+    "cell.active": "Active cell — family ceiling + hairline frame (§20)",
+    "cell.selected": "Selected asset cell",
+    "cell.well": "The grid well behind the cells (base)",
+    "stage.default": "Default stage backdrop — the anchor",
+    "stage.min": "Darkest stage setting (range floor)",
+    "stage.max": "Lightest stage setting — range cap (§1)",
+};
+
 // oklch(L C H) → L. These families are achromatic, so L is the first number.
 const parseL = (value: string): number => {
     const match = value.match(/oklch\(\s*([\d.]+)/);
@@ -54,7 +81,7 @@ function Ladder({ family, theme }: { family: Family; theme: string }) {
                             key={token.path}
                             style={{
                                 display: "grid",
-                                gridTemplateColumns: "64px minmax(180px, 260px) 68px 1fr",
+                                gridTemplateColumns: "56px minmax(150px, 210px) 58px 132px 1fr",
                                 gap: "var(--alx-space-4)",
                                 alignItems: "center",
                                 borderLeft: `2px solid ${isAnchor ? "var(--alx-accent)" : "transparent"}`,
@@ -71,6 +98,9 @@ function Ladder({ family, theme }: { family: Family; theme: string }) {
                             </span>
                             <span className="alx-type-caption" style={{ color: isAnchor ? "var(--alx-accent)" : "var(--alx-ink-3)" }}>
                                 {isAnchor ? "◆ anchor" : delta > 0 ? `↑ +${delta.toFixed(3)}  lighter` : `↓ ${delta.toFixed(3)}  darker`}
+                            </span>
+                            <span className="alx-type-caption" title={token.role ?? undefined} style={{ color: "var(--alx-ink-3)" }}>
+                                {USAGE[token.path] ?? ""}
                             </span>
                         </div>
                     );
