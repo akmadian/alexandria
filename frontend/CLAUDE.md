@@ -92,6 +92,10 @@ types-only — bridge to runtime with the completeness trick.
 - **Primitives vs features:** `components/<name>/` is domain-blind chrome;
   `features/<name>/` composes primitives + domain context; features never import
   other features. In doubt, build feature-local, promote later.
+- **Structural containers group under `components/layout/`** (`Pane`, `StatusBar`; Storybook
+  title `Layout/*`) — the docked shells that hold other chrome, kept apart from control
+  primitives. Flat `components/<name>/` stays the default; promote a container into `layout/`
+  once a second one exists (the rule that moved Pane + StatusBar there).
 - **Build method (ratified):** one primitive at a time, leaves first (Button →
   ToggleButton → Checkbox → Switch), container + item type as one unit, composites
   last. Every primitive lands its matrix in the design-library route
