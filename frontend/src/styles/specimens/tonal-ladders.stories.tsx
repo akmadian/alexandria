@@ -30,7 +30,7 @@ const USAGE: Record<string, string> = {
     "ink.4": "Disabled text",
     "ink.hairline": "Seams & separators (§3)",
     "surface.panel": "Rails, inspector, bars — the ground",
-    "surface.field": "Control containers: input wells, select triggers, value chips (D35)",
+    "surface.container": "Control containers: input wells, select triggers, value chips (D35)",
     "surface.raised": "In-well selection ceiling — the segmented pill",
     "surface.sunken": "Grouped-control track the pill rises out of",
     "surface.pill": "On-panel selection: tabs, toggles, list rows (§7)",
