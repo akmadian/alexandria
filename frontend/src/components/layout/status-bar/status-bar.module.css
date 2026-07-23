@@ -1,0 +1,22 @@
+/* The §12 bottom readout band: docked chrome — flat, hue-free, one hairline seam on top, no
+ * shadow. A single line, always: content that overflows clips (the feature truncates its own
+ * flexible zone, §13). 24px tall — the row-list rung; a dedicated status-band token is deferred to
+ * the chrome-dimension round (§30.5). data-sm mono is the readout voice; ink.2 is the muted band.
+ *
+ * A flex row so the feature can pass multiple children + a margin-auto spacer to zone them
+ * (counts left, filename center, machinery right) without this shell prescribing the layout. */
+
+.bar {
+    composes: alx-type-data-sm from global;
+    height: var(--alx-size-row-list);
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-4);
+    padding: 0 var(--alx-size-row-inset);
+    border-top: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    background: var(--alx-surface-panel);
+    color: var(--alx-ink-2);
+    white-space: nowrap;
+    overflow: hidden;
+}
