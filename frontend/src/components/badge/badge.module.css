@@ -38,7 +38,7 @@
  * (material round D32 / Draft D: fill XOR border, the machinery chip default is tint). */
 .dot {
     color: var(--alx-ink-1);
-    background: var(--alx-surface-field);
+    background: var(--alx-surface-container);
 }
 
 .mark {

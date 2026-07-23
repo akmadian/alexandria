@@ -23,7 +23,7 @@
      * surface.field is the chrome input-well role; cell.* is the asset family (§20). */
     border: var(--alx-stroke-hairline) solid transparent;
     border-radius: var(--alx-radius-control);
-    background: var(--alx-surface-field);
+    background: var(--alx-surface-container);
     min-width: 0;
 }
 

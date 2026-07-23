@@ -12,7 +12,7 @@
 /* Filled value-row (D35): the row reads as a recessed chip in the one control-container
  * material — the reference "field token" look. Borderless (fill-only, D32 grammar). */
 .filled {
-    background: var(--alx-surface-field);
+    background: var(--alx-surface-container);
     border: var(--alx-stroke-hairline) solid transparent;
     border-radius: var(--alx-radius-control);
 }

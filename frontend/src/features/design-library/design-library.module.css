@@ -96,7 +96,7 @@
 .formula {
     composes: alx-type-data-sm from global;
     padding: 0 var(--alx-space-1);
-    background: var(--alx-surface-field);
+    background: var(--alx-surface-container);
     border-radius: var(--alx-radius-control);
 }
 

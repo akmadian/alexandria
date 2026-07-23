@@ -159,7 +159,7 @@
     --alx-stage-min: oklch(0.2 0 0);
     --alx-stroke-hairline: 1px;
     --alx-stroke-thick: 2px;
-    --alx-surface-field: oklch(0.955 0 0);
+    --alx-surface-container: oklch(0.955 0 0);
     --alx-surface-hover: oklch(0.97 0 0);
     --alx-surface-panel: oklch(1 0 0);
     --alx-surface-pill: oklch(0.945 0 0);
@@ -340,7 +340,7 @@
     --alx-ink-3: oklch(0.52 0 0);
     --alx-ink-4: oklch(0.63 0 0);
     --alx-ink-hairline: oklch(0.815 0 0);
-    --alx-surface-field: oklch(0.885 0 0);
+    --alx-surface-container: oklch(0.885 0 0);
     --alx-surface-hover: oklch(0.883 0 0);
     --alx-surface-panel: oklch(0.905 0 0);
     --alx-surface-pill: oklch(0.93 0 0);
@@ -417,7 +417,7 @@
     --alx-ink-3: oklch(0.655 0 0);
     --alx-ink-4: oklch(0.585 0 0);
     --alx-ink-hairline: oklch(0.4 0 0);
-    --alx-surface-field: oklch(0.272 0 0);
+    --alx-surface-container: oklch(0.272 0 0);
     --alx-surface-hover: oklch(0.33 0 0);
     --alx-surface-panel: oklch(0.3 0 0);
     --alx-surface-pill: oklch(0.405 0 0);
@@ -494,7 +494,7 @@
     --alx-ink-3: oklch(0.635 0 0);
     --alx-ink-4: oklch(0.56 0 0);
     --alx-ink-hairline: oklch(0.32 0 0);
-    --alx-surface-field: oklch(0.19 0 0);
+    --alx-surface-container: oklch(0.19 0 0);
     --alx-surface-hover: oklch(0.245 0 0);
     --alx-surface-panel: oklch(0.215 0 0);
     --alx-surface-pill: oklch(0.32 0 0);

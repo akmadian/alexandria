@@ -1213,3 +1213,18 @@ per-hue tint), giving Row/ControlRow a filled value-row material, the dropdown/s
 (absent today — the material's biggest future consumer), unifying the two selection substrates, and the
 `surface.field` → `surface.container` rename (bundled there because it touches every consumer). The
 visible payoff lands with that round; a usage-lint (containers must reach for the role) lands with it too.
+
+**Addendum (2026-07-22, component-convergence round — deliveries).** Two deferred items landed:
+- **Filled value-rows.** `ControlRow` gained a `filled` variant (recessed chip in the container
+  material) with optional children (label-only field tokens); `ControlGroup` gained `gap` so filled
+  chip-rows read as separate objects while metadata rows still stack flush. The design-library renders
+  the reference value-token list.
+- **The rename `surface.field` → `surface.container`.** All four themes, the two `contracts.json` APCA
+  pairs, and every src consumer (the TextField well, the Badge dot, the ControlRow fill, the design
+  library) repointed; emitted regenerated (contracts hold, no color value changed). The role note now
+  lives on `surface.container`; the name generalized from input-wells to every recessed holder.
+
+  Still deferred: the **dropdown/select trigger** primitive (no consumer yet — the material's biggest
+  future consumer), the **neutral value-chip** (Badge stays hue-only; no standalone consumer, filled
+  rows cover the value-token look), unifying the two selection substrates, and the containers-must-use-
+  the-role **usage-lint**.

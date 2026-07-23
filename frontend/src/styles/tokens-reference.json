@@ -1296,10 +1296,10 @@
       "css": "2px"
     },
     {
-      "path": "surface.field",
+      "path": "surface.container",
       "type": "color",
       "varying": true,
-      "role": "the canonical CONTROL-CONTAINER (D35, 2026-07-22): the ONE recessed neutral material every value/control HOLDER uses — input wells, dropdown/select triggers, neutral value chips, filled value-rows. Recesses one step below panel. Neutral containers never source from pill/hover/tint (those are selection/state/tag) — that misuse is the fragmentation D35 closes. Name predates the generalization; rename to surface.container is deferred to the component-convergence round.",
+      "role": "the canonical CONTROL-CONTAINER (D35, 2026-07-22): the ONE recessed neutral material every value/control HOLDER uses — input wells, dropdown/select triggers, neutral value chips, filled value-rows. Recesses one step below panel. Neutral containers never source from pill/hover/tint (those are selection/state/tag) — that misuse is the fragmentation D35 closes. Renamed surface.field → surface.container in the component-convergence round (2026-07-22), the name generalized from input-wells to every recessed holder.",
       "css": {
         "paper": "oklch(0.955 0 0)",
         "linen": "oklch(0.885 0 0)",
@@ -1381,7 +1381,7 @@
       "path": "surface.sunken",
       "type": "color",
       "varying": true,
-      "role": "the deep well for grouped controls (material round 2026-07-22): a segmented track the selection pill rises OUT of. Distinct from field (input wells): sits a solid register jump below panel in EVERY theme so the pill separates by tone, not a line. Deepened 0.95→0.91 (eye-gate) so the borderless white pill (surface.raised 1.0) pops at a ~0.09 gap. Narrowed by D35 (2026-07-22) to the SOLE deeper exception to the one-container rule — the grouped-control track only; every other neutral container uses surface.field.",
+      "role": "the deep well for grouped controls (material round 2026-07-22): a segmented track the selection pill rises OUT of. Distinct from surface.container (the shallow recessed holder): sits a solid register jump below panel in EVERY theme so the pill separates by tone, not a line. Deepened 0.95→0.91 (eye-gate) so the borderless white pill (surface.raised 1.0) pops at a ~0.09 gap. Narrowed by D35 (2026-07-22) to the SOLE deeper exception to the one-container rule — the grouped-control track only; every other neutral container uses surface.container.",
       "css": {
         "paper": "oklch(0.91 0 0)",
         "linen": "oklch(0.85 0 0)",

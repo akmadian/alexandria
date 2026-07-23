@@ -4,7 +4,7 @@
   "surface": {
     "$type": "color",
     "panel": { "$value": { "colorSpace": "oklch", "components": [0.215, 0, 0] } },
-    "field": { "$value": { "colorSpace": "oklch", "components": [0.19, 0, 0] } },
+    "container": { "$value": { "colorSpace": "oklch", "components": [0.19, 0, 0] } },
     "sunken": { "$value": { "colorSpace": "oklch", "components": [0.155, 0, 0] }, "$extensions": { "alx": { "role": "deep grouped-control well (material round 2026-07-22): the segmented track, darker than panel so the panel-level pill rises out of it by tone." } } },
     "hover": { "$value": { "colorSpace": "oklch", "components": [0.245, 0, 0] } },
     "pressed": { "$value": { "colorSpace": "oklch", "components": [0.265, 0, 0] } },

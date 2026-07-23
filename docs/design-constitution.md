@@ -138,12 +138,12 @@ slab on light themes — the backwards direction.
 
 **One control-container material (D35, 2026-07-22).** Everything neutral that *holds* a value
 or a control — input wells, dropdown/select triggers, neutral value chips, filled value-rows —
-is the **same** recessed material: `surface.field`, the canonical *control-container* (the name
-predates the generalization; it recesses one register step below panel). Components never source
+is the **same** recessed material: `surface.container` (renamed from `surface.field`, whose name
+had narrowed to input wells; it recesses one register step below panel). Components never source
 a neutral container from `surface.pill`, `surface.hover`, or a per-hue `tint` — those are
 *selection*, *state*, and *tag* respectively, and reaching for one as a container is the
 fragmentation D35 closes (on the dark themes it makes a chip or a quiet button *rise* off the
-panel while the field beside it *recesses* — same job, opposite directions). Two sanctioned
+panel while the container beside it *recesses* — same job, opposite directions). Two sanctioned
 departures, each because tone must substitute for a shadow §6 forbids on docked chrome: the
 grouped-control **track** alone deepens to `surface.sunken` so the borderless in-well selection
 pill pops by tone; and **selection** leaves the container entirely (`surface.pill` on panel,
