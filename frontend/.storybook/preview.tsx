@@ -14,6 +14,19 @@ const THEMES = ["paper", "linen", "graphite", "carbon"] as const;
 const preview: Preview = {
     parameters: {
         controls: { matchers: { color: /(background|color)$/i, date: /Date$/i } },
+        // Foundations lead; primitives follow the §6 build ladder (leaves first),
+        // not the default alphabetical order. Anything unlisted falls in after,
+        // alphabetically. Stories within a component keep file order (Playground → Matrix).
+        options: {
+            storySort: {
+                order: [
+                    "Design System",
+                    ["Colors", "Typography", "Spacing & Sizing", "Radius", "Elevation", "Motion", "Reference"],
+                    "Primitives",
+                    ["Button", "ToggleButton", "Checkbox", "Switch", "SegmentedControl", "TextField", "Rating", "Badge", "Icon", "LabelSwatch", "Row", "ControlRow", "ControlGroup", "PanelSection", "NoticeRegion"],
+                ],
+            },
+        },
     },
     initialGlobals: { theme: "paper" },
     globalTypes: {
