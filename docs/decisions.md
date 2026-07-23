@@ -1228,3 +1228,64 @@ visible payoff lands with that round; a usage-lint (containers must reach for th
   future consumer), the **neutral value-chip** (Badge stays hue-only; no standalone consumer, filled
   rows cover the value-token look), unifying the two selection substrates, and the containers-must-use-
   the-role **usage-lint**.
+
+## D36 — Menu: the second overlay tenant, on an extracted shared Popover (2026-07-22)
+
+**Decision.** The **Menu** primitive lands (`components/menu`), and the §6 transient shell is
+**extracted** from Select into `components/popover` — Select repointed, so a menu, a select, and any
+future bespoke popover share ONE shell (surface.transient + occlusion shadow + transient radius); they
+differ only in contents. §6/§24 already made menus lawful ("small transient"); no constitution change.
+
+**The line — menu vs bespoke popover — drawn at interaction semantics, not visual richness.** Every
+serious system (ARIA APG, Radix, RAC, AppKit) draws it identically: `role=menu` is a SINGLE roving
+focus over commands/choices (arrows traverse, type-ahead); anything needing multiple tab stops,
+embedded form controls, or a filtering field is a bespoke Popover (`role=dialog`). APG forbids form
+controls inside `role=menu`. So an embedded segmented-control item, a filter accordion, or a
+multi-interactive-trailing row is bespoke-Popover content, **not** a MenuItem. Rich chrome that is
+*around* the list (search, tabs, footer buttons, button clusters) composes as **header/footer slots on
+the Popover, outside the roving list** — the "porch" — so it never breaks the menu model.
+
+**MenuItem — a three-tier accessory model, never a prop per combination** (the §22 combination-name
+defect in component form): AUTOMATIC markers (submenu chevron / selection check, from RAC render-props)
+· SUGAR for the common case (`icon` / `shortcut`, the latter mono-muted — the §9 data voice) ·
+COMPOSITION for the long tail. The item substrate is **Select's item verbatim** (one collection
+material: value ramp, hit-target height, toward-ink hover §7, radius-control). `description` renders a
+muted second line — a **sanctioned two-line exception to uniform row height** (§8). Selection is
+hue-free (the check is the signal, parity with Select). Submenus use RAC `SubmenuTrigger` (hover-open,
+safe-triangle, Right/Left — never hand-rolled), nesting the same Menu on the same shell.
+
+**Icon alignment is menu-scoped** (the reference "All / Some / No icons" spec): any leading icon in a
+menu reserves the gutter for EVERY row (iconless rows indent to align); no icons collapses it (labels
+flush). Pure CSS `:has()`, per-menu, zero JS.
+
+**Destructive items — structural seam now, hue deferred.** `MenuItem isDestructive` sets
+`data-destructive` and renders **hue-free ink today**; the whole menu ships without a destructive
+color. The danger tone is a §5 hue-ledger addition parked to the **signals-color hue round** (Ari's
+call — the signal hues need a round of their own to nail their structure). The seam is built so that
+round is a pure CSS wire-up, no consumer churn. **Do not lose this:** see the design open board trigger.
+
+**Amends** nothing (builds on §6/§24). The signals-color round will amend §5 to seat the danger tone.
+
+**Deferred** (ponytail — a consumer triggers each): the danger **hue** (seam ready; trigger =
+signals-color round) · header/footer **slots** (search/tabs/footer buttons/clusters — compose on
+Popover; RAC Autocomplete for the search-filter case) · multiple interactive trailing (a dialog-row) ·
+embedded-control / segmented items (bespoke Popover) · a `size` prop (menus are single row-list
+density) · the Cut/Copy/Paste **cluster** (header-slot custom content) · the detached fixed-dark
+keyboard-hint tooltip (a Tooltip-primitive concern).
+
+**Addendum (2026-07-22, review corrections — sourcing from the system).** Ari's review caught values
+that were hand-picked rather than derived; corrected: a menu item **is the `list` rowIntent** —
+height `size.row-list`, horizontal inset `size.row-inset` (12px, not a raw `space-2`/8), label
+`type.value` (the content voice), all from `registries.json rowIntents.list`; the leading icon shares
+the label's ink (§14, one command unit) rather than an arbitrary muted step. The menu **trigger is the
+`ghost` rung, not `outline`**: `outline` spends contrast on an enclosure (§3's lowest rung), and a menu
+trigger is *not a container* (the recessed chip is Select's value-material, D35) — so it separates by
+value. It is **deliberately distinct from Select's trigger** (Ari, review): every major system
+(Spectrum / Radix / MUI / shadcn) styles a Select trigger as a *field* — it holds a value, so it
+recesses into `surface.container` — and a menu/dropdown trigger as a *button*. So the menu trigger is
+**transparent at rest** (a button, not a field) and fills on hover with **`surface.hover`** — the one
+hover token shared with Select's items and every other hover in the system. Distinct at rest, unified on
+hover; `outline` was rejected because §3 ranks fill above enclosure. Trailing accessories right-align on
+one edge, with a small
+optical inset-margin so the chevron/check glyph lands on the shortcut-text edge; the submenu popover
+offset was corrected from the RAC-starter's overlapping negative value to a clean adjacent placement.

@@ -1,0 +1,15 @@
+/* Popover — the §6 transient shell. The ONE place docked-chrome's no-shadow rule lifts:
+ * theme-following surface.transient + the occlusion shadow + the transient radius rung.
+ * Every overlay tenant (Select, Menu + submenus, future bespoke filter popovers) sits on
+ * this one shell, so a menu and a bespoke popover are visually identical — they differ only
+ * in their contents. Per-tenant extras (Select's trigger-width floor, Menu's min-width) ride
+ * an added className, never this base. */
+
+.popover {
+    box-sizing: border-box;
+    padding: var(--alx-space-1);
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    border-radius: var(--alx-radius-transient);
+    background: var(--alx-surface-transient);
+    box-shadow: var(--alx-shadow-occlusion);
+}

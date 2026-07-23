@@ -161,6 +161,22 @@
     padding: var(--alx-space-2);
 }
 
+/* Menu specimens are click-to-open triggers laid out in a row. */
+.menuTriggers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--alx-space-3);
+    padding: var(--alx-space-2) 0;
+}
+
+/* The disclosure chevron on a menu trigger: `disclose` rests pointing right, rotate to point
+ * down (matching Select). Muted — it's a disclosure hint, not the label. */
+.triggerChevron {
+    color: var(--alx-ink-3);
+    transform: rotate(90deg);
+}
+
 .matrixRow {
     display: grid;
     grid-template-columns: 80px repeat(6, 120px);

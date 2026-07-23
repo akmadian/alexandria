@@ -79,16 +79,11 @@
     --alx-size-icon: var(--alx-size-icon-lg);
 }
 
-/* The popover — the §6 transient. RAC exposes --trigger-width so the menu matches the
- * trigger's width as a floor; RAC sets max-height inline for viewport fit. */
+/* The §6 transient shell lives in components/popover; Select adds only the trigger-width
+ * floor so the list matches the trigger's width (RAC exposes --trigger-width; it sets
+ * max-height inline for viewport fit). */
 .popover {
-    box-sizing: border-box;
     min-width: var(--trigger-width);
-    padding: var(--alx-space-1);
-    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
-    border-radius: var(--alx-radius-transient);
-    background: var(--alx-surface-transient);
-    box-shadow: var(--alx-shadow-occlusion);
 }
 
 .listbox {

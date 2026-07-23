@@ -89,3 +89,10 @@ seven hues failing ring contrast on paper/linen and only 5 of 12 accent-eligible
 today). The icon registry is SEEDED (2026-07-17, `disclose` — registries.json
 `icons` + `components/icon`) and grows a concept per need; the full iconography
 round still owns stroke empirics and decorated display icons.
+
+**Signals-color hue round (§5 — pending, Ari's call).** The signal hues (error, attention,
+and a new **danger/destructive** tone) need a round of their own to nail their structure. One
+consumer is already waiting: **Menu ships the `data-destructive` seam** (D36) — a destructive
+item carries the hook but renders hue-free ink today. When this round seats the danger tone,
+wire `.item[data-destructive]` in `components/menu/menu.module.css` to it (a pure CSS change —
+the structural seam is built). Trigger: this round. Don't lose it.

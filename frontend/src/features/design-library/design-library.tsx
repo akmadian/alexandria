@@ -13,6 +13,15 @@ import { Checkbox } from "@/components/checkbox/checkbox";
 import { ControlGroup } from "@/components/control-group/control-group";
 import { ControlRow } from "@/components/control-row/control-row";
 import { Icon } from "@/components/icon/icon";
+import {
+    Menu,
+    MenuItem,
+    MenuSection,
+    MenuSectionHeader,
+    MenuSeparator,
+    MenuTrigger,
+    SubmenuTrigger,
+} from "@/components/menu/menu";
 import { PanelSection } from "@/components/panel-section/panel-section";
 import { Rating } from "@/components/rating/rating";
 import { Row } from "@/components/row/row";
@@ -691,7 +700,97 @@ function SelectSpecimens({ id }: SectionProps) {
                     </ControlRow>
                 </ControlGroup>
             </div>
-            <p className={styles.note}>First overlay primitive — click to open the popover (surface.transient + occlusion shadow + transient radius, §6).</p>
+            <p className={styles.note}>The overlay rides the shared §6 transient shell (components/popover) — click to open (surface.transient + occlusion shadow + transient radius).</p>
+        </section>
+    );
+}
+
+function MenuSpecimens({ id }: SectionProps) {
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Menu — the §6 transient&apos;s second tenant (role=menu on the shared Popover)</h2>
+            <p className={styles.subHead}>click a trigger to open — action, single-select, mixed-icon alignment, and multi-select</p>
+            <div className={styles.menuTriggers}>
+                <MenuTrigger>
+                    <Button rung="ghost">
+                        Actions
+                        <Icon concept="disclose" className={styles.triggerChevron} />
+                    </Button>
+                    <Menu aria-label="Asset actions">
+                        <SubmenuTrigger>
+                            <MenuItem id="rate" icon="rating">Rate</MenuItem>
+                            <Menu aria-label="Rate">
+                                <MenuItem id="r0">None</MenuItem>
+                                <MenuItem id="r1">1 star</MenuItem>
+                                <MenuItem id="r2">2 stars</MenuItem>
+                                <MenuItem id="r3">3 stars</MenuItem>
+                                <MenuItem id="r4">4 stars</MenuItem>
+                                <MenuItem id="r5">5 stars</MenuItem>
+                            </Menu>
+                        </SubmenuTrigger>
+                        <MenuItem id="pick" icon="flag" shortcut="P">Flag as pick</MenuItem>
+                        <MenuItem id="reject" icon="reject" shortcut="X">Reject</MenuItem>
+                        <MenuSeparator />
+                        <MenuSection>
+                            <MenuSectionHeader>More</MenuSectionHeader>
+                            <MenuItem id="meta" icon="settings">Metadata settings…</MenuItem>
+                            <MenuItem id="hide" description="Stays in the catalog; hidden from this view.">
+                                Hide from grid
+                            </MenuItem>
+                            <MenuItem id="edit" isDisabled>Open in external editor</MenuItem>
+                        </MenuSection>
+                        <MenuSeparator />
+                        <MenuItem id="remove" isDestructive shortcut="⌘⌫">Remove from catalog…</MenuItem>
+                    </Menu>
+                </MenuTrigger>
+
+                <MenuTrigger>
+                    <Button rung="ghost">
+                        View
+                        <Icon concept="disclose" className={styles.triggerChevron} />
+                    </Button>
+                    <Menu aria-label="View mode" selectionMode="single" defaultSelectedKeys={["loupe"]}>
+                        <MenuItem id="grid">Grid</MenuItem>
+                        <MenuItem id="loupe">Loupe</MenuItem>
+                        <MenuItem id="compare">Compare</MenuItem>
+                        <MenuItem id="cull">Cull</MenuItem>
+                    </Menu>
+                </MenuTrigger>
+
+                <MenuTrigger>
+                    <Button rung="ghost">
+                        Mixed icons
+                        <Icon concept="disclose" className={styles.triggerChevron} />
+                    </Button>
+                    <Menu aria-label="Mixed icons">
+                        <MenuItem id="space" icon="settings">Space settings</MenuItem>
+                        <MenuItem id="fav" icon="flag">Add to favorites</MenuItem>
+                        <MenuItem id="rename">Rename</MenuItem>
+                        <MenuItem id="dupe">Duplicate</MenuItem>
+                    </Menu>
+                </MenuTrigger>
+
+                <MenuTrigger>
+                    <Button rung="ghost">
+                        Columns
+                        <Icon concept="disclose" className={styles.triggerChevron} />
+                    </Button>
+                    <Menu
+                        aria-label="Columns"
+                        selectionMode="multiple"
+                        defaultSelectedKeys={["name", "rating"]}
+                    >
+                        <MenuItem id="name">File name</MenuItem>
+                        <MenuItem id="rating">Rating</MenuItem>
+                        <MenuItem id="date">Capture date</MenuItem>
+                        <MenuItem id="camera">Camera</MenuItem>
+                        <MenuItem id="lens">Lens</MenuItem>
+                    </Menu>
+                </MenuTrigger>
+            </div>
+            <p className={styles.note}>
+                One roving list on the shared shell. Automatic markers (submenu chevron / selection check), sugar (icon / shortcut), and a two-line description — never a prop per accessory-combination (§22). Destructive rows carry the data-destructive seam (ink today; the danger tone plugs in at the signals-color hue round). Alignment is menu-scoped: any icon reserves the gutter for every row (see &ldquo;Mixed icons&rdquo; vs &ldquo;View&rdquo;).
+            </p>
         </section>
     );
 }
@@ -946,6 +1045,7 @@ const SECTIONS: readonly { id: string; label: string; render: (id: string) => Re
     { id: "segmented", label: "SegmentedControl", render: (id) => <SegmentedControlSpecimens id={id} /> },
     { id: "textfield", label: "TextField", render: (id) => <TextFieldMatrix id={id} /> },
     { id: "select", label: "Select", render: (id) => <SelectSpecimens id={id} /> },
+    { id: "menu", label: "Menu", render: (id) => <MenuSpecimens id={id} /> },
     { id: "checkbox", label: "Checkbox", render: (id) => <CheckboxMatrix id={id} /> },
     { id: "switch", label: "Switch", render: (id) => <SwitchMatrix id={id} /> },
     { id: "rating", label: "Rating", render: (id) => <RatingMatrix id={id} /> },

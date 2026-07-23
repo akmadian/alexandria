@@ -1,0 +1,142 @@
+/* Menu — the §6 transient's second tenant. The item substrate is Select's `.item` verbatim
+ * (one collection material): value ramp, hit-target height, toward-ink hover (§7),
+ * radius-control. The list, sections, separators, and the three-tier accessory row build on it.
+ * The shell (surface/shadow/radius) lives in components/popover; this file owns only contents. */
+
+.list {
+    display: flex;
+    flex-direction: column;
+    /* A readable floor; raw px is lawful (width is ungated) — eye-tunable in the matrix. */
+    min-width: 180px;
+    max-height: inherit;
+    overflow: auto;
+    outline: none;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Group label — muted, sentence case (§9; not the references' uppercase micro-labels).
+ * Inset on the row grammar's --alx-size-row-inset so the header aligns to the item edge. */
+.sectionHeader {
+    composes: alx-type-label-sm from global;
+    padding: var(--alx-space-1) var(--alx-size-row-inset);
+    color: var(--alx-ink-3);
+}
+
+.separator {
+    height: var(--alx-stroke-hairline);
+    margin: var(--alx-space-1) 0;
+    border: none;
+    background: var(--alx-ink-hairline);
+}
+
+/* A menu item IS the `list` rowIntent (registries.json): height = --alx-size-row-list (24, the
+ * hit-target floor so it stays tappable), horizontal inset = --alx-size-row-inset (the row
+ * grammar's 12px, not a raw space quantum). Content ink is ink.1 — the label and leading icon
+ * both inherit it (§14: an icon paired with a label is one ink unit); trailing metadata is muted. */
+.item {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    min-height: var(--alx-size-row-list);
+    padding: 0 var(--alx-size-row-inset);
+    border-radius: var(--alx-radius-control);
+    color: var(--alx-ink-1);
+    cursor: default;
+    outline: none;
+}
+
+/* Keyboard focus and pointer hover share the toward-ink register move (§7). */
+.item[data-hovered],
+.item[data-focused] {
+    background: var(--alx-surface-hover);
+}
+
+/* §4 disabled = chroma-drained + one ink step down. Label + leading inherit the item color;
+ * the parts that set their own muted ink are stepped down explicitly. */
+.item[data-disabled],
+.item[data-disabled] .description,
+.item[data-disabled] .shortcut,
+.item[data-disabled] .check,
+.item[data-disabled] .chevron {
+    color: var(--alx-ink-4);
+}
+
+/* A description makes the row two-line — a sanctioned exception to uniform row height (§8). */
+.item:has(.description) {
+    padding-block: var(--alx-space-1);
+}
+
+/* [data-destructive] is the structural danger seam. Rendered hue-free (identical to any row)
+ * until the signals-color hue round wires it to the danger tone (D36 / design open board). */
+
+/* The leading icon shares the label's ink (§14: one command unit) — it inherits the item color. */
+.leading {
+    flex: none;
+    display: flex;
+    align-items: center;
+    width: var(--alx-size-icon);
+}
+
+/* Menu-scoped alignment (the "All / Some / No icons" spec): if NO item carries a leading icon,
+ * collapse the gutter so labels sit flush; any icon present reserves the gutter for EVERY row
+ * (iconless rows included), so labels align. Pure CSS `:has()`, per-menu, zero JS. */
+.list:not(:has(.leading > svg)) .leading {
+    display: none;
+}
+
+.body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.label {
+    composes: alx-type-value from global;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.description {
+    composes: alx-type-label-sm from global;
+    overflow: hidden;
+    color: var(--alx-ink-3);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trailing {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+}
+
+/* Shortcut — the mono data voice (§9), muted. */
+.shortcut {
+    composes: alx-type-data-sm from global;
+    color: var(--alx-ink-3);
+}
+
+/* The selected mark is INK, not the accent — chrome is hue-free (the check is the signal).
+ * The trailing icons carry ~4px of transparent glyph padding inside their box; a small visual
+ * shift (transform, so layout is untouched) lands the glyph on the same right edge as shortcut
+ * text (optical alignment, eye-tuned). */
+.check {
+    flex: none;
+    color: var(--alx-ink-1);
+    transform: translateX(4px);
+}
+
+/* The submenu chevron rests pointing right (the `disclose` concept's natural orientation). */
+.chevron {
+    flex: none;
+    color: var(--alx-ink-3);
+    transform: translateX(4px);
+}

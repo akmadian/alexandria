@@ -1,9 +1,9 @@
 // Select — the dropdown/select trigger (frontend/CLAUDE.md §6: RAC owns overlay behavior).
-// The FIRST overlay primitive: the trigger rides the D35 control-container material (so a
-// dropdown reads as the same recessed chip as a field), and the popover establishes the §6
-// TRANSIENT grammar — surface.transient + the occlusion shadow + the transient radius rung,
-// the only place docked-chrome's no-shadow rule lifts. Single-select; the trigger shows no
-// visible label (a field / ControlRow names it), matching the reference inspector dropdowns.
+// The trigger rides the D35 control-container material (so a dropdown reads as the same
+// recessed chip as a field); the overlay sits on the shared §6 transient shell
+// (components/popover), adding only a trigger-width floor so the list matches the field.
+// Single-select; the trigger shows no visible label (a field / ControlRow names it),
+// matching the reference inspector dropdowns.
 
 import type { ReactNode } from "react";
 import {
@@ -11,12 +11,12 @@ import {
     ListBox as AriaListBox,
     ListBoxItem as AriaListBoxItem,
     type ListBoxItemProps as AriaListBoxItemProps,
-    Popover as AriaPopover,
     Select as AriaSelect,
     type SelectProps as AriaSelectProps,
     SelectValue as AriaSelectValue,
 } from "react-aria-components";
 import { Icon } from "@/components/icon/icon";
+import { Popover } from "@/components/popover/popover";
 import { cx } from "@/lib/cx";
 import styles from "./select.module.css";
 
@@ -57,11 +57,11 @@ export function Select<T extends object>({
                 <AriaSelectValue className={styles.value} />
                 <Icon concept="disclose" className={styles.chevron} />
             </AriaButton>
-            <AriaPopover className={styles.popover} offset={4}>
+            <Popover className={styles.popover}>
                 <AriaListBox className={styles.listbox} items={items}>
                     {children}
                 </AriaListBox>
-            </AriaPopover>
+            </Popover>
         </AriaSelect>
     );
 }
