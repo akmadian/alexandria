@@ -21,7 +21,7 @@ const preview: Preview = {
             storySort: {
                 order: [
                     "Design System",
-                    ["Colors", "Typography", "Spacing", "Control Sizes", "Radius", "Elevation", "Motion", "Reference"],
+                    ["Colors", "Tonal Ladders", "Typography", "Spacing", "Control Sizes", "Radius", "Elevation", "Motion", "Reference"],
                     "Primitives",
                     ["Button", "ToggleButton", "Checkbox", "Switch", "SegmentedControl", "TextField", "Rating", "Badge", "Icon", "LabelSwatch", "Row", "ControlRow", "ControlGroup", "PanelSection", "NoticeRegion"],
                 ],
