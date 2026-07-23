@@ -23,7 +23,7 @@ const preview: Preview = {
                     "Design System",
                     ["Colors", "Tonal Ladders", "Typography", "Spacing", "Control Sizes", "Radius", "Elevation", "Motion", "Reference"],
                     "Primitives",
-                    ["Button", "ToggleButton", "Checkbox", "Switch", "SegmentedControl", "TextField", "Rating", "Badge", "Icon", "LabelSwatch", "Row", "ControlRow", "ControlGroup", "PanelSection", "NoticeRegion"],
+                    ["Button", "ToggleButton", "Checkbox", "Switch", "SegmentedControl", "TextField", "Rating", "Badge", "Icon", "LabelSwatch", "Row", "ControlRow", "ControlGroup", "PanelSection", "NoticeRegion", "Menu"],
                 ],
             },
         },

@@ -20,6 +20,13 @@
             "runtimeExecutable": "wails",
             "runtimeArgs": ["dev"],
             "port": 34115
+        },
+        {
+            "name": "storybook",
+            "cwd": "frontend",
+            "runtimeExecutable": "bun",
+            "runtimeArgs": ["run", "storybook", "--", "--no-open", "--ci"],
+            "port": 6006
         }
     ]
 }
