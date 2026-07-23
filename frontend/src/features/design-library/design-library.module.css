@@ -161,6 +161,14 @@
     padding: var(--alx-space-2);
 }
 
+/* Tree specimens: the docked rails laid side by side (each on a surface.panel .panelSpecimen). */
+.treeSpecimens {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--alx-space-4);
+}
+
 /* Menu specimens are click-to-open triggers laid out in a row. */
 .menuTriggers {
     display: flex;

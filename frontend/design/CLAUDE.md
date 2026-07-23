@@ -91,8 +91,17 @@ today). The icon registry is SEEDED (2026-07-17, `disclose` — registries.json
 round still owns stroke empirics and decorated display icons.
 
 **Signals-color hue round (§5 — pending, Ari's call).** The signal hues (error, attention,
-and a new **danger/destructive** tone) need a round of their own to nail their structure. One
-consumer is already waiting: **Menu ships the `data-destructive` seam** (D36) — a destructive
-item carries the hook but renders hue-free ink today. When this round seats the danger tone,
-wire `.item[data-destructive]` in `components/menu/menu.module.css` to it (a pure CSS change —
-the structural seam is built). Trigger: this round. Don't lose it.
+and a new **danger/destructive** tone) need a round of their own to nail their structure. **Two**
+consumers now wait: **Menu ships the `data-destructive` seam** (D36) — a destructive item carries
+the hook but renders hue-free ink today; and **Tree ships a diff/state hook** (D37) for the
+db-browser green "+" state. When this round seats the tones, wire `.item[data-destructive]` in
+`components/menu/menu.module.css` (a pure CSS change — the structural seam is built). Trigger: this
+round. Don't lose it.
+
+**Tree eye-gate pins (D37 v3, 2026-07-22 — render-before-ratify).** The Tree landed with real elbow
+connectors + filled folder-state icons; these first-pass values want a real-Geist eye across all four
+themes: (1) **connector tone** (`ink-hairline` today — strengthen if faint) + the **elbow corner
+radius** (`radius-control` today); (2) the **indent step** (icon + `space-2`); (3) **icon size**
+(`icon-lg` 18, filled) — the §14 filled tree-icon exception; (4) the **pill inset** (`space-1` side
+margin, `radius-control`). Instrument: Storybook `Primitives/Tree` (Ari's surface) + `#/design-library`
+→ Tree. Separate deferred item: the xs **checkbox radius** rounds off (its own focused round; chip filed).

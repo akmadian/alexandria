@@ -304,6 +304,11 @@ Two families, two jobs, never mixed:
   **Fill = on** (flag picked, star rated); state never by color alone. Every icon is
   a registered concept beside the vocabulary: same glyph = same meaning, one glyph
   per concept.
+  **Clarification (2026-07-22, D37 tree round):** on the §12 browser rail, tree
+  kind-icons are plain **stroke** icons like the rest (no fill) — a filled variant was
+  tried and rejected (filling stroke glyphs reads muddy). Selection is carried by icon
+  **stroke-weight + ink** (§9): the active scope node steps to a heavier stroke + full
+  ink, others sit lighter + faded. Expand state is shown by the disclosure chevron.
   **Icon size is a per-tier ramp** (D33 proportional round): the old one-size rule is
   superseded — icons scale with their control tier so everything fits the tier height.
   Ramp `12 / 14 / 16 / 18` for control-xs/sm/md/lg (**PIN** — first pass, eye-gate on
@@ -651,6 +656,13 @@ on re-inventing mechanics users already know.
   a tier scales text (a `control-text` type ramp), icon (a per-tier icon ramp — amends §14),
   indicator, and pad — not just height. Checkbox / Switch / Rating scale their whole indicator with
   the tier. All text/icon px are first-pass PIN (eye-gate on real Geist pending).
+- Ratified 2026-07-22 (the Tree round; D37): the §12 browser rail is **docked chrome** (flat, refuses
+  the §6 shell) with **real elbow connectors** (per-row, data-fed ├/└), **filled folder-state
+  kind-icons** (the §14 filled exception — the folder icon is also the expand toggle, swapping
+  open/closed), a **rounded floating selection pill** (control radius), tonal ink hierarchy (§9;
+  active scope at full ink, others faded), and **sans** scent counts (a deliberate §9 exception — the
+  reference uses sans, not the mono data voice). Connector tone/corner, indent step, icon size, and
+  pill inset are first-pass PIN (§30 eye-gate).
 
 ---
 

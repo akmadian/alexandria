@@ -68,7 +68,11 @@
       "mixed": "minus",
       "rating": "star",
       "flag": "flag",
-      "reject": "flag-off"
+      "reject": "flag-off",
+      "folder": "folder",
+      "collection": "layers",
+      "tag": "tag",
+      "source": "hard-drive"
     }
   },
 

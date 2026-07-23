@@ -1,0 +1,194 @@
+/* Tree — the §12 browser rail, DOCKED chrome (flat on surface.panel, no §6 shell). Real elbow
+ * connectors (per-row, data-fed ├/└), a small expand chevron + filled-on-open folder icons, a rounded
+ * floating selection pill, and badge counts. Hierarchy by weight + ink (§9) AND the connectors. */
+
+.tree {
+    /* Kind icons run larger + fill-on-open for substance. */
+    --alx-size-icon: var(--alx-size-icon-lg);
+    /* The leading affordance column (chevron in single mode; the connectors center on it). 16px. */
+    --tree-chevron: var(--alx-space-4);
+    --tree-lead-half: calc(var(--tree-chevron) / 2);
+    /* Indent per level = the affordance column + a gap; children step in clearly. §30 eye-gate. */
+    --tree-indent: calc(var(--tree-chevron) + var(--alx-space-2));
+    /* The connector vertical sits under the leading affordance's center. */
+    --tree-guide-x: var(--tree-lead-half);
+    /* Guide tone — between the bare hairline (too faint, v3) and ink-4 (too heavy, v4). §30 pin. */
+    --tree-guide: color-mix(in oklab, var(--alx-ink-hairline), var(--alx-ink-4) 40%);
+    display: flex;
+    flex-direction: column;
+    padding: var(--alx-space-1) 0;
+    overflow: auto;
+    outline: none;
+}
+
+/* Multiple mode leads with the checkbox, so the connectors center on IT (Ari) — the leading half shrinks
+ * to the xs box. */
+.item[data-selection-mode="multiple"] {
+    --tree-lead-half: calc(var(--alx-size-icon-xs) / 2);
+}
+
+/* A tree row IS the `list` rowIntent (height 24). The pill floats (side margin + control radius). */
+.item {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-height: var(--alx-size-row-list);
+    margin: 0 var(--alx-space-1);
+    padding: 0 var(--alx-space-2);
+    border-radius: var(--alx-radius-control);
+    cursor: default;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.item[data-hovered] {
+    background: var(--alx-surface-hover);
+}
+
+.item[data-selected] {
+    background: var(--alx-surface-pill);
+}
+
+.item[data-focus-visible] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: calc(-1 * var(--alx-focus-ring-width));
+}
+
+/* ── Connector columns ─────────────────────────────────────────────────────────
+ * One cell per ancestor level (width = indent). Vertical at --tree-guide-x (leading-affordance center);
+ * the elbow foot extends past the cell by half the affordance so it meets the child's chevron/checkbox
+ * center. "line"/"tee" are full-height (they continue below); "end" is the rounded └ stopping at center. */
+.guide {
+    flex: none;
+    align-self: stretch;
+    width: var(--tree-indent);
+    position: relative;
+}
+
+.line::before,
+.tee::before {
+    content: "";
+    position: absolute;
+    left: var(--tree-guide-x);
+    top: 0;
+    bottom: 0;
+    border-left: var(--alx-stroke-hairline) solid var(--tree-guide);
+}
+
+/* The elbow foot stops at the leading control's edge (right: 0 = cell edge), never extending into
+ * it — piercing the chevron/checkbox read as "stabbing" (Ari). */
+.tee::after {
+    content: "";
+    position: absolute;
+    left: var(--tree-guide-x);
+    right: 0;
+    top: 50%;
+    border-top: var(--alx-stroke-hairline) solid var(--tree-guide);
+}
+
+.end::before {
+    content: "";
+    position: absolute;
+    left: var(--tree-guide-x);
+    right: 0;
+    top: 0;
+    height: 50%;
+    border-left: var(--alx-stroke-hairline) solid var(--tree-guide);
+    border-bottom: var(--alx-stroke-hairline) solid var(--tree-guide);
+    border-bottom-left-radius: var(--alx-radius-control);
+}
+
+/* ── Chevron (expand affordance) ───────────────────────────────────────────────
+ * Small + muted; rotates on open (PanelSection's §26 readout). RAC's slot toggles expand; the row/label
+ * click sets scope. Leaves reserve the same gutter so icons line up. */
+.chevron,
+.chevronSpacer {
+    flex: none;
+    width: var(--tree-chevron);
+    height: var(--tree-chevron);
+}
+
+.chevron {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tree-chevron);
+    height: var(--tree-chevron);
+    color: var(--alx-ink-4);
+    cursor: pointer;
+    --alx-size-icon: var(--alx-size-icon-sm);
+}
+
+.chevronGlyph {
+    transition: transform var(--alx-duration-fast) var(--alx-easing-out);
+}
+
+.item[data-expanded] .chevronGlyph {
+    transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chevronGlyph {
+        transition: none;
+    }
+}
+
+/* ── Kind icon ─────────────────────────────────────────────────────────────────
+ * One outline glyph per kind — no fill. Selection is the only state that matters, and it's carried by
+ * stroke WEIGHT + INK (§9): unselected sits lighter + faded, the active scope node steps to a heavier
+ * stroke + full ink. Nothing "filled" — the confusing part is gone. */
+.icon {
+    flex: none;
+    display: flex;
+    align-items: center;
+    margin-inline-start: var(--alx-space-1);
+    color: var(--alx-ink-3);
+}
+
+.item[data-hovered] .icon {
+    color: var(--alx-ink-2);
+}
+
+.item[data-selected] .icon {
+    --alx-size-icon-stroke: var(--alx-stroke-thick);
+    color: var(--alx-ink-1);
+}
+
+/* The selection checkbox (multiple mode only). */
+.selection {
+    flex: none;
+    margin-inline-end: var(--alx-space-1);
+}
+
+/* Label — `control` role (sans, weight 500, §9). Ink state-driven. */
+.label {
+    composes: alx-type-control from global;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-inline-start: var(--alx-space-2);
+    color: var(--alx-ink-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item[data-hovered] .label,
+.item[data-selected] .label {
+    color: var(--alx-ink-1);
+}
+
+/* Count — a subtle gray Badge (Ari: "try it in a badge"), right-aligned at the inset edge. */
+.count {
+    flex: none;
+    display: flex;
+    align-items: center;
+    margin-inline-start: var(--alx-space-2);
+}
+
+/* §4 disabled = one ink step down across the row's marks. */
+.item[data-disabled] .label,
+.item[data-disabled] .icon,
+.item[data-disabled] .chevron {
+    color: var(--alx-ink-4);
+}

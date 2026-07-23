@@ -1289,3 +1289,96 @@ hover; `outline` was rejected because §3 ranks fill above enclosure. Trailing a
 one edge, with a small
 optical inset-margin so the chevron/check glyph lands on the shortcut-text edge; the submenu popover
 offset was corrected from the RAC-starter's overlapping negative value to a clean adjacent placement.
+
+## D37 — Tree: the §12 browser rail, docked chrome on the list rowIntent (2026-07-22)
+
+**Decision.** The **Tree** primitive lands (`components/tree`) — the §12 left-rail browser, "one
+reusable hierarchical component across Sources / Collections / Tags; selecting a node sets the scope."
+Built on RAC's stable `Tree` family (1.19); we own only look. No constitution change — §12 already
+specifies it.
+
+**Docked chrome, NOT a §6 transient — the core adaptation.** Select and Menu *took* the popover shell
+(`components/popover`: surface.transient + occlusion shadow + transient radius). The tree does the
+opposite: it is **flat docked chrome** — `surface.panel`, no border / shadow / radius (the layering
+doctrine: shadow rides only transient overlays). The RAC starter's overlay box is stripped entirely.
+
+**The row IS the `list` rowIntent** (`registries.json`: "row-list 24 — interactive dense — the tree"),
+so every metric is sourced, not chosen — the Menu discipline: height `size.row-list`, inset
+`size.row-inset`, label `type.value` at `ink.1`, count `type.data-sm` at `ink.3` (tabular, §13 scent,
+via the new `formatCount` — exact ≤4 digits, "20.3k" beyond), the leading concept icon inheriting the
+label's ink (§14, one unit). The disclosure chevron is the `disclose` concept (ink.3), reserving its
+gutter on every row so leaf labels align under branch labels, and rotating on `[data-expanded]` —
+PanelSection's §26 state readout verbatim. Indent guides are vertical `ink.hairline` lines, one per
+ancestor level (§3 hairline rung), painted by the indent zone's repeating gradient.
+
+**TreeNode — the same three-tier accessory model as MenuItem:** AUTOMATIC (chevron on
+`hasChildItems`, the selection checkbox) · SUGAR (`icon` / `count`) · COMPOSITION (nested TreeNodes,
+static or via `<Collection>` for a dynamic backend hierarchy). Domain-blind: a `features/browser` maps
+the seam's source/collection/tag DTOs → nodes later; the primitive is mock-fed and storybooked now.
+
+**Selection is the scope (§15), single by default, multiple-capable.** `selectionMode="single"` sets
+the one active scope node — the on-panel `surface.pill` (D32) is the indicator, no checkbox.
+`"multiple"` renders `<Checkbox slot="selection" size="xs">` for a union scope (independent per node —
+no parent/child cascade in v1). The tree scope is a **separate selection from the asset selection**
+(§15). The unfocused-pane register drop (§15) is a `[data-soft]` structural seam the rail feature drives
+later — rendered identically today, no value guessed (the same discipline as Menu's destructive seam).
+
+**New icon concepts** (§14, grow-a-concept-per-need): `folder` / `collection` / `tag` / `source`
+(Lucide `Folder` / `Library` / `Tag` / `HardDrive`) — added to `registries.json icons` +
+`components/icon`. Glyph choices are first-pass, eye-gate pending in the iconography round.
+
+**Amends** nothing (builds on §12/§15/§6). **Two values are §30 pins** (render-before-ratify, on the
+design open board): the **indent unit per level** (first pass `space-4`/16 — a child aligns under the
+parent's icon, and a guide drawn at indent/2 lands on the ancestor's chevron center) and the
+**guide-line treatment** (straight verticals, VS-Code style); plus confirming the on-panel `surface.pill`
+reads on a real dense tree (D32 was ratified on controls).
+
+**Deferred** (ponytail — a consumer triggers each): parent/child cascade + the `mixed` parent state ·
+diff/state **hue** (the db-browser green "+" — folds into the same signals-color round as Menu's
+destructive seam) · virtualization (RAC adds it when a giant tag tree demands it) · drag-to-reorder
+(`useDragAndDrop`) · async paging (`TreeLoadMoreItem`) · a density/size prop
+(the tree is bound to the `list` intent by §12 — one-line swap if a consumer ever needs a roomier tree).
+
+**Amendment (2026-07-22, v2 then v3 — Ari's eye gated each).** The primitive iterated hard against the
+reference (the Knowledge Base rail). **v2** fixed the *tone*: hierarchy carried by **weight + ink** (§9)
+— the active scope row anchors at full `ink.1` (label + icon), everything else one step faded (the
+material-round steep-ink read), label bumped to the `control` weight (500). **v3** fixed the *structure*,
+and it holds the current shape:
+
+- **Items-driven.** The API is now `nodes: TreeNodeData[]` (`{id,label,icon?,expandedIcon?,count?,
+  children?}`; domain-blind), because the connector model must be computed from the sibling/last-child
+  structure — data CSS and RAC's flat list can't see. `computeGuides(nodes)` returns each node's
+  connector array (length = depth − 1; roots `[]`); a column is `line` (ancestor has a following
+  sibling → its vertical passes through) or `blank`, the node's own column `tee` (├) or `end` (└,
+  last child). It's pure and unit-tested — the one real logic seam.
+- **Real elbow connectors**, per-row (the flat-DOM version of the nested-`<li>` `border-left`+elbow
+  technique: iamkate/ishadeed): a hairline vertical under the icon center, a rounded `└` foot on the
+  last child. Indent per level = icon + gap, so the connector columns and the content columns share one
+  step (a child's icon lands under the parent's **label**) — this fixes v2's misaligned lone verticals.
+- **Filled folder-state kind-icons** (the §14 amendment): the folder icon **is** RAC's `slot="chevron"`
+  expand button — click it to toggle (swapping `folder`↔`folder-open`), click the label to set scope.
+  Leaf nodes render a static icon. `Icon` gained a `filled` prop (`fill: currentColor`).
+- **Rounded floating pill** (`radius-control` + side margin) for selection/hover — not a hard-cornered
+  full bleed. **Sans counts** (small `value-sm`, muted, tabular) — a deliberate §9 exception (the
+  reference uses sans, not the mono data voice; recorded so it isn't drift).
+
+The checkbox-at-xs rounds off (radius-control is half the 12px box) — deferred to its own focused round
+(a background-task chip filed). Open §30 eye-gate pins: connector tone + corner radius, indent step, icon
+size (currently `icon-lg` 18, filled), pill inset, count size.
+
+**v4 (2026-07-22, Ari's review of v3):** a small **chevron came back** as the explicit expand affordance
+(icon is no longer the toggle — clearer UX: chevron toggles, row/label scopes); **fill is now
+open-only** (expanded nodes filled, collapsed/leaf outline — the rail isn't "filled all the time"; fill =
+the open on-state, §14 clarified, not an exception); **counts moved into a subtle gray `Badge`**;
+connectors **strengthened** (tone `ink-hairline`→`ink-4`) and **centered on the leading control** (chevron
+single / checkbox multiple); the collection glyph swapped `library`→`layers` (Library read "super thin").
+Also fixed a global `Icon` regression: `fill={undefined}` had dropped Lucide's `fill="none"`, black-filling
+every non-filled glyph (surfaced as a black crux in the tree checkbox).
+
+**v5 (2026-07-22) — fill abandoned entirely.** Filling stroke-glyphs is muddy no matter what (fill + stroke
+double, `stroke:none` loses detail), and "why are *some* icons filled" had no good answer. So the tree uses
+**plain stroke icons, one glyph per kind**, and **selection is carried by icon stroke-weight + ink** (§9,
+Ari's call): active scope = `stroke-thick` (2px) + `ink.1`; others = default stroke + `ink.3`. No fill, no
+open/closed glyph swap (the chevron shows expand). The `Icon` `filled` prop, the `.filled` class, and the
+`folder-open` concept were removed as dead. Connector foot no longer extends into the leading control
+(`right: 0`, was piercing/"stabbing" the chevron/checkbox); connector tone softened to a hairline↔ink-4 blend.

@@ -10,12 +10,38 @@
 // token-gaps list (PanelSection's disclosure chevron forced it). `check` and
 // `mixed` (§25's em-dash state as a glyph) arrived with Checkbox the same day.
 // `settings` (the header gear) joined with the workspace tab strip (task 37).
+// The browser-tree concepts (`folder`/`collection`/`tag`/`source`) arrived with
+// the Tree primitive (D37) — the §12 rail names a node's kind, one glyph each.
 
-import { Check, ChevronRight, Flag, FlagOff, Minus, Settings, Star, type LucideIcon } from "lucide-react";
+import {
+    Check,
+    ChevronRight,
+    Flag,
+    FlagOff,
+    Folder,
+    HardDrive,
+    Layers,
+    Minus,
+    Settings,
+    Star,
+    Tag,
+    type LucideIcon,
+} from "lucide-react";
 import { cx } from "@/lib/cx";
 import styles from "./icon.module.css";
 
-export type IconConcept = "check" | "disclose" | "mixed" | "rating" | "flag" | "reject" | "settings";
+export type IconConcept =
+    | "check"
+    | "disclose"
+    | "mixed"
+    | "rating"
+    | "flag"
+    | "reject"
+    | "settings"
+    | "folder"
+    | "collection"
+    | "tag"
+    | "source";
 
 // C10: a new concept fails to compile until it has exactly one glyph. Judgment
 // concepts (rating/flag/reject) seeded with the §19 cell slots — icons are ink,
@@ -29,6 +55,10 @@ const GLYPHS = {
     flag: Flag,
     reject: FlagOff,
     settings: Settings,
+    folder: Folder,
+    collection: Layers,
+    tag: Tag,
+    source: HardDrive,
 } as const satisfies Record<IconConcept, LucideIcon>;
 
 export function Icon({ concept, className }: { concept: IconConcept; className?: string }) {

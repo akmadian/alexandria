@@ -34,6 +34,7 @@ import { Select, SelectItem } from "@/components/select/select";
 import { Switch } from "@/components/switch/switch";
 import { TextField } from "@/components/text-field/text-field";
 import { ToggleButton } from "@/components/toggle-button/toggle-button";
+import { Tree, type TreeNodeData } from "@/components/tree/tree";
 import { getTheme, setTheme, themes, type Theme } from "@/lib/theme";
 import reference from "@/styles/tokens-reference.json";
 import styles from "./design-library.module.css";
@@ -795,6 +796,101 @@ function MenuSpecimens({ id }: SectionProps) {
     );
 }
 
+const treeFolders: TreeNodeData[] = [
+    {
+        id: "mac",
+        icon: "source",
+        count: 48213,
+        label: "Macintosh HD",
+        children: [
+            {
+                id: "2024",
+                icon: "folder",
+                count: 412,
+                label: "2024",
+                children: [
+                    { id: "iceland", icon: "folder", count: 88, label: "Iceland" },
+                    { id: "japan", icon: "folder", count: 20300, label: "Japan" },
+                    { id: "long", icon: "folder", count: 7, label: "A very long folder name that must end-truncate" },
+                ],
+            },
+            { id: "2023", icon: "folder", count: 1204, label: "2023" },
+        ],
+    },
+];
+
+const treeTags: TreeNodeData[] = [
+    {
+        id: "places",
+        icon: "tag",
+        count: 982,
+        label: "Places",
+        children: [
+            { id: "iceland-tag", icon: "tag", count: 88, label: "Iceland" },
+            {
+                id: "us",
+                icon: "tag",
+                count: 640,
+                label: "United States",
+                children: [
+                    { id: "portland", icon: "tag", count: 210, label: "Portland" },
+                    { id: "seattle", icon: "tag", count: 430, label: "Seattle" },
+                ],
+            },
+        ],
+    },
+    { id: "film", icon: "tag", count: 53, label: "Shot on film" },
+];
+
+const treeCollections: TreeNodeData[] = [
+    {
+        id: "portfolio",
+        icon: "collection",
+        count: 64,
+        label: "Portfolio",
+        children: [
+            { id: "best", icon: "collection", count: 24, label: "Best of 2024" },
+            { id: "print", icon: "collection", count: 40, label: "Print candidates" },
+        ],
+    },
+    { id: "clients", icon: "collection", count: 318, label: "Clients" },
+];
+
+function TreeSpecimens({ id }: SectionProps) {
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Tree — the §12 browser rail (docked chrome; real elbow connectors)</h2>
+            <p className={styles.subHead}>
+                three modes, one component — Folders (single-select scope), Tags (multi-select union), Collections
+            </p>
+            <div className={styles.treeSpecimens}>
+                <div className={styles.panelSpecimen}>
+                    <Tree aria-label="Folders" nodes={treeFolders} defaultExpandedKeys={["mac", "2024"]} defaultSelectedKeys={["iceland"]} />
+                </div>
+                <div className={styles.panelSpecimen}>
+                    <Tree
+                        aria-label="Tags"
+                        nodes={treeTags}
+                        selectionMode="multiple"
+                        defaultExpandedKeys={["places", "us"]}
+                        defaultSelectedKeys={["iceland-tag", "portland"]}
+                    />
+                </div>
+                <div className={styles.panelSpecimen}>
+                    <Tree aria-label="Collections" nodes={treeCollections} defaultExpandedKeys={["portfolio"]} defaultSelectedKeys={["best"]} />
+                </div>
+            </div>
+            <p className={styles.note}>
+                Flat docked chrome (no §6 shell), items-driven so the connectors compute from the sibling/last-child
+                structure (├ / └). Hierarchy by weight + ink (§9): filled folder kind-icons (§14 tree exception) that
+                swap open/closed and ride the tonal ramp (full ink on the active scope, faded elsewhere); the icon is
+                the expand toggle, the label sets scope. Rounded floating pill (control radius); sans muted count. Eye-gate
+                pins: guide tone/corner, indent step, icon size, pill inset. Deferred to the signals-color round: diff/state hue.
+            </p>
+        </section>
+    );
+}
+
 function ControlRowMatrix({ id }: SectionProps) {
     return (
         <section id={id} className={styles.section}>
@@ -1046,6 +1142,7 @@ const SECTIONS: readonly { id: string; label: string; render: (id: string) => Re
     { id: "textfield", label: "TextField", render: (id) => <TextFieldMatrix id={id} /> },
     { id: "select", label: "Select", render: (id) => <SelectSpecimens id={id} /> },
     { id: "menu", label: "Menu", render: (id) => <MenuSpecimens id={id} /> },
+    { id: "tree", label: "Tree", render: (id) => <TreeSpecimens id={id} /> },
     { id: "checkbox", label: "Checkbox", render: (id) => <CheckboxMatrix id={id} /> },
     { id: "switch", label: "Switch", render: (id) => <SwitchMatrix id={id} /> },
     { id: "rating", label: "Rating", render: (id) => <RatingMatrix id={id} /> },

@@ -54,6 +54,14 @@ export function formatNumber(value: number): string {
     return f.format(value);
 }
 
+/** §13 scent count: exact to 4 digits (grouped), abbreviated beyond ("20.3k"). For tree /
+ * browser counts, where the number is a rough magnitude, not an answer. Render in a tabular
+ * data role so the column stays aligned; hover reveals the exact value (the caller's job). */
+export function formatCount(value: number): string {
+    if (value < 10000) return formatNumber(value);
+    return numberFmt("count-compact", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
 function numberFmt(key: string, opts: Intl.NumberFormatOptions): Intl.NumberFormat {
     const k = `${i18n.language}:${key}`;
     let f = cache.get(k) as Intl.NumberFormat | undefined;
