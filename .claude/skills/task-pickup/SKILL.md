@@ -37,14 +37,29 @@ You are picking up a unit of work in Alexandria. The tracking docs are the sourc
    - If you find a conflict between the spec and the guidelines, or a gap in the spec, report it before writing code.
    - If necessary, search online for best practices and idioms, and propose a change to the spec before writing code.
    - Instead of writing code that is "good enough" to get the job done, propose a change to the spec that will result in better code.
-5. **Report and stop.** Before writing any code, state back:
-   - The scope in your own words, including what is explicitly out of scope.
-   - The constants/decisions that bind the work (by C-number / D-number).
-   - Intersections found in step 2 and whether you propose folding them in or leaving them.
-   - What code will be changed/ added/ removed and why.
-   - Any in-round decisions the spec leaves open, with your recommendation.
+5. **Report and stop.** Steps 1–4 were for YOU — that reading is how you get up to speed, and
+   Ari does not need it replayed. The report's job is to (a) surface the decisions only Ari can
+   make and (b) prove you're grounded, compactly. Format, in this order:
 
-   Wait for User's confirmation. Do not start implementing on your own initiative.
+   1. **TL;DR** — 2–3 sentences: what the round is, what it touches, what it explicitly won't.
+   2. **Decisions needed** — the headline section; nothing needing a ruling may hide in prose
+      elsewhere. One numbered block per decision:
+      - **What's being decided**, one plain sentence. No shorthand labels invented
+        mid-conversation ("seed doc Q3") — say the thing itself.
+      - The options, one line each, with the tradeoff that actually matters.
+      - **Recommendation** + one-line why, visually distinct.
+      If there are no open decisions, say so in one line. More than ~5 decisions → present the
+      first batch and offer the rest next, don't dump all at once.
+   3. **Reference digest** — skimmable, not required reading: a scope table (in / out), the
+      binding C/D-numbers as a table with a few words each on why they bind, intersections
+      found with a fold-in/leave verdict each, and anything reality-verification contradicted
+      in the spec. Tables and numbered lists over paragraphs, always.
+
+   **Ruling ledger discipline:** rulings arrive piecemeal — track ratified vs. pending
+   explicitly, restate the ledger whenever asking for more rulings, and never stretch "I agree
+   with all of them" past the items that were actually on the table in that exchange.
+
+   Wait for rulings on every open decision. Do not start implementing on your own initiative.
 
 ## Standing rules (they apply to the implementation that follows)
 

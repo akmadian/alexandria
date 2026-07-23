@@ -2,6 +2,9 @@
 
 **Areas:** backend. **Blocked by:** nothing (the ingest pipeline and the keyword path it reuses
 both exist; deliberately parked — pick up when LrC migration reaches the roadmap front).
+*Sequencing note (2026-07-23, D41): prefer running after 40-backend-volume-folder-schema —
+LrC's AgLibraryRootFolder/Folder maps directly onto Volume/Folder; building the mapping
+against the pre-split `Source` means building it twice.*
 **Scope:** new `internal/lrcimport` (engine) + `cmd/lrcimport` (standalone CLI) + a Wails-bound
 wizard (frontend, later). **References:** D1 (seam), D8 (classification), D12 (pipeline), D15
 (XMP field map), D21, `docs/requirements-distilled.md` (NFR-6 zero-network).

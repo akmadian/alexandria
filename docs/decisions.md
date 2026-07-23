@@ -1383,6 +1383,45 @@ open/closed glyph swap (the chevron shows expand). The `Icon` `filled` prop, the
 `folder-open` concept were removed as dead. Connector foot no longer extends into the leading control
 (`right: 0`, was piercing/"stabbing" the chevron/checkbox); connector tone softened to a hairline↔ink-4 blend.
 
+## D38 — Global navigation moves to a far-left activity rail; the header de-weights (2026-07-22)
+
+**Decision.** Global view-switching leaves the top and becomes a **far-left activity rail** — a new
+§12 zone, the VS Code / Slack / Linear idiom. The rail carries **view destinations only** (Catalog
+now; Review joins via the registry when its epic lands) in a top group, and **Settings** (a
+full-window task view) in a bottom group. Icon-only, single-select, the current view shown selected.
+The rail is a **fixed fixture, NOT a Pane** — not resizable or collapsible; the left browser Pane
+docks to its right, unchanged.
+
+**Why.** The 2026-07-21 import amendment put workspace tabs + a settings gear in a slim top header and
+pushed the FilterBar down into the Catalog panel, leaving the top band doing nothing but global nav —
+a horizontal strip of pure overhead that reads top-heavy (Ari). §12 also wanted the top to be "the
+filter bar — a place," which that amendment couldn't honor while hosting global tabs. Verticalizing
+global nav frees the top to be **contextual-only** and is *more* §12-coherent, not merely a move. It
+scales identically (registry-shaped: add a view = add an icon) and the Review pending-count badge
+rides an activity icon better than a header tab.
+
+**Import + Export are NOT rail items — they pair at the bottom of the left browser Pane.** Convention
+governs: Lightroom Classic (Alexandria's lineage) pairs Import/Export as buttons at the bottom-left of
+the Library (i.e. the bottom of the left source panel); Adobe CC Libraries co-locates them. Keeping
+the learned pairing beats altitude-purity, and it *is* Ari's own altitude principle applied (actions
+on the catalog ≠ global nav — the same reason Folders/Collections/Tags stay in-Pane tabs, not rail
+icons). Import *launches* its full-window task view (C3, unchanged from the import epic); Export acts
+on the current selection. **Built with the rail-assembly round** (the left browser Pane isn't in the
+app shell yet); until then Import stays a **transitional rail entry**, leaving the rail when the pair
+lands. *Revisit trigger:* rail-assembly moves Import/Export to the Pane pair.
+
+**Header → a thin contextual/window band.** Global nav leaves the top entirely; a slim band may remain
+for window-drag + the macOS traffic-lights inset + optional per-view actions. No longer a global-nav
+band.
+
+**Deferred (separate, larger decision):** the "inset card" app-shell look (thin gutter top/bottom/
+right, content in a floating rounded card, per Ari's Conceptzilla inspo) — its own design exploration.
+
+**Supersedes** frontend-import amendment #1 (tabs-in-header) and #2 (gear-in-header): global nav →
+rail; Settings → rail bottom, not a header gear. Amendment #3 (FilterBar is Catalog-space) stands.
+**§12 updated** (adds the far-left rail zone). The rail shell is the third `components/layout/` fixture
+(after Pane, StatusBar). **§30 pin** (render-before-ratify): the rail width (first pass ~48px).
+
 ## D40 — Kbd: the keyboard-shortcut keycap, on the control-size bundle (2026-07-23)
 
 *(D-number note: this round ran in worktree `kbd-primitive` off v3 HEAD `f122377` (Tree/D37). Three
@@ -1438,3 +1477,61 @@ sanctioned optical-centering idiom for single-glyph chips.
 to fill/balance the cap; build the `data-lg` role (eye-gate the line-height) when a roomy-surface consumer
 (command palette, help sheet) appears. The `keycap` face values (border tone, bottom-rule weight) are
 first-pass, eye-gated with the round.
+
+## D41 — Source-management round: the Volume/Folder execution plan + browser-rail rulings (2026-07-23)
+
+The epic design round (Ari + Claude, 2026-07-22/23; epic `backend-source-management`, closed by
+minting tasks 40–45). Executes D24's split direction; rulings, all Ari-ratified:
+
+- **The split principle is identity vs. tracking scope, not writer class.** `volumes` (portability
+  anchor) and `folders` (tracked root) both carry mixed writer classes ([jdg] `host`/`share_name`/
+  `name` live on Volume; [syn] `last_scanned_at` on Folder); enforcement stays per-column via the
+  writer interfaces. The earlier "Volume=observations, Folder=judgments" framing was examined and
+  rejected against the schema annotations.
+- **Wire projections:** `VolumeNode` / `FolderNode` (tracked roots + derived path nodes, one
+  `getFolderTree` forest call) / `CollectionNode` (`kind` = the domain enum per C15;
+  `assetCount *int` — nil "unavailable" ≠ 0 "empty").
+- **Counts per axis, each matching what clicking the node shows:** folders count their subtree
+  (scope defaults recursive; free in the deriver's one pass); collections count direct membership
+  (adjacency; rollup = revisit trigger, recursive CTE when wanted); **smart collections get real
+  badges** — one compiled COUNT each through the one query authority, inside the list read,
+  refreshed by the existing `catalog/changed` invalidation. Field survey: LrC computes lazily with
+  visibly stale counts; this design is fresher for the machinery already committed. Known accepted
+  wart: `now`-anchored queries drift between events (LrC ships the same); upgrade path = slow
+  timer refresh. **No Go-side predicate evaluator, ever** — a second membership evaluator beside
+  the SQL compiler is the C15 parallel-definition category.
+- **Folder-add semantics: disjoint roots, graceful merge — reject nothing.** Adding a subfolder
+  of a tracked root redirects to it; adding a parent absorbs existing roots (confirmed; their
+  sync settings dissolve); exact duplicate selects the existing. Field survey: LrC merges into
+  one tree (roots are view state), digiKam forbids nesting, Plex/Jellyfin overlap self-punishes
+  with duplicates — nobody ships overlapping roots. The one legitimate nesting want (per-subtree
+  sync override) is deferred (DEFERRED §19) and addable *within* disjoint roots later.
+- **Offline volumes stay selectable** — offline is a visual state (dimmed, marked), never a
+  disabled node: the catalog remains fully browsable while a drive is unplugged (metadata,
+  judgments, thumbnails persist; `connectivity` is an observation, not a gate — the local-first
+  promise, and what LrC gets right). `isDisabled` on tree nodes is reserved for genuinely
+  non-interactive entries.
+- **`removeFolder`: cascade-via-soft-delete** behind a count-showing confirm — judgments survive
+  in the rows, files untouched (D24's never-mutate rule), `RESTRICT` stays. Volumes are never
+  removed directly; an empty volume simply leaves the derived rail.
+- **`sync_mode` ships whole** (manual|watched|scheduled — field + toggle); the engine already
+  runs all three (DEFERRED §1: "policy/gating layer, not a rewrite"). Rider recorded: watcher
+  supervision stays §2's deferral.
+- **No asset/file logical-physical table split** — D24's mandated re-evaluation concludes: the
+  real-copies decision killed the driver; writer-class interfaces are the decoupling. The
+  `derived_from` lineage edge waits for the copy verb that would write it.
+- **The review projection belongs to the review epic** (build when the Review tab is the caller);
+  this round only guarantees the source-aware kind rule is expressible (`volume_id` on both rows).
+- **Loose files re-deferred**; trigger = a file-pick import UI.
+- **Rename ripple executed with the split** (pre-release window, last cheap moment): ast token
+  `source`→`volume`, folder-scope payload `sourceId`→`volumeId` (the one column-derivation
+  exception dies), event `sourceStatus`→`volumeStatus`, IOTokens per-source→per-volume (≈
+  per-device — noted at §11). **No migration code**: 0001 edited in place, dev catalogs re-import.
+- **Task structure is two parallel tracks** joined by the bind (mock-first: shapes ratified here,
+  so contract+mock need nothing from the backend track): 40→41 backend ∥ 42→(43 ∥ 44) frontend,
+  45 the join. `pickDirectory` is a shared noun-free verb — first-landing epic mints it.
+
+**Revisit triggers:** collection subtree rollups (if direct counts confuse in use); smart-count
+timer refresh (if time-anchor drift bites); per-subtree sync overrides via an override table
+(never via overlapping roots); count caching (only past the baseline recorded in the deriver
+task's closing commit).

@@ -91,7 +91,9 @@ matches.
   our Asset fuses them; the writer-class interfaces provide the code-level
   decoupling. Copies are REAL files with a `derived_from` lineage edge (D24),
   which removes the main driver for the table split. Re-evaluated inside the
-  volume/folder round.
+  volume/folder round — *and ruled out there (2026-07-23, D41): one asset table
+  stands; the writer-class interfaces are the decoupling; the `derived_from`
+  lineage edge waits for the copy verb.*
 - **`Source` → `Volume` + `Folder`** is decided (D24) and owned by the
   source-management round. Until it lands, don't propagate "source" into new
   surfaces; the ast token `source` keeps its name until that round renames the

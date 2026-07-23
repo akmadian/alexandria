@@ -127,7 +127,8 @@ sync-scope no). Leaning: one "mint assets referencing (volume, path)" core, with
 assumes it walked the *entire* source (unvisited known = missing). Point a source at
 a volume and import 30 loose files, and the next reconcile marks the *rest of the
 volume* missing. So loose files can NOT be modeled as "a source with a volume-wide
-`base_path`" — they need the per-file scope.
+`base_path`" — they need the per-file scope. *(2026-07-23, D41: re-deferred by the
+source-management design round; trigger = a file-pick import UI — none is planned.)*
 
 **Open sub-question — ✅ RESOLVED (D24, 2026-07-10): the formal split.** `Source`
 splits into **`Volume`** (identity/portability anchor: filesystem UUID +
@@ -336,7 +337,9 @@ owns the consuming UI — none exists yet):**
 
 **Trigger:** the review-UX / source-management milestone (the first UI that lists
 pairs for the user) — build at least the projection then, so the kinds are computed
-in one place.
+in one place. *(2026-07-23, D41: ownership ruled — the review epic builds the
+projection + resolution actions; the volume/folder split (task 40) only guarantees
+the source-aware kind rule is expressible: `volume_id` on both rows.)*
 
 ---
 
@@ -560,7 +563,9 @@ would justify it — the cold backlog orders by import recency, per the same D28
 
 **Trigger:** real-hardware evidence that enrichment scans crawl on spinning or external media —
 a user report or a trace file showing producer read-wait dominating on an HDD source. Then build
-detection + depth policy as its own layer; the token seam it feeds already exists.
+detection + depth policy as its own layer; the token seam it feeds already exists. *(2026-07-23,
+D41: task 40's rename moves the token pool from per-source to per-volume — a volume approximates
+a device strictly better than a source did. The detection layer stays deferred as above.)*
 
 ---
 
@@ -754,3 +759,21 @@ only. The narrows, each honest:
 **Trigger:** the browser-rail / collections round — it needs the source tree and collection
 reads anyway; mint the wire projections there and the inspector rows follow. Membership
 *management* from the panel additionally waits for the judgment-writing round's mutation lane.
+
+*(2026-07-23, D41: partially resolved by the source-management round. The collection wire
+projection is ratified (`CollectionNode`, task 42) and the source-name row resolves when task
+45 retires `listSources` for `getFolderTree`. Still open here: the per-asset membership read
+("which collections hold asset X") and membership management.)*
+
+## 19. Per-subtree sync overrides — nested tracking wants, without overlapping roots
+
+**Surfaced:** the source-management design round (2026-07-23, D41's folder-add ruling).
+
+Tracked folder roots are **disjoint by invariant** (adding inside/above an existing root
+redirects or absorbs — never two overlapping roots). The one legitimate thing nesting would
+have bought: different sync behavior for a subtree of a tracked root (watch
+`/Photos/2024`, leave the rest of `/Photos` manual). Deliberately not built — it's addable
+*within* disjoint roots later as a per-subtree override table consulted by the sync gating
+layer, with no change to root identity, counts, or the watcher subscription set.
+
+**Trigger:** a user wants different sync behavior on a subtree of an already-tracked root.
