@@ -12,7 +12,8 @@ import { Button, type ButtonRung, type ButtonSize } from "@/components/button/bu
 import { Checkbox } from "@/components/checkbox/checkbox";
 import { ControlGroup } from "@/components/control-group/control-group";
 import { ControlRow } from "@/components/control-row/control-row";
-import { Icon } from "@/components/icon/icon";
+import { Icon, type IconConcept } from "@/components/icon/icon";
+import { Kbd, type KbdSize, type KbdStyle, KbdGroup } from "@/components/kbd/kbd";
 import {
     Menu,
     MenuItem,
@@ -666,6 +667,89 @@ function BadgeMatrix({ id }: SectionProps) {
     );
 }
 
+const KBD_STYLES = ["flat", "keycap"] as const satisfies readonly KbdStyle[];
+const KBD_MODIFIERS = ["command", "shift", "option", "control", "return", "delete"] as const satisfies readonly IconConcept[];
+const KBD_LETTERS = ["P", "K", "Esc"] as const;
+const KBD_SIZES = [
+    { key: "xs", label: "xs · 16 (dense)" },
+    { key: "sm", label: "sm · 20 (menu)" },
+    { key: "md", label: "md · 24" },
+] as const satisfies readonly { key: KbdSize; label: string }[];
+
+function KbdMatrix({ id }: SectionProps) {
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Kbd — the keyboard-shortcut keycap: style × keys, and composed combos</h2>
+            <p className={styles.subHead}>single caps — modifier icons + text keys · flat (tinted) vs keycap (bordered face + bottom rule)</p>
+            {KBD_STYLES.map((style) => (
+                <div key={style} className={styles.matrix}>
+                    <span className={styles.matrixLabel}>{style}</span>
+                    <div className={styles.badgeRow}>
+                        {KBD_MODIFIERS.map((concept) => (
+                            <Kbd key={concept} style={style} icon={concept} />
+                        ))}
+                        {KBD_LETTERS.map((key) => (
+                            <Kbd key={key} style={style}>
+                                {key}
+                            </Kbd>
+                        ))}
+                    </div>
+                </div>
+            ))}
+            <p className={styles.subHead}>composed combos (KbdGroup — one cap per key, the shadcn model)</p>
+            {KBD_STYLES.map((style) => (
+                <div key={style} className={styles.matrix}>
+                    <span className={styles.matrixLabel}>{style}</span>
+                    <div className={styles.badgeRow}>
+                        <KbdGroup>
+                            <Kbd style={style} icon="command" />
+                            <Kbd style={style}>K</Kbd>
+                        </KbdGroup>
+                        <KbdGroup>
+                            <Kbd style={style} icon="command" />
+                            <Kbd style={style} icon="shift" />
+                            <Kbd style={style}>P</Kbd>
+                        </KbdGroup>
+                        <KbdGroup>
+                            <Kbd style={style} icon="command" />
+                            <Kbd style={style} icon="delete" />
+                        </KbdGroup>
+                    </div>
+                </div>
+            ))}
+            <p className={styles.subHead}>size ladder — caps ride the D33 control-size bundle (xs 16 / sm 20 / md 24); text + icon derive from the tier (text-box-trim centers the glyph + frees xs). Stops at md: mono ceilings at 12px</p>
+            {KBD_SIZES.map(({ key, label }) => (
+                <div key={key} className={styles.matrix}>
+                    <span className={styles.matrixLabel}>{label}</span>
+                    <div className={styles.badgeRow}>
+                        <Kbd size={key} icon="command" />
+                        <Kbd size={key}>K</Kbd>
+                        <KbdGroup>
+                            <Kbd size={key} icon="command" />
+                            <Kbd size={key} icon="shift" />
+                            <Kbd size={key}>P</Kbd>
+                        </KbdGroup>
+                        <Kbd size={key} style="keycap" icon="command" />
+                        <KbdGroup>
+                            <Kbd size={key} style="keycap" icon="command" />
+                            <Kbd size={key} style="keycap">
+                                K
+                            </Kbd>
+                        </KbdGroup>
+                    </div>
+                </div>
+            ))}
+            <p className={styles.note}>
+                Neutral machinery — hue-free. flat honors §6 flat chrome (fill XOR border, D32); keycap leans on the §6
+                keyboard-hint genre carve-out, lifting via a doubled bottom border (never a shadow). Modifier keys
+                (⌘⇧⌥⌃↵⌫) render as vector icons — the Mac symbols mush as 11px font text, so they ride the icon
+                registry instead. The Menu consumes flat: a bare-string shortcut renders one text cap, a KbdGroup
+                renders composed caps.
+            </p>
+        </section>
+    );
+}
+
 function SelectSpecimens({ id }: SectionProps) {
     return (
         <section id={id} className={styles.section}>
@@ -741,7 +825,18 @@ function MenuSpecimens({ id }: SectionProps) {
                             <MenuItem id="edit" isDisabled>Open in external editor</MenuItem>
                         </MenuSection>
                         <MenuSeparator />
-                        <MenuItem id="remove" isDestructive shortcut="⌘⌫">Remove from catalog…</MenuItem>
+                        <MenuItem
+                            id="remove"
+                            isDestructive
+                            shortcut={
+                                <KbdGroup>
+                                    <Kbd icon="command" />
+                                    <Kbd icon="delete" />
+                                </KbdGroup>
+                            }
+                        >
+                            Remove from catalog…
+                        </MenuItem>
                     </Menu>
                 </MenuTrigger>
 
@@ -1147,6 +1242,7 @@ const SECTIONS: readonly { id: string; label: string; render: (id: string) => Re
     { id: "switch", label: "Switch", render: (id) => <SwitchMatrix id={id} /> },
     { id: "rating", label: "Rating", render: (id) => <RatingMatrix id={id} /> },
     { id: "badge", label: "Badge", render: (id) => <BadgeMatrix id={id} /> },
+    { id: "kbd", label: "Kbd", render: (id) => <KbdMatrix id={id} /> },
     { id: "controlrow", label: "ControlRow", render: (id) => <ControlRowMatrix id={id} /> },
     { id: "controlgroup", label: "ControlGroup", render: (id) => <ControlGroupSpecimens id={id} /> },
     { id: "row", label: "Row + PanelSection", render: (id) => <RowSpecimens id={id} /> },

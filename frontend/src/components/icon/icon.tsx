@@ -12,16 +12,26 @@
 // `settings` (the header gear) joined with the workspace tab strip (task 37).
 // The browser-tree concepts (`folder`/`collection`/`tag`/`source`) arrived with
 // the Tree primitive (D37) — the §12 rail names a node's kind, one glyph each.
+// The keyboard-modifier concepts (`command`/`option`/`control`/`shift`/`return`/
+// `delete`) arrived with the Kbd keycap: the Mac symbols aren't in Geist Mono's
+// subset (they mush to a blob at 11px via OS fallback), so a shortcut renders them
+// as vector icons — crisp at any cap size.
 
 import {
+    ArrowBigUp,
     Check,
     ChevronRight,
+    ChevronUp,
+    Command,
+    CornerDownLeft,
+    Delete,
     Flag,
     FlagOff,
     Folder,
     HardDrive,
     Layers,
     Minus,
+    Option,
     Settings,
     Star,
     Tag,
@@ -41,7 +51,13 @@ export type IconConcept =
     | "folder"
     | "collection"
     | "tag"
-    | "source";
+    | "source"
+    | "command"
+    | "option"
+    | "control"
+    | "shift"
+    | "return"
+    | "delete";
 
 // C10: a new concept fails to compile until it has exactly one glyph. Judgment
 // concepts (rating/flag/reject) seeded with the §19 cell slots — icons are ink,
@@ -59,6 +75,12 @@ const GLYPHS = {
     collection: Layers,
     tag: Tag,
     source: HardDrive,
+    command: Command,
+    option: Option,
+    control: ChevronUp,
+    shift: ArrowBigUp,
+    return: CornerDownLeft,
+    delete: Delete,
 } as const satisfies Record<IconConcept, LucideIcon>;
 
 export function Icon({ concept, className }: { concept: IconConcept; className?: string }) {

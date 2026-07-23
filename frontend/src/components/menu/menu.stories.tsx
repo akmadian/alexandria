@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Button } from "@/components/button/button";
 import { Icon } from "@/components/icon/icon";
+import { Kbd, KbdGroup } from "@/components/kbd/kbd";
 import {
     Menu,
     MenuItem,
@@ -82,7 +83,16 @@ function ActionMenu({ open }: { open?: boolean }) {
                     </MenuItem>
                 </MenuSection>
                 <MenuSeparator />
-                <MenuItem id="remove" isDestructive shortcut="⌘⌫">
+                <MenuItem
+                    id="remove"
+                    isDestructive
+                    shortcut={
+                        <KbdGroup>
+                            <Kbd icon="command" />
+                            <Kbd icon="delete" />
+                        </KbdGroup>
+                    }
+                >
                     Remove from catalog…
                 </MenuItem>
             </Menu>

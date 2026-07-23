@@ -1,0 +1,76 @@
+/* Kbd — the keyboard-shortcut keycap. The size ladder rides the D33 control-size BUNDLE, the same
+ * way button.module.css does: a tier is {mono text role + height + icon size} moving together, all
+ * derived from one target. A keycap matches its icon to the MONO TEXT (icon ≈ text, one ramp step
+ * up for optical match) — unlike a button, which matches the icon to the tier. mono ceilings at
+ * 12px, so the ladder is sm + md; a taller cap needs a design-source mono-ramp extension.
+ *
+ * The base reserves a 1px transparent border so `flat` and `keycap` share a box (Badge's trick).
+ * `flat` and `keycap` are fill XOR border (D32): flat a tinted box, keycap a bordered face with a
+ * stroke-thick bottom rule (the pressable-key read). No shadow — docked chrome stays flat (§6); the
+ * keycap lift is a border, leaning on the §6 keyboard-hint genre carve-out. Single caps are square
+ * (min-width = the tier height); multi-char caps grow past it. */
+
+.kbd {
+    display: inline-flex;
+    box-sizing: border-box;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--alx-space-1);
+    border: var(--alx-stroke-hairline) solid transparent;
+    border-radius: var(--alx-radius-control);
+    white-space: nowrap;
+    /* Optical centering: mono's line box seats the ink low; trim it to the cap-height/baseline so
+     * flex centering centers the glyph itself (not the leading). Trimming to cap-height (not the
+     * 16px mono line) is also what frees the xs (16) tier — the text no longer needs the full line
+     * box. Trims regardless of the composed line-height, so no raw line-height override needed. */
+    text-box: trim-both cap alphabetic;
+}
+
+/* xs — the dense rung: control-xs target (16). Mono floors at 11px text / 12px icon (nothing
+ * smaller to step to), so xs shares sm's glyph in a tighter cap — a density step, not a glyph
+ * step. Viable only because text-box-trim frees the 16px line-height floor. */
+.xs {
+    composes: alx-type-data-sm from global;
+    --alx-size-icon: var(--alx-size-icon-xs);
+    height: var(--alx-size-control-xs);
+    min-width: var(--alx-size-control-xs);
+}
+
+/* sm — the menu default: control-sm target (20), data-sm mono (11), icon-xs (12). */
+.sm {
+    composes: alx-type-data-sm from global;
+    --alx-size-icon: var(--alx-size-icon-xs);
+    height: var(--alx-size-control-sm);
+    min-width: var(--alx-size-control-sm);
+}
+
+/* md — control-md target (24), data mono (12), icon-sm (14). */
+.md {
+    composes: alx-type-data from global;
+    --alx-size-icon: var(--alx-size-icon-sm);
+    height: var(--alx-size-control-md);
+    min-width: var(--alx-size-control-md);
+}
+
+/* flat: quiet tinted fill, no visible border (machinery-chip default — fill XOR border, D32). */
+.flat {
+    color: var(--alx-ink-3);
+    background: var(--alx-surface-container);
+}
+
+/* keycap: raised-key read via a hairline face border + a stroke-thick bottom rule. A border, never
+ * a box-shadow — the flat-chrome law holds (§6); this leans on the keyboard-hint genre carve-out. */
+.keycap {
+    color: var(--alx-ink-2);
+    background: var(--alx-surface-panel);
+    border-color: var(--alx-ink-hairline);
+    border-bottom-width: var(--alx-stroke-thick);
+}
+
+/* KbdGroup — the multi-key row; the group owns the gap so caps stay evenly spaced. */
+.group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--alx-space-1);
+}

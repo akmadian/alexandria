@@ -61,7 +61,7 @@
   },
 
   "icons": {
-    "$comment": "§14 structural family: concept → Lucide glyph, ONE glyph per concept; components name concepts, never glyphs. Runtime registry: frontend/src/components/icon (C10-complete; the two lists grow together — compiler emission closes the gap when the count warrants). Seeded 2026-07-17: the disclosure chevron was the first per-need pull from the parked token-gaps list. Judgment concepts (rating/flag/reject) added 2026-07-18 with the §19 cell slots — fill = on (a rated star / picked flag is filled ink, §14). Machinery states use the dot-matrix map above, never rows here.",
+    "$comment": "§14 structural family: concept → Lucide glyph, ONE glyph per concept; components name concepts, never glyphs. Runtime registry: frontend/src/components/icon (C10-complete; the two lists grow together — compiler emission closes the gap when the count warrants). Seeded 2026-07-17: the disclosure chevron was the first per-need pull from the parked token-gaps list. Judgment concepts (rating/flag/reject) added 2026-07-18 with the §19 cell slots — fill = on (a rated star / picked flag is filled ink, §14). Machinery states use the dot-matrix map above, never rows here. Keyboard-modifier concepts (command/option/control/shift/return/delete) added 2026-07-22 with the Kbd keycap: the Mac symbols aren't in Geist Mono's subset (they mush at 11px via OS fallback), so a shortcut renders them as vector icons — crisp at any cap size.",
     "structural": {
       "check": "check",
       "disclose": "chevron-right",
@@ -72,7 +72,13 @@
       "folder": "folder",
       "collection": "layers",
       "tag": "tag",
-      "source": "hard-drive"
+      "source": "hard-drive",
+      "command": "command",
+      "option": "option",
+      "control": "chevron-up",
+      "shift": "arrow-big-up",
+      "return": "corner-down-left",
+      "delete": "delete"
     }
   },
 
