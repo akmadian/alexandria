@@ -1,0 +1,137 @@
+/* Select — the trigger rides the D35 control-container (recessed chip, like a field); the
+ * popover is the §6 TRANSIENT: theme-following surface, occlusion shadow, transient radius.
+ * The trigger is content-sized (compact "Line ▾"); a consumer widens it via className. */
+
+.select {
+    display: inline-flex;
+    min-width: 0;
+}
+
+.trigger {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--alx-space-2);
+    padding: 0 var(--alx-space-2);
+    border: var(--alx-stroke-hairline) solid transparent;
+    border-radius: var(--alx-radius-control);
+    background: var(--alx-surface-container);
+    color: var(--alx-ink-1);
+    min-width: 0;
+}
+
+.trigger[data-hovered] {
+    background: var(--alx-surface-hover);
+}
+
+.trigger[data-focus-visible] {
+    outline: var(--alx-focus-ring-width) solid var(--alx-accent-ring);
+    outline-offset: var(--alx-focus-ring-offset);
+}
+
+.trigger[data-disabled] {
+    color: var(--alx-ink-4);
+}
+
+.value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* §9 (ratified): the empty/placeholder value is ink.4, two steps below its label. */
+.value[data-placeholder] {
+    color: var(--alx-ink-4);
+}
+
+.chevron {
+    flex: none;
+    color: var(--alx-ink-3);
+    /* The `disclose` concept rests pointing right; a dropdown wants it down. */
+    transform: rotate(90deg);
+}
+
+/* Size ladder (§8/D33) — mirrors TextField: the trigger's value-text ramp + height + pad +
+ * icon, scaled into the tier. */
+.controlXsmall {
+    composes: alx-type-value-xs from global;
+    height: var(--alx-size-control-xs);
+    padding: 0 var(--alx-space-1);
+    --alx-size-icon: var(--alx-size-icon-xs);
+}
+
+.controlSmall {
+    composes: alx-type-value-sm from global;
+    height: var(--alx-size-control-sm);
+    --alx-size-icon: var(--alx-size-icon-sm);
+}
+
+.controlMedium {
+    composes: alx-type-value from global;
+    height: var(--alx-size-control-md);
+}
+
+.controlLarge {
+    composes: alx-type-value-lg from global;
+    height: var(--alx-size-control-lg);
+    padding: 0 var(--alx-space-3);
+    --alx-size-icon: var(--alx-size-icon-lg);
+}
+
+/* The popover — the §6 transient. RAC exposes --trigger-width so the menu matches the
+ * trigger's width as a floor; RAC sets max-height inline for viewport fit. */
+.popover {
+    box-sizing: border-box;
+    min-width: var(--trigger-width);
+    padding: var(--alx-space-1);
+    border: var(--alx-stroke-hairline) solid var(--alx-ink-hairline);
+    border-radius: var(--alx-radius-transient);
+    background: var(--alx-surface-transient);
+    box-shadow: var(--alx-shadow-occlusion);
+}
+
+.listbox {
+    display: flex;
+    flex-direction: column;
+    max-height: inherit;
+    overflow: auto;
+    outline: none;
+}
+
+.item {
+    composes: alx-type-value from global;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--alx-space-2);
+    min-height: var(--alx-size-hit-target);
+    padding: 0 var(--alx-space-2);
+    border-radius: var(--alx-radius-control);
+    color: var(--alx-ink-1);
+    cursor: default;
+    outline: none;
+}
+
+/* Keyboard focus and pointer hover share the toward-ink register move (§7). */
+.item[data-hovered],
+.item[data-focused] {
+    background: var(--alx-surface-hover);
+}
+
+.item[data-disabled] {
+    color: var(--alx-ink-4);
+}
+
+.itemLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The selected mark is INK, not the accent — chrome is hue-free (the check is the signal). */
+.check {
+    flex: none;
+    color: var(--alx-ink-1);
+}

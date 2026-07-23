@@ -21,6 +21,7 @@ import {
     SegmentedControl,
     type SegmentedControlSize,
 } from "@/components/segmented-control/segmented-control";
+import { Select, SelectItem } from "@/components/select/select";
 import { Switch } from "@/components/switch/switch";
 import { TextField } from "@/components/text-field/text-field";
 import { ToggleButton } from "@/components/toggle-button/toggle-button";
@@ -655,6 +656,46 @@ function BadgeMatrix({ id }: SectionProps) {
     );
 }
 
+function SelectSpecimens({ id }: SectionProps) {
+    return (
+        <section id={id} className={styles.section}>
+            <h2 className={styles.sectionHead}>Select — the dropdown trigger (control-container) + the §6 transient popover</h2>
+            <p className={styles.subHead}>size ladder — the trigger rides the container material</p>
+            <div className={styles.sizeStrip}>
+                {CONTROL_SIZES.map((s) => (
+                    <div key={s.key} className={styles.sizeStripRow}>
+                        <span className={styles.matrixLabel}>{s.label}</span>
+                        <Select label={`View ${s.key}`} size={s.key} defaultSelectedKey="loupe">
+                            <SelectItem id="grid">Grid</SelectItem>
+                            <SelectItem id="loupe">Loupe</SelectItem>
+                            <SelectItem id="compare">Compare</SelectItem>
+                        </Select>
+                    </div>
+                ))}
+            </div>
+            <p className={styles.subHead}>in a ControlRow — the reference "label + dropdown" row</p>
+            <div className={styles.panelSpecimen}>
+                <ControlGroup>
+                    <ControlRow label="Type">
+                        <Select label="Chart type" defaultSelectedKey="line">
+                            <SelectItem id="line">Line</SelectItem>
+                            <SelectItem id="bar">Bar</SelectItem>
+                            <SelectItem id="area">Area</SelectItem>
+                        </Select>
+                    </ControlRow>
+                    <ControlRow label="X-axis">
+                        <Select label="X-axis" placeholder="Choose…">
+                            <SelectItem id="date">Date</SelectItem>
+                            <SelectItem id="quarter">Quarter</SelectItem>
+                        </Select>
+                    </ControlRow>
+                </ControlGroup>
+            </div>
+            <p className={styles.note}>First overlay primitive — click to open the popover (surface.transient + occlusion shadow + transient radius, §6).</p>
+        </section>
+    );
+}
+
 function ControlRowMatrix({ id }: SectionProps) {
     return (
         <section id={id} className={styles.section}>
@@ -904,6 +945,7 @@ const SECTIONS: readonly { id: string; label: string; render: (id: string) => Re
     { id: "toggle", label: "ToggleButton", render: (id) => <ToggleButtonMatrix id={id} /> },
     { id: "segmented", label: "SegmentedControl", render: (id) => <SegmentedControlSpecimens id={id} /> },
     { id: "textfield", label: "TextField", render: (id) => <TextFieldMatrix id={id} /> },
+    { id: "select", label: "Select", render: (id) => <SelectSpecimens id={id} /> },
     { id: "checkbox", label: "Checkbox", render: (id) => <CheckboxMatrix id={id} /> },
     { id: "switch", label: "Switch", render: (id) => <SwitchMatrix id={id} /> },
     { id: "rating", label: "Rating", render: (id) => <RatingMatrix id={id} /> },
