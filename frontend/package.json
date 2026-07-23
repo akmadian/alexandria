@@ -14,7 +14,9 @@
         "lint:css": "stylelint \"src/**/*.css\"",
         "typecheck": "tsc -b --noEmit",
         "generate:tokens": "bun design/compiler/main.ts",
-        "check": "bun run generate:tokens && git diff --exit-code --quiet -- src/styles/tokens.css src/styles/tokens.ts src/styles/tokens-reference.json && tsc -b --noEmit && eslint src design/compiler && stylelint \"src/**/*.css\" && vitest run"
+        "check": "bun run generate:tokens && git diff --exit-code --quiet -- src/styles/tokens.css src/styles/tokens.ts src/styles/tokens-reference.json && tsc -b --noEmit && eslint src design/compiler && stylelint \"src/**/*.css\" && vitest run",
+        "storybook": "storybook dev -p 6006",
+        "build-storybook": "storybook build"
     },
     "dependencies": {
         "@tanstack/react-query": "^5.101.2",
@@ -30,6 +32,10 @@
     },
     "devDependencies": {
         "@eslint/js": "^9",
+        "@storybook/addon-a11y": "^10.5.3",
+        "@storybook/addon-docs": "^10.5.3",
+        "@storybook/addon-mcp": "^0.7.0",
+        "@storybook/react-vite": "^10.5.3",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.2",
         "@testing-library/user-event": "^14.6.1",
@@ -45,9 +51,11 @@
         "eslint": "^9",
         "eslint-plugin-jsx-a11y": "^6.10.2",
         "eslint-plugin-react-hooks": "^7.1.1",
+        "eslint-plugin-storybook": "^10.5.3",
         "globals": "^17.7.0",
         "happy-dom": "^20.10.6",
         "prettier": "^3.8.1",
+        "storybook": "^10.5.3",
         "stylelint": "^17.14.0",
         "stylelint-declaration-strict-value": "^1.11.1",
         "typescript": "^6.0.3",
