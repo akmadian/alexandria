@@ -743,9 +743,20 @@ function ControlGroupSpecimens({ id }: SectionProps) {
                     </ControlGroup>
                 </div>
             </div>
+            <p className={styles.subHead}>filled value-rows — the D35 container as a chip list (ControlGroup gap + ControlRow filled)</p>
+            <div className={styles.panelSpecimen}>
+                <div className={styles.chipList}>
+                    <ControlGroup gap>
+                        <ControlRow filled label="Salesperson" />
+                        <ControlRow filled label="SUM of Units" />
+                        <ControlRow filled label="Quarter">Q3</ControlRow>
+                    </ControlGroup>
+                </div>
+            </div>
             <p className={styles.note}>
                 The group owns the shared label-column width (labelWidth, default 40%) so rows align; between-group space
-                is the parent's gap. Rows within a group stack flush — §8 (space inside rows, not between).
+                is the parent's gap. Metadata rows stack flush — §8 (space inside rows, not between); filled value-rows
+                (D35) read as separate chips in the one control-container material, spaced by the group's gap.
             </p>
         </section>
     );

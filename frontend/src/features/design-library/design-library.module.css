@@ -156,6 +156,11 @@
     padding: var(--alx-space-2) 0;
 }
 
+/* Padding around a filled chip-list so the chips don't touch the panel edge. */
+.chipList {
+    padding: var(--alx-space-2);
+}
+
 .matrixRow {
     display: grid;
     grid-template-columns: 80px repeat(6, 120px);

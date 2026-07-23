@@ -16,15 +16,18 @@ export interface ControlGroupProps {
     /** Shared label-column width every row aligns to — any CSS length; keep ≤ 60% (the
      * row's cap). Default 40%. Set at the group level, per the inspector convention. */
     labelWidth?: string;
+    /** Space the rows apart instead of stacking flush — for a list of filled chip-rows
+     * (D35 value tokens), which read as separate objects. Default flush (metadata rows). */
+    gap?: boolean;
     /** The ControlRows. */
     children: ReactNode;
     className?: string;
 }
 
-export function ControlGroup({ labelWidth = "40%", children, className }: ControlGroupProps) {
+export function ControlGroup({ labelWidth = "40%", gap = false, children, className }: ControlGroupProps) {
     return (
         <div
-            className={cx(styles.group, className)}
+            className={cx(styles.group, gap && styles.gapped, className)}
             style={{ "--control-row-label": labelWidth } as CSSProperties}
         >
             {children}

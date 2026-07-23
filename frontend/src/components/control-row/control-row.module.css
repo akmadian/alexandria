@@ -9,6 +9,14 @@
     padding: 0 var(--alx-size-row-inset);
 }
 
+/* Filled value-row (D35): the row reads as a recessed chip in the one control-container
+ * material — the reference "field token" look. Borderless (fill-only, D32 grammar). */
+.filled {
+    background: var(--alx-surface-field);
+    border: var(--alx-stroke-hairline) solid transparent;
+    border-radius: var(--alx-radius-control);
+}
+
 .label {
     /* Form style (D34): the label reserves a column; a ControlGroup sets
      * --control-row-label to a shared width so a stack of rows aligns. Standalone it

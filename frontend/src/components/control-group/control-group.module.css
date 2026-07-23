@@ -7,3 +7,9 @@
     display: flex;
     flex-direction: column;
 }
+
+/* Filled chip-rows read as separate objects, so they get a small gap (D35 value tokens)
+ * rather than the flush metadata-row stack. */
+.gapped {
+    gap: var(--alx-space-1);
+}

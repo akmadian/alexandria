@@ -39,21 +39,26 @@ export interface ControlRowProps {
     label: ReactNode;
     /** Row height on the control ladder: xs = 16px, sm = 20px, md = 24px, lg = 28px. */
     size?: ControlRowSize;
-    /** Right slot: the control / badge / text value, at its own size. */
-    children: ReactNode;
+    /** Recessed filled-chip treatment (D35 control-container): the row reads as a
+     * recessed chip on the panel, for value-list rows (the reference "field token"
+     * look). Off = the row sits flat on the panel. */
+    filled?: boolean;
+    /** Right slot: the control / badge / text value, at its own size. Omit for a
+     * label-only row (a filled field token). */
+    children?: ReactNode;
     className?: string;
 }
 
-export function ControlRow({ label, size = "md", children, className }: ControlRowProps) {
+export function ControlRow({ label, size = "md", filled = false, children, className }: ControlRowProps) {
     return (
-        <div className={cx(styles.row, SIZE_CLASSES[size], className)}>
+        <div className={cx(styles.row, SIZE_CLASSES[size], filled && styles.filled, className)}>
             <span
                 className={cx(styles.label, LABEL_ROLES[size])}
                 title={typeof label === "string" ? label : undefined}
             >
                 {label}
             </span>
-            <span className={styles.value}>{children}</span>
+            {children !== undefined && <span className={styles.value}>{children}</span>}
         </div>
     );
 }

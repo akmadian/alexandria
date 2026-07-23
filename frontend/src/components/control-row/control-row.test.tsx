@@ -22,6 +22,15 @@ test("defaults to the md height tier", () => {
     expect(container.firstElementChild?.className).toContain("controlMedium");
 });
 
+test("filled lands the chip class; a label-only row renders without a value slot", () => {
+    const { container } = render(<ControlRow label="Salesperson" filled />);
+    const row = container.firstElementChild;
+    expect(row?.className).toContain("filled");
+    expect(screen.getByText("Salesperson")).toBeVisible();
+    // Only the label span — no value slot when children is omitted.
+    expect(row?.querySelectorAll("span").length).toBe(1);
+});
+
 test("each size lands its height class and steps the label role", () => {
     const cases: readonly [ControlRowSize, string, string][] = [
         ["xs", "controlXsmall", "alx-type-control-xs"],

@@ -34,3 +34,12 @@ test("labelWidth overrides the shared column", () => {
     );
     expect((container.firstElementChild as HTMLElement).style.getPropertyValue("--control-row-label")).toBe("120px");
 });
+
+test("gap lands the spaced class for filled chip-lists", () => {
+    const { container } = render(
+        <ControlGroup gap>
+            <ControlRow filled label="Salesperson" />
+        </ControlGroup>,
+    );
+    expect((container.firstElementChild as HTMLElement).className).toContain("gapped");
+});
