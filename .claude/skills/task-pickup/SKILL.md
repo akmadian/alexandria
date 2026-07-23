@@ -46,6 +46,10 @@ You are picking up a unit of work in Alexandria. The tracking docs are the sourc
       elsewhere. One numbered block per decision:
       - **What's being decided**, one plain sentence. No shorthand labels invented
         mid-conversation ("seed doc Q3") — say the thing itself.
+      - **Plain language throughout — jargon is a defect, not a style choice.** No acronyms,
+        no architecture vocabulary ("DTO", "wire shape", "boundary"); describe what the user
+        or the app does, in words someone who hasn't read this codebase follows on first
+        read. Precision lives in the spec files; the report is the plain-English layer.
       - The options, one line each, with the tradeoff that actually matters.
       - **Recommendation** + one-line why, visually distinct.
       If there are no open decisions, say so in one line. More than ~5 decisions → present the

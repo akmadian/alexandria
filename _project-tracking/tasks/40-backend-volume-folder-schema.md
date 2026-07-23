@@ -30,12 +30,15 @@ policy): **no migration code is written; dev catalogs re-import.**
 - **The path→volume resolver** — absolute path → mount point → filesystem UUID →
   find-or-create `volumes` row → `(volume_id, relative_path)`. The volume monitor's probe is
   the source. Callers: folder-add, the importer, watcher event mapping.
-- **Folder-add semantics, engine-side** (D41 graceful merge; disjoint roots invariant):
-  `CreateFolder` returns an outcome, never a bare overlap error —
-  `created` | `alreadyTrackedWithin(existingFolderID)` (adding a subfolder of a tracked
-  root) | `absorbed(replacedFolderIDs)` (adding a parent: existing roots fold into the new
-  wider root; their sync settings dissolve into it — the caller confirms first via the seam).
-  Exact duplicate → `alreadyTrackedWithin(self)`.
+- **Folder-add semantics, engine-side** (D41 graceful merge + its quiet-by-default dated
+  note; disjoint roots invariant): `CreateFolder(path, confirm bool)` returns an outcome,
+  never a bare overlap error —
+  `created` | `alreadyTrackedWithin(existingFolderID)` (subfolder of a tracked root; exact
+  duplicate → self) | `absorbed(replacedFolderIDs)` (parent of existing roots: they fold into
+  the new wider root — performed QUIETLY when no behavior changes) |
+  `needsConfirmation(replacedFolderIDs, behaviorChanges)` (a watched/scheduled root would
+  change sync behavior under the new parent: NOTHING mutates; the caller re-calls with
+  `confirm=true` to proceed as `absorbed`).
 - **The rename ripple** (mechanical, complete in this task): domain nouns + catalog
   interfaces; the ast token `source` → `volume`, folder-scope payload `sourceId` → `volumeId`
   (the one camelCase-derivation exception dies); event string `sourceStatus` →
@@ -60,8 +63,10 @@ pre-release).
 - Resolver: two folders on one filesystem yield ONE `volumes` row; an NFD-named fixture file
   matches its NFC query form via `path_key` (the §8 phantom-identity case closes — assert no
   spurious new asset + review pair).
-- `CreateFolder` outcomes: subfolder-of-tracked → `alreadyTrackedWithin`; parent-of-tracked →
-  `absorbed` with the prior roots' assets re-based under the new root, no asset identity
-  churn (D20: same file ≠ new asset); disjointness holds after every outcome.
+- `CreateFolder` outcomes: subfolder-of-tracked → `alreadyTrackedWithin`; parent-of-tracked
+  with uniform sync behavior → quiet `absorbed`, prior roots' assets re-based under the new
+  root, no asset identity churn (D20: same file ≠ new asset); parent-of-tracked where a
+  watched root would change behavior → `needsConfirmation` with NO mutation, then `absorbed`
+  on the confirmed re-call; disjointness holds after every outcome.
 - `path_key` rebuild function registered and reproduces identical keys.
 - Logging: resolver decisions + folder-add outcomes at Info, per-path at Debug.

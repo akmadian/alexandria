@@ -16,8 +16,11 @@ form exists by execution time, this supersedes it; if not, that epic reuses this
   - `created` → select the new root in the rail.
   - `alreadyTrackedWithin` → "already tracked, inside *X*" → navigate/select *X*. (The
     exact-duplicate case returns self — copy reads "already tracked", no "inside".)
-  - `absorbed` → confirm first: name the roots being folded in and that their sync settings
-    dissolve into the new root's; on confirm, one tree results.
+  - `absorbed` → QUIET, like LrC's Add Parent Folder: no dialog; the rail simply shows the
+    new combined tree (select the new root so the result is visible in place).
+  - `needsConfirmation` → the one dialog in this flow, only when sync behavior would change:
+    name the watched/scheduled folder and what changes ("'2024' is watched; combining under
+    'Photos' (manual) stops watching it — continue?"), then re-call with confirm.
 - **Remove folder:** confirm showing the asset count and the semantics in plain copy —
   catalog rows soft-deleted with judgments preserved, **files on disk untouched** (D24);
   then `removeFolder`.
@@ -34,8 +37,9 @@ settings-level knob), watcher supervision (§2).
 
 ## Acceptance
 
-- Against the mock: all three add outcomes exercisable end-to-end, each resolving per D41
-  (redirect selects, absorb confirms then merges, created selects).
+- Against the mock: all four add outcomes exercisable end-to-end, each resolving per D41
+  (created selects; redirect selects the existing; quiet absorb just shows the merged tree;
+  the behavior-change case shows the one dialog, and confirm/cancel both behave).
 - Remove: confirm displays the correct count; after confirm the folder leaves the rail and
   its assets leave every scope; cancel is a true no-op.
 - Sync-mode change round-trips through the contract and re-renders the root's state.

@@ -17,8 +17,10 @@ architecture record (mock parity rules).
     `nil` = count unavailable, `0` = empty (D41). With smart counts computed for real, `nil`
     is the backend's declared retreat for a count it declined to compute (D41's
     pathological-query escape hatch) — the wire shape keeps that door open.
-  - `CreateFolderOutcome` — `created | alreadyTrackedWithin | absorbed` + the referenced
-    folder IDs (mirrors task 40's engine outcomes).
+  - `CreateFolderOutcome` — `created | alreadyTrackedWithin | absorbed | needsConfirmation`
+    + the referenced folder IDs and, on `needsConfirmation`, the behavior changes to show
+    (mirrors task 40's engine outcomes; quiet-by-default per D41's dated note).
+    `createFolder(path, confirm?)` carries the confirm flag for the re-call.
 - **`SyncMode` enum in `internal/domain`** (manual|watched|scheduled) — the sanctioned
   forward slice of task 40; declared once here if 40 hasn't landed first.
 - **Contract methods** (`AlexandriaAPI`): `getFolderTree(): VolumeNode[]` (one call, whole
@@ -46,5 +48,6 @@ rename; the rail rides existing `catalog/changed`).
   under that scope and nowhere else); smart counts match what the mock query returns; folder
   subtree counts sum correctly at every level.
 - Outcome flows exercisable in the mock: adding a subfolder of a tracked root, a parent of
-  two roots, an exact duplicate.
+  two roots (quiet absorb), a parent over a watched root (`needsConfirmation`, then the
+  confirmed re-call), an exact duplicate.
 - Tests: mock membership/count invariants + outcome table.

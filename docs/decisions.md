@@ -1501,8 +1501,14 @@ minting tasks 40–45). Executes D24's split direction; rulings, all Ari-ratifie
   timer refresh. **No Go-side predicate evaluator, ever** — a second membership evaluator beside
   the SQL compiler is the C15 parallel-definition category.
 - **Folder-add semantics: disjoint roots, graceful merge — reject nothing.** Adding a subfolder
-  of a tracked root redirects to it; adding a parent absorbs existing roots (confirmed; their
-  sync settings dissolve); exact duplicate selects the existing. Field survey: LrC merges into
+  of a tracked root redirects to it; adding a parent absorbs existing roots; exact duplicate
+  selects the existing. *(Dated note 2026-07-23, same round: absorption is QUIET by default —
+  LrC's "Add Parent Folder"/merge/import-dedupe all act without confirmation dialogs, showing
+  the result in place, and that is the user expectation. The app asks first ONLY when the
+  combination would change behavior: a watched/scheduled folder falling under a parent with a
+  different sync_mode. Mechanically: the first create call performs quiet absorbs but returns
+  a needs-confirmation outcome without mutating when a behavior change is involved; a second
+  call with an explicit confirm flag proceeds.)* Field survey: LrC merges into
   one tree (roots are view state), digiKam forbids nesting, Plex/Jellyfin overlap self-punishes
   with duplicates — nobody ships overlapping roots. The one legitimate nesting want (per-subtree
   sync override) is deferred (DEFERRED §19) and addable *within* disjoint roots later.
