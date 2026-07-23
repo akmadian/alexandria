@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import reactHooks from "eslint-plugin-react-hooks";
+import storybook from "eslint-plugin-storybook";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -64,4 +65,6 @@ export default tseslint.config(
     },
     // Tests and the mock's own check touch internals freely.
     { files: ["src/**/*.test.{ts,tsx}", "src/test/**", "src/api/**"], rules: { "no-restricted-imports": "off" } },
+    // Storybook's own best-practice rules for *.stories.* and .storybook/ config.
+    ...storybook.configs["flat/recommended"],
 );

@@ -35,6 +35,9 @@ Dev Window for Wails
 - FEAT: Maybe want to support annotations? Like users can click on an image to point to a specific thing, then take notes on that thing?
 - NOTE from task 19 - clear on reimport. Reimporting an asset correctly wipes observations and generated artifacts to regenerate anew. The old thumbnail file remains on disk, and the UI's cache keeps serving it. Cache not automatically busted on reimport. BAD UX path would be user reimports and all representations of the asset do not update to freshly imported and enriched values.
 
+### Design System (tokens)
+- Backfill the empty `role` fields in `design/tokens/` for the self-evident tonal state/default rungs: `surface.hover`, `surface.pressed`, `cell.rest`, `cell.hover`, `cell.selected`, `stage.default`, `stage.min`. (Varying-family roles live per-theme, mostly in `themes/paper.tokens.json`; `stage` in `semantic.tokens.json`.) Decide the convention FIRST: every rung that has a role carries real rationale (dates, § refs, decisions), so these may be intentionally empty — is `role` "recorded rationale" (leave them) or "every token gets a usage label" (backfill)? Proposed phrasings + full context live in the Storybook Tonal Ladders view, which currently carries them as a curated stopgap (`frontend/src/styles/specimens/tonal-ladders.stories.tsx`, `USAGE` map); authoritative roles would let that view read them directly instead. Do it on the token-source line (frontend-design-v3), NOT in isolation — a token edit forces regenerating `tokens.css/ts/reference.json` (freshness-gated), which conflicts with concurrent token work.
+
 ### Experience References
 - Photos: LrC
 - Fonts: MacOS FontBook
