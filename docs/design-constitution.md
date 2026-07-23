@@ -663,6 +663,15 @@ on re-inventing mechanics users already know.
   active scope at full ink, others faded), and **sans** scent counts (a deliberate §9 exception — the
   reference uses sans, not the mono data voice). Connector tone/corner, indent step, icon size, and
   pill inset are first-pass PIN (§30 eye-gate).
+- Ratified 2026-07-23 (the Kbd round; D40): the keyboard-shortcut **keycap** primitive rides the D33
+  control-size bundle (`xs` 16 / `sm` 20 menu-default / `md` 24), deriving its icon from the **mono
+  text** (icon ≈ text), square single caps; `flat` (tinted chip) + `keycap` (bordered face, raised via
+  a `stroke-thick` border not a shadow — plain §6 flat chrome, no amendment). Mac modifier
+  symbols render as **vector icon concepts** (six added to §14's structural family), not font glyphs
+  that mush at cap px. Optical vertical centering uses **`text-box-trim`** (first consumer); horizontal
+  centering is **accepted as geometric** — the K/P visual-mass lean has no idiomatic fix (no CSS
+  property, `opbd` absent from both Geist faces, per-glyph nudges blur sub-pixel). A taller tier awaits
+  a design-source mono-ramp extension (`data-lg`).
 
 ---
 

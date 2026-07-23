@@ -60,7 +60,7 @@
  * the parts that set their own muted ink are stepped down explicitly. */
 .item[data-disabled],
 .item[data-disabled] .description,
-.item[data-disabled] .shortcut,
+.item[data-disabled] kbd,
 .item[data-disabled] .check,
 .item[data-disabled] .chevron {
     color: var(--alx-ink-4);
@@ -116,12 +116,6 @@
     display: flex;
     align-items: center;
     gap: var(--alx-space-2);
-}
-
-/* Shortcut — the mono data voice (§9), muted. */
-.shortcut {
-    composes: alx-type-data-sm from global;
-    color: var(--alx-ink-3);
 }
 
 /* The selected mark is INK, not the accent — chrome is hue-free (the check is the signal).

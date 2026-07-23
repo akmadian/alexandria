@@ -15,7 +15,6 @@
 import { Children, type ReactElement, type ReactNode } from "react";
 import {
     Header as AriaHeader,
-    Keyboard as AriaKeyboard,
     Menu as AriaMenu,
     MenuItem as AriaMenuItem,
     type MenuItemProps as AriaMenuItemProps,
@@ -30,6 +29,7 @@ import {
     Text as AriaText,
 } from "react-aria-components";
 import { Icon, type IconConcept } from "@/components/icon/icon";
+import { Kbd } from "@/components/kbd/kbd";
 import { Popover } from "@/components/popover/popover";
 import { cx } from "@/lib/cx";
 import styles from "./menu.module.css";
@@ -59,7 +59,8 @@ export interface MenuItemProps extends Omit<AriaMenuItemProps, "children" | "cla
     children: ReactNode;
     /** Leading icon (sugar). Presence of ANY icon in a menu reserves the gutter for all rows. */
     icon?: IconConcept;
-    /** Trailing keyboard shortcut (sugar) — mono, muted (the data voice, §9). */
+    /** Trailing keyboard shortcut (sugar). A bare string renders as a single flat `Kbd` keycap;
+     * for a multi-key combo pass a composed `<KbdGroup>` of `<Kbd>` caps (⌘ ⇧ P). */
     shortcut?: ReactNode;
     /** A muted second line (native two-line item; the row grows — a sanctioned §8 exception). */
     description?: ReactNode;
@@ -101,9 +102,8 @@ export function MenuItem({
                     </span>
                     {(shortcut !== undefined || isSelected || hasSubmenu) && (
                         <span className={styles.trailing}>
-                            {shortcut !== undefined && (
-                                <AriaKeyboard className={styles.shortcut}>{shortcut}</AriaKeyboard>
-                            )}
+                            {shortcut !== undefined &&
+                                (typeof shortcut === "string" ? <Kbd>{shortcut}</Kbd> : shortcut)}
                             {isSelected && <Icon concept="check" className={styles.check} />}
                             {hasSubmenu && <Icon concept="disclose" className={styles.chevron} />}
                         </span>

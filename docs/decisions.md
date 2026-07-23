@@ -1382,3 +1382,59 @@ Ari's call): active scope = `stroke-thick` (2px) + `ink.1`; others = default str
 open/closed glyph swap (the chevron shows expand). The `Icon` `filled` prop, the `.filled` class, and the
 `folder-open` concept were removed as dead. Connector foot no longer extends into the leading control
 (`right: 0`, was piercing/"stabbing" the chevron/checkbox); connector tone softened to a hairline↔ink-4 blend.
+
+## D40 — Kbd: the keyboard-shortcut keycap, on the control-size bundle (2026-07-23)
+
+*(D-number note: this round ran in worktree `kbd-primitive` off v3 HEAD `f122377` (Tree/D37). Three
+later decisions share the tail: **D38** = the far-left activity-rail (v3 working tree, 2026-07-22);
+**D39** = SwatchPicker (renumbers from its branch-recorded D38 at merge); **D40** = Kbd (this, the latest,
+2026-07-23). Ordered chronologically to avoid collisions when the unmerged branches land.)*
+
+**Decision.** A **Kbd** primitive lands (`components/kbd`): `Kbd` (a native `<kbd>`) + `KbdGroup` (the
+multi-key row), the boxed keycap from the reference set. Domain-blind, hue-free (chrome is neutral
+machinery), no RAC (presentational like Badge — a `<kbd>` has no behavior). **Two styles** behind a
+`style` prop (Badge-parallel): `flat` — a tinted machinery chip (D32 fill-XOR-border, `surface.container`);
+`keycap` — a bordered face with a `stroke-thick` bottom rule, the pressable-key read carried by a **border,
+never a shadow**, so it is plain §6 flat chrome (a seam/hairline construction, not elevation); the fixed-dark
+keyboard-hint carve-out is a separate floating-tooltip concern (D36-deferred), not this inline chip. The
+**Menu consumes it**: `MenuItem shortcut` renders through Kbd (a bare string → one cap; a `<KbdGroup>` →
+composed caps), dropping RAC's presentational `Keyboard` wrapper.
+
+**Sizing rides the D33 control-size BUNDLE**, mirroring `button.module.css`: a size class is a tier of
+`{mono text role + height + icon size}` derived from one target — `xs` 16 (dense) / `sm` 20 (menu default) /
+`md` 24. A keycap matches its icon to the **mono text** (icon ≈ text), *not* the button-tier icon, because a
+keycap is square and mono (smaller glyph than a sans button label): `sm` = `data-sm` 11 + `icon-xs` 12; `md`
+= `data` 12 + `icon-sm` 14. Single caps are **square** (`min-width` = tier height, Ari's call); multi-char
+caps grow past it. *(An audit — Ari's catch that md·24 rendered a larger ⌘ than lg·28 — corrected a
+hand-wired first pass: a self-referential `--alx-size-icon` var that fell back to the SVG's native 24px,
+off-ramp icon sizes, a `min-inline-size` square hack, logical props, and a `calc(hairline*2)` border where
+`stroke-thick` exists. The rule: consume the bundle, never re-derive it.)*
+
+**Modifier symbols render as vector icons, not font glyphs.** The Mac modifiers (⌘⇧⌥⌃⌫↵) are **not in Geist
+Mono's subsetted woff2**, so the browser falls back to the OS symbol font — crisp at display sizes but a mush
+at the cap's 11–12px (proof: Geist Mono is monospaced yet ⌘'s advance ≠ `M`'s; font is irrelevant, only
+px). So the six modifiers became **registered icon concepts** (`command`/`option`/`control`/`shift`/`return`/
+`delete` → Lucide, added to `components/icon` + `registries.json icons.structural`, §14 per-need growth);
+`Kbd` gained an `icon` prop, sized via `--alx-size-icon` (D33 container). Vector → crisp at any cap size.
+
+**Optical centering — `text-box-trim`, the first consumer.** Mono's line box seats the ink low under
+`align-items: center`; `text-box: trim-both cap alphabetic` (the CSS successor to Capsize; Chrome/Safari/Edge
+shipped) trims the line box to cap-height so flex centering centers the **glyph**, not the leading. This also
+**frees the `xs` (16) tier** — the 16px mono line-height was what floored the cap at 20, and trimming removes
+it. **Horizontal centering is accepted as geometric** (Ari's exacting eye, then ratified): CSS centers the
+glyph's bounding box — verified correct (symmetric glyphs O/H/X/digits center perfectly); K/P *read* slightly
+left because they are visual-mass-heavy on the stem (geometric center ≠ optical center). No idiomatic fix
+exists — no CSS property (open CSSWG #5466), OpenType `opbd` is a *margin*-alignment feature and is **absent
+from both Geist Mono and Geist Sans** (tested), and a per-glyph mass-nudge is sub-pixel at cap sizes so it
+**blurs** the glyph (demonstrated). The lean is inherent letterform mass, present in every UI label; keycaps
+just isolate it. Recorded so it is not re-litigated as drift.
+
+**Amends** §14 (the six keyboard-modifier icon concepts join the structural family). No §6 change — the
+`keycap` raised read is a border/seam, already lawful flat chrome. Introduces `text-box-trim` as the
+sanctioned optical-centering idiom for single-glyph chips.
+
+**Deferred** (ponytail — a consumer triggers it): a **taller keycap tier** (`lg` 28+) needs a design-source
+**mono type-ramp extension** — mono ships only `data` 12 / `data-sm` 11, so beyond `md` the text can't scale
+to fill/balance the cap; build the `data-lg` role (eye-gate the line-height) when a roomy-surface consumer
+(command palette, help sheet) appears. The `keycap` face values (border tone, bottom-rule weight) are
+first-pass, eye-gated with the round.
