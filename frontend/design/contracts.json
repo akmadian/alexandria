@@ -7,7 +7,9 @@
       { "ink": "ink.1", "on": ["surface.panel", "surface.container", "surface.transient", "cell.rest", "cell.active"], "minLc": 75 },
       { "ink": "ink.2", "on": ["surface.panel", "surface.container", "surface.transient"], "minLc": 60, "minLcDark": 50 },
       { "ink": "ink.3", "on": ["surface.panel"], "minLc": 40, "minLcDark": 36 },
-      { "ink": "ink.4", "on": ["surface.panel"], "minLc": 25 }
+      { "ink": "ink.4", "on": ["surface.panel"], "minLc": 25 },
+      { "ink": "tooltip.ink", "on": ["tooltip.surface"], "minLc": 75, "$comment": "fixed-dark tooltip label (§24/D42); near-max contrast, but the check is real" },
+      { "ink": "tooltip-inverse.ink", "on": ["tooltip-inverse.surface"], "minLc": 75, "$comment": "inverse tooltip label (§24/D42): panel-pole ink on ink-pole chip, checked per theme" }
     ]
   },
 

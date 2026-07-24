@@ -265,15 +265,23 @@ States grouped by author, systematized by the axis algebra (§4):
 
 ### §12 Structure (the zones)
 
-LrC's skeleton, kept deliberately:
+LrC's skeleton, kept deliberately — with one addition (D38): a far-left rail for
+global navigation, so the top zone stays contextual, not a global-nav band.
 
+- **Far-left activity rail (D38)** — global view-switching: icon-only destinations
+  (Catalog, Review, …) in a top group, Settings in a bottom group. A fixed fixture,
+  **not a Pane** (not resizable/collapsible). VS Code / Slack idiom. Import + Export
+  are *not* here — they pair at the bottom of the **Left rail** (LrC convention;
+  actions on the catalog, not global nav).
 - **Left rail** — sources: one tree at a time under tabs (Folders / Collections /
   Tags), icons + indent guides + muted right-aligned counts.
 - **Center** — the well (grid on chrome) or the stage (loupe).
 - **Right rail** — inspector: histogram/preview, judgment controls, metadata rows.
-- **Top** — the filter bar: a *place*, not a popover. Always-visible attribute
-  toggles + chip grammar (`field:op:value ×`, "+ Add filter", "N more" overflow).
-  Chips are a rendering of `ast.Query` — never parallel filter state.
+- **Top** — **contextual only** (D38 moved global nav to the far-left rail): the
+  filter bar, a *place*, not a popover — always-visible attribute toggles + chip
+  grammar (`field:op:value ×`, "+ Add filter", "N more" overflow). Chips are a
+  rendering of `ast.Query` — never parallel filter state. (A thin band may persist
+  for window-drag + the macOS traffic-lights inset.)
 - **Bottom** — filmstrip (persistent selection context across views) + status
   readout (§19).
 
@@ -546,6 +554,10 @@ reasoning — internal consistency first, usage-linting second:
   popover) < dialog/sheet < toast`. Each layer's treatment (shadow recipe, radius
   rung, polarity) is a row here; there is no other elevation.
 - **Shadows:** exactly two recipes — occlusion (transients) and tunnel (§6).
+- **Tooltip row treatment** (D42, 2026-07-23, pin): the small-transient layer's tooltip is
+  fixed-dark by default (§6) with a sanctioned `inverse` variant (theme-pole aliased); radius
+  `control`, a soft occlusion shadow, and a 1px rim = the variant ink at `tooltip.edge-alpha` — the
+  dark-chrome separator, since shadow alone does not read there (§6). Two-variant material seated.
 - **Motion tokens:** durations (~3 steps in the 80–250ms band) + easings (ease-out
   family; the reference set's `cubic-bezier(0.16, 1, 0.3, 1)` is the working
   default) as tokens like colors.
@@ -672,6 +684,13 @@ on re-inventing mechanics users already know.
   centering is **accepted as geometric** — the K/P visual-mass lean has no idiomatic fix (no CSS
   property, `opbd` absent from both Geist faces, per-glyph nudges blur sub-pixel). A taller tier awaits
   a design-source mono-ramp extension (`data-lg`).
+- Ratified 2026-07-23 (the Tooltip round; D42): the §24 tooltip row, **two-variant**. The fixed-dark
+  polarity (the "one polarity exception" above) stays the DEFAULT (`variant=dark`); a **sanctioned
+  `inverse` variant** is added (theme-pole aliased — dark chip on light worlds, light on dark), Ari's
+  call as a closed `variant` prop (§22 strategy set, not a per-instance knob). The dark-chrome
+  separator is the alpha-white **rim** (shadow alone does not read on dark, §6), not the shadow.
+  Values **pin: hypothesis** — eye-gated on the probes + Storybook. Reopened the polarity exception
+  with shadcn evidence; the exception holds as the default.
 
 ---
 

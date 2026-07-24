@@ -169,6 +169,13 @@
     --alx-surface-sunken: oklch(0.91 0 0);
     --alx-surface-transient: oklch(1 0 0);
     --alx-thumb-hairline-alpha: 0.07;
+    --alx-tooltip-edge-alpha: 0.18;
+    --alx-tooltip-ink: oklch(0.95 0 0);
+    --alx-tooltip-inverse-ink: oklch(1 0 0);
+    --alx-tooltip-inverse-surface: oklch(0.15 0 0);
+    --alx-tooltip-keycap-edge-alpha: 0.22;
+    --alx-tooltip-keycap-face-alpha: 0.12;
+    --alx-tooltip-surface: oklch(0.205 0 0);
     --alx-type-role-caption-font-family: Geist, system-ui, sans-serif;
     --alx-type-role-caption-font-size: 11px;
     --alx-type-role-caption-font-weight: 400;
@@ -349,6 +356,8 @@
     --alx-surface-selected: oklch(0.822 0 0);
     --alx-surface-sunken: oklch(0.85 0 0);
     --alx-surface-transient: oklch(0.905 0 0);
+    --alx-tooltip-inverse-ink: oklch(0.905 0 0);
+    --alx-tooltip-inverse-surface: oklch(0.23 0 0);
     --alx-world-register-step: 0.018;
 }
 
@@ -426,6 +435,8 @@
     --alx-surface-selected: oklch(0.405 0 0);
     --alx-surface-sunken: oklch(0.24 0 0);
     --alx-surface-transient: oklch(0.34 0 0);
+    --alx-tooltip-inverse-ink: oklch(0.3 0 0);
+    --alx-tooltip-inverse-surface: oklch(0.93 0 0);
     --alx-world-register-step: 0.035;
 }
 
@@ -503,6 +514,8 @@
     --alx-surface-selected: oklch(0.32 0 0);
     --alx-surface-sunken: oklch(0.155 0 0);
     --alx-surface-transient: oklch(0.26 0 0);
+    --alx-tooltip-inverse-ink: oklch(0.215 0 0);
+    --alx-tooltip-inverse-surface: oklch(0.9 0 0);
     --alx-world-register-step: 0.035;
 }
 

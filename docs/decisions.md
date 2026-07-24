@@ -1559,3 +1559,48 @@ user-correctable, comment at site). The engine's folder-add outcomes use the one
 `CreateFolderOutcomeKind` vocabulary (an engine-local camelCase twin was converged at
 integration — C15). macOS firmlink multi-root tracking is a ponytail ceiling on the
 resolver's mount cache. Windows probe rides the per-milestone Windows pass.
+
+## D42 — Tooltip: the §24 tooltip row, two-variant (fixed-dark default + inverse) (2026-07-23)
+
+The tooltip design+build round (Ari + Claude, 2026-07-23). Seats the §24 tooltip-row treatment and
+lands the `components/tooltip` primitive on it. **Modal** was scoped first, then deferred to the
+queue (its plan — single `Modal` primitive, the unpinned scrim-token gap, an alertdialog variant —
+is captured in the round's history); Tooltip won as the near-leaf transient with the most immediate
+consumers (every icon-button wants a hover label) and the twice-deferred D36→D40 keyboard-hint
+carve-out behind it.
+
+**D-number note:** lands chronologically as D42; the tail is contended (D39 SwatchPicker + others on
+unmerged worktrees renumber at merge — see D40's note). Ordered chronologically to avoid collisions.
+
+Rulings, all Ari-ratified (values **pin: hypothesis** — eye-gated on `library/tooltip-probe.html` +
+`tooltip-polarity-probe.html` and the Storybook `Primitives/Tooltip` matrix; final eye-tune open):
+
+- **Polarity is a closed two-value `variant` prop (§22 strategy set), not a per-instance knob.**
+  Ari's call, overriding the recommendation to bake one polarity in — but shaped so §6 holds:
+  `variant=dark` (default) is the ratified §6 fixed-dark chip (theme-invariant); `variant=inverse`
+  is theme-contrasting (dark on light worlds, light on dark). The §6 "one polarity exception" stands
+  as the DEFAULT; inverse is a *sanctioned added variant*, not a reversal. Reopened by new reference
+  evidence (shadcn's `primary`-contrast tooltip); §27's "adopt unmodified" still governs the default.
+- **Inverse is built from each theme's own poles** (design-ladder tier-1 alias, not literals):
+  `tooltip-inverse.surface = {ink.1}`, `ink = {surface.panel}` — maximal contrast on every theme,
+  auto-tracks any retune. Ari delegated the value: "reasonable for contrast + idiomatic."
+- **The separator on dark chrome is the alpha-white rim, NOT the shadow** — §6's "shadow alone does
+  not read on dark chrome" confirmed on the carbon probe (tone-only vanishes; the rim holds). The rim
+  derives from the variant ink at `tooltip.edge-alpha` (0.18), so it adapts to either variant; the
+  soft occlusion shadow is kept (free depth on light chrome, harmless on dark).
+- **Row values:** radius `radius.control` (6 — the transient 12 reads too round for a small label);
+  **no arrow** (redundant at a tight offset; the genre is dropping it); label `caption` (11px, over
+  the §28-pending micro 10). Trigger offset 5px and warmup ~700ms are RAC *behavior* — component
+  defaults, not tokens.
+- **Kbd-in-tooltip derives from the tooltip ink** (keycap face/edge alphas 0.12 / 0.22), so an
+  on-tooltip keycap adapts to either variant with no theme-following tokens. Ari pulled this into
+  scope (Kbd-on-dark was the D36/D40-deferred concern); the tokens are seated, but the
+  shortcut-carrying tooltip *component* variant stays deferred.
+- **Seated** in `semantic.tokens.json` (`tooltip` dark + derivation alphas, theme-invariant;
+  `tooltip-inverse` pole aliases) with per-variant APCA contract pairs (both near-max, pass). The
+  component is `components/tooltip` on RAC `TooltipTrigger`+`Tooltip` (its OWN primitive, not the
+  Popover shell — hover/focus, warmup, non-interactive), full RAC prop passthrough.
+
+**Deferred (DEFERRED triggers):** the shortcut/keyboard-hint tooltip *component* variant (first
+shortcut-in-tooltip consumer); a rich title+body tooltip (first consumer); a `max-width` cap (the
+chrome-dimensions token gap — first long-label consumer). **Modal** stays queued.

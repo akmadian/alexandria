@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Alexandria — tooltip-row probe (§24 fixed-dark treatment)</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: oklch(0.86 0 0); font-family: Geist, sans-serif; padding: 28px 28px 80px; color: oklch(0.2 0 0); }
+  h1 { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 30px 0 2px; }
+  .sub { font-size: 11px; color: oklch(0.42 0 0); font-family: "Geist Mono", monospace; margin-bottom: 18px; max-width: 1060px; line-height: 16px; }
+  .sub b { color: oklch(0.18 0 0); font-family: Geist; font-weight: 600; }
+  .themelabel { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.35 0 0); margin: 0 0 10px; }
+  .cols { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .cap { font-size: 10px; font-family: "Geist Mono", monospace; color: oklch(0.5 0 0); margin-top: 8px; line-height: 14px; }
+  .cap b { color: oklch(0.2 0 0); }
+
+  /* a chunk of theme chrome: trigger + tooltip stacked with a REAL tooltip offset (5px) */
+  .chrome { width: 224px; padding: 26px 0 30px; border-radius: 10px; outline: 1px solid var(--hairline);
+            background: var(--panel); display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .btn { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center;
+         color: var(--ink1); background: var(--btn); outline: 1px solid var(--hairline); font-size: 15px; }
+
+  /* the tooltip under test — fixed-dark, theme-INVARIANT (same on every theme). edge = ALPHA-WHITE. */
+  .tip { position: relative; --fill: 0.205; --ink: 0.95; --edgeA: 0.18;
+         background: oklch(var(--fill) 0 0); color: oklch(var(--ink) 0 0);
+         font-size: 11px; line-height: 16px; letter-spacing: 0.005em; font-weight: 400;
+         padding: 3px 8px; border-radius: 6px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .tip.r12 { border-radius: 12px; }
+  .tip.micro { font-size: 10px; line-height: 14px; letter-spacing: 0.015em; }
+  .tip.edge { box-shadow: inset 0 0 0 1px oklch(1 0 0 / var(--edgeA)); }
+  .tip.shadow { filter: drop-shadow(0 4px 12px oklch(0 0 0 / 0.18)) drop-shadow(0 1px 2px oklch(0 0 0 / 0.12)); }
+  .tip.edge.shadow { box-shadow: inset 0 0 0 1px oklch(1 0 0 / var(--edgeA)); }
+  .tip .arrow { position: absolute; top: -3px; left: 50%; transform: translateX(-50%) rotate(45deg);
+                width: 7px; height: 7px; background: oklch(var(--fill) 0 0); }
+
+  /* an on-dark Kbd keycap (the tooltip's own fixed material — alpha-white face + edge, light ink) */
+  .kbd { font-family: "Geist Mono", monospace; font-size: 10px; line-height: 1; color: oklch(0.82 0 0);
+         background: oklch(1 0 0 / 0.10); box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.20), inset 0 -1px 0 oklch(1 0 0 / 0.12);
+         border-radius: 4px; padding: 3px 5px 4px; min-width: 16px; display: inline-flex; justify-content: center; }
+
+  .matrix { display: flex; gap: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+  <h1>Tooltip row — §24 fixed-dark treatment · v2 (render before ratify)</h1>
+  <div class="sub">The <b>one polarity exception</b> (§6): tooltips are fixed-dark labels, the SAME dark chip on every theme. <b>v2 changes (Ari):</b> the separating edge is now <b>alpha-white</b> (self-adjusting — a light rim on dark chrome, invisible on white); the trigger gap is tightened to a real <b>5px offset</b> (v1 mocked it too loose, which unfairly punished the no-arrow read); and key commands render as an <b>on-dark Kbd keycap</b> reusing the tooltip's own material (§D). Hypothesis: fill <b>L 0.205</b>, ink <b>L 0.95</b>, alpha-white edge <b>0.18</b>, radius <b>6</b>, label <b>11px</b>.</div>
+
+  <h2>A · Polarity across the four themes</h2>
+  <div class="sub" style="margin-bottom:14px">The same fixed-dark chip (alpha-white edge + soft shadow) on each theme's panel chrome, at the real 5px offset. ΔL = tone gap chip↔chrome. Paper/linen huge · graphite comfortable · <b>carbon 0.010 — invisible by tone; the alpha-white edge is what holds it.</b></div>
+  <div class="cols" id="polarity"></div>
+
+  <h2>B · Separation — alpha-white edge, and how much (the fork)</h2>
+  <div class="sub" style="margin-bottom:14px">Left block, graphite+carbon: <b>tone only</b> · <b>+ alpha-white edge (0.18)</b> · <b>+ soft shadow</b> · <b>+ edge &amp; shadow</b>. Confirms the v1 finding — on carbon the <b>edge</b> is the separator, the shadow barely reads on dark chrome (§6). Right block: an <b>alpha sweep on carbon</b> (0.10 · 0.18 · 0.28) — your eye on how bright the rim should be: enough to hold on carbon, not so bright it shouts on paper.</div>
+  <div id="matrix"></div>
+  <div class="themelabel" style="margin-top:20px">carbon · alpha-white rim sweep</div>
+  <div class="matrix" id="sweep"></div>
+
+  <h2>C · Radius &amp; arrow — at the real 5px offset</h2>
+  <div class="sub" style="margin-bottom:14px">On paper, now honestly positioned. Radius <b>6</b> vs <b>12</b>. And arrow vs plain — with the gap tightened, does the plain chip still feel detached, or does 5px read as "attached to" the trigger without needing the pointer?</div>
+  <div class="cols" id="radiusArrow"></div>
+
+  <h2>D · Kbd inside the tooltip — on-dark keycap</h2>
+  <div class="sub" style="margin-bottom:14px">The consistency ask: key commands use the Kbd primitive. Kbd is normally theme-following (would go invisible on a dark theme inside a dark tooltip), so inside the tooltip it renders <b>on-dark</b> — an alpha-white face + edge + the tooltip's light ink. Shown on paper · graphite · carbon: because the tooltip is fixed-dark, the keycap looks <b>identical on all three</b> — that's the consistency win. Rightmost: plain-text shortcut (v1) for contrast.</div>
+  <div class="cols" id="kbd"></div>
+
+<script>
+  const THEMES = {
+    paper:    { panel: 1.00,  ink1: 0.15, hairline: 0.885, btn: 0.955 },
+    linen:    { panel: 0.905, ink1: 0.23, hairline: 0.815, btn: 0.885 },
+    graphite: { panel: 0.30,  ink1: 0.93, hairline: 0.40,  btn: 0.272 },
+    carbon:   { panel: 0.215, ink1: 0.90, hairline: 0.32,  btn: 0.190 },
+  };
+  const TIP_FILL = 0.205;
+  const setVars = (el, v) => { for (const [k, val] of Object.entries(v)) el.style.setProperty("--" + k, `oklch(${val} 0 0)`); };
+  const chrome = (v, tipClass, tipHTML, extra) => {
+    const c = document.createElement("div"); c.className = "chrome"; setVars(c, v);
+    c.innerHTML = `<div class="btn">◎</div><div class="tip ${tipClass}"${extra || ""}>${tipHTML}</div>`;
+    return c;
+  };
+  const col = (labelHTML, node, capHTML) => {
+    const d = document.createElement("div");
+    if (labelHTML) d.innerHTML = `<div class="themelabel">${labelHTML}</div>`;
+    else d.innerHTML = `<div class="themelabel" style="visibility:hidden">.</div>`;
+    d.appendChild(node);
+    const cap = document.createElement("div"); cap.className = "cap"; cap.innerHTML = capHTML || "";
+    d.appendChild(cap);
+    return d;
+  };
+
+  // A
+  const pol = document.getElementById("polarity");
+  for (const [name, v] of Object.entries(THEMES)) {
+    const dl = Math.abs(TIP_FILL - v.panel).toFixed(3);
+    pol.appendChild(col(name, chrome(v, "edge shadow", "Rotate 90° left"),
+      `chip L ${TIP_FILL} · panel L ${v.panel}<br><b>ΔL ${dl}</b>${dl < 0.03 ? " — edge holds it" : ""}`));
+  }
+
+  // B left — treatment matrix
+  const matrix = document.getElementById("matrix");
+  const TREAT = [
+    { cls: "", label: "tone only" },
+    { cls: "edge", label: "+ alpha-white edge" },
+    { cls: "shadow", label: "+ soft shadow" },
+    { cls: "edge shadow", label: "+ edge & shadow" },
+  ];
+  for (const name of ["graphite", "carbon"]) {
+    const v = THEMES[name];
+    const wrap = document.createElement("div"); wrap.style.marginBottom = "22px";
+    wrap.innerHTML = `<div class="themelabel">${name} · panel L ${v.panel}</div>`;
+    const row = document.createElement("div"); row.className = "matrix";
+    for (const t of TREAT) row.appendChild(col("", chrome(v, t.cls, "Rotate 90°"), t.label));
+    wrap.appendChild(row);
+    matrix.appendChild(wrap);
+  }
+
+  // B right — carbon alpha sweep
+  const sweep = document.getElementById("sweep");
+  for (const a of [0.10, 0.18, 0.28]) {
+    const node = chrome(THEMES.carbon, "edge shadow", "Rotate 90°", ` style="--edgeA:${a}"`);
+    sweep.appendChild(col("", node, `edge alpha ${a}`));
+  }
+
+  // C — radius & arrow (paper, real offset)
+  const ra = document.getElementById("radiusArrow");
+  ra.appendChild(col("", chrome(THEMES.paper, "edge shadow", "Rotate 90° left"), "radius 6 · plain"));
+  ra.appendChild(col("", chrome(THEMES.paper, "edge shadow r12", "Rotate 90° left"), "radius 12 · plain"));
+  ra.appendChild(col("", chrome(THEMES.paper, "edge shadow", 'Rotate 90° left<span class="arrow"></span>'), "radius 6 · with arrow"));
+
+  // D — Kbd on-dark
+  const kbd = document.getElementById("kbd");
+  const kbdTip = '<span>Rotate left</span><span class="kbd">⌘</span><span class="kbd">[</span>';
+  for (const name of ["paper", "graphite", "carbon"]) {
+    kbd.appendChild(col(name, chrome(THEMES[name], "edge shadow", kbdTip), "on-dark Kbd keycap"));
+  }
+  kbd.appendChild(col("plain text", chrome(THEMES.graphite, "edge shadow", "Rotate left · ⌘["), "v1 · plain shortcut"));
+</script>
+</body>
+</html>

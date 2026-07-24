@@ -1409,6 +1409,72 @@
       "css": "0.07"
     },
     {
+      "path": "tooltip-inverse.ink",
+      "type": "color",
+      "varying": true,
+      "role": "inverse label = the theme's panel pole (max contrast against the ink-pole chip)",
+      "pin": "hypothesis",
+      "css": {
+        "paper": "oklch(1 0 0)",
+        "linen": "oklch(0.905 0 0)",
+        "graphite": "oklch(0.3 0 0)",
+        "carbon": "oklch(0.215 0 0)"
+      }
+    },
+    {
+      "path": "tooltip-inverse.surface",
+      "type": "color",
+      "varying": true,
+      "role": "inverse chip = the theme's primary-ink pole (dark on light worlds, light on dark)",
+      "pin": "hypothesis",
+      "css": {
+        "paper": "oklch(0.15 0 0)",
+        "linen": "oklch(0.23 0 0)",
+        "graphite": "oklch(0.93 0 0)",
+        "carbon": "oklch(0.9 0 0)"
+      }
+    },
+    {
+      "path": "tooltip.edge-alpha",
+      "type": "number",
+      "varying": false,
+      "role": "alpha of the variant ink → the 1px separating rim; the load-bearing separator on dark chrome (§6). Eye-gated from the carbon sweep 0.10/0.18/0.28.",
+      "pin": "hypothesis",
+      "css": "0.18"
+    },
+    {
+      "path": "tooltip.ink",
+      "type": "color",
+      "varying": false,
+      "role": "label ink on the dark chip; near-max APCA over surface",
+      "pin": "hypothesis",
+      "css": "oklch(0.95 0 0)"
+    },
+    {
+      "path": "tooltip.keycap-edge-alpha",
+      "type": "number",
+      "varying": false,
+      "role": "alpha of the variant ink → the keycap rim",
+      "pin": "hypothesis",
+      "css": "0.22"
+    },
+    {
+      "path": "tooltip.keycap-face-alpha",
+      "type": "number",
+      "varying": false,
+      "role": "alpha of the variant ink → the on-tooltip Kbd keycap face. Kbd-in-tooltip derives from the tooltip's own ink, so it adapts to either variant with no theme-following tokens.",
+      "pin": "hypothesis",
+      "css": "0.12"
+    },
+    {
+      "path": "tooltip.surface",
+      "type": "color",
+      "varying": false,
+      "role": "the fixed-dark tooltip chip (variant=dark, the §6 default)",
+      "pin": "hypothesis",
+      "css": "oklch(0.205 0 0)"
+    },
+    {
       "path": "type-role.caption",
       "type": "typography",
       "varying": false,

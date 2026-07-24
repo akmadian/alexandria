@@ -74,6 +74,22 @@
     }
   },
 
+  "tooltip": {
+    "$description": "Tooltip material (§6/§24 tooltip row, D42). Fixed-dark labels — 'labels, not surfaces', the ratified §6 polarity exception. These roles are the DEFAULT (`variant=dark`) and are theme-INVARIANT (the same dark chip on every theme); the `inverse` variant is theme-varying and lives in themes/* as `tooltip-inverse`. The separating rim and the on-tooltip Kbd keycap are the variant ink at the alphas below — the design owns the opacity so components never hardcode it (§3). Literals are lawful here until the engineered palette lands (then alias, per this file's tier note). pin: hypothesis — eye-gated on library/tooltip-probe.html + tooltip-polarity-probe.html, 2026-07-23; the alpha-white rim (over the shadow) is the load-bearing separator on dark chrome, since shadow alone does not read there (§6).",
+    "surface": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [0.205, 0, 0] }, "$extensions": { "alx": { "pin": "hypothesis", "role": "the fixed-dark tooltip chip (variant=dark, the §6 default)" } } },
+    "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [0.95, 0, 0] }, "$extensions": { "alx": { "pin": "hypothesis", "role": "label ink on the dark chip; near-max APCA over surface" } } },
+    "edge-alpha": { "$type": "number", "$value": 0.18, "$extensions": { "alx": { "pin": "hypothesis", "role": "alpha of the variant ink → the 1px separating rim; the load-bearing separator on dark chrome (§6). Eye-gated from the carbon sweep 0.10/0.18/0.28." } } },
+    "keycap-face-alpha": { "$type": "number", "$value": 0.12, "$extensions": { "alx": { "pin": "hypothesis", "role": "alpha of the variant ink → the on-tooltip Kbd keycap face. Kbd-in-tooltip derives from the tooltip's own ink, so it adapts to either variant with no theme-following tokens." } } },
+    "keycap-edge-alpha": { "$type": "number", "$value": 0.22, "$extensions": { "alx": { "pin": "hypothesis", "role": "alpha of the variant ink → the keycap rim" } } }
+  },
+
+  "tooltip-inverse": {
+    "$type": "color",
+    "$description": "The tooltip `inverse` variant (§24/D42): theme-CONTRASTING, built from the theme's OWN poles so it maximally contrasts the chrome on every theme — a dark chip on light worlds, a light chip on dark worlds (shadcn-style). Aliases, not literals (design-ladder tier-1: role reference over new value): surface = the primary-ink pole, ink = the panel pole; re-tracks automatically if a theme retunes. The `tooltip` edge/keycap alphas apply to THIS ink too, so the rim and keycap adapt. pin: hypothesis 2026-07-23.",
+    "surface": { "$value": "{ink.1}", "$extensions": { "alx": { "pin": "hypothesis", "role": "inverse chip = the theme's primary-ink pole (dark on light worlds, light on dark)" } } },
+    "ink": { "$value": "{surface.panel}", "$extensions": { "alx": { "pin": "hypothesis", "role": "inverse label = the theme's panel pole (max contrast against the ink-pole chip)" } } }
+  },
+
   "type-role": {
     "$description": "The §30.4 role ladder (committed 2026-07-13): concept → typography composite; the paired ink lives in $extensions.alx.ink. For static text, two sizes do the work (12 default, 11 dense) and weight + ink + mono make the hierarchy (§9). CONTROL text is the exception (D33 proportional round): text scales with its size tier (§8) via two parallel per-tier ramps split by the weight convention — `control-*` (10/11/12/13 MEDIUM) for interactive labels (buttons/toggles/tabs/segments), `value-*` (10/11/12/13 REGULAR) for content (field values, checkbox/switch labels). Values PIN, eye-gate pending. 13 also serves dialog titles (semibold); 10 also the micro voice. disabled is NOT a role — it is the §4 unary operator (one ink step down on whatever role). VERIFIED with real Geist (library/type-probe.html, 2026-07-13): the matched pair holds — mono needs NO size compensation (baselines and x-heights align at same px; earlier 'mono reads larger' was a fallback-font artifact); head weight = semibold 600 (700 reads shouty over dense rows). Remaining §28 check: Windows ClearType at 1×.",
     "$type": "typography",

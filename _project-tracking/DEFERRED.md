@@ -777,3 +777,22 @@ have bought: different sync behavior for a subtree of a tracked root (watch
 layer, with no change to root identity, counts, or the watcher subscription set.
 
 **Trigger:** a user wants different sync behavior on a subtree of an already-tracked root.
+
+## 20. Tooltip — the deferred variants and the width cap
+
+**Surfaced:** the Tooltip round (2026-07-23, D42).
+
+The tooltip primitive shipped as a fixed-dark / inverse label (a two-variant `variant` prop). Three
+adjacent wants were deliberately not built:
+
+- **The shortcut / keyboard-hint tooltip variant** — a tooltip carrying a `Kbd` keycap (the ⌘K
+  hint), the literal D36/D40-deferred concern. The on-tooltip keycap MATERIAL is already seated
+  (`tooltip.keycap-face-alpha` / `keycap-edge-alpha` derive from the variant ink), so the token work
+  is done; the *component* variant (a Kbd rendered inside the tooltip, or a label+shortcut layout) is
+  not. **Trigger:** the first consumer that needs a shortcut shown in a tooltip.
+- **A rich tooltip** (title + body, multi-line) — the label tooltip is single-content. **Trigger:**
+  the first consumer needing structured tooltip content — at which point reassess tooltip vs. a
+  non-modal popover (a rich or interactive surface is a `role=dialog` popover, not a tooltip).
+- **A `max-width` cap** — the label sizes to content and wraps at the viewport today; a real width
+  cap is the parked **chrome-dimensions** token gap (`frontend/design/CLAUDE.md` open board), not
+  minted speculatively. **Trigger:** the first long-label tooltip consumer.

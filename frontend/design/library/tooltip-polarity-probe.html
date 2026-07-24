@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Alexandria — tooltip polarity: fixed-dark vs inverse-contrast</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("fonts/Geist.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono.woff2") format("woff2"); font-weight: 100 900; }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: oklch(0.86 0 0); font-family: Geist, sans-serif; padding: 28px 28px 80px; color: oklch(0.2 0 0); }
+  h1 { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  .sub { font-size: 11px; color: oklch(0.42 0 0); font-family: "Geist Mono", monospace; margin-bottom: 22px; max-width: 1080px; line-height: 16px; }
+  .sub b { color: oklch(0.18 0 0); font-family: Geist; font-weight: 600; }
+  .row { display: grid; grid-template-columns: 88px 1fr 1fr; gap: 20px; align-items: center; margin-bottom: 16px; }
+  .rowhead { display: contents; }
+  .colhead { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.35 0 0); }
+  .themename { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.35 0 0); }
+  .worldtag { font-size: 9px; font-family: "Geist Mono", monospace; color: oklch(0.55 0 0); margin-top: 3px; }
+
+  .chrome { padding: 22px 0 26px; border-radius: 10px; outline: 1px solid var(--hairline);
+            background: var(--panel); display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .btn { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center;
+         color: var(--ink1); background: var(--btn); outline: 1px solid var(--hairline); font-size: 15px; }
+
+  /* tooltip: fill + ink set per instance; edge + keycap derive from ink alpha so they adapt to polarity */
+  .tip { --fill: 0.205; --ink: 0.95;
+         background: oklch(var(--fill) 0 0); color: oklch(var(--ink) 0 0);
+         font-size: 11px; line-height: 16px; letter-spacing: 0.005em;
+         padding: 3px 8px; border-radius: 6px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+         box-shadow: inset 0 0 0 1px oklch(var(--ink) 0 0 / 0.18);
+         filter: drop-shadow(0 4px 12px oklch(0 0 0 / 0.16)) drop-shadow(0 1px 2px oklch(0 0 0 / 0.10)); }
+  .kbd { font-family: "Geist Mono", monospace; font-size: 10px; line-height: 1; color: oklch(var(--ink) 0 0);
+         background: oklch(var(--ink) 0 0 / 0.12); box-shadow: inset 0 0 0 1px oklch(var(--ink) 0 0 / 0.22);
+         border-radius: 4px; padding: 3px 5px 4px; min-width: 15px; display: inline-flex; justify-content: center; }
+</style>
+</head>
+<body>
+  <h1>Tooltip polarity — fixed-dark (§6 as ratified) vs inverse-contrast (shadcn-style)</h1>
+  <div class="sub"><b>The decision, on screen.</b> Left column = the ratified §6 fixed-dark chip (dark on every theme). Right column = inverse-contrast (dark on light worlds, <b>light on dark worlds</b>) — your proposal. Note the two columns are <b>identical on paper &amp; linen</b> — inversion only changes the dark worlds. The whole question is the bottom two rows: on graphite/carbon, does the <b>light</b> chip read better than the dark chip that needed the edge to survive? The Kbd keycap derives from the tooltip's own ink, so it flips with the chip (light keycap on dark chip, dark keycap on light chip) — consistent either way. <b>This reopens §6/§29 (the "one polarity exception" was ratified fixed-dark) — an amendment, your call.</b></div>
+
+  <div class="row rowhead">
+    <div></div>
+    <div class="colhead">fixed-dark (current §6)</div>
+    <div class="colhead">inverse-contrast (proposed)</div>
+  </div>
+  <div id="grid"></div>
+
+<script>
+  const THEMES = {
+    paper:    { world: "light", panel: 1.00,  ink1: 0.15, hairline: 0.885, btn: 0.955 },
+    linen:    { world: "light", panel: 0.905, ink1: 0.23, hairline: 0.815, btn: 0.885 },
+    graphite: { world: "dark",  panel: 0.30,  ink1: 0.93, hairline: 0.40,  btn: 0.272 },
+    carbon:   { world: "dark",  panel: 0.215, ink1: 0.90, hairline: 0.32,  btn: 0.190 },
+  };
+  const FIXED = { fill: 0.205, ink: 0.95 };
+  // inverse = the theme's OWN poles (seated as aliases: surface={ink.1}, ink={surface.panel}) — the emitted values
+  const inverseOf = (v) => ({ fill: v.ink1, ink: v.panel });
+  const setVars = (el, v) => { for (const k of ["panel","ink1","hairline","btn"]) el.style.setProperty("--" + k, `oklch(${v[k]} 0 0)`); };
+  const chrome = (v, spec) => {
+    const c = document.createElement("div"); c.className = "chrome"; setVars(c, v);
+    c.innerHTML = `<div class="btn">◎</div>
+      <div class="tip" style="--fill:${spec.fill};--ink:${spec.ink}">
+        <span>Rotate left</span><span class="kbd">⌘</span><span class="kbd">[</span>
+      </div>`;
+    return c;
+  };
+
+  const grid = document.getElementById("grid");
+  for (const [name, v] of Object.entries(THEMES)) {
+    const row = document.createElement("div"); row.className = "row";
+    const label = document.createElement("div");
+    label.innerHTML = `<div class="themename">${name}</div><div class="worldtag">${v.world} world</div>`;
+    row.appendChild(label);
+    row.appendChild(chrome(v, FIXED));
+    row.appendChild(chrome(v, inverseOf(v)));
+    grid.appendChild(row);
+  }
+</script>
+</body>
+</html>

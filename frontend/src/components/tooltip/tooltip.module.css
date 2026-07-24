@@ -1,0 +1,55 @@
+/* Tooltip — the §6 fixed-dark label (§24 tooltip row, D42). The one polarity exception: a
+ * fixed-dark chip on every theme (variant=dark, default), plus a theme-contrasting `inverse`
+ * variant built from each theme's poles. Surface + ink are the seated tooltip tokens; the
+ * separating rim DERIVES from the variant ink at --alx-tooltip-edge-alpha, so it reads as a
+ * light rim on dark chrome (the §6 separator there — shadow alone does not read on dark) and
+ * vanishes on light. The soft occlusion shadow adds depth on light chrome, harmless on dark. */
+
+.tooltip {
+    composes: alx-type-caption from global;
+    box-sizing: border-box;
+    padding: var(--alx-space-1) var(--alx-space-2);
+    /* rim = the variant ink at --alx-tooltip-edge-alpha (a border, like Kbd's keycap face —
+     * never a literal). On dark chrome this is the light separating rim (§6); on light it
+     * vanishes into the dark chip. */
+    border: var(--alx-stroke-hairline) solid oklch(from var(--tooltip-ink) l c h / var(--alx-tooltip-edge-alpha));
+    border-radius: var(--alx-radius-control);
+    background: var(--tooltip-surface);
+    color: var(--tooltip-ink);
+    box-shadow: var(--alx-shadow-occlusion);
+    /* A label chip sizes to its (short) content; a long label wraps at the viewport edge (RAC
+     * containerPadding). A max-width cap is the chrome-dimensions token gap — deferred to a
+     * real long-label consumer, not minted speculatively. */
+    transition:
+        opacity var(--alx-duration-fast) var(--alx-easing-out),
+        transform var(--alx-duration-fast) var(--alx-easing-out);
+}
+
+/* variant = the seated material bundle (§22 strategy set), never a per-instance knob. */
+.dark {
+    --tooltip-surface: var(--alx-tooltip-surface);
+    --tooltip-ink: var(--alx-tooltip-ink);
+}
+
+.inverse {
+    --tooltip-surface: var(--alx-tooltip-inverse-surface);
+    --tooltip-ink: var(--alx-tooltip-inverse-ink);
+}
+
+/* enter/exit: a quiet fade + 2px settle — transform/opacity only (§6 motion discipline). */
+.tooltip[data-entering],
+.tooltip[data-exiting] {
+    opacity: 0;
+    transform: translateY(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tooltip {
+        transition: none;
+    }
+
+    .tooltip[data-entering],
+    .tooltip[data-exiting] {
+        transform: none;
+    }
+}
