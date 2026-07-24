@@ -17,7 +17,7 @@ function stubAssetService(methods: Record<string, unknown>) {
 function modelRow(id: string): AssetRowModel {
     return {
         id,
-        sourceId: "source-1",
+        volumeId: "source-1",
         filename: `${id}.jpg`,
         fileType: "image",
         fileStatus: "online",
@@ -130,19 +130,7 @@ describe("wailsApi", () => {
     });
 });
 
-describe("wailsApi sources, import, and events", () => {
-    it("lists and creates sources through the SourceService bindings", async () => {
-        const source = { ID: "src-9", Name: "New", Kind: "local", BasePath: "/x" };
-        const listSources = vi.fn().mockResolvedValue([source]);
-        const createSource = vi.fn().mockResolvedValue(source);
-        vi.stubGlobal("go", { seam: { SourceService: { ListSources: listSources, CreateSource: createSource } } });
-
-        await expect(wailsApi.listSources()).resolves.toEqual([source]);
-        const input = { name: "New", basePath: "/x" };
-        await expect(wailsApi.createSource(input)).resolves.toBe(source);
-        expect(createSource).toHaveBeenCalledWith(input);
-    });
-
+describe("wailsApi import and events", () => {
     it("starts and cancels imports through the ImportService bindings", async () => {
         const startImport = vi.fn().mockResolvedValue("job-42");
         const cancelJob = vi.fn().mockResolvedValue(undefined);
@@ -156,11 +144,11 @@ describe("wailsApi sources, import, and events", () => {
 
     it("normalizes a source rejection into ApiError", async () => {
         vi.stubGlobal("go", {
-            seam: { ImportService: { StartImport: vi.fn().mockRejectedValue('{"kind":"domain","code":"source_offline","detail":"src-0"}') } },
+            seam: { ImportService: { StartImport: vi.fn().mockRejectedValue('{"kind":"domain","code":"volume_offline","detail":"src-0"}') } },
         });
         const failure = await wailsApi.startImport("src-0").catch((error: unknown) => error);
         expect(failure).toBeInstanceOf(ApiError);
-        expect((failure as ApiError).code).toBe("source_offline");
+        expect((failure as ApiError).code).toBe("volume_offline");
     });
 
     it("subscribes one listener per topic channel and tears them all down", () => {

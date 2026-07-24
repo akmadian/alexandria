@@ -13,7 +13,7 @@ export type EventType =
   | "done"
   | "historyChanged"
   | "progress"
-  | "sourceStatus";
+  | "volumeStatus";
 
 export type JobState =
   | "cancelled"

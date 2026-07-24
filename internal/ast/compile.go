@@ -4,6 +4,12 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	// Pure Unicode normalization for the folder-scope path_key prefix. This is
+	// NOT a domain import (ast's purity rule stands: domain only for enum
+	// membership); it is the same pure NFC call domain.PathKey wraps, and the
+	// scope tests pin the two together.
+	"golang.org/x/text/unicode/norm"
 )
 
 // Statement is the compiled SQL output: parameterized query text and its
@@ -156,7 +162,7 @@ func MergeScope(outer Query, storedWhere Node) Query {
 
 // --- Asset row columns (the slim grid-card projection) ---
 
-const assetRowColumns = `id, source_id, filename, file_type, file_status,
+const assetRowColumns = `id, volume_id, filename, file_type, file_status,
 	rating, color_label, flag,
 	width, height, captured_at, ingested_at,
 	thumbnail_at, relative_path, size_bytes,
@@ -204,23 +210,30 @@ func compileScope(scope *Scope) (string, []any, error) {
 	}
 }
 
-// compileFolderScope narrows to one directory within a source. Path "" is the
-// source root. Non-recursive means direct children only: paths under the
+// compileFolderScope narrows to one directory within a volume. Path "" is the
+// volume root. Non-recursive means direct children only: paths under the
 // folder with no further separator.
+//
+// The subtree filter compiles against path_key with an NFC-normalized prefix —
+// "compare keys, open bytes" (D24; DEFERRED §8: normalizing only one side is
+// WRONG against NFD-stored rows). This mirrors sqlite/asset_repo.go's
+// volumeSubtreeClause, so the two subtree predicates share one normalization;
+// the ast test suite pins this normalization to domain.PathKey. NFC never
+// touches ASCII, so '/' segment boundaries survive normalization.
 func compileFolderScope(scope *Scope) (string, []any, error) {
 	if scope.Path == "" {
 		if scope.Recursive {
-			return "source_id = ?", []any{scope.SourceID}, nil
+			return "volume_id = ?", []any{scope.VolumeID}, nil
 		}
-		return "source_id = ? AND relative_path NOT LIKE '%/%'", []any{scope.SourceID}, nil
+		return "volume_id = ? AND path_key NOT LIKE '%/%'", []any{scope.VolumeID}, nil
 	}
-	prefix := escapeLike(scope.Path) + "/"
+	prefix := escapeLike(norm.NFC.String(scope.Path)) + "/"
 	if scope.Recursive {
-		return "source_id = ? AND relative_path LIKE ? ESCAPE '\\'",
-			[]any{scope.SourceID, prefix + "%"}, nil
+		return "volume_id = ? AND path_key LIKE ? ESCAPE '\\'",
+			[]any{scope.VolumeID, prefix + "%"}, nil
 	}
-	return "source_id = ? AND relative_path LIKE ? ESCAPE '\\' AND relative_path NOT LIKE ? ESCAPE '\\'",
-		[]any{scope.SourceID, prefix + "%", prefix + "%/%"}, nil
+	return "volume_id = ? AND path_key LIKE ? ESCAPE '\\' AND path_key NOT LIKE ? ESCAPE '\\'",
+		[]any{scope.VolumeID, prefix + "%", prefix + "%/%"}, nil
 }
 
 func compileNode(node Node, now time.Time) (string, []any, error) {

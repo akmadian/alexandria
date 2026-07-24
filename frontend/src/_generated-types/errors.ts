@@ -13,5 +13,5 @@ export type ErrorCode =
   | "not_found"
   | "query_invalid"
   | "query_version_too_new"
-  | "source_offline"
-  | "validation";
+  | "validation"
+  | "volume_offline";

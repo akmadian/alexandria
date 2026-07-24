@@ -111,7 +111,7 @@ func (pipe *pipeline) commit(ctx context.Context, batch []*pipelineItem) error {
 		if !item.isSidecar && !item.rejected {
 			committed++
 			if pipe.importer.OnAssetCommitted != nil {
-				pipe.importer.OnAssetCommitted(ctx, pipe.source, item.assetID, item.scanned.relPath)
+				pipe.importer.OnAssetCommitted(ctx, pipe.target.VolumeID, item.assetID, item.scanned.relPath)
 			}
 		}
 	}
@@ -152,7 +152,7 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 		}
 	}
 	if item.isSidecar {
-		return repos.Sidecars.UpsertObservation(ctx, buildSidecar(pipe.source, &item.scanned, item.hash))
+		return repos.Sidecars.UpsertObservation(ctx, buildSidecar(pipe.target, &item.scanned, item.hash))
 	}
 	if item.rejected {
 		return nil // error row written; no identity minted
@@ -167,7 +167,7 @@ func (pipe *pipeline) writeItem(ctx context.Context, repos sqlite.Repos, item *p
 		item.logger.Debug("reimport: derived state + enrichment DLQ cleared", "path", item.scanned.relPath, "assetID", item.assetID)
 		return clearStaleDerived(ctx, repos, item.assetID)
 	default: // actionNew, actionDuplicate
-		asset := buildAsset(item.assetID, pipe.source, &item.scanned, item.hash, &item.extractedMetadata)
+		asset := buildAsset(item.assetID, pipe.target, &item.scanned, item.hash, &item.extractedMetadata)
 		if err := repos.Assets.Create(ctx, asset); err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func clearStaleDerived(ctx context.Context, repos sqlite.Repos, assetID string) 
 // writeItem. Note the reimport branch requires Store (not just the narrow Obs
 // writer) — a watcher composition that omits Store nil-panics on its primary
 // event, a same-path edit.
-func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
+func (imp *Importer) persist(ctx context.Context, target Target, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata, verdict action, existing *domain.Asset, logger *log.Logger) (string, error) {
 	switch verdict {
 	case actionReimport:
 		logger.Debug("write.persist: reimporting existing asset", "path", scanned.relPath, "assetID", existing.ID)
@@ -222,7 +222,7 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned
 
 	default: // actionNew, actionDuplicate
 		logger.Debug("write.persist: new asset detected - minting!", "path", scanned.relPath)
-		asset := buildAsset(domain.NewID(), source, scanned, hash, extractedMetadata)
+		asset := buildAsset(domain.NewID(), target, scanned, hash, extractedMetadata)
 		if err := imp.Obs.Create(ctx, asset); err != nil {
 			return "", err
 		}
@@ -244,7 +244,7 @@ func (imp *Importer) persist(ctx context.Context, source *domain.Source, scanned
 // buildSidecar derives the (dir, stem) filesystem key and observation columns
 // for a companion file. The grouping engine later matches assets to sidecars on
 // this key.
-func buildSidecar(source *domain.Source, scanned *scannedFile, hash string) *domain.SidecarFile {
+func buildSidecar(target Target, scanned *scannedFile, hash string) *domain.SidecarFile {
 	directory := path.Dir(scanned.relPath)
 	if directory == "." {
 		directory = ""
@@ -253,7 +253,7 @@ func buildSidecar(source *domain.Source, scanned *scannedFile, hash string) *dom
 	now := time.Now().UTC()
 	return &domain.SidecarFile{
 		ID:           domain.NewID(),
-		SourceID:     source.ID,
+		VolumeID:     target.VolumeID,
 		Dir:          directory,
 		Stem:         stem,
 		Ext:          scanned.ext,
@@ -317,11 +317,11 @@ func reimportFilePatch(scanned *scannedFile, hash string, extractedMetadata *met
 // metadata. The ID is minted by the caller (MATCH). ThumbnailAt is nil at
 // commit by design (D25): the thumbnail is an enrichment artifact, produced
 // post-commit by the engine — the missing column IS the queue.
-func buildAsset(id string, source *domain.Source, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata) *domain.Asset {
+func buildAsset(id string, target Target, scanned *scannedFile, hash string, extractedMetadata *metadata.Metadata) *domain.Asset {
 	now := time.Now().UTC()
 	asset := &domain.Asset{
 		ID:           id,
-		SourceID:     source.ID,
+		VolumeID:     target.VolumeID,
 		RelativePath: scanned.relPath,
 		FileStatus:   domain.FileStatusOnline,
 		Filename:     scanned.filename,

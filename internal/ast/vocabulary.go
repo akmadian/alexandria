@@ -19,7 +19,7 @@ const (
 	FieldTag         Field = "tag"
 	FieldCapturedAt  Field = "capturedAt"
 	FieldIngestedAt  Field = "ingestedAt"
-	FieldSource      Field = "source"
+	FieldVolume      Field = "volumeId"
 	FieldWidth       Field = "width"
 	FieldHeight      Field = "height"
 	FieldCameraMake  Field = "cameraMake"
@@ -107,12 +107,13 @@ type FieldSpec struct {
 	// Suggestable marks fields whose distinct values can be queried for
 	// autocomplete (CompileDistinctValues).
 	Suggestable bool
-	// columnOverride replaces the mechanical camelCase→snake_case column
-	// derivation. Only `source` needs it (source → source_id). Virtual fields
-	// (tag, text) set virtual instead and have no column.
-	columnOverride string
 	// virtual marks fields with no assets column: tag (junction table) and
 	// text (FTS). They compile through dedicated strategies.
+	//
+	// Every non-virtual field's column derives mechanically (camelCase→snake_case)
+	// — the old `source → source_id` override died with the D24 volume/folder
+	// split: the entity field is now `volumeId`, which derives to `volume_id`
+	// cleanly, so there is no longer any column-derivation exception.
 	virtual bool
 }
 
@@ -128,7 +129,7 @@ var vocabulary = map[Field]FieldSpec{
 	FieldTag:         {Kind: KindTagReference, Nullable: true, virtual: true},
 	FieldCapturedAt:  {Kind: KindDateRange, Nullable: true},
 	FieldIngestedAt:  {Kind: KindDateRange},
-	FieldSource:      {Kind: KindEntityReference, columnOverride: "source_id"},
+	FieldVolume:      {Kind: KindEntityReference},
 	FieldWidth:       {Kind: KindNumeric, Nullable: true},
 	FieldHeight:      {Kind: KindNumeric, Nullable: true},
 	FieldCameraMake:  {Kind: KindText, Nullable: true, Suggestable: true},
@@ -172,9 +173,6 @@ func (s FieldSpec) allowsOperator(operator Operator) bool {
 func (s FieldSpec) column(field Field) string {
 	if s.virtual {
 		return ""
-	}
-	if s.columnOverride != "" {
-		return s.columnOverride
 	}
 	return camelToSnake(string(field))
 }

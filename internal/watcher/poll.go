@@ -45,10 +45,10 @@ func probeReachable(fsys fs.FS) bool {
 // pollDriven starts true when the event subscribe failed (inotify watch-limit →
 // degrade to polling, never crash).
 //
-// ponytail: the source-level sources.connectivity column (SourceRepo.SetConnectivity)
+// ponytail: the volume-level volumes.connectivity column (VolumeRepo.SetConnectivity)
 // is NOT written here — no consumer reads it yet (the P3 health panel is deferred).
-// MarkConnectivityBySource (asset file_status) is what keeps assets browsable-but-
-// offline, which is the only observable requirement today. Add the source-column
+// MarkConnectivityByVolume (asset file_status) is what keeps assets browsable-but-
+// offline, which is the only observable requirement today. Add the volume-column
 // flip when the status bar consumes it.
 func (w *Watcher) poll(ctx context.Context, fsys fs.FS, pollDriven bool) error {
 	interval := w.PollInterval
@@ -67,27 +67,27 @@ func (w *Watcher) poll(ctx context.Context, fsys fs.FS, pollDriven bool) error {
 			switch {
 			case !reachable && !w.offline.Load():
 				w.offline.Store(true)
-				if err := w.Obs.MarkConnectivityBySource(ctx, w.Source.ID, false); err != nil {
-					w.Log.Error("watcher: mark offline failed", "source", w.Source.Name, "err", err)
+				if err := w.Obs.MarkConnectivityByVolume(ctx, w.Target.VolumeID, false); err != nil {
+					w.Log.Error("watcher: mark offline failed", "volume", w.Target.Name, "err", err)
 				}
-				w.Log.Warn("watcher: source offline — quiescing", "source", w.Source.Name)
+				w.Log.Warn("watcher: volume offline — quiescing", "volume", w.Target.Name)
 
 			case reachable && w.offline.Load():
 				w.offline.Store(false)
-				if err := w.Obs.MarkConnectivityBySource(ctx, w.Source.ID, true); err != nil {
-					w.Log.Error("watcher: mark online failed", "source", w.Source.Name, "err", err)
+				if err := w.Obs.MarkConnectivityByVolume(ctx, w.Target.VolumeID, true); err != nil {
+					w.Log.Error("watcher: mark online failed", "volume", w.Target.Name, "err", err)
 				}
-				w.Log.Info("watcher: source online — catch-up reconcile", "source", w.Source.Name)
+				w.Log.Info("watcher: volume online — catch-up reconcile", "volume", w.Target.Name)
 				pollDriven = true // stay poll-driven; we don't re-subscribe live events
-				if _, err := w.Ingester.Run(ctx, w.Source, fsys); err != nil {
+				if _, err := w.Ingester.Run(ctx, w.Target, fsys); err != nil {
 					w.Log.Error("watcher: catch-up reconcile failed", "err", err)
 				}
 
 			case reachable && pollDriven:
 				// No live events (degraded or post-remount): the periodic walk IS the
 				// change detector.
-				w.Log.Debug("watcher: poll reconcile (no live events)", "source", w.Source.Name)
-				if _, err := w.Ingester.Run(ctx, w.Source, fsys); err != nil {
+				w.Log.Debug("watcher: poll reconcile (no live events)", "volume", w.Target.Name)
+				if _, err := w.Ingester.Run(ctx, w.Target, fsys); err != nil {
 					w.Log.Error("watcher: poll reconcile failed", "err", err)
 				}
 			}

@@ -19,7 +19,10 @@ type AssetRepo struct {
 	DB DBTX
 }
 
-const assetColumns = `id, source_id, relative_path, file_status, last_verified_at,
+// assetColumns is the full read/write column list. path_key is deliberately NOT
+// here: it is a derived storage column (NFC of relative_path), never a domain
+// field, so Create writes it separately and scans never read it back.
+const assetColumns = `id, volume_id, relative_path, file_status, last_verified_at,
 	filename, extension, mime_type, file_type, size_bytes, mtime, partial_hash,
 	width, height, duration_secs, color_space, bit_depth,
 	captured_at, camera_make, camera_model, lens_model, focal_length_mm,
@@ -52,10 +55,13 @@ func (r *AssetRepo) FindByHash(ctx context.Context, hash string, sizeBytes int64
 	return a, err
 }
 
-func (r *AssetRepo) FindBySourcePath(ctx context.Context, sourceID, relativePath string) (*domain.Asset, error) {
+// FindByVolumePath matches on (volume_id, path_key) — the NFC comparison form,
+// so an NFD-stored name matches its NFC query form (D24: compare keys, open
+// bytes). The unique identity index backs it.
+func (r *AssetRepo) FindByVolumePath(ctx context.Context, volumeID, relativePath string) (*domain.Asset, error) {
 	row := r.DB.QueryRowContext(ctx,
-		"SELECT "+assetColumns+" FROM assets WHERE source_id = ? AND relative_path = ?",
-		sourceID, relativePath)
+		"SELECT "+assetColumns+" FROM assets WHERE volume_id = ? AND path_key = ?",
+		volumeID, domain.PathKey(relativePath))
 	a, err := scanAssetRow(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -86,10 +92,12 @@ func (r *AssetRepo) DeleteByID(ctx context.Context, id string) error {
 // reappears unchanged must NOT be skipped — it has to flow through the matrix to
 // be restored (relink/reimport → online). Skipping it would leave it missing
 // forever.
-func (r *AssetRepo) ListKnownFiles(ctx context.Context, sourceID string) (map[string]domain.FileStat, error) {
+func (r *AssetRepo) ListKnownFiles(ctx context.Context, volumeID, pathPrefix string) (map[string]domain.FileStat, error) {
+	subtree, args := volumeSubtreeClause(pathPrefix)
+	args = append([]any{volumeID}, args...)
 	rows, err := r.DB.QueryContext(ctx,
-		"SELECT relative_path, mtime, size_bytes, partial_hash FROM assets WHERE source_id = ? AND is_deleted = 0 AND file_status = 'online'",
-		sourceID)
+		"SELECT path_key, mtime, size_bytes, partial_hash FROM assets WHERE volume_id = ? AND is_deleted = 0 AND file_status = 'online'"+subtree,
+		args...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,13 +105,13 @@ func (r *AssetRepo) ListKnownFiles(ctx context.Context, sourceID string) (map[st
 
 	known := make(map[string]domain.FileStat)
 	for rows.Next() {
-		var relPath, mtime string
+		var pathKey, mtime string
 		var size int64
 		var hash sql.NullString
-		if err := rows.Scan(&relPath, &mtime, &size, &hash); err != nil {
+		if err := rows.Scan(&pathKey, &mtime, &size, &hash); err != nil {
 			return nil, err
 		}
-		known[relPath] = domain.FileStat{
+		known[pathKey] = domain.FileStat{
 			MTime:       parseTime(mtime),
 			SizeBytes:   size,
 			PartialHash: hash.String,
@@ -113,11 +121,13 @@ func (r *AssetRepo) ListKnownFiles(ctx context.Context, sourceID string) (map[st
 }
 
 // ListPathsStatus is the slim reconciliation projection: id, path, status for
-// every live asset in the source — no 40-column scan per row.
-func (r *AssetRepo) ListPathsStatus(ctx context.Context, sourceID string) ([]catalog.PathStatus, error) {
+// every live asset in one volume subtree — no 40-column scan per row.
+func (r *AssetRepo) ListPathsStatus(ctx context.Context, volumeID, pathPrefix string) ([]catalog.PathStatus, error) {
+	subtree, args := volumeSubtreeClause(pathPrefix)
+	args = append([]any{volumeID}, args...)
 	rows, err := r.DB.QueryContext(ctx,
-		"SELECT id, relative_path, file_status FROM assets WHERE source_id = ? AND is_deleted = 0",
-		sourceID)
+		"SELECT id, relative_path, file_status FROM assets WHERE volume_id = ? AND is_deleted = 0"+subtree,
+		args...)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +142,30 @@ func (r *AssetRepo) ListPathsStatus(ctx context.Context, sourceID string) ([]cat
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// volumeSubtreeClause scopes a per-volume query to the paths at/under pathPrefix
+// (volume-relative). "" means the whole volume (no extra clause). Comparison is
+// key-to-key (path_key, NFC): the folder path itself plus every descendant. The
+// LIKE pattern is escaped so a directory name containing %/_ is matched literally.
+func volumeSubtreeClause(pathPrefix string) (string, []any) {
+	if pathPrefix == "" {
+		return "", nil
+	}
+	prefixKey := domain.PathKey(pathPrefix)
+	return " AND (path_key = ? OR path_key LIKE ? ESCAPE '\\')",
+		[]any{prefixKey, escapeLikePrefix(prefixKey) + "/%"}
+}
+
+// escapeLikePrefix escapes LIKE metacharacters so a stored path segment is
+// matched literally (mirrors the ast compiler's escapeLike; kept local so the
+// query authority stays the sole owner of USER-predicate SQL — this is engine
+// plumbing over path_key).
+func escapeLikePrefix(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
+	return s
 }
 
 // --- Query-layer reader (impl/13) ---
@@ -336,7 +370,7 @@ func scanAssetRowSlim(rows *sql.Rows) (catalog.AssetRow, error) {
 	var sizeBytes int64
 
 	if err := rows.Scan(
-		&row.ID, &row.SourceID, &row.Filename, &row.FileType, &row.FileStatus,
+		&row.ID, &row.VolumeID, &row.Filename, &row.FileType, &row.FileStatus,
 		&rating, &colorLabel, &flag,
 		&width, &height, &capturedAt, &ingestedAt,
 		&thumbnailAt, &row.RelativePath, &sizeBytes,
@@ -395,9 +429,9 @@ func (r *AssetRepo) Create(ctx context.Context, asset *domain.Asset) error {
 		return err
 	}
 	_, err = r.DB.ExecContext(ctx, `INSERT INTO assets
-		(`+assetColumns+`) VALUES
-		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?)`,
-		asset.ID, asset.SourceID, asset.RelativePath, asset.FileStatus, formatTimePtr(asset.LastVerifiedAt),
+		(`+assetColumns+`, path_key) VALUES
+		(?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?, ?)`,
+		asset.ID, asset.VolumeID, asset.RelativePath, asset.FileStatus, formatTimePtr(asset.LastVerifiedAt),
 		asset.Filename, asset.Extension, asset.MIMEType, asset.FileType, asset.SizeBytes, formatTime(asset.MTime), asset.PartialHash,
 		asset.Width, asset.Height, asset.DurationSecs, asset.ColorSpace, asset.BitDepth,
 		formatTimePtr(asset.CapturedAt), asset.CameraMake, asset.CameraModel, asset.LensModel, asset.FocalLengthMM,
@@ -409,7 +443,8 @@ func (r *AssetRepo) Create(ctx context.Context, asset *domain.Asset) error {
 		boolToInt(asset.IsDeleted), formatTimePtr(asset.DeletedAt),
 		formatTime(asset.IngestedAt), formatTime(asset.UpdatedAt),
 		asset.Title, asset.Caption, formatTimePtr(asset.JudgmentModifiedAt),
-		asset.Sharpness, asset.ClippingHighlights, asset.ClippingShadows)
+		asset.Sharpness, asset.ClippingHighlights, asset.ClippingShadows,
+		domain.PathKey(asset.RelativePath))
 	return err
 }
 
@@ -472,10 +507,13 @@ func (r *AssetRepo) ApplyFilePatch(ctx context.Context, id string, patch *catalo
 	return checkRowsAffected(res, "asset", id)
 }
 
-func (r *AssetRepo) UpdatePath(ctx context.Context, assetID, sourceID, relativePath string) error {
+// UpdatePath re-homes an asset onto a new (volume, path). path_key is re-derived
+// so the comparison key tracks the bytes (D24). Used by the review queue's
+// confirm-move resolution (DEFERRED §5), not by ingest (D20).
+func (r *AssetRepo) UpdatePath(ctx context.Context, assetID, volumeID, relativePath string) error {
 	res, err := r.DB.ExecContext(ctx,
-		"UPDATE assets SET source_id = ?, relative_path = ?, updated_at = ? WHERE id = ?",
-		sourceID, relativePath, formatTime(time.Now().UTC()), assetID)
+		"UPDATE assets SET volume_id = ?, relative_path = ?, path_key = ?, updated_at = ? WHERE id = ?",
+		volumeID, relativePath, domain.PathKey(relativePath), formatTime(time.Now().UTC()), assetID)
 	if err != nil {
 		return err
 	}
@@ -492,17 +530,17 @@ func (r *AssetRepo) SetFileStatus(ctx context.Context, assetID string, status do
 	return checkRowsAffected(res, "asset", assetID)
 }
 
-// MarkConnectivityBySource flips every asset of a source between online and
+// MarkConnectivityByVolume flips every asset of a volume between online and
 // offline (a whole-volume mount/unmount). Files are presumed intact when a
-// source goes offline — this never marks them missing.
-func (r *AssetRepo) MarkConnectivityBySource(ctx context.Context, sourceID string, online bool) error {
+// volume goes offline — this never marks them missing.
+func (r *AssetRepo) MarkConnectivityByVolume(ctx context.Context, volumeID string, online bool) error {
 	fromStatus, toStatus := domain.FileStatusOnline, domain.FileStatusOffline
 	if online {
 		fromStatus, toStatus = domain.FileStatusOffline, domain.FileStatusOnline
 	}
 	_, err := r.DB.ExecContext(ctx,
-		"UPDATE assets SET file_status = ? WHERE source_id = ? AND file_status = ?",
-		toStatus, sourceID, fromStatus)
+		"UPDATE assets SET file_status = ? WHERE volume_id = ? AND file_status = ?",
+		toStatus, volumeID, fromStatus)
 	return err
 }
 
@@ -699,7 +737,7 @@ func scanAssetFromRow(scanner assetScanner) (*domain.Asset, error) {
 	var sharpness, clippingHighlights, clippingShadows sql.NullFloat64
 
 	err := scanner.Scan(
-		&asset.ID, &asset.SourceID, &asset.RelativePath, &asset.FileStatus, &lastVerifiedAt,
+		&asset.ID, &asset.VolumeID, &asset.RelativePath, &asset.FileStatus, &lastVerifiedAt,
 		&asset.Filename, &asset.Extension, &asset.MIMEType, &asset.FileType, &asset.SizeBytes, &mtime, &asset.PartialHash,
 		&width, &height, &durationSecs, &colorSpace, &bitDepth,
 		&capturedAt, &cameraMake, &cameraModel, &lensModel, &focalLengthMM,

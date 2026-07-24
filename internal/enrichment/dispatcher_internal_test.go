@@ -45,7 +45,7 @@ func jpgOnlyApplicable(handler assettype.Handler) bool { return handler.Ext == "
 func internalEngineState(t *testing.T, definitions []JobDefinition, missingAssets int) (*Engine, *dispatcherState) {
 	t.Helper()
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "internal")
+	source := testutil.NewTestVolume(t, db, "internal")
 	for index := range missingAssets {
 		testutil.NewTestAsset(t, db, source.ID, "internal-"+string(rune('a'+index))+".jpg")
 	}

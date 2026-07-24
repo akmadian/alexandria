@@ -18,33 +18,57 @@
 -- INTO (which never renumbers rowids); do NOT run a plain in-place VACUUM. If one is
 -- ever run, call sqlite.RebuildFTS afterwards.
 
-CREATE TABLE IF NOT EXISTS sources (
+-- The D24 split (D41): `sources` becomes `volumes` (identity/portability anchor,
+-- matched by filesystem UUID — the mount point is resolved live, never stored)
+-- plus `folders` (tracked roots + sync scope; one volume, many disjoint folders).
+-- The split principle is identity vs. tracking scope, NOT writer class — both
+-- tables carry mixed classes, enforced per-column by the catalog writer interfaces.
+CREATE TABLE IF NOT EXISTS volumes (
     id                  TEXT PRIMARY KEY,
     name                TEXT NOT NULL,                              -- [jdg]
     kind                TEXT NOT NULL CHECK(kind IN ('local', 'external_drive', 'smb', 'nfs')),
-    base_path           TEXT NOT NULL,                             -- [jdg]
-    filesystem_uuid     TEXT,                                      -- [obs]
-    disk_serial         TEXT,                                      -- [obs]
-    volume_label        TEXT,                                      -- [obs]
     host                TEXT,                                      -- [jdg]
     share_name          TEXT,                                      -- [jdg]
-    poll_interval_secs  INTEGER,                                   -- [jdg]
-    scan_recursively    INTEGER NOT NULL DEFAULT 1,                -- [jdg]
-    enabled             INTEGER NOT NULL DEFAULT 1,                -- [jdg] user activates/deactivates
+    filesystem_uuid     TEXT,                                      -- [obs] identity key: real fs UUID (local/external), 'smb://host/share' / 'nfs://host/export' (network), or residual session-scoped 'dev:N' (exotic fs only — internal/volume prober)
+    disk_serial         TEXT,                                      -- [obs]
+    volume_label        TEXT,                                      -- [obs]
     connectivity        TEXT NOT NULL DEFAULT 'online'             -- [obs] volume monitor / reconciler
                             CHECK(connectivity IN ('online', 'offline')),
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+);
+
+-- A volume is found-or-created by filesystem_uuid, so the identity lookup is a
+-- unique index (NULLs are distinct in SQLite, so an as-yet-unidentified volume
+-- never collides).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_volumes_filesystem_uuid ON volumes(filesystem_uuid);
+
+CREATE TABLE IF NOT EXISTS folders (
+    id                  TEXT PRIMARY KEY,
+    volume_id           TEXT NOT NULL REFERENCES volumes(id) ON DELETE RESTRICT,
+    path                TEXT NOT NULL,                             -- [jdg] volume-relative; '' = volume root
+    name                TEXT NOT NULL,                             -- [jdg]
+    sync_mode           TEXT NOT NULL DEFAULT 'manual'             -- [jdg]
+                            CHECK(sync_mode IN ('manual', 'watched', 'scheduled')),
+    scan_recursively    INTEGER NOT NULL DEFAULT 1,                -- [jdg]
+    enabled             INTEGER NOT NULL DEFAULT 1,                -- [jdg] user activates/deactivates
+    poll_interval_secs  INTEGER,                                   -- [jdg]
     last_scanned_at     TEXT,                                      -- [syn]
     created_at          TEXT NOT NULL,
     updated_at          TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_sources_filesystem_uuid ON sources(filesystem_uuid);
+CREATE INDEX IF NOT EXISTS idx_folders_volume ON folders(volume_id);
+-- Tracked roots on one volume are disjoint by invariant (D41); a volume never
+-- carries two folders at the same path.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_volume_path ON folders(volume_id, path);
 
 CREATE TABLE IF NOT EXISTS assets (
     id                  TEXT PRIMARY KEY,
-    source_id           TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+    volume_id           TEXT NOT NULL REFERENCES volumes(id) ON DELETE RESTRICT,
     -- [obs] file identity & facts ------------------------------------------------
-    relative_path       TEXT NOT NULL,
+    relative_path       TEXT NOT NULL,                             -- volume-relative path; on-disk bytes, the I/O truth
+    path_key            TEXT NOT NULL,                             -- [der] NFC(relative_path); "compare keys, open bytes" (D24) — rebuildable
     file_status         TEXT NOT NULL DEFAULT 'online' CHECK(file_status IN ('online', 'offline', 'missing')),
     filename            TEXT NOT NULL,
     extension           TEXT NOT NULL,
@@ -109,10 +133,15 @@ CREATE INDEX IF NOT EXISTS idx_assets_ingested_at   ON assets(ingested_at) WHERE
 CREATE INDEX IF NOT EXISTS idx_assets_filename      ON assets(filename) WHERE is_deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_assets_size_bytes    ON assets(size_bytes) WHERE is_deleted = 0;
 CREATE INDEX IF NOT EXISTS idx_assets_hash          ON assets(partial_hash, size_bytes);
-CREATE INDEX IF NOT EXISTS idx_assets_source_status ON assets(source_id, file_status);
--- Soft-delete safe: a removed row keeps its path, so a later re-import at the same
--- path must not collide. Only live rows are constrained unique.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_source_path ON assets(source_id, relative_path) WHERE is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_assets_volume_status ON assets(volume_id, file_status);
+-- Identity is (volume_id, path_key): the NFC key, not the raw bytes, so an
+-- NFD-stored macOS name and its NFC query form are one identity (D24 — never a
+-- phantom new asset). Soft-delete safe: a removed row keeps its key, so a later
+-- re-import at the same path must not collide; only live rows are constrained.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_volume_path_key ON assets(volume_id, path_key) WHERE is_deleted = 0;
+-- Folder-scope prefix scans and the importer's per-subtree known-file load walk
+-- path_key ranges (GLOB prefix), so key it for the index.
+CREATE INDEX IF NOT EXISTS idx_assets_volume_path_key_all ON assets(volume_id, path_key);
 
 -- Full-text search. Standalone FTS5 (see header). asset_id is stored UNINDEXED so a
 -- MATCH result maps back to the asset without a join; the rowid mirrors assets.rowid
@@ -150,21 +179,22 @@ END;
 
 CREATE TABLE IF NOT EXISTS sidecar_files (
     id                  TEXT PRIMARY KEY,
-    source_id           TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-    dir                 TEXT NOT NULL,                             -- [obs] relative dir, '' = source root
+    volume_id           TEXT NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
+    dir                 TEXT NOT NULL,                             -- [obs] volume-relative dir, '' = volume root
     stem                TEXT NOT NULL,                             -- [obs] lowercase basename sans final ext
     ext                 TEXT NOT NULL,                             -- [obs] 'xmp', 'aae', 'thm', ...
-    relative_path       TEXT NOT NULL,                             -- [obs] full relative path (convenience)
+    relative_path       TEXT NOT NULL,                             -- [obs] full volume-relative path (I/O bytes)
+    path_key            TEXT NOT NULL,                             -- [der] NFC(relative_path); compare keys, open bytes
     size_bytes          INTEGER NOT NULL,                         -- [obs]
     mtime               TEXT NOT NULL,                            -- [obs]
     partial_hash        TEXT NOT NULL,                           -- [obs]
     attached_asset_id   TEXT REFERENCES assets(id) ON DELETE SET NULL,  -- [der] grouping engine writes it
     first_seen_at       TEXT NOT NULL,
     updated_at          TEXT NOT NULL,
-    UNIQUE(source_id, relative_path)
+    UNIQUE(volume_id, path_key)
 );
 
-CREATE INDEX IF NOT EXISTS idx_sidecars_key ON sidecar_files(source_id, dir, stem);
+CREATE INDEX IF NOT EXISTS idx_sidecars_key ON sidecar_files(volume_id, dir, stem);
 
 CREATE TABLE IF NOT EXISTS duplicates (
     id                  TEXT PRIMARY KEY,
@@ -239,7 +269,7 @@ CREATE INDEX IF NOT EXISTS idx_collection_assets_asset      ON collection_assets
 
 CREATE TABLE IF NOT EXISTS import_sessions (
     id                   TEXT PRIMARY KEY,
-    source_id            TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    volume_id            TEXT NOT NULL REFERENCES volumes(id) ON DELETE CASCADE,
     kind                 TEXT NOT NULL CHECK(kind IN ('import', 'reconcile', 'watch')),
     started_at           TEXT NOT NULL,
     finished_at          TEXT,

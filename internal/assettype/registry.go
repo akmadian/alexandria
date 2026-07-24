@@ -5,7 +5,7 @@
 //
 // "Type" (not "Kind") matches the repo's convention: Type is a file's format
 // category (FileType/MIMEType/file_type), whereas Kind is a variant within an
-// entity (SourceKind, CollectionKind). This package resolves the former.
+// entity (VolumeKind, CollectionKind). This package resolves the former.
 //
 // One explicit table (`registry`) — add a format by adding a row, and nowhere
 // else. This deliberately replaces the three parallel maps that used to drift

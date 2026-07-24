@@ -3,6 +3,7 @@ package enrichment
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"os"
@@ -21,17 +22,18 @@ import (
 // the full engine loop is exercised end-to-end by the importer acceptance
 // suite (import → converge, corrupt → DLQ → heal).
 
-// fakeSourceResolver serves one source by ID — the whole SourceResolver
-// surface (the producer holds resolution only, never source mutation).
-type fakeSourceResolver struct {
-	source *domain.Source
+// fakeVolumeResolver resolves one volume to a mount point — the whole
+// VolumeResolver surface (the producer holds resolution only, never mutation).
+type fakeVolumeResolver struct {
+	volumeID string
+	mount    string
 }
 
-func (f *fakeSourceResolver) Get(_ context.Context, id string) (*domain.Source, error) {
-	if f.source != nil && f.source.ID == id {
-		return f.source, nil
+func (f *fakeVolumeResolver) Absolute(_ context.Context, volumeID, relativePath string) (string, error) {
+	if volumeID != f.volumeID {
+		return "", fmt.Errorf("volume %s not mounted this session", volumeID)
 	}
-	return nil, nil
+	return filepath.Join(f.mount, relativePath), nil
 }
 
 // recordingDerivedWriter captures each ApplyFunc's side effect.
@@ -62,11 +64,11 @@ func (w *recordingDerivedWriter) SetPhash(_ context.Context, _ string, hash stri
 }
 func (w *recordingDerivedWriter) ClearDerived(context.Context, string) error { panic("unused") }
 
-func thumbnailFixture(t *testing.T) (*thumbnailer.Thumbnailer, *fakeSourceResolver, *domain.Asset) {
+func thumbnailFixture(t *testing.T) (*thumbnailer.Thumbnailer, *fakeVolumeResolver, *domain.Asset) {
 	t.Helper()
-	sourceDir := t.TempDir()
+	mountDir := t.TempDir()
 	pixels := image.NewRGBA(image.Rect(0, 0, 16, 16))
-	file, err := os.Create(filepath.Join(sourceDir, "photo.jpg"))
+	file, err := os.Create(filepath.Join(mountDir, "photo.jpg"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,9 +78,9 @@ func thumbnailFixture(t *testing.T) (*thumbnailer.Thumbnailer, *fakeSourceResolv
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	source := &domain.Source{ID: "source-1", BasePath: sourceDir}
-	asset := &domain.Asset{ID: "asset-1", SourceID: source.ID, RelativePath: "photo.jpg", Extension: "jpg"}
-	return thumbnailer.New(t.TempDir()), &fakeSourceResolver{source: source}, asset
+	volumes := &fakeVolumeResolver{volumeID: "volume-1", mount: mountDir}
+	asset := &domain.Asset{ID: "asset-1", VolumeID: volumes.volumeID, RelativePath: "photo.jpg", Extension: "jpg"}
+	return thumbnailer.New(t.TempDir()), volumes, asset
 }
 
 func TestThumbnailProducer_ProducesAndApplies(t *testing.T) {
@@ -110,7 +112,7 @@ func TestThumbnailProducer_FailureTaxonomy(t *testing.T) {
 	})
 	t.Run("undecodable bytes are decode_failed", func(t *testing.T) {
 		thumbnails, sources, asset := thumbnailFixture(t)
-		if err := os.WriteFile(filepath.Join(sources.source.BasePath, "photo.jpg"), []byte("\xff\xd8garbage"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(sources.mount, "photo.jpg"), []byte("\xff\xd8garbage"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		_, err := thumbnailProducer(thumbnails, sources)(context.Background(), asset, func() {})
@@ -122,11 +124,11 @@ func TestThumbnailProducer_FailureTaxonomy(t *testing.T) {
 		_, err := thumbnailProducer(thumbnails, sources)(context.Background(), asset, func() {})
 		assertReason(t, err, "tool_unavailable")
 	})
-	t.Run("unknown source is source_unknown", func(t *testing.T) {
+	t.Run("unresolved volume is volume_unresolved", func(t *testing.T) {
 		thumbnails, sources, asset := thumbnailFixture(t)
-		asset.SourceID = "no-such-source"
+		asset.VolumeID = "no-such-volume"
 		_, err := thumbnailProducer(thumbnails, sources)(context.Background(), asset, func() {})
-		assertReason(t, err, "source_unknown")
+		assertReason(t, err, "volume_unresolved")
 	})
 	t.Run("extension without a strategy is not_applicable", func(t *testing.T) {
 		thumbnails, sources, asset := thumbnailFixture(t)
@@ -165,6 +167,6 @@ func TestThumbnailPolicies(t *testing.T) {
 
 // compile-time proof the fakes satisfy the real interfaces.
 var (
-	_ SourceResolver             = (*fakeSourceResolver)(nil)
+	_ VolumeResolver             = (*fakeVolumeResolver)(nil)
 	_ catalog.AssetDerivedWriter = (*recordingDerivedWriter)(nil)
 )

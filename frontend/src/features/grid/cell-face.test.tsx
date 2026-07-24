@@ -12,7 +12,7 @@ function row(overrides: Partial<AssetRow> = {}): AssetRow {
     return {
         kind: "asset",
         id: "asset-1",
-        sourceId: "source-1",
+        volumeId: "source-1",
         filename: "photo.jpg",
         fileType: "image",
         fileStatus: "online",

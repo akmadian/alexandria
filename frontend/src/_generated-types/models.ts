@@ -2,13 +2,13 @@
 // Source of truth: internal/catalog + internal/seam (struct json tags), per C13/C15.
 // Regenerate with `make generate` after changing the Go source.
 
-import type { ColorLabel, EnrichmentKind, FileStatus, FileType, Flag } from "./enums";
+import type { CollectionKind, ColorLabel, CreateFolderOutcomeKind, EnrichmentKind, FileStatus, FileType, Flag, SyncMode, VolumeConnectivity, VolumeKind } from "./enums";
 import type { EventTopic, EventType, JobState } from "./events";
 
 /** The slim grid-card projection. The seam adapter layers thumbURL + the kind discriminator on top. */
 export interface AssetRow {
   id: string;
-  sourceId: string;
+  volumeId: string;
   filename: string;
   fileType: FileType;
   fileStatus: FileStatus;
@@ -31,7 +31,7 @@ export interface AssetRow {
 /** The full-asset detail projection GetAsset returns — the inspector's read. */
 export interface AssetDetail {
   id: string;
-  sourceId: string;
+  volumeId: string;
   filename: string;
   extension: string;
   mimeType: string;
@@ -121,8 +121,59 @@ export interface HistoryState {
   redoLabel?: string;
 }
 
-/** watcher/sourceStatus payload. */
-export interface SourceStatus {
-  sourceId: string;
+/** watcher/volumeStatus payload. */
+export interface VolumeStatus {
+  volumeId: string;
   status: string;
+}
+
+/** A storage volume with its tracked-root folders — a node in the getFolderTree forest (D41). */
+export interface VolumeNode {
+  id: string;
+  name: string;
+  kind: VolumeKind;
+  connectivity: VolumeConnectivity;
+  assetCount: number;
+  folders: FolderNode[];
+}
+
+/** One node in a volume's folder tree; recursive via children (D41). */
+export interface FolderNode {
+  id: string;
+  name: string;
+  path: string;
+  syncMode?: SyncMode;
+  assetCount: number;
+  children: FolderNode[];
+}
+
+/** A collection projected for the rail; flat list, parentId adjacency (D41). */
+export interface CollectionNode {
+  id: string;
+  name: string;
+  parentId?: string;
+  kind: CollectionKind;
+  assetCount: number | null;
+}
+
+/** One tracked root whose sync policy would change under a proposed absorb (D41). */
+export interface FolderBehaviorChange {
+  folderId: string;
+  folderName: string;
+  currentSyncMode: SyncMode;
+  newSyncMode: SyncMode;
+}
+
+/** The disposition of a createFolder attempt plus the folders it touched (D41). */
+export interface CreateFolderOutcome {
+  kind: CreateFolderOutcomeKind;
+  folderId?: string;
+  absorbedFolderIds?: string[];
+  behaviorChanges?: FolderBehaviorChange[];
+}
+
+/** The sparse updateFolder input (name / sync mode). */
+export interface FolderPatch {
+  name?: string;
+  syncMode?: SyncMode;
 }

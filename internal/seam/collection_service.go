@@ -86,7 +86,7 @@ func (s *CollectionService) CreateCollection(input CollectionInput) (*domain.Col
 	// Reject contradictory shapes the repo's narrower guard would let through: a
 	// smart collection with no query persists a useless row the scope resolver
 	// can't read; a manual collection carrying a query stores dead data the query
-	// system never consults. (Mirrors CreateSource's required-field guard.)
+	// system never consults.
 	if input.Name == "" {
 		return nil, normalizeError(&domain.ValidationError{Field: "name", Message: "collection name is required"})
 	}

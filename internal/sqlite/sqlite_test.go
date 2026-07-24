@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/akmadian/alexandria/internal/ast"
 	"github.com/akmadian/alexandria/internal/catalog"
 	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/sqlite"
@@ -16,7 +17,7 @@ import (
 // and it must become searchable by filename.
 func TestMigration_FTSTriggerIndexesAssets(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "sunset-beach.jpg")
 
 	var id string
@@ -33,52 +34,51 @@ func TestMigration_ForeignKeysEnforced(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := db.Exec(`INSERT INTO assets
-		(id, source_id, relative_path, file_status, filename, extension, mime_type, file_type,
+		(id, volume_id, relative_path, path_key, file_status, filename, extension, mime_type, file_type,
 		 size_bytes, mtime, partial_hash, ingested_at, updated_at)
-		VALUES ('a1', 'nonexistent-source', 'f.jpg', 'online', 'f.jpg', 'jpg', 'image/jpeg', 'image',
+		VALUES ('a1', 'nonexistent-volume', 'f.jpg', 'f.jpg', 'online', 'f.jpg', 'jpg', 'image/jpeg', 'image',
 		 1024, ?, 'hash', ?, ?)`, now, now, now)
 	if err == nil {
 		t.Fatal("expected foreign key violation, got nil")
 	}
 }
 
-// --- Source repository tests ---
+// --- Volume repository tests ---
 
-func TestSourceRepo_CreateAndGet(t *testing.T) {
+func TestVolumeRepo_CreateAndGet(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &sqlite.SourceRepo{DB: db}
+	repo := &sqlite.VolumeRepo{DB: db}
 	ctx := context.Background()
 
 	now := time.Now().UTC().Truncate(time.Second)
 	fsUUID := "uuid-123"
-	source := &domain.Source{
-		ID: "s1", Name: "Photos", Kind: domain.SourceKindExternalDrive,
-		BasePath: "/Volumes/Photos", FilesystemUUID: &fsUUID,
-		ScanRecursively: true, Enabled: true, Connectivity: domain.SourceOnline,
+	volume := &domain.Volume{
+		ID: "v1", Name: "Photos", Kind: domain.VolumeKindExternalDrive,
+		FilesystemUUID: &fsUUID, Connectivity: domain.VolumeOnline,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if err := repo.Create(ctx, source); err != nil {
+	if err := repo.Create(ctx, volume); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	got, err := repo.Get(ctx, "s1")
+	got, err := repo.Get(ctx, "v1")
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.Name != "Photos" || got.Kind != domain.SourceKindExternalDrive {
+	if got.Name != "Photos" || got.Kind != domain.VolumeKindExternalDrive {
 		t.Fatalf("got %+v", got)
 	}
 	if got.FilesystemUUID == nil || *got.FilesystemUUID != "uuid-123" {
 		t.Fatalf("filesystem_uuid: got %v", got.FilesystemUUID)
 	}
-	if !got.Enabled || got.Connectivity != domain.SourceOnline {
-		t.Fatalf("enabled/connectivity: got enabled=%v connectivity=%q", got.Enabled, got.Connectivity)
+	if got.Connectivity != domain.VolumeOnline {
+		t.Fatalf("connectivity: got %q", got.Connectivity)
 	}
 }
 
-func TestSourceRepo_GetNotFound(t *testing.T) {
+func TestVolumeRepo_GetNotFound(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &sqlite.SourceRepo{DB: db}
+	repo := &sqlite.VolumeRepo{DB: db}
 	_, err := repo.Get(context.Background(), "nope")
 	var nf *domain.NotFoundError
 	if !errors.As(err, &nf) {
@@ -86,53 +86,48 @@ func TestSourceRepo_GetNotFound(t *testing.T) {
 	}
 }
 
-func TestSourceRepo_List(t *testing.T) {
+func TestVolumeRepo_List(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &sqlite.SourceRepo{DB: db}
+	repo := &sqlite.VolumeRepo{DB: db}
 	ctx := context.Background()
 
-	testutil.NewTestSource(t, db, "one")
-	testutil.NewTestSource(t, db, "two")
+	testutil.NewTestVolume(t, db, "one")
+	testutil.NewTestVolume(t, db, "two")
 
-	sources, err := repo.List(ctx)
+	volumes, err := repo.List(ctx)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(sources) != 2 {
-		t.Fatalf("got %d sources, want 2", len(sources))
+	if len(volumes) != 2 {
+		t.Fatalf("got %d volumes, want 2", len(volumes))
 	}
 }
 
-func TestSourceRepo_SetConnectivity(t *testing.T) {
+func TestVolumeRepo_SetConnectivity(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &sqlite.SourceRepo{DB: db}
+	repo := &sqlite.VolumeRepo{DB: db}
 	ctx := context.Background()
-	testutil.NewTestSource(t, db, "drive")
+	testutil.NewTestVolume(t, db, "drive")
 
-	if err := repo.SetConnectivity(ctx, "src-drive", domain.SourceOffline); err != nil {
+	if err := repo.SetConnectivity(ctx, "vol-drive", domain.VolumeOffline); err != nil {
 		t.Fatalf("set connectivity: %v", err)
 	}
-	got, _ := repo.Get(ctx, "src-drive")
-	if got.Connectivity != domain.SourceOffline {
+	got, _ := repo.Get(ctx, "vol-drive")
+	if got.Connectivity != domain.VolumeOffline {
 		t.Fatalf("got connectivity %q, want offline", got.Connectivity)
-	}
-	// Connectivity (observation) must not disturb Enabled (judgment).
-	if !got.Enabled {
-		t.Fatal("SetConnectivity clobbered Enabled")
 	}
 }
 
-func TestSourceRepo_FindByFilesystemUUID(t *testing.T) {
+func TestVolumeRepo_FindByFilesystemUUID(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	repo := &sqlite.SourceRepo{DB: db}
+	repo := &sqlite.VolumeRepo{DB: db}
 	ctx := context.Background()
 
 	now := time.Now().UTC().Truncate(time.Second)
 	fsUUID := "fs-abc"
-	if err := repo.Create(ctx, &domain.Source{
-		ID: "s1", Name: "ext", Kind: domain.SourceKindExternalDrive,
-		BasePath: "/mnt/ext", FilesystemUUID: &fsUUID,
-		ScanRecursively: true, Enabled: true, Connectivity: domain.SourceOnline,
+	if err := repo.Create(ctx, &domain.Volume{
+		ID: "v1", Name: "ext", Kind: domain.VolumeKindExternalDrive,
+		FilesystemUUID: &fsUUID, Connectivity: domain.VolumeOnline,
 		CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
@@ -142,8 +137,8 @@ func TestSourceRepo_FindByFilesystemUUID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
-	if got == nil || got.ID != "s1" {
-		t.Fatalf("expected s1, got %v", got)
+	if got == nil || got.ID != "v1" {
+		t.Fatalf("expected v1, got %v", got)
 	}
 
 	got, err = repo.FindByFilesystemUUID(ctx, "no-such")
@@ -162,10 +157,10 @@ func TestAssetRepo_CreateAndGet(t *testing.T) {
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 
-	src := testutil.NewTestSource(t, db, "photos")
+	src := testutil.NewTestVolume(t, db, "photos")
 	now := time.Now().UTC().Truncate(time.Second)
 	asset := &domain.Asset{
-		ID: "a1", SourceID: src.ID, RelativePath: "vacation/beach.jpg",
+		ID: "a1", VolumeID: src.ID, RelativePath: "vacation/beach.jpg",
 		FileStatus: domain.FileStatusOnline, Filename: "beach.jpg",
 		Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
 		SizeBytes: 4096, MTime: now, PartialHash: "hash123",
@@ -200,11 +195,11 @@ func TestAssetRepo_Create_RejectsJudgmentFields(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	now := time.Now().UTC()
 	rating := 3
 	a := &domain.Asset{
-		ID: "bad", SourceID: src.ID, RelativePath: "x.jpg", FileStatus: domain.FileStatusOnline,
+		ID: "bad", VolumeID: src.ID, RelativePath: "x.jpg", FileStatus: domain.FileStatusOnline,
 		Filename: "x.jpg", Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
 		SizeBytes: 1, MTime: now, PartialHash: "h", Rating: &rating, IngestedAt: now, UpdatedAt: now,
 	}
@@ -228,7 +223,7 @@ func TestAssetRepo_SoftDelete(t *testing.T) {
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
 
 	if err := repo.SoftDelete(ctx, []string{"asset-photo.jpg"}); err != nil {
@@ -250,7 +245,7 @@ func TestAssetRepo_ApplyTriagePatch_BulkSetsOnlyJudgment(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	for _, name := range []string{"r1.jpg", "r2.jpg", "r3.jpg"} {
 		testutil.NewTestAsset(t, db, src.ID, name)
@@ -276,7 +271,7 @@ func TestAssetRepo_ApplyTriagePatch_ClearField(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 
 	if err := repo.ApplyTriagePatch(ctx, []string{"asset-x.jpg"}, catalog.TriagePatch{Rating: domain.SetOpt(3)}); err != nil {
@@ -300,7 +295,7 @@ func TestAssetRepo_FindByHash(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "dup.jpg")
 
 	got, err := repo.FindByHash(ctx, "testhash-dup.jpg", 1024)
@@ -321,14 +316,14 @@ func TestAssetRepo_FindByHash(t *testing.T) {
 	}
 }
 
-func TestAssetRepo_FindBySourcePath(t *testing.T) {
+func TestAssetRepo_FindByVolumePath(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "sub/photo.jpg")
 
-	got, err := repo.FindBySourcePath(ctx, src.ID, "sub/photo.jpg")
+	got, err := repo.FindByVolumePath(ctx, src.ID, "sub/photo.jpg")
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
@@ -337,15 +332,15 @@ func TestAssetRepo_FindBySourcePath(t *testing.T) {
 	}
 }
 
-func TestAssetRepo_MarkConnectivityBySource(t *testing.T) {
+func TestAssetRepo_MarkConnectivityByVolume(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "drive")
+	src := testutil.NewTestVolume(t, db, "drive")
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
 
-	if err := repo.MarkConnectivityBySource(ctx, src.ID, false); err != nil {
+	if err := repo.MarkConnectivityByVolume(ctx, src.ID, false); err != nil {
 		t.Fatalf("mark offline: %v", err)
 	}
 	got, _ := repo.Get(ctx, "asset-a.jpg")
@@ -353,7 +348,7 @@ func TestAssetRepo_MarkConnectivityBySource(t *testing.T) {
 		t.Fatalf("got %q, want offline", got.FileStatus)
 	}
 
-	if err := repo.MarkConnectivityBySource(ctx, src.ID, true); err != nil {
+	if err := repo.MarkConnectivityByVolume(ctx, src.ID, true); err != nil {
 		t.Fatalf("mark online: %v", err)
 	}
 	got, _ = repo.Get(ctx, "asset-a.jpg")
@@ -370,7 +365,7 @@ func TestSchema_SoftDeleteThenReimportSamePath(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	a1 := testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
 	if err := repo.SoftDelete(ctx, []string{a1.ID}); err != nil {
@@ -379,7 +374,7 @@ func TestSchema_SoftDeleteThenReimportSamePath(t *testing.T) {
 
 	now := time.Now().UTC()
 	reimported := &domain.Asset{
-		ID: domain.NewID(), SourceID: src.ID, RelativePath: "photo.jpg",
+		ID: domain.NewID(), VolumeID: src.ID, RelativePath: "photo.jpg",
 		FileStatus: domain.FileStatusOnline, Filename: "photo.jpg", Extension: "jpg",
 		MIMEType: "image/jpeg", FileType: domain.FileTypeImage, SizeBytes: 2048,
 		MTime: now, PartialHash: "newhash", IngestedAt: now, UpdatedAt: now,
@@ -412,7 +407,7 @@ func TestSchema_RootTagSlugConflict(t *testing.T) {
 func TestSchema_FKCascadeOnTagDelete(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -441,7 +436,7 @@ func TestSchema_FKCascadeOnTagDelete(t *testing.T) {
 func TestRebuildFTS_IncludesTags(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, src.ID, "img.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
 
@@ -472,7 +467,7 @@ func TestAssetRepo_ApplyFilePatch_PreservesJudgment(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "p.jpg")
 
 	// User rates it (judgment write → stamps judgment_modified_at).
@@ -513,7 +508,7 @@ func TestAssetRepo_XMPInbound_DoesNotBumpJudgmentModified(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "x.jpg")
 
 	a0, _ := repo.Get(ctx, "asset-x.jpg")
@@ -551,7 +546,7 @@ func TestStore_InTxRollback(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	store := sqlite.NewStore(db)
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	testutil.NewTestAsset(t, db, src.ID, "m.jpg")
 
 	sentinel := errors.New("boom")
@@ -567,5 +562,166 @@ func TestStore_InTxRollback(t *testing.T) {
 	got, _ := (&sqlite.AssetRepo{DB: db}).Get(ctx, "asset-m.jpg")
 	if got.RelativePath != "m.jpg" {
 		t.Fatalf("rollback failed: path=%q, want m.jpg", got.RelativePath)
+	}
+}
+
+// --- path_key: derived NFC identity form (D24) ---
+
+// TestRebuildPathKeys proves path_key is derived state with a registered rebuild
+// path: corrupt the keys, rebuild, and every key must equal NFC(relative_path).
+func TestRebuildPathKeys(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	ctx := context.Background()
+	vol := testutil.NewTestVolume(t, db, "v")
+	assets := &sqlite.AssetRepo{DB: db}
+
+	// An NFD-composed name (macOS style): "cafe" + combining acute.
+	nfdName := "cafe\u0301.jpg" // decomposed (e + combining acute)
+	asset := &domain.Asset{
+		ID: "a1", VolumeID: vol.ID, RelativePath: nfdName, FileStatus: domain.FileStatusOnline,
+		Filename: nfdName, Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
+		SizeBytes: 10, MTime: time.Now().UTC(), PartialHash: "h",
+		IngestedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := assets.Create(ctx, asset); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Corrupt the stored key out from under the rows.
+	if _, err := db.ExecContext(ctx, "UPDATE assets SET path_key = 'bogus'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlite.RebuildPathKeys(ctx, db); err != nil {
+		t.Fatalf("rebuild: %v", err)
+	}
+
+	var key string
+	if err := db.QueryRowContext(ctx, "SELECT path_key FROM assets WHERE id = 'a1'").Scan(&key); err != nil {
+		t.Fatal(err)
+	}
+	if key != domain.PathKey(nfdName) {
+		t.Fatalf("rebuilt path_key = %q, want NFC form %q", key, domain.PathKey(nfdName))
+	}
+}
+
+// TestFindByVolumePath_NFDMatchesNFC is the §8 phantom-identity closure at the
+// repo seam: a file stored with an NFD (decomposed) name matches when queried by
+// its NFC (composed) form, because the comparison is key-to-key (path_key), not
+// byte-to-byte — so the identity matrix reimports rather than minting a phantom.
+func TestFindByVolumePath_NFDMatchesNFC(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	ctx := context.Background()
+	vol := testutil.NewTestVolume(t, db, "v")
+	assets := &sqlite.AssetRepo{DB: db}
+
+	nfdName := "cafe\u0301.jpg" // decomposed (e + combining acute), as macOS hands it out
+	nfcName := "caf\u00e9.jpg"  // precomposed (é), the query form
+	if nfdName == nfcName {
+		t.Fatal("test bug: the two forms must differ at the byte level")
+	}
+
+	asset := &domain.Asset{
+		ID: "a1", VolumeID: vol.ID, RelativePath: nfdName, FileStatus: domain.FileStatusOnline,
+		Filename: nfdName, Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
+		SizeBytes: 10, MTime: time.Now().UTC(), PartialHash: "h",
+		IngestedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := assets.Create(ctx, asset); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	got, err := assets.FindByVolumePath(ctx, vol.ID, nfcName)
+	if err != nil {
+		t.Fatalf("find by NFC form: %v", err)
+	}
+	if got == nil || got.ID != "a1" {
+		t.Fatalf("NFC query did not match the NFD-stored asset (got %v) — a phantom identity would be minted", got)
+	}
+}
+
+// TestQueryAssets_FolderScope_NFDStoredNFCScope is the execution-level closure
+// of the folder-scope half of DEFERRED §8: an asset stored under an NFD
+// (decomposed) directory name IS found by a folder scope carrying the NFC
+// (composed) prefix, because both sides compile to path_key (compare keys, open
+// bytes — normalizing only the query side against raw NFD rows would miss).
+func TestQueryAssets_FolderScope_NFDStoredNFCScope(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	ctx := context.Background()
+	vol := testutil.NewTestVolume(t, db, "v")
+	assets := &sqlite.AssetRepo{DB: db}
+
+	nfdDirectory := "cafe\u0301" // decomposed (e + combining acute), as macOS stores it
+	nfcDirectory := "caf\u00e9"  // precomposed (é), the scope's query form
+	if nfdDirectory == nfcDirectory {
+		t.Fatal("test bug: the two forms must differ at the byte level")
+	}
+	asset := &domain.Asset{
+		ID: "a1", VolumeID: vol.ID, RelativePath: nfdDirectory + "/shot.jpg", FileStatus: domain.FileStatusOnline,
+		Filename: "shot.jpg", Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
+		SizeBytes: 10, MTime: time.Now().UTC(), PartialHash: "h",
+		IngestedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := assets.Create(ctx, asset); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	query := ast.Query{
+		Version: ast.Version,
+		Scope:   &ast.Scope{Kind: ast.ScopeFolder, VolumeID: vol.ID, Path: nfcDirectory, Recursive: true},
+	}
+	rows, total, err := assets.QueryAssets(ctx, query,
+		ast.Arrangement{SortField: ast.SortFilename, SortDir: ast.SortAsc}, ast.Page{Limit: 10})
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].ID != "a1" {
+		t.Fatalf("NFC folder scope missed the NFD-stored asset: total=%d rows=%+v", total, rows)
+	}
+}
+
+// --- Folder repository: the [syn] writer split ---
+
+// TestFolderRepo_SetLastScannedAt proves the writer split on the folder table:
+// the narrow sync-state writer records the scan cursor without touching judgment
+// columns, and the user-action Update never clobbers the cursor back.
+func TestFolderRepo_SetLastScannedAt(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	ctx := context.Background()
+	vol := testutil.NewTestVolume(t, db, "v")
+	folder := testutil.NewTestFolder(t, db, vol.ID, "Photos")
+	repo := &sqlite.FolderRepo{DB: db}
+
+	scannedAt := time.Now().UTC().Truncate(time.Second)
+	if err := repo.SetLastScannedAt(ctx, folder.ID, scannedAt); err != nil {
+		t.Fatalf("set last scanned: %v", err)
+	}
+	got, err := repo.Get(ctx, folder.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastScannedAt == nil || !got.LastScannedAt.Equal(scannedAt) {
+		t.Fatalf("last_scanned_at = %v, want %v", got.LastScannedAt, scannedAt)
+	}
+	// The [syn] write must not disturb judgment columns.
+	if got.SyncMode != domain.SyncModeManual || !got.Enabled {
+		t.Fatalf("sync-state write disturbed judgment columns: %+v", got)
+	}
+
+	// The user-action Update (a judgment write) must NOT clobber the cursor:
+	// a stale in-memory LastScannedAt on the updated struct is ignored.
+	got.Name = "Renamed"
+	got.LastScannedAt = nil
+	if err := repo.Update(ctx, got); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	after, err := repo.Get(ctx, folder.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Name != "Renamed" {
+		t.Fatalf("update did not apply: %+v", after)
+	}
+	if after.LastScannedAt == nil || !after.LastScannedAt.Equal(scannedAt) {
+		t.Fatalf("user Update clobbered the [syn] cursor: %v", after.LastScannedAt)
 	}
 }

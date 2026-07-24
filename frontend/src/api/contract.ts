@@ -15,9 +15,16 @@
 
 import type { ColorLabel, Flag } from "@/_generated-types/enums";
 import type { ApiErrorKind, ErrorCode } from "@/_generated-types/errors";
-import type { AssetDetail, AssetRow as AssetRowModel, Envelope } from "@/_generated-types/models";
+import type {
+    AssetDetail,
+    AssetRow as AssetRowModel,
+    CollectionNode,
+    CreateFolderOutcome,
+    Envelope,
+    FolderPatch,
+    VolumeNode,
+} from "@/_generated-types/models";
 import type { Arrangement, Page, Query } from "@/query-model/ast";
-import type { domain, seam } from "../../wailsjs/go/models";
 
 // Re-export the AST so consumers have one door for the query types.
 export type { Arrangement, Page, Query };
@@ -34,15 +41,15 @@ export type { AssetDetail };
 // catalog → CatalogChange).
 export type { Envelope };
 
-// The source model and its create input. Sources have no `_generated-types/`
-// projection yet (the Go-struct→TS model emitter covers catalog rows + events, not
-// domain aggregates — DEFERRED §7), so the generated source of truth is the Wails
-// binding models: `domain.Source` is wire-accurate (the Go struct carries no json
-// tags, so its JSON is the PascalCase field names Wails reflects), and
-// `seam.SourceInput` is the json-tagged create shape. Re-exported here so features
-// and the adapters share one door, never the wailsjs tree (C13: never hand-authored).
-export type Source = domain.Source;
-export type SourceInput = seam.SourceInput;
+// The browser-rail wire projections (D41, §12) — the top navigation axis. These
+// pass through unchanged (pure display reads, no presentation layering), so the
+// rail features import them from the contract, never the generated tree.
+// `VolumeNode.folders` and `FolderNode.children` are the nested forest
+// getFolderTree returns; `CollectionNode` arrives as a flat list keyed by
+// `parentId`; `CreateFolderOutcome` discriminates the four folder-add outcomes;
+// `FolderPatch` is the sparse updateFolder input.
+export type { CollectionNode, CreateFolderOutcome, FolderPatch, VolumeNode };
+export type { FolderNode, FolderBehaviorChange } from "@/_generated-types/models";
 
 /**
  * The slim grid-card projection (seam/01). The engine truth is the GENERATED
@@ -134,20 +141,60 @@ export interface AlexandriaAPI {
      */
     updateAssets(target: UpdateTarget, patch: TriagePatch): Promise<void>;
 
-    /** Every configured source (SourceService.ListSources). */
-    listSources(): Promise<Source[]>;
+    /**
+     * The whole top navigation axis in one call (D41): every storage volume with
+     * its nested tracked-root folder forest and honest subtree counts. An offline
+     * volume is present and browsable (connectivity is an observation, never a
+     * gate) — the rail dims it, never drops it.
+     */
+    getFolderTree(): Promise<VolumeNode[]>;
 
-    /** Create a source and return the minted record (SourceService.CreateSource). */
-    createSource(input: SourceInput): Promise<Source>;
+    /**
+     * Every collection as a flat list (D41): the rail builds the forest from each
+     * node's `parentId`. `assetCount` is nullable — nil = the count is
+     * unavailable (a smart query the backend declined to compute), 0 = empty.
+     */
+    listCollections(): Promise<CollectionNode[]>;
+
+    /**
+     * Track a folder as a root (D41: disjoint roots, graceful merge — reject
+     * nothing). Returns the disposition (created / already-tracked-within /
+     * absorbed / needs-confirmation). Absorption is QUIET by default; when the
+     * merge would change a watched/scheduled child's behavior the first call
+     * returns `needs_confirmation` WITHOUT mutating, and the caller re-issues with
+     * `confirm: true` to proceed.
+     */
+    createFolder(path: string, confirm?: boolean): Promise<CreateFolderOutcome>;
+
+    /**
+     * Stop tracking a folder root (D41: cascade-via-soft-delete — judgments
+     * survive, files are untouched). The count-showing confirm is the caller's
+     * (the rail reads the count off the tree). Unknown id rejects with not_found.
+     */
+    removeFolder(id: string): Promise<void>;
+
+    /**
+     * Apply a sparse patch to a tracked root — its display name and/or sync mode
+     * (D41: sync_mode ships whole). Absent fields are left untouched. Unknown id
+     * rejects with not_found.
+     */
+    updateFolder(id: string, patch: FolderPatch): Promise<void>;
+
+    /**
+     * Open the OS directory picker and resolve with the chosen absolute path, or
+     * `null` if the user cancelled. A shared noun-free verb (D41); the mock
+     * returns a fake path, the real dialog lands in a later task.
+     */
+    pickDirectory(): Promise<string | null>;
 
     /**
      * Launch a cancelable import over a source, resolving with the job id
      * immediately (ImportService.StartImport). Progress arrives over `subscribe`
      * as jobs/progress envelopes, completion as a jobs/done envelope carrying the
      * summary — the C9 no-private-progress-paths rule. An offline source rejects
-     * with source_offline; an unknown id with not_found.
+     * with volume_offline; an unknown id with not_found.
      */
-    startImport(sourceId: string): Promise<string>;
+    startImport(folderId: string): Promise<string>;
 
     /**
      * Request cancellation of a running job (ImportService.CancelJob). A no-op for

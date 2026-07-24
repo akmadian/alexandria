@@ -13,7 +13,7 @@ import (
 // discriminator) on top — those are adapter concerns, not engine truth.
 type AssetRow struct {
 	ID           string             `json:"id"`
-	SourceID     string             `json:"sourceId"`
+	VolumeID     string             `json:"volumeId"`
 	Filename     string             `json:"filename"`
 	FileType     domain.FileType    `json:"fileType"`
 	FileStatus   domain.FileStatus  `json:"fileStatus"`

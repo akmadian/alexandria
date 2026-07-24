@@ -57,7 +57,7 @@ describe("routeEnvelope", () => {
         const queryClient = new QueryClient();
         const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 
-        routeEnvelope(queryClient, envelope("watcher", "sourceStatus"));
+        routeEnvelope(queryClient, envelope("watcher", "volumeStatus"));
         routeEnvelope(queryClient, envelope("sync", "reserved"));
 
         expect(invalidate).not.toHaveBeenCalled();

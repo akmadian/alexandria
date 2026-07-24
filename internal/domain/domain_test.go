@@ -70,7 +70,7 @@ func TestErrorMessages(t *testing.T) {
 		{&domain.ValidationError{Field: "rating", Message: "bad"}, "rating"},
 		{&domain.ErrSchemaTooOld{Current: 1, Required: 2}, "2"},
 		{&domain.ErrSchemaTooNew{Current: 3, Known: 2}, "3"},
-		{&domain.SourceOfflineError{SourceID: "s1", Path: "/vol"}, "s1"},
+		{&domain.VolumeOfflineError{VolumeID: "s1", Path: "/vol"}, "s1"},
 	}
 	for _, tc := range cases {
 		if message := tc.err.Error(); !strings.Contains(message, tc.want) {

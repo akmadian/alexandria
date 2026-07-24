@@ -26,13 +26,13 @@ func (r *countingReader) Get(context.Context, string) (*domain.Asset, error) {
 func (r *countingReader) FindByHash(context.Context, string, int64) (*domain.Asset, error) {
 	panic("unused")
 }
-func (r *countingReader) FindBySourcePath(context.Context, string, string) (*domain.Asset, error) {
+func (r *countingReader) FindByVolumePath(context.Context, string, string) (*domain.Asset, error) {
 	panic("unused")
 }
-func (r *countingReader) ListKnownFiles(context.Context, string) (map[string]domain.FileStat, error) {
+func (r *countingReader) ListKnownFiles(context.Context, string, string) (map[string]domain.FileStat, error) {
 	panic("unused")
 }
-func (r *countingReader) ListPathsStatus(context.Context, string) ([]catalog.PathStatus, error) {
+func (r *countingReader) ListPathsStatus(context.Context, string, string) ([]catalog.PathStatus, error) {
 	panic("unused")
 }
 func (r *countingReader) QueryAssets(context.Context, ast.Query, ast.Arrangement, ast.Page) ([]catalog.AssetRow, int, error) {

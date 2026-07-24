@@ -25,16 +25,17 @@ import (
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/testutil"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
+	"github.com/akmadian/alexandria/internal/volume"
 	"github.com/akmadian/gospan"
 	"github.com/charmbracelet/log"
 )
 
 // newPipelineImporter is like newImporter but returns the import repo (so tests
 // can read DLQ/session rows).
-func newPipelineImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.AssetRepo, *sqlite.ImportRepo) {
+func newPipelineImporter(t *testing.T) (*importer.Importer, importer.Target, *sqlite.AssetRepo, *sqlite.ImportRepo) {
 	t.Helper()
 	database := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, database, "photos")
+	volume := testutil.NewTestVolume(t, database, "photos")
 	assets := &sqlite.AssetRepo{DB: database}
 	imports := &sqlite.ImportRepo{DB: database}
 	ingester := &importer.Importer{
@@ -45,24 +46,33 @@ func newPipelineImporter(t *testing.T) (*importer.Importer, *domain.Source, *sql
 		Imports: imports,
 		Log:     log.New(io.Discard),
 	}
-	return ingester, source, assets, imports
+	// fsys is rooted at the volume; the whole tree is the walk root ("").
+	target := importer.Target{VolumeID: volume.ID, Name: volume.Name}
+	return ingester, target, assets, imports
+}
+
+// fixedProber is a test volume prober that reports a fixed mount point and
+// identity — so a temp dir stands in as its own volume mount and every path
+// under it resolves to a stable volume-relative key.
+type fixedProber struct{ mount, uuid string }
+
+func (p fixedProber) Probe(context.Context, string) (volume.Probe, error) {
+	return volume.Probe{MountPoint: p.mount, FilesystemUUID: p.uuid}, nil
 }
 
 // diskImporter builds an importer over REAL files in a temp dir — the shape the
 // enrichment convergence tests need, because the enrichment producer reads the
-// asset's bytes from disk by absolute path (source base path + relative path),
-// which a fstest.MapFS never has.
-func diskImporter(t *testing.T) (*importer.Importer, *domain.Source, string, *sql.DB) {
+// asset's bytes from disk by absolute path (mount point + volume-relative path),
+// which a fstest.MapFS never has. The returned resolver's mount cache is warmed
+// so the enrichment engine can resolve the volume back to the temp dir.
+func diskImporter(t *testing.T) (*importer.Importer, importer.Target, string, *sql.DB, *volume.Resolver) {
 	t.Helper()
-	sourceDir := t.TempDir()
+	mountDir := t.TempDir()
 	database := testutil.NewTestDB(t)
-	now := time.Now().UTC()
-	source := &domain.Source{
-		ID: domain.NewID(), Name: "disk", Kind: domain.SourceKindLocal,
-		BasePath: sourceDir, ScanRecursively: true, Enabled: true,
-		Connectivity: domain.SourceOnline, CreatedAt: now, UpdatedAt: now,
-	}
-	if err := (&sqlite.SourceRepo{DB: database}).Create(context.Background(), source); err != nil {
+	resolver := volume.NewResolver(&sqlite.VolumeRepo{DB: database},
+		fixedProber{mount: mountDir, uuid: "disk-" + domain.NewID()}, log.New(io.Discard))
+	resolved, err := resolver.Resolve(context.Background(), mountDir)
+	if err != nil {
 		t.Fatal(err)
 	}
 	assets := &sqlite.AssetRepo{DB: database}
@@ -74,17 +84,18 @@ func diskImporter(t *testing.T) (*importer.Importer, *domain.Source, string, *sq
 		Imports: &sqlite.ImportRepo{DB: database},
 		Log:     log.New(io.Discard),
 	}
-	return ingester, source, sourceDir, database
+	target := importer.Target{VolumeID: resolved.VolumeID, WalkRoot: resolved.RelativePath, Name: "disk"}
+	return ingester, target, mountDir, database, resolver
 }
 
 // startEnrichmentEngine runs the real engine — canonical registry, real
 // thumbnailer — over the test catalog, exactly as the composition root wires
 // it. Its first act is the on-open missing-artifact scan (D25: crash recovery
 // = rescan), which is what these tests lean on.
-func startEnrichmentEngine(t *testing.T, database *sql.DB, thumbnailDir string) *enrichment.Engine {
+func startEnrichmentEngine(t *testing.T, database *sql.DB, thumbnailDir string, resolver *volume.Resolver) *enrichment.Engine {
 	t.Helper()
 	engine, err := enrichment.New(&enrichment.Config{
-		Definitions: enrichment.Definitions(thumbnailer.New(thumbnailDir), &sqlite.SourceRepo{DB: database}),
+		Definitions: enrichment.Definitions(thumbnailer.New(thumbnailDir), resolver),
 		Reader:      &sqlite.AssetRepo{DB: database},
 		Store:       sqlite.NewStore(database),
 		Enrichment:  &sqlite.EnrichmentRepo{DB: database},
@@ -279,11 +290,11 @@ func TestReimport_RestoresMissingAtOriginalPath(t *testing.T) {
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{"b.mp4": {Data: content}}); err != nil {
 		t.Fatal(err)
 	}
-	original, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4")
+	original, _ := assets.FindByVolumePath(ctx, source.VolumeID, "b.mp4")
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{}); err != nil {
 		t.Fatal(err)
 	}
-	if missing, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4"); missing == nil || missing.FileStatus != domain.FileStatusMissing {
+	if missing, _ := assets.FindByVolumePath(ctx, source.VolumeID, "b.mp4"); missing == nil || missing.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("precondition: b.mp4 should be missing, got %v", missing)
 	}
 
@@ -295,7 +306,7 @@ func TestReimport_RestoresMissingAtOriginalPath(t *testing.T) {
 	if result.Updated != 1 || result.Added != 0 {
 		t.Fatalf("same-path reappearance must reimport, not mint: updated=%d added=%d, want 1/0", result.Updated, result.Added)
 	}
-	restored, _ := assets.FindBySourcePath(ctx, source.ID, "b.mp4")
+	restored, _ := assets.FindByVolumePath(ctx, source.VolumeID, "b.mp4")
 	if restored.ID != original.ID || restored.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("must restore the same identity online: got id=%s status=%s", restored.ID, restored.FileStatus)
 	}
@@ -317,14 +328,14 @@ func TestUnpairedRename_RecordedForReview(t *testing.T) {
 		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}, "old.mp4"); err != nil {
 			t.Fatal(err)
 		}
-		original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
+		original, _ := assets.FindByVolumePath(ctx, source.VolumeID, "old.mp4")
 		if err := ingester.IngestFile(ctx, source, fstest.MapFS{}, "old.mp4"); err != nil {
 			t.Fatal(err)
 		}
 		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"new.mp4": {Data: content}}, "new.mp4"); err != nil {
 			t.Fatal(err)
 		}
-		assertProbableMove(t, assets, source.ID, original.ID)
+		assertProbableMove(t, assets, source.VolumeID, original.ID)
 	})
 
 	// Ordering B — the create graduates first (both paths exist, then old vanishes).
@@ -334,7 +345,7 @@ func TestUnpairedRename_RecordedForReview(t *testing.T) {
 		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"old.mp4": {Data: content}}, "old.mp4"); err != nil {
 			t.Fatal(err)
 		}
-		original, _ := assets.FindBySourcePath(ctx, source.ID, "old.mp4")
+		original, _ := assets.FindByVolumePath(ctx, source.VolumeID, "old.mp4")
 		both := fstest.MapFS{"old.mp4": {Data: content}, "new.mp4": {Data: content}}
 		if err := ingester.IngestFile(ctx, source, both, "new.mp4"); err != nil {
 			t.Fatal(err)
@@ -342,21 +353,21 @@ func TestUnpairedRename_RecordedForReview(t *testing.T) {
 		if err := ingester.IngestFile(ctx, source, fstest.MapFS{"new.mp4": {Data: content}}, "old.mp4"); err != nil {
 			t.Fatal(err)
 		}
-		assertProbableMove(t, assets, source.ID, original.ID)
+		assertProbableMove(t, assets, source.VolumeID, original.ID)
 	})
 }
 
 // assertProbableMove checks B's end state: two distinct assets (original missing,
 // new online) and a pending duplicates row linking them — the review-queue signal
 // for "probable move", with nothing auto-merged.
-func assertProbableMove(t *testing.T, assets *sqlite.AssetRepo, sourceID, originalID string) {
+func assertProbableMove(t *testing.T, assets *sqlite.AssetRepo, volumeID, originalID string) {
 	t.Helper()
 	ctx := context.Background()
-	old, _ := assets.FindBySourcePath(ctx, sourceID, "old.mp4")
+	old, _ := assets.FindByVolumePath(ctx, volumeID, "old.mp4")
 	if old == nil || old.ID != originalID || old.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("original must be left MISSING, not merged: got %v", old)
 	}
-	fresh, _ := assets.FindBySourcePath(ctx, sourceID, "new.mp4")
+	fresh, _ := assets.FindByVolumePath(ctx, volumeID, "new.mp4")
 	if fresh == nil || fresh.ID == originalID || fresh.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("new path must be a distinct online asset: got %v", fresh)
 	}
@@ -383,7 +394,7 @@ func TestCopyThenDeleteMove_RecordedForReview(t *testing.T) {
 	if _, err := ingester.Run(ctx, source, fstest.MapFS{"a/photo.mp4": {Data: content}}); err != nil {
 		t.Fatal(err)
 	}
-	original, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4")
+	original, _ := assets.FindByVolumePath(ctx, source.VolumeID, "a/photo.mp4")
 	if err := assets.ApplyTriagePatch(ctx, []string{original.ID}, catalog.TriagePatch{Rating: domain.SetOpt(5)}); err != nil {
 		t.Fatal(err)
 	}
@@ -404,14 +415,14 @@ func TestCopyThenDeleteMove_RecordedForReview(t *testing.T) {
 	if allCount != 2 {
 		t.Fatalf("both identities must survive (no merge): got %d assets, want 2", allCount)
 	}
-	stale, _ := assets.FindBySourcePath(ctx, source.ID, "a/photo.mp4")
+	stale, _ := assets.FindByVolumePath(ctx, source.VolumeID, "a/photo.mp4")
 	if stale == nil || stale.ID != original.ID || stale.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("original must be left MISSING with identity intact: got %v", stale)
 	}
 	if stale.Rating == nil || *stale.Rating != 5 {
 		t.Fatalf("the user's rating must stay on the missing original: got %v", stale.Rating)
 	}
-	fresh, _ := assets.FindBySourcePath(ctx, source.ID, "b/photo.mp4")
+	fresh, _ := assets.FindByVolumePath(ctx, source.VolumeID, "b/photo.mp4")
 	if fresh == nil || fresh.ID == original.ID || fresh.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("copy must be a distinct online asset: got %v", fresh)
 	}
@@ -448,7 +459,7 @@ func TestSidecar_TrackedNotIndexed(t *testing.T) {
 	if assetCount != 1 {
 		t.Fatalf("want 1 asset, got %d (sidecar leaked in as an asset?)", assetCount)
 	}
-	sidecars, err := (&sqlite.SidecarRepo{DB: assets.DB}).ListByKey(ctx, source.ID, "trip", "photo")
+	sidecars, err := (&sqlite.SidecarRepo{DB: assets.DB}).ListByKey(ctx, source.VolumeID, "trip", "photo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +481,7 @@ func TestMismatch_TrustsContent(t *testing.T) {
 	if result.Added != 1 {
 		t.Fatalf("added=%d, want 1", result.Added)
 	}
-	asset, _ := assets.FindBySourcePath(ctx, source.ID, "mislabeled.png")
+	asset, _ := assets.FindByVolumePath(ctx, source.VolumeID, "mislabeled.png")
 	if asset == nil {
 		t.Fatal("asset missing")
 	}
@@ -496,7 +507,7 @@ func TestMismatch_TrustsContent(t *testing.T) {
 // again" is still the repair; the ledger just moved to the engine that does
 // the decoding.
 func TestCorruptFile_DLQThenHeal(t *testing.T) {
-	ingester, source, sourceDir, database := diskImporter(t)
+	ingester, source, sourceDir, database, resolver := diskImporter(t)
 	ctx := context.Background()
 	brokenPath := filepath.Join(sourceDir, "broken.jpg")
 	if err := os.WriteFile(brokenPath, jpegBytes(2)[:20], 0o600); err != nil { // valid magic, undecodable
@@ -508,17 +519,17 @@ func TestCorruptFile_DLQThenHeal(t *testing.T) {
 		t.Fatalf("corrupt file should still mint an identity: added=%d err=%v", result.Added, err)
 	}
 	assets := &sqlite.AssetRepo{DB: database}
-	asset, _ := assets.FindBySourcePath(ctx, source.ID, "broken.jpg")
+	asset, _ := assets.FindByVolumePath(ctx, source.VolumeID, "broken.jpg")
 	if asset.Width != nil {
 		t.Fatalf("corrupt file should have no dims: w=%v", asset.Width)
 	}
 
 	// The engine discovers the corruption: a durable decode_failed DLQ row.
-	engine := startEnrichmentEngine(t, database, t.TempDir())
+	engine := startEnrichmentEngine(t, database, t.TempDir(), resolver)
 	// The production wiring: ingest's post-commit hook nudges the dispatcher
 	// (the composition root chains OnAssetCommitted → RequestScan) — without it
 	// the healed reimport would sit unscanned until the next catalog open.
-	ingester.OnAssetCommitted = func(context.Context, *domain.Source, string, string) {
+	ingester.OnAssetCommitted = func(context.Context, string, string, string) {
 		engine.RequestScan()
 	}
 	enrichmentRepo := &sqlite.EnrichmentRepo{DB: database}
@@ -533,7 +544,7 @@ func TestCorruptFile_DLQThenHeal(t *testing.T) {
 	if err != nil || healedResult.Updated != 1 {
 		t.Fatalf("heal: updated=%d err=%v, want 1/nil", healedResult.Updated, err)
 	}
-	asset, _ = assets.FindBySourcePath(ctx, source.ID, "broken.jpg")
+	asset, _ = assets.FindByVolumePath(ctx, source.VolumeID, "broken.jpg")
 	if asset.Width == nil || *asset.Width != 16 {
 		t.Fatalf("healed asset should carry dims: w=%v", asset.Width)
 	}
@@ -570,15 +581,15 @@ func awaitEnrichmentFailure(t *testing.T, enrichmentRepo *sqlite.EnrichmentRepo,
 // described the old bytes) — while the thumbnail FILE survives on disk, so the
 // grid shows the outdated-but-real thumb until regeneration overwrites it.
 func TestReimport_ClearsDerivedAndEnrichmentDLQ(t *testing.T) {
-	reimportVia := map[string]func(t *testing.T, ingester *importer.Importer, source *domain.Source, files fstest.MapFS){
-		"pipeline": func(t *testing.T, ingester *importer.Importer, source *domain.Source, files fstest.MapFS) {
+	reimportVia := map[string]func(t *testing.T, ingester *importer.Importer, source importer.Target, files fstest.MapFS){
+		"pipeline": func(t *testing.T, ingester *importer.Importer, source importer.Target, files fstest.MapFS) {
 			t.Helper()
 			result, err := ingester.Run(context.Background(), source, files)
 			if err != nil || result.Updated != 1 {
 				t.Fatalf("reimport run: updated=%d err=%v, want 1/nil", result.Updated, err)
 			}
 		},
-		"single-file": func(t *testing.T, ingester *importer.Importer, source *domain.Source, files fstest.MapFS) {
+		"single-file": func(t *testing.T, ingester *importer.Importer, source importer.Target, files fstest.MapFS) {
 			t.Helper()
 			if err := ingester.IngestFile(context.Background(), source, files, "edited.jpg"); err != nil {
 				t.Fatal(err)
@@ -592,7 +603,7 @@ func TestReimport_ClearsDerivedAndEnrichmentDLQ(t *testing.T) {
 			if _, err := ingester.Run(ctx, source, fstest.MapFS{"edited.jpg": {Data: jpegBytes(1)}}); err != nil {
 				t.Fatal(err)
 			}
-			asset, _ := assets.FindBySourcePath(ctx, source.ID, "edited.jpg")
+			asset, _ := assets.FindByVolumePath(ctx, source.VolumeID, "edited.jpg")
 
 			// Simulate enrichment residue describing the ORIGINAL bytes: the
 			// artifact column set, a DLQ row, and the thumbnail file on disk.
@@ -615,7 +626,7 @@ func TestReimport_ClearsDerivedAndEnrichmentDLQ(t *testing.T) {
 			// Same path, changed bytes → reimport.
 			reimport(t, ingester, source, fstest.MapFS{"edited.jpg": {Data: jpegBytes(2)}})
 
-			reloaded, _ := assets.FindBySourcePath(ctx, source.ID, "edited.jpg")
+			reloaded, _ := assets.FindByVolumePath(ctx, source.VolumeID, "edited.jpg")
 			if reloaded.ThumbnailAt != nil {
 				t.Fatalf("reimport must clear derived columns, thumbnail_at=%v", reloaded.ThumbnailAt)
 			}
@@ -740,7 +751,7 @@ func TestMidImportCountsPersist(t *testing.T) {
 // commits assets with NO thumbnails; the engine's on-open scan then converges
 // every eligible asset.
 func TestEnrichment_ConvergesAfterImport(t *testing.T) {
-	ingester, source, sourceDir, database := diskImporter(t)
+	ingester, source, sourceDir, database, resolver := diskImporter(t)
 	const fileCount = 12
 	writeJPEGFiles(t, sourceDir, fileCount)
 
@@ -758,7 +769,7 @@ func TestEnrichment_ConvergesAfterImport(t *testing.T) {
 	}
 
 	thumbnailDir := t.TempDir()
-	startEnrichmentEngine(t, database, thumbnailDir) // on-open scan = the whole trigger
+	startEnrichmentEngine(t, database, thumbnailDir, resolver) // on-open scan = the whole trigger
 	awaitThumbnails(t, database, fileCount)
 
 	// The artifact is real: a file on disk for every flagged asset.
@@ -777,7 +788,7 @@ func TestEnrichment_ConvergesAfterImport(t *testing.T) {
 // cancel an import mid-run; the already-committed assets get thumbnails via
 // the scan alone — no re-import, no repair step, no half-imported state.
 func TestEnrichment_ConvergesAfterCancel(t *testing.T) {
-	ingester, source, sourceDir, database := diskImporter(t)
+	ingester, source, sourceDir, database, resolver := diskImporter(t)
 	writeJPEGFiles(t, sourceDir, 300)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -797,7 +808,7 @@ func TestEnrichment_ConvergesAfterCancel(t *testing.T) {
 		t.Skip("cancel raced ahead of the first commit; nothing to check")
 	}
 
-	startEnrichmentEngine(t, database, t.TempDir())
+	startEnrichmentEngine(t, database, t.TempDir(), resolver)
 	awaitThumbnails(t, database, committed)
 }
 
@@ -806,7 +817,7 @@ func TestEnrichment_ConvergesAfterCancel(t *testing.T) {
 // enrichment_errors row while the asset stays committed and browsable — the
 // failed state is durable, never an eternal spinner.
 func TestEnrichment_FailureIsDurableAndAssetBrowsable(t *testing.T) {
-	ingester, source, sourceDir, database := diskImporter(t)
+	ingester, source, sourceDir, database, resolver := diskImporter(t)
 	writeJPEGFiles(t, sourceDir, 2)
 	// Valid magic, undecodable body: indexes fine, thumbnails never.
 	if err := os.WriteFile(filepath.Join(sourceDir, "shoot", "broken.jpg"), jpegBytes(9)[:20], 0o600); err != nil {
@@ -818,11 +829,11 @@ func TestEnrichment_FailureIsDurableAndAssetBrowsable(t *testing.T) {
 		t.Fatalf("import: added=%d err=%v, want 3/nil", result.Added, err)
 	}
 
-	startEnrichmentEngine(t, database, t.TempDir())
+	startEnrichmentEngine(t, database, t.TempDir(), resolver)
 	awaitThumbnails(t, database, 2) // the two decodable files converge
 
 	assets := &sqlite.AssetRepo{DB: database}
-	broken, _ := assets.FindBySourcePath(context.Background(), source.ID, "shoot/broken.jpg")
+	broken, _ := assets.FindByVolumePath(context.Background(), source.VolumeID, "shoot/broken.jpg")
 	if broken == nil || broken.IsDeleted {
 		t.Fatal("the failing asset must stay committed and browsable (D13)")
 	}
@@ -836,7 +847,7 @@ func TestEnrichment_FailureIsDurableAndAssetBrowsable(t *testing.T) {
 // eligible asset through thumbnail → all three cheap signals, via scans alone (no
 // re-import), because each signal kind gates on the thumbnail artifact.
 func TestEnrichment_SignalsConvergeAfterThumbnails(t *testing.T) {
-	ingester, source, sourceDir, database := diskImporter(t)
+	ingester, source, sourceDir, database, resolver := diskImporter(t)
 	writeJPEGFiles(t, sourceDir, 12)
 
 	result, err := ingester.Run(context.Background(), source, os.DirFS(sourceDir))
@@ -844,7 +855,7 @@ func TestEnrichment_SignalsConvergeAfterThumbnails(t *testing.T) {
 		t.Fatalf("import: added=%d err=%v, want 12/nil", result.Added, err)
 	}
 
-	startEnrichmentEngine(t, database, t.TempDir())
+	startEnrichmentEngine(t, database, t.TempDir(), resolver)
 	awaitThumbnails(t, database, 12)
 	awaitSignals(t, database, 12)
 }
@@ -854,12 +865,12 @@ func TestEnrichment_SignalsConvergeAfterThumbnails(t *testing.T) {
 // derived columns (the D28 reimport staleness path) and rescanning re-derives the
 // SAME values — the rebuild path the derived-state invariant requires.
 func TestEnrichment_SignalsIdempotentOnRederive(t *testing.T) {
-	ingester, source, sourceDir, database := diskImporter(t)
+	ingester, source, sourceDir, database, resolver := diskImporter(t)
 	writeJPEGFiles(t, sourceDir, 3)
 	if _, err := ingester.Run(context.Background(), source, os.DirFS(sourceDir)); err != nil {
 		t.Fatal(err)
 	}
-	engine := startEnrichmentEngine(t, database, t.TempDir())
+	engine := startEnrichmentEngine(t, database, t.TempDir(), resolver)
 	awaitSignals(t, database, 3)
 	before := readSignals(t, database)
 
@@ -1125,7 +1136,7 @@ func TestPreflight_PermissionDeniedIsActionable(t *testing.T) {
 
 	// The safety property: because preflight aborts before the empty walk, the
 	// walk-end diff never runs, so the existing asset is untouched (not marked missing).
-	kept, _ := assets.FindBySourcePath(ctx, source.ID, "keep.mp4")
+	kept, _ := assets.FindByVolumePath(ctx, source.VolumeID, "keep.mp4")
 	if kept == nil || kept.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("a denied rescan must not mark known assets missing: got %v", kept)
 	}
@@ -1147,18 +1158,18 @@ func benchDB(b *testing.B) *sql.DB {
 	return database
 }
 
-func benchSource(b *testing.B, database *sql.DB) *domain.Source {
+func benchSource(b *testing.B, database *sql.DB) importer.Target {
 	b.Helper()
 	now := time.Now().UTC()
-	source := &domain.Source{
-		ID: domain.NewID(), Name: "bench", Kind: domain.SourceKindLocal,
-		BasePath: "/bench", ScanRecursively: true, Enabled: true,
-		Connectivity: domain.SourceOnline, CreatedAt: now, UpdatedAt: now,
+	uuid := "bench"
+	volume := &domain.Volume{
+		ID: domain.NewID(), Name: "bench", Kind: domain.VolumeKindLocal,
+		FilesystemUUID: &uuid, Connectivity: domain.VolumeOnline, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := (&sqlite.SourceRepo{DB: database}).Create(context.Background(), source); err != nil {
+	if err := (&sqlite.VolumeRepo{DB: database}).Create(context.Background(), volume); err != nil {
 		b.Fatal(err)
 	}
-	return source
+	return importer.Target{VolumeID: volume.ID, Name: volume.Name}
 }
 
 func hasReason(dlqRows []*domain.ImportError, reason string) bool {

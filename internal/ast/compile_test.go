@@ -229,7 +229,7 @@ func TestCompile_AlwaysExcludesDeleted(t *testing.T) {
 func TestMergeScope(t *testing.T) {
 	outer := ast.Query{
 		Version: ast.Version,
-		Scope:   &ast.Scope{Kind: ast.ScopeFolder, SourceID: "s1", Recursive: true},
+		Scope:   &ast.Scope{Kind: ast.ScopeFolder, VolumeID: "s1", Recursive: true},
 		Where:   ast.Leaf{Field: ast.FieldRating, Cmp: ast.OpGte, Value: float64(3)},
 	}
 	stored := ast.Leaf{Field: ast.FieldFileType, Cmp: ast.OpIn, Value: []string{"raw"}}
@@ -310,7 +310,7 @@ func TestCompile_Scopes(t *testing.T) {
 		scope ast.Scope
 		want  string
 	}{
-		{"folder root recursive", ast.Scope{Kind: ast.ScopeFolder, SourceID: "s1", Recursive: true}, "source_id = ?"},
+		{"folder root recursive", ast.Scope{Kind: ast.ScopeFolder, VolumeID: "s1", Recursive: true}, "volume_id = ?"},
 		{"collection", ast.Scope{Kind: ast.ScopeCollection, ID: "c1"}, "collection_assets"},
 		{"tag", ast.Scope{Kind: ast.ScopeTag, ID: "t1"}, "asset_tags"},
 	}

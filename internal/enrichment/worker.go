@@ -114,9 +114,9 @@ func (e *Engine) runJob(ctx context.Context, assignment *job) {
 		return
 	}
 
-	// Admission: the source's I/O token first (cheap, plentiful), then the
+	// Admission: the volume's I/O token first (cheap, plentiful), then the
 	// weighted CPU budget — never hold scarce CPU tokens while queuing on disk.
-	if err := e.readTokens.acquire(ctx, asset.SourceID); err != nil {
+	if err := e.readTokens.acquire(ctx, asset.VolumeID); err != nil {
 		result.status = resultCanceled
 		e.sendResult(ctx, result)
 		return
@@ -127,7 +127,7 @@ func (e *Engine) runJob(ctx context.Context, assignment *job) {
 	}
 	held, err := e.budget.acquire(ctx, tokens)
 	if err != nil {
-		e.readTokens.release(asset.SourceID)
+		e.readTokens.release(asset.VolumeID)
 		result.status = resultCanceled
 		e.sendResult(ctx, result)
 		return
@@ -145,7 +145,7 @@ func (e *Engine) runJob(ctx context.Context, assignment *job) {
 	}
 	produceSpan.End()
 	e.budget.release(held)
-	e.readTokens.release(asset.SourceID)
+	e.readTokens.release(asset.VolumeID)
 
 	switch result.status {
 	case resultApplied:

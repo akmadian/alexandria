@@ -78,7 +78,7 @@ func resolveBatchSize(imp *Importer) int {
 // thing both touch, so it alone is mutex-guarded.
 type pipeline struct {
 	importer  *Importer
-	source    *domain.Source
+	target    Target
 	fsys      fs.FS
 	known     map[string]domain.FileStat
 	sessionID string
@@ -106,10 +106,10 @@ type pipeline struct {
 	runErrors []ImportError
 }
 
-func newPipeline(importer *Importer, source *domain.Source, fsys fs.FS, known map[string]domain.FileStat, sessionID, jobID string) *pipeline {
+func newPipeline(importer *Importer, target Target, fsys fs.FS, known map[string]domain.FileStat, sessionID, jobID string) *pipeline {
 	return &pipeline{
 		importer:     importer,
-		source:       source,
+		target:       target,
 		fsys:         fsys,
 		known:        known,
 		sessionID:    sessionID,
@@ -126,29 +126,29 @@ func newPipeline(importer *Importer, source *domain.Source, fsys fs.FS, known ma
 // the source's known-file map, opens an import session, runs the pipeline, fuses
 // the walk-end missing diff, and finalizes the session. Only catastrophic
 // failures return an error; per-file failures are DLQ rows.
-func (imp *Importer) RunJob(ctx context.Context, jobID string, source *domain.Source, fsys fs.FS) (ImportResult, error) {
+func (imp *Importer) RunJob(ctx context.Context, jobID string, target Target, fsys fs.FS) (ImportResult, error) {
 	if imp.Store == nil || imp.Imports == nil {
 		panic("importer: Store and Imports must be set for the pipeline path")
 	}
 	// Fail fast on an unreadable root (macOS TCC on a /Volumes path) before opening
 	// a session — and before the empty walk would mark every known asset missing.
-	if err := preflightReadable(fsys, source.BasePath); err != nil {
+	if err := preflightReadable(fsys, target.walkStart(), target.Name); err != nil {
 		return ImportResult{}, err
 	}
-	known, err := imp.Reader.ListKnownFiles(ctx, source.ID)
+	known, err := imp.Reader.ListKnownFiles(ctx, target.VolumeID, target.WalkRoot)
 	if err != nil {
 		return ImportResult{}, err
 	}
-	sessionID, err := imp.Imports.Start(ctx, source.ID, "import")
+	sessionID, err := imp.Imports.Start(ctx, target.VolumeID, "import")
 	if err != nil {
 		return ImportResult{}, err
 	}
-	pipe := newPipeline(imp, source, fsys, known, sessionID, jobID)
+	pipe := newPipeline(imp, target, fsys, known, sessionID, jobID)
 	// The run root span: every item trace and the SCAN walk span nest under it,
 	// so one import run reads as one waterfall. Ends after the session finalizes.
 	ctx, runSpan := imp.Tracer.Start(ctx, "import.run",
-		slog.String("source", source.Name), slog.String("session", sessionID))
-	imp.Log.Info("import started", "source", source.Name, "known", len(known), "session", sessionID,
+		slog.String("volume", target.Name), slog.String("session", sessionID))
+	imp.Log.Info("import started", "volume", target.Name, "known", len(known), "session", sessionID,
 		"pools", fmt.Sprintf("hash=%d extract=%d", pipe.pools.hash, pipe.pools.extract))
 
 	// Pre-count the tree so progress is determinate from the first event. On
@@ -161,7 +161,7 @@ func (imp *Importer) RunJob(ctx context.Context, jobID string, source *domain.So
 		pipe.total.Store(count)
 		pipe.walkDone.Store(true)
 		pipe.emitProgress("scan")
-		imp.Log.Info("pre-count complete", "source", source.Name, "assets", count)
+		imp.Log.Info("pre-count complete", "volume", target.Name, "assets", count)
 	}
 
 	runErr := pipe.run(ctx)
@@ -191,7 +191,7 @@ func (imp *Importer) RunJob(ctx context.Context, jobID string, source *domain.So
 	}
 	runSpan.End()
 
-	imp.Log.Info("import finished", "source", source.Name, "session", sessionID,
+	imp.Log.Info("import finished", "volume", target.Name, "session", sessionID,
 		"added", result.Added, "updated", result.Updated, "moved", result.Moved,
 		"skipped", result.Skipped, "dups", result.Dups, "missing", result.Missing,
 		"errors", pipe.errorCount)
@@ -312,7 +312,7 @@ func (pipe *pipeline) tally(item *pipelineItem) {
 // move/duplicate resolution to the user. A file that reappears at its ORIGINAL
 // path is visited and restored via reimport, so it is never a candidate here.
 func (pipe *pipeline) markMissing(ctx context.Context) error {
-	pathStatuses, err := pipe.importer.Reader.ListPathsStatus(ctx, pipe.source.ID)
+	pathStatuses, err := pipe.importer.Reader.ListPathsStatus(ctx, pipe.target.VolumeID, pipe.target.WalkRoot)
 	if err != nil {
 		return err
 	}
@@ -321,7 +321,8 @@ func (pipe *pipeline) markMissing(ctx context.Context) error {
 		if pathStatus.FileStatus != domain.FileStatusOnline {
 			continue
 		}
-		if _, seen := pipe.visited[pathStatus.RelativePath]; !seen {
+		// visited is keyed by path_key (the NFC comparison form), so compare keys.
+		if _, seen := pipe.visited[domain.PathKey(pathStatus.RelativePath)]; !seen {
 			candidateIDs = append(candidateIDs, pathStatus.ID)
 		}
 	}
@@ -340,7 +341,7 @@ func (pipe *pipeline) markMissing(ctx context.Context) error {
 		return err
 	}
 	pipe.missingCount += len(candidateIDs)
-	pipe.importer.Log.Info("marked assets missing (walk-end diff)", "source", pipe.source.Name, "count", len(candidateIDs))
+	pipe.importer.Log.Info("marked assets missing (walk-end diff)", "volume", pipe.target.Name, "count", len(candidateIDs))
 	return nil
 }
 
@@ -350,8 +351,8 @@ func (pipe *pipeline) markMissing(ctx context.Context) error {
 // was minted as a new asset + a pending review row; the user resolves the move.
 // Nothing known at the path, or a row already not online, is a no-op — so a
 // duplicate gone-event never double-marks.
-func (imp *Importer) markGone(ctx context.Context, source *domain.Source, relPath string) error {
-	existing, err := imp.Reader.FindBySourcePath(ctx, source.ID, relPath)
+func (imp *Importer) markGone(ctx context.Context, target Target, relPath string) error {
+	existing, err := imp.Reader.FindByVolumePath(ctx, target.VolumeID, relPath)
 	if err != nil {
 		return err
 	}
@@ -362,7 +363,7 @@ func (imp *Importer) markGone(ctx context.Context, source *domain.Source, relPat
 	if err := imp.Obs.SetFileStatus(ctx, existing.ID, domain.FileStatusMissing); err != nil {
 		return err
 	}
-	imp.Log.Info("marked asset missing", "source", source.Name, "path", relPath, "asset", existing.ID)
+	imp.Log.Info("marked asset missing", "volume", target.Name, "path", relPath, "asset", existing.ID)
 	return nil
 }
 

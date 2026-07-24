@@ -25,7 +25,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 	// parent). Its duration includes backpressure from a full SCAN channel —
 	// honest: that IS what the walk spends its time on.
 	_, walkSpan := pipe.importer.Tracer.Start(ctx, "import.scan")
-	err := fs.WalkDir(pipe.fsys, ".", func(relativePath string, entry fs.DirEntry, walkErr error) error {
+	err := fs.WalkDir(pipe.fsys, pipe.target.walkStart(), func(relativePath string, entry fs.DirEntry, walkErr error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -41,7 +41,7 @@ func (pipe *pipeline) scan(ctx context.Context, out chan<- *pipelineItem) error 
 			return nil
 		}
 
-		pipe.visited[relativePath] = struct{}{} // every file present on disk (for the missing diff)
+		pipe.visited[domain.PathKey(relativePath)] = struct{}{} // present on disk, keyed for the missing diff
 
 		if isHidden(name) {
 			return nil
@@ -121,7 +121,7 @@ func (pipe *pipeline) traceItem(ctx context.Context, item *pipelineItem) *pipeli
 // never a catalog fact (Finish writes the authoritative counts).
 func (pipe *pipeline) countAssets(ctx context.Context) (int64, error) {
 	var count int64
-	err := fs.WalkDir(pipe.fsys, ".", func(relativePath string, entry fs.DirEntry, walkErr error) error {
+	err := fs.WalkDir(pipe.fsys, pipe.target.walkStart(), func(relativePath string, entry fs.DirEntry, walkErr error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -158,17 +158,17 @@ func (pipe *pipeline) countAssets(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-// preflightReadable probes the source root before the pipeline opens a session,
+// preflightReadable probes the walk root before the pipeline opens a session,
 // turning a permission failure into an actionable error instead of a silent
 // empty import. This matters twice: on macOS, TCC withholds access to protected
 // and removable/network volumes (a /Volumes path fails with EPERM) until the app
 // — or, for the dev harness, the terminal running it — is granted access; and a
 // denied root would otherwise walk nothing, so the walk-end diff (markMissing)
-// would mark every known asset in the source missing. Failing fast here prevents
+// would mark every known asset in the subtree missing. Failing fast here prevents
 // both. Only the root is probed — a deeper unreadable subtree is per-entry noise
 // SCAN already records as run errors, not a reason to abort the whole import.
-func preflightReadable(fsys fs.FS, displayPath string) error {
-	if _, err := fs.ReadDir(fsys, "."); err != nil {
+func preflightReadable(fsys fs.FS, probePath, displayPath string) error {
+	if _, err := fs.ReadDir(fsys, probePath); err != nil {
 		if isPermissionDenied(err) {
 			return fmt.Errorf("cannot scan %q: macOS is withholding permission for this location. "+
 				"Grant Full Disk Access to Alexandria (or, running the dev harness, your terminal) in "+
@@ -244,9 +244,10 @@ const mtimeTolerance = 2 * time.Second
 
 // unchanged reports whether a scanned file matches a known catalog entry closely
 // enough to skip: exact size and mtime within tolerance. This is the idempotency
-// gate — re-running on an unchanged source hashes nothing.
+// gate — re-running on an unchanged volume hashes nothing. The known map is keyed
+// by path_key (the NFC comparison form), so the lookup keys the scanned path too.
 func unchanged(scanned *scannedFile, known map[string]domain.FileStat) bool {
-	previous, ok := known[scanned.relPath]
+	previous, ok := known[domain.PathKey(scanned.relPath)]
 	if !ok {
 		return false
 	}

@@ -16,29 +16,37 @@ import (
 // zero new seam surface (C9: no private progress paths).
 const jobKindImport = "import"
 
-// sourceGetter is the read slice ImportService needs to resolve a source to its
-// filesystem root before ingesting. Matches sqlite.SourceRepo.Get.
-type sourceGetter interface {
-	Get(ctx context.Context, id string) (*domain.Source, error)
+// folderGetter is the read slice ImportService needs to resolve a tracked folder
+// before ingesting. Matches sqlite.FolderRepo.Get.
+type folderGetter interface {
+	Get(ctx context.Context, id string) (*domain.Folder, error)
 }
 
-// runImport executes one import run, invoking onProgress for each engine Progress
-// tick, and returns the final result. The composition root supplies the real
-// implementation (build a wired importer, set OnProgress, call RunJob over the
-// source's filesystem); tests supply a fake so ImportService's job/event behavior
-// — including cancellation — is unit-testable without a database or a real walk.
+// volumeGetter resolves a folder's volume for the up-front offline check. Matches
+// sqlite.VolumeRepo.Get.
+type volumeGetter interface {
+	Get(ctx context.Context, id string) (*domain.Volume, error)
+}
+
+// runImport executes one import run over a tracked folder, invoking onProgress
+// for each engine Progress tick, and returns the final result. The composition
+// root supplies the real implementation (resolve the folder's volume to a mount,
+// build a wired importer, set OnProgress, call RunJob over an importer.Target);
+// tests supply a fake so ImportService's job/event behavior — including
+// cancellation — is unit-testable without a database or a real walk.
 //
 // This is the D1 seam: the engine hands over its existing OnProgress callback and
 // RunJob; internal/seam adapts them to the job envelope and the emitter. The
 // engine imports no Wails.
-type runImport func(ctx context.Context, jobID string, source *domain.Source, onProgress func(importer.Progress)) (importer.ImportResult, error)
+type runImport func(ctx context.Context, jobID string, folder *domain.Folder, onProgress func(importer.Progress)) (importer.ImportResult, error)
 
 // ImportService is the seam face of the import pipeline: start a cancelable import
 // job, report progress and completion through the C9 envelope. It owns no pipeline
-// logic — it resolves the source, launches the injected run under the Jobs
-// registry, and maps engine Progress/ImportResult to events.
+// logic — it resolves the folder + its volume, launches the injected run under the
+// Jobs registry, and maps engine Progress/ImportResult to events.
 type ImportService struct {
-	sources sourceGetter
+	folders folderGetter
+	volumes volumeGetter
 	jobs    *importer.Jobs
 	run     runImport
 	emitter Emitter
@@ -49,36 +57,42 @@ type ImportService struct {
 // job is to report progress has nothing to do without it; a nil emitter would
 // silently swallow every progress event. The host always has a real emitter by
 // the time it builds this.
-func NewImportService(sources sourceGetter, jobs *importer.Jobs, run runImport, emitter Emitter) *ImportService {
+func NewImportService(folders folderGetter, volumes volumeGetter, jobs *importer.Jobs, run runImport, emitter Emitter) *ImportService {
 	if emitter == nil {
 		emitter = nopEmitter{}
 	}
-	return &ImportService{sources: sources, jobs: jobs, run: run, emitter: emitter}
+	return &ImportService{folders: folders, volumes: volumes, jobs: jobs, run: run, emitter: emitter}
 }
 
-// StartImport resolves the source and launches an import job, returning its id
-// immediately (progress arrives via jobs/progress events, completion via
-// jobs/done). An offline source is rejected up front with source_offline rather
-// than failing deep in the walk. The job runs under the Jobs registry so
-// CancelJob can stop it; the terminal event distinguishes done/failed/cancelled.
-func (s *ImportService) StartImport(sourceID string) (string, error) {
-	source, err := s.sources.Get(seamContext(), sourceID)
+// StartImport resolves the folder + its volume and launches an import job,
+// returning its id immediately (progress arrives via jobs/progress events,
+// completion via jobs/done). An offline volume is rejected up front with
+// volume_offline rather than failing deep in the walk. The job runs under the
+// Jobs registry so CancelJob can stop it; the terminal event distinguishes
+// done/failed/cancelled.
+func (s *ImportService) StartImport(folderID string) (string, error) {
+	folder, err := s.folders.Get(seamContext(), folderID)
 	if err != nil {
-		log.Error("seam: StartImport resolve source failed", "source", sourceID, "err", err)
+		log.Error("seam: StartImport resolve folder failed", "folder", folderID, "err", err)
 		return "", normalizeError(err)
 	}
-	if source.Connectivity == domain.SourceOffline {
-		return "", normalizeError(&domain.SourceOfflineError{SourceID: source.ID, Path: source.BasePath})
+	volume, err := s.volumes.Get(seamContext(), folder.VolumeID)
+	if err != nil {
+		log.Error("seam: StartImport resolve volume failed", "volume", folder.VolumeID, "err", err)
+		return "", normalizeError(err)
+	}
+	if volume.Connectivity == domain.VolumeOffline {
+		return "", normalizeError(&domain.VolumeOfflineError{VolumeID: volume.ID, Path: folder.Path})
 	}
 
 	jobID := s.jobs.Start(jobKindImport, func(ctx context.Context, id string) {
 		onProgress := func(progress importer.Progress) {
 			s.emitter.Emit(EventJobProgress, jobProgressFrom(id, progress))
 		}
-		result, runErr := s.run(ctx, id, source, onProgress)
+		result, runErr := s.run(ctx, id, folder, onProgress)
 		s.emitter.Emit(EventJobDone, jobDoneFrom(id, &result, runErr))
 	})
-	log.Info("seam: started import", "job", jobID, "source", sourceID)
+	log.Info("seam: started import", "job", jobID, "folder", folderID)
 	return jobID, nil
 }
 

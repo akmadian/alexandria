@@ -34,7 +34,7 @@ func TestSyncSidecarInbound(t *testing.T) {
 	defer daemon.Close()
 
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 	repo := &sqlite.AssetRepo{DB: db}
 
@@ -94,7 +94,7 @@ func TestSyncSidecarClearsRemovedRating(t *testing.T) {
 	defer daemon.Close()
 
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 	repo := &sqlite.AssetRepo{DB: db}
 	syncer := NewSyncer(daemon, repo, repo, nil, settings.DefaultSettings, log.Default())
@@ -152,7 +152,7 @@ func TestSyncSidecarUnionsKeywords(t *testing.T) {
 	defer daemon.Close()
 
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 	store := sqlite.NewStore(db)
 	repo := &sqlite.AssetRepo{DB: db}
@@ -261,7 +261,7 @@ func TestOscillatorGuard(t *testing.T) {
 	defer daemon.Close()
 
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 	repo := &sqlite.AssetRepo{DB: db}
 
@@ -311,7 +311,7 @@ func TestEchoCheck(t *testing.T) {
 	defer daemon.Close()
 
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
@@ -429,7 +429,7 @@ func TestConflictResolution(t *testing.T) {
 	setup := func(t *testing.T) (*sqlite.AssetRepo, *sqlite.Store, *domain.Asset, string) {
 		t.Helper()
 		db := testutil.NewTestDB(t)
-		source := testutil.NewTestSource(t, db, "s")
+		source := testutil.NewTestVolume(t, db, "s")
 		asset := testutil.NewTestAsset(t, db, source.ID, "sunrise.orf")
 		repo := &sqlite.AssetRepo{DB: db}
 		store := sqlite.NewStore(db)
@@ -600,7 +600,7 @@ func TestBuildWriteArgs(t *testing.T) {
 // TestAssetTagNames verifies the tag read-back for outbound writes.
 func TestAssetTagNames(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "test.jpg")
 	store := sqlite.NewStore(db)
 	ctx := context.Background()

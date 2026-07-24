@@ -64,16 +64,16 @@ func Validate(query Query) error {
 func validateScope(scope *Scope) error {
 	switch scope.Kind {
 	case ScopeLibrary:
-		if scope.ID != "" || scope.SourceID != "" || scope.Path != "" {
+		if scope.ID != "" || scope.VolumeID != "" || scope.Path != "" {
 			return &ErrStructure{Message: "library scope carries no target"}
 		}
 		return nil
 	case ScopeFolder:
-		if scope.SourceID == "" {
-			return &ErrStructure{Message: "folder scope requires a sourceId"}
+		if scope.VolumeID == "" {
+			return &ErrStructure{Message: "folder scope requires a volumeId"}
 		}
 		if scope.ID != "" {
-			return &ErrStructure{Message: "folder scope uses sourceId+path, not id"}
+			return &ErrStructure{Message: "folder scope uses volumeId+path, not id"}
 		}
 		if strings.HasPrefix(scope.Path, "/") || strings.HasSuffix(scope.Path, "/") {
 			return &ErrStructure{Message: fmt.Sprintf("folder path %q must be relative with no trailing slash", scope.Path)}
@@ -83,7 +83,7 @@ func validateScope(scope *Scope) error {
 		if scope.ID == "" {
 			return &ErrStructure{Message: fmt.Sprintf("scope %q requires an ID", scope.Kind)}
 		}
-		if scope.SourceID != "" || scope.Path != "" {
+		if scope.VolumeID != "" || scope.Path != "" {
 			return &ErrStructure{Message: fmt.Sprintf("scope %q carries only an id", scope.Kind)}
 		}
 		return nil

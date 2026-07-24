@@ -1541,3 +1541,21 @@ minting tasks 40–45). Executes D24's split direction; rulings, all Ari-ratifie
 timer refresh (if time-anchor drift bites); per-subtree sync overrides via an override table
 (never via overlapping roots); count caching (only past the baseline recorded in the deriver
 task's closing commit).
+
+**Dated note (2026-07-23, the 40+42 execution round):** the split + wire-shapes tasks landed
+(two parallel Opus worktree tracks, each triple-reviewed, integrated by the orchestrator).
+Execution rulings, all Ari-ratified where marked: **the entity filter token is `volumeId`**
+(Ari; the literal "→ `volume`" above would have required keeping the columnOverride exception
+this same round killed — the mechanical derivation wins, display copy stays a C14 registry
+concern); **the real volume-identity probe shipped immediately** (Ari — the st_dev interim
+failed D24's portability promise two ways: replug mints a duplicate volume, device-number
+reuse mis-attributes): darwin = statfs + `diskutil info -plist` subprocess (OS-shipped binary,
+plain exec — the dependency package's discovery/consent machinery has nothing to do for it),
+linux = /proc/self/mountinfo + /dev/disk/by-uuid (stdlib only), network mounts =
+`smb://host/share` (case-folded) / `nfs://host/export` (slash-folded) — host+share IS their
+identity; `dev:N` survives only as the exotic-filesystem residual, ceiling-commented. Linux
+external-vs-local classification needs a sysfs walk — left local-by-default ([jdg],
+user-correctable, comment at site). The engine's folder-add outcomes use the one generated
+`CreateFolderOutcomeKind` vocabulary (an engine-local camelCase twin was converged at
+integration — C15). macOS firmlink multi-root tracking is a ponytail ceiling on the
+resolver's mount cache. Windows probe rides the per-milestone Windows pass.

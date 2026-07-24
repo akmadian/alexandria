@@ -6,21 +6,25 @@
 // ./client.ts.
 
 import type { EventType, JobState } from "@/_generated-types/events";
-import type { ColorLabel, FileStatus, FileType, Flag } from "@/_generated-types/enums";
+import type { CollectionKind, ColorLabel, FileStatus, FileType, Flag, VolumeConnectivity, VolumeKind, SyncMode } from "@/_generated-types/enums";
 import type { Envelope, JobDone, JobProgress } from "@/_generated-types/models";
 import type { SortField, TokenField } from "@/_generated-types/vocabulary";
 import { log } from "@/lib/logger";
 import type { Arrangement, Leaf, Query, WhereNode } from "@/query-model/ast";
 import { DEFAULT_ARRANGEMENT, isLeaf } from "@/query-model/ast";
+import { leaf } from "@/query-model/registry";
 import type {
     AlexandriaAPI,
     AssetDetail,
     AssetQueryResult,
     AssetRow,
-    Source,
-    SourceInput,
+    CollectionNode,
+    CreateFolderOutcome,
+    FolderNode,
+    FolderPatch,
     TriagePatch,
     UpdateTarget,
+    VolumeNode,
 } from "./contract";
 import { ApiError } from "./contract";
 
@@ -47,7 +51,7 @@ interface MockAsset {
     caption: string | null;
     creator: string | null;
     copyright: string | null;
-    sourceId: string;
+    volumeId: string;
     tagIds: string[];
     thumbURL: string;
 
@@ -140,7 +144,7 @@ function seededAssets(count: number): MockAsset[] {
             caption: null,
             creator: i % 3 === 0 ? "A. Photographer" : null,
             copyright: null,
-            sourceId: `src-${i % 3}`,
+            volumeId: `src-${i % 3}`,
             tagIds: [],
             thumbURL: thumbDataUri(i + 1, kind.ratio),
 
@@ -188,7 +192,7 @@ function toRow(asset: MockAsset): AssetRow {
     return {
         kind: "asset",
         id: asset.id,
-        sourceId: asset.sourceId,
+        volumeId: asset.volumeId,
         filename: asset.filename,
         fileType: asset.fileType,
         fileStatus: asset.fileStatus,
@@ -211,7 +215,7 @@ function toRow(asset: MockAsset): AssetRow {
 function toDetail(asset: MockAsset): AssetDetail {
     return {
         id: asset.id,
-        sourceId: asset.sourceId,
+        volumeId: asset.volumeId,
         filename: asset.filename,
         extension: asset.extension,
         mimeType: asset.mimeType,
@@ -274,7 +278,7 @@ const FIELD: Record<TokenField, (asset: MockAsset) => unknown> = {
     lensModel: (a) => a.lensModel,
     rating: (a) => a.rating,
     sharpness: () => null,
-    source: (a) => a.sourceId,
+    volumeId: (a) => a.volumeId,
     tag: (a) => a.tagIds,
     text: (a) => `${a.filename} ${a.title ?? ""} ${a.caption ?? ""} ${a.creator ?? ""}`,
     title: (a) => a.title,
@@ -377,18 +381,32 @@ function evaluate(node: WhereNode | null, asset: MockAsset): boolean {
     }
 }
 
-// Scope narrowing (the extensional root). Vertical: library = all; collection/tag
-// membership + folder paths arrive with the sidebar (widen).
+// Scope narrowing (the extensional root). library = all; collection membership is
+// real (backed by COLLECTIONS below); folder narrows by volume (path-precise
+// narrowing lands with the folder-scope work — the tree's counts are honest
+// regardless); tag membership lands with the tag browser.
 function inScope(query: Query, asset: MockAsset): boolean {
     switch (query.scope.kind) {
         case "library":
             return true;
         case "folder":
-            return asset.sourceId === query.scope.sourceId;
+            return asset.volumeId === query.scope.volumeId;
         case "collection":
+            return collectionContains(query.scope.id, asset);
         case "tag":
-            return true; // membership tables land with the browser sidebar
+            return true; // membership lands with the tag browser
     }
+}
+
+// A collection's membership, the SQL membership-table / smart-query stand-in: a
+// manual collection lists its members; a smart collection re-runs its stored
+// predicate through the SAME `evaluate` the query engine uses, so its scope and
+// its badge count can never disagree (D41).
+function collectionContains(id: string, asset: MockAsset): boolean {
+    const collection = COLLECTIONS.find((candidate) => candidate.id === id);
+    if (collection === undefined) return false;
+    if (collection.kind === "manual") return collection.memberIds.includes(asset.id);
+    return evaluate(collection.where, asset);
 }
 
 // Sort accessors keyed by the GENERATED SortField union — the completeness
@@ -444,10 +462,22 @@ function applyPatch(asset: MockAsset, patch: TriagePatch): void {
 
 // --- sources -----------------------------------------------------------------
 
-// Seeded sources matching the assets' sourceIds (src-0..src-2), so the browser
-// sidebar (widen) and the import flow have real records to render. Shaped as
-// domain.Source (PascalCase, no json tags on the Go struct — the wire truth).
-function seededSources(): Source[] {
+// MockSource is the mock's INTERNAL legacy seed shape — the wire's Source type
+// died with the Volume/Folder split (D41); this survives only to drive the fake
+// import job until the frontend-import epic rebinds startImport to folder seeds.
+interface MockSource {
+    ID: string;
+    Name: string;
+    Kind: VolumeKind;
+    BasePath: string;
+    ScanRecursively: boolean;
+    Enabled: boolean;
+    Connectivity: VolumeConnectivity;
+    CreatedAt: string;
+    UpdatedAt: string;
+}
+
+function seededSources(): MockSource[] {
     const now = new Date(2026, 5, 1).toISOString();
     const names = ["Studio SSD", "Field Drive", "Archive NAS"];
     return names.map((name, index) => ({
@@ -463,7 +493,231 @@ function seededSources(): Source[] {
     }));
 }
 
-const SOURCES: Source[] = seededSources();
+const SOURCES: MockSource[] = seededSources();
+
+// --- the browser rail: volumes, folders, collections (D41) -------------------
+//
+// The top navigation axis the rail renders. Volumes and folders are a SEPARATE
+// seed from SOURCES: the backend's Volume/Folder split (D41) has EXECUTED — the
+// wire has no Source surface anymore — but the mock keeps its internal legacy
+// SOURCES seed to drive the fake import job until the frontend-import epic
+// rebinds startImport to folder seeds. Each
+// seeded volume maps to the assets of one seeded volumeId (VOLUME_OF), so folder
+// counts are DERIVED from the real catalog and sum honestly.
+
+interface MockVolume {
+    id: string;
+    name: string;
+    kind: VolumeKind;
+    connectivity: VolumeConnectivity;
+    basePath: string; // the mount prefix; disjoint createFolder paths derive a volume from theirs
+}
+
+// A tracked folder root. Roots are mutable (createFolder/removeFolder/updateFolder
+// rewrite them); the rendered tree nests one root under another purely by path
+// containment, so an absorb needs no reparenting bookkeeping.
+interface MockTrackedRoot {
+    id: string;
+    volumeId: string;
+    name: string;
+    path: string;
+    syncMode: SyncMode;
+}
+
+// volumeId → volumeId, so a volume's assets are exactly its source's assets.
+const VOLUME_OF: Record<string, string> = { "src-0": "vol-studio", "src-1": "vol-field", "src-2": "vol-archive" };
+
+function seededVolumes(): MockVolume[] {
+    return [
+        { id: "vol-studio", name: "Studio SSD", kind: "local", connectivity: "online", basePath: "/Volumes/StudioSSD" },
+        { id: "vol-field", name: "Field Drive", kind: "external_drive", connectivity: "online", basePath: "/Volumes/FieldDrive" },
+        // One offline volume (D41): dimmed + marked in the rail, but its catalog
+        // stays fully browsable — connectivity is an observation, never a gate.
+        { id: "vol-archive", name: "Archive NAS", kind: "smb", connectivity: "offline", basePath: "/Volumes/ArchiveNAS" },
+    ];
+}
+
+function seededTrackedRoots(): MockTrackedRoot[] {
+    return [
+        // One watched root — the subject of the needs-confirmation flow when a
+        // manual parent would absorb it.
+        { id: "folder-studio", volumeId: "vol-studio", name: "Photos", path: "/Volumes/StudioSSD/Photos", syncMode: "watched" },
+        // Two sibling roots under a common parent — the quiet-absorb flow (both
+        // manual, so a manual parent changes nothing).
+        { id: "folder-field-2024", volumeId: "vol-field", name: "2024", path: "/Volumes/FieldDrive/2024", syncMode: "manual" },
+        { id: "folder-field-2025", volumeId: "vol-field", name: "2025", path: "/Volumes/FieldDrive/2025", syncMode: "manual" },
+        { id: "folder-archive", volumeId: "vol-archive", name: "Archive", path: "/Volumes/ArchiveNAS/Archive", syncMode: "scheduled" },
+    ];
+}
+
+let VOLUMES: MockVolume[] = seededVolumes();
+let TRACKED_ROOTS: MockTrackedRoot[] = seededTrackedRoots();
+let folderCounter = 0;
+
+/** Test seam: restore the seeded volume/folder rail after mutation cases. */
+export function resetMockBrowserRail(): void {
+    VOLUMES = seededVolumes();
+    TRACKED_ROOTS = seededTrackedRoots();
+    folderCounter = 0;
+}
+
+const normalizePath = (path: string): string => path.replace(/\/+$/, "");
+const basename = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
+const isStrictDescendant = (path: string, ancestor: string): boolean => path.startsWith(ancestor + "/");
+
+// The nearest tracked root strictly containing `root` within its volume — the
+// parent under which the rail nests it. Undefined = a top-level root.
+function nearestAncestorRoot(root: MockTrackedRoot, roots: MockTrackedRoot[]): MockTrackedRoot | undefined {
+    let best: MockTrackedRoot | undefined;
+    for (const candidate of roots) {
+        if (candidate.id === root.id || candidate.volumeId !== root.volumeId) continue;
+        if (isStrictDescendant(root.path, candidate.path) && (best === undefined || candidate.path.length > best.path.length)) {
+            best = candidate;
+        }
+    }
+    return best;
+}
+
+// A leaf root (no child roots) bears assets; a container root (has child roots)
+// holds none directly — its count is its children's. Volume assets are
+// partitioned across the volume's leaf roots deterministically, so every asset
+// lands in exactly one root's subtree and counts sum to the volume total.
+function assetsForLeafRoot(root: MockTrackedRoot, volumeAssets: MockAsset[], volumeRoots: MockTrackedRoot[]): MockAsset[] {
+    const leaves = volumeRoots.filter((candidate) => !volumeRoots.some((other) => nearestAncestorRoot(other, volumeRoots)?.id === candidate.id));
+    leaves.sort((a, b) => a.id.localeCompare(b.id));
+    const slot = leaves.findIndex((candidate) => candidate.id === root.id);
+    if (slot === -1 || leaves.length === 0) return [];
+    return volumeAssets.filter((_, index) => index % leaves.length === slot);
+}
+
+// Derived (non-root) subfolders: one level bucketed by capture year, "undated"
+// for the EXIF-less scans. Ids are synthetic (volumeId + ":" + path, per D41),
+// carry no syncMode (they inherit the root's), and hold their bucket's assets.
+function yearBuckets(root: MockTrackedRoot, assets: MockAsset[], volumeId: string): FolderNode[] {
+    const groups = new Map<string, number>();
+    for (const asset of assets) {
+        const key = asset.capturedAt === null ? "undated" : String(new Date(asset.capturedAt).getFullYear());
+        groups.set(key, (groups.get(key) ?? 0) + 1);
+    }
+    return [...groups.keys()]
+        .sort()
+        .map((key): FolderNode => {
+            const path = `${root.path}/${key}`;
+            return { id: `${volumeId}:${path}`, name: key, path, assetCount: groups.get(key) ?? 0, children: [] };
+        });
+}
+
+function buildRootNode(root: MockTrackedRoot, volumeRoots: MockTrackedRoot[], volumeAssets: MockAsset[], volumeId: string): FolderNode {
+    const childRoots = volumeRoots.filter((candidate) => nearestAncestorRoot(candidate, volumeRoots)?.id === root.id);
+    const childNodes = childRoots.map((childRoot) => buildRootNode(childRoot, volumeRoots, volumeAssets, volumeId));
+    // A leaf root bears the assets (as year buckets); a container root defers to
+    // its child roots and holds none directly.
+    const derived = childRoots.length === 0 ? yearBuckets(root, assetsForLeafRoot(root, volumeAssets, volumeRoots), volumeId) : [];
+    const children = [...childNodes, ...derived];
+    const assetCount = children.reduce((sum, child) => sum + child.assetCount, 0);
+    return { id: root.id, name: root.name, path: root.path, syncMode: root.syncMode, assetCount, children };
+}
+
+function buildVolumeTree(volume: MockVolume): VolumeNode {
+    const volumeRoots = TRACKED_ROOTS.filter((root) => root.volumeId === volume.id);
+    const volumeAssets = CATALOG.filter((asset) => VOLUME_OF[asset.volumeId] === volume.id);
+    const topRoots = volumeRoots.filter((root) => nearestAncestorRoot(root, volumeRoots) === undefined);
+    const folders = topRoots.map((root) => buildRootNode(root, volumeRoots, volumeAssets, volume.id));
+    const assetCount = folders.reduce((sum, folder) => sum + folder.assetCount, 0);
+    return { id: volume.id, name: volume.name, kind: volume.kind, connectivity: volume.connectivity, assetCount, folders };
+}
+
+// Resolve (or mint) the volume a disjoint createFolder path lives on, so a newly
+// tracked root always has a volume to hang under in the rail.
+function ensureVolumeForPath(path: string): string {
+    const mount = "/" + path.split("/").slice(1, 3).join("/");
+    const existing = VOLUMES.find((volume) => volume.basePath === mount);
+    if (existing !== undefined) return existing.id;
+    const volume: MockVolume = {
+        id: `vol-${VOLUMES.length}`,
+        name: basename(mount),
+        kind: "external_drive",
+        connectivity: "online",
+        basePath: mount,
+    };
+    VOLUMES.push(volume);
+    return volume.id;
+}
+
+// The sync mode a newly minted parent root takes. A quiet absorb of like-moded
+// children changes nothing; absorbing a watched/scheduled child needs confirming.
+const NEW_ROOT_SYNC_MODE: SyncMode = "manual";
+
+function createFolderOutcome(rawPath: string, confirm: boolean): CreateFolderOutcome {
+    const path = normalizePath(rawPath);
+    // 1. Exact match or under an existing root → redirect to that root.
+    const container = TRACKED_ROOTS.find((root) => root.path === path || isStrictDescendant(path, root.path));
+    if (container !== undefined) return { kind: "already_tracked_within", folderId: container.id };
+
+    // 2. Parent of one or more existing roots → absorb (quiet unless a
+    //    watched/scheduled child's behavior would change under the new mode).
+    const absorbed = TRACKED_ROOTS.filter((root) => isStrictDescendant(root.path, path));
+    if (absorbed.length > 0) {
+        const behaviorChanges = absorbed
+            .filter((root) => root.syncMode !== NEW_ROOT_SYNC_MODE && (root.syncMode === "watched" || root.syncMode === "scheduled"))
+            .map((root) => ({ folderId: root.id, folderName: root.name, currentSyncMode: root.syncMode, newSyncMode: NEW_ROOT_SYNC_MODE }));
+        if (behaviorChanges.length > 0 && !confirm) {
+            // No mutation — the caller re-issues with confirm=true.
+            return { kind: "needs_confirmation", absorbedFolderIds: absorbed.map((root) => root.id), behaviorChanges };
+        }
+        folderCounter += 1;
+        const parent: MockTrackedRoot = { id: `folder-new-${folderCounter}`, volumeId: absorbed[0].volumeId, name: basename(path), path, syncMode: NEW_ROOT_SYNC_MODE };
+        TRACKED_ROOTS.push(parent);
+        log.info("mock: folder absorbed roots", { path, absorbed: absorbed.length });
+        emit("changed", { scope: "folders" });
+        return { kind: "absorbed", folderId: parent.id, absorbedFolderIds: absorbed.map((root) => root.id) };
+    }
+
+    // 3. Disjoint → a brand-new tracked root (minting its volume if needed).
+    folderCounter += 1;
+    const root: MockTrackedRoot = { id: `folder-new-${folderCounter}`, volumeId: ensureVolumeForPath(path), name: basename(path), path, syncMode: NEW_ROOT_SYNC_MODE };
+    TRACKED_ROOTS.push(root);
+    log.info("mock: folder tracked", { path, id: root.id });
+    emit("changed", { scope: "folders" });
+    return { kind: "created", folderId: root.id };
+}
+
+// Collections. A manual collection carries an explicit membership list; a smart
+// one carries a stored predicate the badge count and scope both read through
+// `evaluate`. `countUnavailable` models D41's escape hatch — a smart count the
+// backend declined to compute (nil on the wire, distinct from 0 = empty).
+type MockCollection =
+    | { id: string; name: string; parentId: string | null; kind: "manual"; memberIds: string[] }
+    | { id: string; name: string; parentId: string | null; kind: "smart"; where: WhereNode; countUnavailable?: boolean };
+
+function seededCollections(): MockCollection[] {
+    return [
+        { id: "col-select", name: "Selects", parentId: null, kind: "manual", memberIds: ["mock-0000", "mock-0003", "mock-0006", "mock-0012"] },
+        // Nested under Selects (exercises parentId) and genuinely empty (count 0,
+        // NOT null — the 0-vs-unavailable distinction).
+        { id: "col-cull", name: "To Cull", parentId: "col-select", kind: "manual", memberIds: [] },
+        // A smart collection with a real compiled badge.
+        { id: "col-highrated", name: "High Rated", parentId: null, kind: "smart", where: leaf("rating", "gte", 4) },
+        // A smart collection whose count the backend declined (nil badge), while
+        // its scope membership stays computable.
+        { id: "col-portfolio", name: "Portfolio", parentId: null, kind: "smart", where: leaf("fileType", "in", ["image"]), countUnavailable: true },
+    ];
+}
+
+const COLLECTIONS: MockCollection[] = seededCollections();
+
+function collectionCount(collection: MockCollection): number | null {
+    if (collection.kind === "manual") return collection.memberIds.length;
+    if (collection.countUnavailable === true) return null;
+    return CATALOG.filter((asset) => evaluate(collection.where, asset)).length;
+}
+
+function toCollectionNode(collection: MockCollection): CollectionNode {
+    const kind: CollectionKind = collection.kind;
+    const node: CollectionNode = { id: collection.id, name: collection.name, kind, assetCount: collectionCount(collection) };
+    if (collection.parentId !== null) node.parentId = collection.parentId;
+    return node;
+}
 
 // --- the event bus (C8) ------------------------------------------------------
 //
@@ -641,48 +895,77 @@ export const mockApi: AlexandriaAPI = {
         });
     },
 
-    listSources(): Promise<Source[]> {
-        return delay(SOURCES.map((source) => ({ ...source })));
+
+    getFolderTree(): Promise<VolumeNode[]> {
+        // Empty volumes leave the rail (D41): only volumes with a tracked root.
+        const tree = VOLUMES.filter((volume) => TRACKED_ROOTS.some((root) => root.volumeId === volume.id)).map(buildVolumeTree);
+        return delay(tree);
     },
 
-    createSource(input: SourceInput): Promise<Source> {
-        // Mirrors the seam's CreateSource: mint an enabled/online record. Kind
-        // defaults to local when empty, matching SourceInput's Go default.
-        const now = new Date().toISOString();
-        const source: Source = {
-            ID: `src-${SOURCES.length}`,
-            Name: input.name,
-            Kind: input.kind !== undefined && input.kind !== "" ? input.kind : "local",
-            BasePath: input.basePath,
-            ScanRecursively: input.scanRecursively ?? true,
-            Enabled: true,
-            Connectivity: "online",
-            CreatedAt: now,
-            UpdatedAt: now,
-        };
-        SOURCES.push(source);
-        log.info("mock: source created", { id: source.ID, name: source.Name });
-        // A new source is a catalog change (scope sources) — invalidate any
-        // source-derived reads, faithful to the seam's coincident event.
-        emit("changed", { scope: "sources" });
-        return delay({ ...source });
+    listCollections(): Promise<CollectionNode[]> {
+        return delay(COLLECTIONS.map(toCollectionNode));
     },
 
-    startImport(sourceId: string): Promise<string> {
-        const source = SOURCES.find((candidate) => candidate.ID === sourceId);
+    createFolder(path: string, confirm?: boolean): Promise<CreateFolderOutcome> {
+        return delay(createFolderOutcome(path, confirm ?? false));
+    },
+
+    removeFolder(id: string): Promise<void> {
+        const target = TRACKED_ROOTS.find((root) => root.id === id);
+        if (target === undefined) {
+            return delay(id).then(() => {
+                throw new ApiError("domain", `folder ${id} not found`, "not_found");
+            });
+        }
+        // Cascade-via-soft-delete (D41): drop the root and every root nested under
+        // it. The mock has no soft-delete rows; judgments on the assets persist in
+        // CATALOG, matching "judgments survive, files untouched".
+        TRACKED_ROOTS = TRACKED_ROOTS.filter(
+            (root) => root.id !== id && !(root.volumeId === target.volumeId && isStrictDescendant(root.path, target.path)),
+        );
+        log.info("mock: folder removed", { id });
+        emit("changed", { scope: "folders" });
+        return delay(undefined);
+    },
+
+    updateFolder(id: string, patch: FolderPatch): Promise<void> {
+        const target = TRACKED_ROOTS.find((root) => root.id === id);
+        if (target === undefined) {
+            return delay(id).then(() => {
+                throw new ApiError("domain", `folder ${id} not found`, "not_found");
+            });
+        }
+        if (patch.name !== undefined) target.name = patch.name;
+        if (patch.syncMode !== undefined) target.syncMode = patch.syncMode;
+        log.info("mock: folder updated", { id });
+        emit("changed", { scope: "folders" });
+        return delay(undefined);
+    },
+
+    pickDirectory(): Promise<string | null> {
+        // The real OS dialog lands in a later task; the fake always "picks" a
+        // fresh disjoint path (never cancels), so the create-folder flow is
+        // demoable end to end. `null` on the wire is the cancelled case.
+        return delay("/Volumes/Untitled/New Folder");
+    },
+
+    startImport(folderId: string): Promise<string> {
+        // Still keyed to the legacy SOURCES seed: the import flow's mock rebinds to
+        // the folder seed when the frontend-import epic consumes the new tree reads.
+        const source = SOURCES.find((candidate) => candidate.ID === folderId);
         if (source === undefined) {
-            return delay(sourceId).then(() => {
-                throw new ApiError("domain", `source ${sourceId} not found`, "not_found");
+            return delay(folderId).then(() => {
+                throw new ApiError("domain", `folder ${folderId} not found`, "not_found");
             });
         }
         if (source.Connectivity === "offline") {
-            return delay(sourceId).then(() => {
-                throw new ApiError("domain", `source ${sourceId} is offline`, "source_offline");
+            return delay(folderId).then(() => {
+                throw new ApiError("domain", `volume for folder ${folderId} is offline`, "volume_offline");
             });
         }
         jobCounter += 1;
         const jobId = `mock-job-${String(jobCounter).padStart(4, "0")}`;
-        log.info("mock: import started", { jobId, sourceId });
+        log.info("mock: import started", { jobId, folderId });
         runMockImport(jobId);
         return delay(jobId);
     },

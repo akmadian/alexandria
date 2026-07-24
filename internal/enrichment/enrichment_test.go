@@ -81,7 +81,7 @@ type harness struct {
 func newHarness(t *testing.T, definitions []enrichment.JobDefinition, machine settings.Machine, budgetCapacity int64, count int) *harness {
 	t.Helper()
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "enrich")
+	source := testutil.NewTestVolume(t, db, "enrich")
 	assets := make([]*domain.Asset, 0, count)
 	for index := range count {
 		assets = append(assets, testutil.NewTestAsset(t, db, source.ID, fmt.Sprintf("photo-%03d.jpg", index)))
@@ -237,11 +237,19 @@ func TestMustValidatePanics(t *testing.T) {
 	enrichment.MustValidate([]enrichment.JobDefinition{first, second})
 }
 
+// nopVolumeResolver is a placeholder VolumeResolver for validation-only tests
+// (producers are never invoked, so Absolute is never called).
+type nopVolumeResolver struct{}
+
+func (nopVolumeResolver) Absolute(context.Context, string, string) (string, error) {
+	return "", nil
+}
+
 func TestCanonicalRegistryValidates(t *testing.T) {
 	// The boot-time sweep as a table test (C10): the canonical rows must
 	// always pass. The dependencies are placeholders — validation exercises
 	// applicability and shape, never the producers.
-	definitions := enrichment.Definitions(thumbnailer.New(t.TempDir()), &sqlite.SourceRepo{})
+	definitions := enrichment.Definitions(thumbnailer.New(t.TempDir()), nopVolumeResolver{})
 	if err := enrichment.Validate(definitions); err != nil {
 		t.Fatalf("canonical registry invalid: %v", err)
 	}

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/akmadian/alexandria/internal/catalog"
-	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/charmbracelet/log"
@@ -53,23 +52,28 @@ const (
 type Ingester interface {
 	// Run is the reconcile: the importer's full walk (impl/05 "reconcile is a
 	// schedule, not a component"). Used at startup and on overflow.
-	Run(ctx context.Context, source *domain.Source, fsys fs.FS) (importer.ImportResult, error)
-	// IngestFile hands over ONE settled/gone path. The importer stats it and
-	// decides the action; present → ingest, gone → mark missing + delete-side merge.
-	IngestFile(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error
+	Run(ctx context.Context, target importer.Target, fsys fs.FS) (importer.ImportResult, error)
+	// IngestFile hands over ONE settled/gone path (volume-relative). The importer
+	// stats it and decides the action; present → ingest, gone → mark missing.
+	IngestFile(ctx context.Context, target importer.Target, fsys fs.FS, name string) error
 }
 
-// Watcher watches one source's tree and keeps its catalog rows fresh. One instance
-// per source; supervising many is a higher layer's job (the app-host supervisor,
-// DEFERRED §2), not the watcher's.
+// Watcher watches one tracked folder's tree and keeps its catalog rows fresh. One
+// instance per folder; supervising many is a higher layer's job (the app-host
+// supervisor, DEFERRED §2), not the watcher's.
 type Watcher struct {
 	Ingester Ingester
-	// Obs is the watcher's ONE sanctioned catalog write: sources.connectivity via
-	// MarkConnectivityBySource (asset file_status online⇄offline on mount/unmount).
+	// Obs is the watcher's ONE sanctioned catalog write: volume connectivity via
+	// MarkConnectivityByVolume (asset file_status online⇄offline on mount/unmount).
 	// It performs no other write — every per-file action goes through Ingester.
-	Obs          catalog.AssetObservationWriter
-	Source       *domain.Source
-	Root         string // absolute path of the source root (watched, and the DirFS base)
+	Obs catalog.AssetObservationWriter
+	// Target names the volume this folder lives on and the folder's volume-relative
+	// walk root, so ingested paths key on (volume, volume-relative path) (D24).
+	Target importer.Target
+	// MountPoint is the volume's current mount point — the DirFS base, so every
+	// event path resolves to a volume-relative path. The watched subtree is
+	// MountPoint joined with Target.WalkRoot.
+	MountPoint   string
 	Log          *log.Logger
 	Debounce     time.Duration // 0 → defaultDebounce
 	PollInterval time.Duration // 0 → defaultPoll (connectivity probe / poll-driven reconcile)
@@ -87,7 +91,8 @@ type Watcher struct {
 
 	// SidecarChanged, if set, fires when a .xmp sidecar graduates. The callback
 	// owns the echo check and catalog action; the watcher just hands it the path.
-	SidecarChanged func(ctx context.Context, source *domain.Source, absolutePath string, relativePath string)
+	// relativePath is volume-relative.
+	SidecarChanged func(ctx context.Context, target importer.Target, absolutePath string, relativePath string)
 
 	// offline gates the event loop while the volume is gone: the poll monitor sets
 	// it on unmount so graduate stops feeding paths (a vanished path during an
@@ -104,18 +109,23 @@ type Watcher struct {
 // down is converged by a full walk before live watching begins. Returns
 // context.Canceled on a clean shutdown.
 func (w *Watcher) Run(ctx context.Context) error {
-	// Canonicalize the root: on macOS /var is a symlink to /private/var, and
-	// FSEvents reports the resolved path — so a symlinked root would make every
+	// Canonicalize the mount: on macOS /var is a symlink to /private/var, and
+	// FSEvents reports the resolved path — so a symlinked base would make every
 	// event look like it escaped the tree (filepath.Rel → "../…") and get dropped.
 	// Resolving once keeps the watch root and event paths in the same namespace.
-	root := w.Root
-	if resolved, err := filepath.EvalSymlinks(root); err == nil {
-		root = resolved
+	// fsys is rooted at the volume mount so every path is volume-relative.
+	mount := w.MountPoint
+	if resolved, err := filepath.EvalSymlinks(mount); err == nil {
+		mount = resolved
 	}
-	fsys := os.DirFS(root)
+	fsys := os.DirFS(mount)
+	watchRoot := mount
+	if w.Target.WalkRoot != "" {
+		watchRoot = filepath.Join(mount, filepath.FromSlash(w.Target.WalkRoot))
+	}
 
-	w.Log.Info("watcher: startup reconcile", "source", w.Source.Name, "root", root)
-	if _, err := w.Ingester.Run(ctx, w.Source, fsys); err != nil {
+	w.Log.Info("watcher: startup reconcile", "volume", w.Target.Name, "root", watchRoot)
+	if _, err := w.Ingester.Run(ctx, w.Target, fsys); err != nil {
 		return fmt.Errorf("startup reconcile: %w", err)
 	}
 
@@ -125,13 +135,15 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 	// Subscribe failure (e.g. inotify watch-limit exhaustion) is not fatal: degrade
 	// to polling, where the poll monitor's periodic reconcile is the change detector.
-	events, err := source(ctx, root)
+	// The event source normalizes against watchRoot (folder-relative); the loop
+	// rebases those onto the volume before handing them to the importer.
+	events, err := source(ctx, watchRoot)
 	pollDriven := false
 	if err != nil {
-		w.Log.Warn("watcher: event subscribe failed — degrading to polling", "root", root, "err", err)
+		w.Log.Warn("watcher: event subscribe failed — degrading to polling", "root", watchRoot, "err", err)
 		pollDriven = true
 	} else {
-		w.Log.Info("watcher: watching", "root", root)
+		w.Log.Info("watcher: watching", "root", watchRoot)
 	}
 
 	// Event loop and connectivity monitor run together; either returning (or ctx
@@ -139,10 +151,19 @@ func (w *Watcher) Run(ctx context.Context) error {
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error { return w.poll(ctx, fsys, pollDriven) })
 	if !pollDriven {
-		w.Log.Info("watcher: event loop started", "root", root)
+		w.Log.Info("watcher: event loop started", "root", watchRoot)
 		group.Go(func() error { return w.loop(ctx, fsys, events) })
 	}
 	return group.Wait()
+}
+
+// toVolumeRelative rebases a folder-relative event path (relative to the watch
+// root) onto the volume, so ingested paths key on (volume, volume-relative path).
+func (w *Watcher) toVolumeRelative(folderRelative string) string {
+	if w.Target.WalkRoot == "" {
+		return folderRelative
+	}
+	return path.Join(w.Target.WalkRoot, folderRelative)
 }
 
 // loop is the single goroutine that owns the dirty set. Per-path timers are the
@@ -194,7 +215,7 @@ func (w *Watcher) loop(ctx context.Context, fsys fs.FS, events <-chan Event) err
 				// full walk. Missed events cannot cause divergence past this point.
 				w.Log.Warn("watcher: event overflow — dropping dirty set, reconciling")
 				stopAll()
-				if _, err := w.Ingester.Run(ctx, w.Source, fsys); err != nil {
+				if _, err := w.Ingester.Run(ctx, w.Target, fsys); err != nil {
 					w.Log.Error("watcher: overflow reconcile failed", "err", err)
 				}
 				continue
@@ -203,7 +224,7 @@ func (w *Watcher) loop(ctx context.Context, fsys fs.FS, events <-chan Event) err
 				w.Log.Debug("watcher: event ignored", "path", event.Path)
 				continue // ignore-list at intake: a .tmp storm never enters the set
 			}
-			arm(event.Path)
+			arm(w.toVolumeRelative(event.Path)) // rebase folder-relative → volume-relative
 
 		case relPath := <-graduated:
 			// ponytail: a late event can Reset a timer that already fired, so a path
@@ -247,15 +268,15 @@ func (w *Watcher) graduate(ctx context.Context, fsys fs.FS, relPath string) (req
 	// sidecar_files row stays tracked. A newly-created sidecar (e.g. LrC starting to
 	// manage a file) needs both the sync and the row.
 	if w.SidecarChanged != nil && isXMPSidecar(relPath) {
-		absolutePath := filepath.Join(w.Root, relPath)
-		w.SidecarChanged(ctx, w.Source, absolutePath, relPath)
+		absolutePath := filepath.Join(w.MountPoint, filepath.FromSlash(relPath))
+		w.SidecarChanged(ctx, w.Target, absolutePath, relPath)
 		w.Log.Info("watcher: sidecar hint fired", "path", relPath)
 	}
 
 	// Settled-present, gone, or a transient stat error: hand the path over. On a
 	// transient error the importer re-stats, returns an error we log, and the next
 	// reconcile/poll heals — still no action decided here.
-	if err := w.Ingester.IngestFile(ctx, w.Source, fsys, relPath); err != nil {
+	if err := w.Ingester.IngestFile(ctx, w.Target, fsys, relPath); err != nil {
 		w.Log.Error("watcher: ingest failed", "path", relPath, "err", err)
 	}
 	w.Log.Info("watcher: graduate completed", "path", relPath)

@@ -135,7 +135,7 @@ func TestGetAsset_ProjectsFullDetail(t *testing.T) {
 	creator, copyright := "Ari Madian", "ALL RIGHTS RESERVED"
 	label := domain.ColorLabelGreen
 	fake := &fakeAssets{asset: &domain.Asset{
-		ID: "a1", SourceID: "s1", Filename: "_DSF4926.RAF", Extension: "RAF",
+		ID: "a1", VolumeID: "s1", Filename: "_DSF4926.RAF", Extension: "RAF",
 		MIMEType: "image/x-fuji-raf", FileType: domain.FileTypeRaw,
 		FileStatus: domain.FileStatusOnline, RelativePath: "Adams 2026/_DSF4926.RAF",
 		SizeBytes: 81_140_000,
@@ -190,7 +190,7 @@ func TestGetAsset_ProjectsFullDetail(t *testing.T) {
 
 func TestGetAsset_NilFieldsStayNil(t *testing.T) {
 	fake := &fakeAssets{asset: &domain.Asset{
-		ID: "a2", SourceID: "s1", Filename: "scan.jpg", Extension: "jpg",
+		ID: "a2", VolumeID: "s1", Filename: "scan.jpg", Extension: "jpg",
 		MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
 		FileStatus: domain.FileStatusOnline, RelativePath: "scans/scan.jpg",
 	}}
@@ -379,7 +379,7 @@ func TestDistinctValues_SuggestableFieldReturnsValues(t *testing.T) {
 
 func TestQueryAssets_OverRealCatalog(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "photos")
+	source := testutil.NewTestVolume(t, db, "photos")
 	testutil.NewTestAsset(t, db, source.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, source.ID, "b.jpg")
 	repo := &sqlite.AssetRepo{DB: db}
@@ -399,7 +399,7 @@ func TestQueryAssets_OverRealCatalog(t *testing.T) {
 
 func TestUpdateAssets_OverRealCatalog_PersistsJudgment(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "photos")
+	source := testutil.NewTestVolume(t, db, "photos")
 	asset := testutil.NewTestAsset(t, db, source.ID, "a.jpg")
 	repo := &sqlite.AssetRepo{DB: db}
 	service := seam.NewAssetService(repo, repo)
@@ -442,7 +442,7 @@ func TestRemoveFromCatalog_RepoErrorMapsToUnexpected(t *testing.T) {
 
 func TestRemoveFromCatalog_OverRealCatalog_SoftDeletes(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "photos")
+	source := testutil.NewTestVolume(t, db, "photos")
 	asset := testutil.NewTestAsset(t, db, source.ID, "a.jpg")
 	repo := &sqlite.AssetRepo{DB: db}
 	service := seam.NewAssetService(repo, repo)

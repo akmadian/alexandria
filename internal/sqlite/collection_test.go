@@ -80,7 +80,7 @@ func TestCollectionRepo_AddRemoveAsset(t *testing.T) {
 	repo := &sqlite.CollectionRepo{DB: db}
 	assetRepo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
@@ -125,7 +125,7 @@ func TestCollectionRepo_AddAsset_PositionOrdering(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.CollectionRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	for _, name := range []string{"a.jpg", "b.jpg", "c.jpg"} {
 		testutil.NewTestAsset(t, db, src.ID, name)
@@ -219,7 +219,7 @@ func TestCollectionRepo_SmartCollectionEvaluatesThroughQueryAssets(t *testing.T)
 	db := testutil.NewTestDB(t)
 	assetRepo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "good.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "bad.jpg")

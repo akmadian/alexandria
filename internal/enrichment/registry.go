@@ -106,7 +106,7 @@ type JobDefinition struct {
 // dependencies its producers need. Tasks 20+ append their rows here. Tests
 // inject their own rows through Config.Definitions — the canonical table and a
 // test's fakes flow through identical validation and dispatch.
-func Definitions(thumbnails *thumbnailer.Thumbnailer, sources SourceResolver) []JobDefinition {
+func Definitions(thumbnails *thumbnailer.Thumbnailer, volumes VolumeResolver) []JobDefinition {
 	return []JobDefinition{
 		{
 			Kind: "thumbnail",
@@ -120,7 +120,7 @@ func Definitions(thumbnails *thumbnailer.Thumbnailer, sources SourceResolver) []
 			TimeoutPolicy:  thumbnailTimeout,
 			Priority:       0, // thumbnails first, always — every signal kind gates on them (task 20)
 			Weight:         thumbnailWeight,
-			Produce:        thumbnailProducer(thumbnails, sources),
+			Produce:        thumbnailProducer(thumbnails, volumes),
 		},
 		// The cheap signals (task 20): each gates on the thumbnail artifact and
 		// reads it off disk. Applicable wherever a thumbnail exists (same predicate

@@ -16,10 +16,10 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-func newImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.AssetRepo) {
+func newImporter(t *testing.T) (*importer.Importer, importer.Target, *sqlite.AssetRepo) {
 	t.Helper()
 	db := testutil.NewTestDB(t)
-	src := testutil.NewTestSource(t, db, "photos")
+	volume := testutil.NewTestVolume(t, db, "photos")
 	assets := &sqlite.AssetRepo{DB: db}
 	imp := &importer.Importer{
 		Reader:  assets,
@@ -29,7 +29,9 @@ func newImporter(t *testing.T) (*importer.Importer, *domain.Source, *sqlite.Asse
 		Imports: &sqlite.ImportRepo{DB: db},
 		Log:     log.New(io.Discard), // injected quiet logger — no test output noise
 	}
-	return imp, src, assets
+	// The fsys is rooted at the volume; the whole tree is the walk root ("").
+	target := importer.Target{VolumeID: volume.ID, Name: volume.Name}
+	return imp, target, assets
 }
 
 func TestRun_IndexesSupportedFilesOnly(t *testing.T) {
@@ -117,7 +119,7 @@ func TestRun_RealFilesOnDisk(t *testing.T) {
 
 	// Metadata extraction ran through the pipeline: real files carry dimensions
 	// and rights (these fixtures are exports without camera EXIF).
-	sample, err := assets.FindBySourcePath(context.Background(), src.ID, "_6160345-.jpg")
+	sample, err := assets.FindByVolumePath(context.Background(), src.VolumeID, "_6160345-.jpg")
 	if err != nil || sample == nil {
 		t.Fatalf("sample asset: %v", err)
 	}
@@ -153,7 +155,7 @@ func TestIngestFile_GonePathMarksMissing(t *testing.T) {
 	if err := imp.IngestFile(ctx, src, fstest.MapFS{}, "a.jpg"); err != nil {
 		t.Fatalf("ingest gone path: %v", err)
 	}
-	a, _ := assets.FindBySourcePath(ctx, src.ID, "a.jpg")
+	a, _ := assets.FindByVolumePath(ctx, src.VolumeID, "a.jpg")
 	if a == nil || a.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("a.jpg status = %v, want missing", a)
 	}
@@ -192,7 +194,7 @@ func TestWalk_MarksMissingThenRestores(t *testing.T) {
 	if res.Missing != 1 {
 		t.Fatalf("walk: missing=%d, want 1", res.Missing)
 	}
-	reloaded, _ := assets.FindBySourcePath(ctx, src.ID, "b.jpg")
+	reloaded, _ := assets.FindByVolumePath(ctx, src.VolumeID, "b.jpg")
 	if reloaded == nil || reloaded.FileStatus != domain.FileStatusMissing {
 		t.Fatalf("b.jpg status = %v, want missing", reloaded)
 	}
@@ -201,7 +203,7 @@ func TestWalk_MarksMissingThenRestores(t *testing.T) {
 	if _, err := imp.Run(ctx, src, full); err != nil {
 		t.Fatalf("walk back: %v", err)
 	}
-	if reloaded, _ = assets.FindBySourcePath(ctx, src.ID, "b.jpg"); reloaded.FileStatus != domain.FileStatusOnline {
+	if reloaded, _ = assets.FindByVolumePath(ctx, src.VolumeID, "b.jpg"); reloaded.FileStatus != domain.FileStatusOnline {
 		t.Fatalf("b.jpg status = %q, want online", reloaded.FileStatus)
 	}
 }

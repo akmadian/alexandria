@@ -14,7 +14,7 @@ function makeRow(id: string, over: Partial<AssetRow> = {}): AssetRow {
         kind: "asset",
         thumbURL: `/thumbnails/512/${id.slice(0, 2)}/${id}.jpg`,
         id,
-        sourceId: "src-0",
+        volumeId: "src-0",
         filename: `${id}.jpg`,
         fileType: "image",
         fileStatus: "online",
@@ -37,7 +37,7 @@ function makeRow(id: string, over: Partial<AssetRow> = {}): AssetRow {
 function makeDetail(id: string, over: Partial<AssetDetail> = {}): AssetDetail {
     return {
         id,
-        sourceId: "src-0",
+        volumeId: "src-0",
         filename: `${id}.jpg`,
         extension: "jpg",
         mimeType: "image/jpeg",

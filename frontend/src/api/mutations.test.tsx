@@ -28,7 +28,7 @@ const ROW: AssetRow = {
     kind: "asset",
     thumbURL: "/thumbnails/512/aa/a.jpg",
     id: "a",
-    sourceId: "src-0",
+    volumeId: "src-0",
     filename: "a.jpg",
     fileType: "image",
     fileStatus: "online",

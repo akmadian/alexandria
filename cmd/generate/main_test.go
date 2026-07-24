@@ -65,9 +65,9 @@ func TestDomainEnumsShape(t *testing.T) {
 		"export type ColorLabel =",
 		"export type Flag =",
 		"export type FileStatus =",
-		"export type SourceKind =",
-		"export type SourceConnectivity =",
-		`  | "external_drive"`, // SourceKind member, proving raw values (not TS names) are emitted
+		"export type VolumeKind =",
+		"export type VolumeConnectivity =",
+		`  | "external_drive"`, // VolumeKind member, proving raw values (not TS names) are emitted
 	}
 	for _, want := range wants {
 		if !strings.Contains(source, want) {
@@ -111,7 +111,7 @@ func TestSeamEventsShape(t *testing.T) {
 		"export type EventType =",
 		"export type JobState =",
 		`  | "catalog"`,      // an EventTopic member
-		`  | "sourceStatus"`, // an EventType member
+		`  | "volumeStatus"`, // an EventType member
 		`  | "cancelled"`,    // a JobState member
 	}
 	for _, want := range wants {

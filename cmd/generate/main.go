@@ -149,9 +149,12 @@ var domainEnumTypes = []string{
 	"ColorLabel",
 	"Flag",
 	"FileStatus",
-	"SourceKind",
-	"SourceConnectivity",
+	"VolumeKind",
+	"VolumeConnectivity",
+	"SyncMode",
 	"EnrichmentKind",
+	"CollectionKind",
+	"CreateFolderOutcomeKind",
 }
 
 // renderDomainEnums builds enums.ts from the discovered members. The type order
@@ -161,7 +164,7 @@ func renderDomainEnums() []byte {
 	members := loadEnumMembers(domainPackage, domainEnumTypes)
 
 	var buffer bytes.Buffer
-	header(&buffer, "internal/domain (asset.go, source.go)")
+	header(&buffer, "internal/domain (asset.go, volume.go)")
 	for _, typeName := range domainEnumTypes {
 		writeUnion(&buffer, typeName, stringsOf(members[typeName]))
 	}

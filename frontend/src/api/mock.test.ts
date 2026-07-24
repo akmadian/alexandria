@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Envelope, JobDone, JobProgress } from "@/_generated-types/models";
 import { DEFAULT_ARRANGEMENT, type Arrangement, type Query } from "@/query-model/ast";
 import { leaf } from "@/query-model/registry";
-import type { Page } from "./contract";
-import { configureMockImport, mockApi } from "./mock";
+import type { FolderNode, Page } from "./contract";
+import { configureMockImport, mockApi, resetMockBrowserRail } from "./mock";
 
 const LIBRARY: Query = { version: 1, scope: { kind: "library" }, where: null };
 const ALL: Page = { offset: 0, limit: 1000 };
@@ -256,28 +256,6 @@ describe("mock updateAssets (the write path)", () => {
     });
 });
 
-describe("mock sources", () => {
-    it("lists the seeded sources matching the asset sourceIds", async () => {
-        const sources = await mockApi.listSources();
-        expect(sources.length).toBeGreaterThanOrEqual(3);
-        expect(sources.map((source) => source.ID)).toEqual(expect.arrayContaining(["src-0", "src-1", "src-2"]));
-        expect(sources.every((source) => source.Enabled && source.Connectivity === "online")).toBe(true);
-    });
-
-    it("mints a source from an input and appends it, emitting a catalog change", async () => {
-        const events: Envelope[] = [];
-        const unsubscribe = mockApi.subscribe((envelope) => events.push(envelope));
-        const before = (await mockApi.listSources()).length;
-
-        const created = await mockApi.createSource({ name: "New Drive", basePath: "/Volumes/New" });
-        expect(created.Name).toBe("New Drive");
-        expect(created.Kind).toBe("local"); // empty kind defaults to local
-        expect(created.Enabled).toBe(true);
-        expect((await mockApi.listSources())).toHaveLength(before + 1);
-        expect(events.some((envelope) => envelope.topic === "catalog" && envelope.type === "changed")).toBe(true);
-        unsubscribe();
-    });
-});
 
 describe("mock import lifecycle (the ticking job)", () => {
     // Zero-delay ticks so the job runs through in a handful of macrotasks; the
@@ -287,7 +265,7 @@ describe("mock import lifecycle (the ticking job)", () => {
     // Drive an import to its terminal event, collecting every envelope. Cancel is
     // requested from within the first progress tick, using the envelope's own
     // jobId (startImport's resolved id races the ticker).
-    function runImport(sourceId: string, cancel = false): Promise<Envelope[]> {
+    function runImport(volumeId: string, cancel = false): Promise<Envelope[]> {
         configureMockImport({ tickMs: 0 });
         return new Promise((resolve, reject) => {
             const seen: Envelope[] = [];
@@ -303,7 +281,7 @@ describe("mock import lifecycle (the ticking job)", () => {
                     resolve(seen);
                 }
             });
-            mockApi.startImport(sourceId).catch(reject);
+            mockApi.startImport(volumeId).catch(reject);
         });
     }
 
@@ -347,5 +325,199 @@ describe("mock import lifecycle (the ticking job)", () => {
 
     it("cancelJob is a no-op for an unknown job (never rejects)", async () => {
         await expect(mockApi.cancelJob("mock-job-9999")).resolves.toBeUndefined();
+    });
+});
+
+// --- the browser rail (D41) --------------------------------------------------
+
+// Walk every node, asserting a parent's count is exactly the sum of its
+// children's (intermediate nodes hold no direct assets in the mock, so the
+// subtree count sums at every level — the folder-count invariant).
+function assertSubtreeSums(node: FolderNode): void {
+    if (node.children.length === 0) return;
+    const childSum = node.children.reduce((sum, child) => sum + child.assetCount, 0);
+    expect(node.assetCount).toBe(childSum);
+    node.children.forEach(assertSubtreeSums);
+}
+
+describe("mock folder tree (getFolderTree)", () => {
+    it("returns the volume forest with subtree counts that sum at every level", async () => {
+        const volumes = await mockApi.getFolderTree();
+        expect(volumes.length).toBeGreaterThanOrEqual(3);
+        for (const volume of volumes) {
+            const rootSum = volume.folders.reduce((sum, folder) => sum + folder.assetCount, 0);
+            expect(volume.assetCount).toBe(rootSum);
+            volume.folders.forEach(assertSubtreeSums);
+        }
+        // Every seeded asset maps to a seeded volume (src-0..2), so the forest's
+        // total equals the whole catalog — no asset is dropped or double-counted.
+        const total = volumes.reduce((sum, volume) => sum + volume.assetCount, 0);
+        const { total: catalogTotal } = await mockApi.queryAssets(LIBRARY, DEFAULT_ARRANGEMENT, ALL);
+        expect(total).toBe(catalogTotal);
+    });
+
+    it("keeps an offline volume present and browsable (never dropped or disabled)", async () => {
+        const volumes = await mockApi.getFolderTree();
+        const offline = volumes.filter((volume) => volume.connectivity === "offline");
+        expect(offline).toHaveLength(1);
+        expect(offline[0].folders.length).toBeGreaterThan(0); // still has its tree
+    });
+
+    it("carries syncMode on tracked roots only, never on derived path nodes", async () => {
+        const volumes = await mockApi.getFolderTree();
+        let derivedSeen = 0;
+        const check = (node: FolderNode): void => {
+            if (node.id.includes(":")) {
+                // Synthetic id (volumeId + ":" + path) = a derived node: no syncMode.
+                derivedSeen += 1;
+                expect(node.syncMode).toBeUndefined();
+            } else {
+                expect(node.syncMode).toBeDefined(); // a tracked root
+            }
+            node.children.forEach(check);
+        };
+        volumes.forEach((volume) => volume.folders.forEach(check));
+        expect(derivedSeen).toBeGreaterThan(0); // the tree actually has derived nodes
+    });
+});
+
+describe("mock collections (listCollections + scope narrowing)", () => {
+    it("computes manual counts from membership and smart counts through the query engine", async () => {
+        const collections = await mockApi.listCollections();
+        const byId = new Map(collections.map((collection) => [collection.id, collection]));
+
+        // Manual: count is the membership size.
+        expect(byId.get("col-select")?.assetCount).toBe(4);
+        expect(byId.get("col-select")?.kind).toBe("manual");
+
+        // Smart: the badge equals what the same predicate yields through the query
+        // engine (scope and badge can't disagree).
+        const highRated = await mockApi.queryAssets(withWhere(leaf("rating", "gte", 4)), DEFAULT_ARRANGEMENT, ALL);
+        expect(byId.get("col-highrated")?.assetCount).toBe(highRated.total);
+    });
+
+    it("distinguishes empty (0) from count-unavailable (null), and carries parentId", async () => {
+        const collections = await mockApi.listCollections();
+        const byId = new Map(collections.map((collection) => [collection.id, collection]));
+
+        expect(byId.get("col-cull")?.assetCount).toBe(0); // genuinely empty
+        expect(byId.get("col-cull")?.parentId).toBe("col-select"); // nesting via adjacency
+        expect(byId.get("col-portfolio")?.assetCount).toBeNull(); // declined, not empty
+        expect(byId.get("col-select")?.parentId).toBeUndefined(); // top-level
+    });
+
+    it("narrows a manual collection scope to exactly its members and nothing else", async () => {
+        const scope: Query = { version: 1, scope: { kind: "collection", id: "col-select" }, where: null };
+        const { items, total } = await mockApi.queryAssets(scope, DEFAULT_ARRANGEMENT, ALL);
+        const members = ["mock-0000", "mock-0003", "mock-0006", "mock-0012"];
+        expect(total).toBe(members.length);
+        expect(items.map((row) => row.id).sort()).toEqual([...members].sort());
+    });
+
+    it("narrows a smart collection scope by re-running its predicate", async () => {
+        const scope: Query = { version: 1, scope: { kind: "collection", id: "col-highrated" }, where: null };
+        const { items, total } = await mockApi.queryAssets(scope, DEFAULT_ARRANGEMENT, ALL);
+        const direct = await mockApi.queryAssets(withWhere(leaf("rating", "gte", 4)), DEFAULT_ARRANGEMENT, ALL);
+        expect(total).toBe(direct.total);
+        expect(items.every((row) => row.rating !== null && row.rating >= 4)).toBe(true);
+    });
+
+    it("yields nothing for an unknown collection id", async () => {
+        const scope: Query = { version: 1, scope: { kind: "collection", id: "no-such" }, where: null };
+        expect((await mockApi.queryAssets(scope, DEFAULT_ARRANGEMENT, ALL)).total).toBe(0);
+    });
+});
+
+describe("mock createFolder outcomes (the D41 table)", () => {
+    afterEach(() => resetMockBrowserRail());
+
+    it("created — a disjoint path mints a new tracked root and a volume for it", async () => {
+        const outcome = await mockApi.createFolder("/Volumes/NewDrive/Fresh");
+        expect(outcome.kind).toBe("created");
+        expect(outcome.folderId).toBeDefined();
+        const volumes = await mockApi.getFolderTree();
+        expect(volumes.some((volume) => volume.folders.some((folder) => folder.path === "/Volumes/NewDrive/Fresh"))).toBe(true);
+    });
+
+    it("already_tracked_within — a subfolder of a tracked root redirects to it", async () => {
+        const outcome = await mockApi.createFolder("/Volumes/StudioSSD/Photos/2026");
+        expect(outcome.kind).toBe("already_tracked_within");
+        expect(outcome.folderId).toBe("folder-studio");
+    });
+
+    it("already_tracked_within — an exact duplicate selects the existing root", async () => {
+        const outcome = await mockApi.createFolder("/Volumes/FieldDrive/2024");
+        expect(outcome.kind).toBe("already_tracked_within");
+        expect(outcome.folderId).toBe("folder-field-2024");
+    });
+
+    it("absorbed — a parent of two like-moded roots merges quietly (no confirmation)", async () => {
+        const outcome = await mockApi.createFolder("/Volumes/FieldDrive");
+        expect(outcome.kind).toBe("absorbed");
+        expect(outcome.absorbedFolderIds).toEqual(expect.arrayContaining(["folder-field-2024", "folder-field-2025"]));
+        expect(outcome.behaviorChanges ?? []).toHaveLength(0);
+        // The two roots now nest under the new parent, counts still summing.
+        const field = (await mockApi.getFolderTree()).find((volume) => volume.id === "vol-field");
+        expect(field?.folders).toHaveLength(1);
+        expect(field?.folders[0].path).toBe("/Volumes/FieldDrive");
+        expect(field?.folders[0].children.map((child) => child.path)).toEqual(
+            expect.arrayContaining(["/Volumes/FieldDrive/2024", "/Volumes/FieldDrive/2025"]),
+        );
+    });
+
+    it("needs_confirmation — absorbing a watched root asks first and does not mutate", async () => {
+        const outcome = await mockApi.createFolder("/Volumes/StudioSSD");
+        expect(outcome.kind).toBe("needs_confirmation");
+        expect(outcome.absorbedFolderIds).toContain("folder-studio");
+        expect(outcome.behaviorChanges).toEqual([
+            { folderId: "folder-studio", folderName: "Photos", currentSyncMode: "watched", newSyncMode: "manual" },
+        ]);
+        // No mutation happened: the studio volume's top root is still Photos.
+        const studio = (await mockApi.getFolderTree()).find((volume) => volume.id === "vol-studio");
+        expect(studio?.folders[0].path).toBe("/Volumes/StudioSSD/Photos");
+    });
+
+    it("needs_confirmation — a scheduled root triggers the same ask as a watched one", async () => {
+        const outcome = await mockApi.createFolder("/Volumes/ArchiveNAS");
+        expect(outcome.kind).toBe("needs_confirmation");
+        expect(outcome.behaviorChanges).toEqual([
+            { folderId: "folder-archive", folderName: "Archive", currentSyncMode: "scheduled", newSyncMode: "manual" },
+        ]);
+    });
+
+    it("needs_confirmation → the confirmed re-call proceeds to absorb", async () => {
+        const first = await mockApi.createFolder("/Volumes/StudioSSD");
+        expect(first.kind).toBe("needs_confirmation");
+        const confirmed = await mockApi.createFolder("/Volumes/StudioSSD", true);
+        expect(confirmed.kind).toBe("absorbed");
+        expect(confirmed.absorbedFolderIds).toContain("folder-studio");
+        const studio = (await mockApi.getFolderTree()).find((volume) => volume.id === "vol-studio");
+        expect(studio?.folders[0].path).toBe("/Volumes/StudioSSD"); // the new parent
+    });
+});
+
+describe("mock folder mutations (remove / update / pick)", () => {
+    afterEach(() => resetMockBrowserRail());
+
+    it("removeFolder drops the root from the tree and rejects an unknown id", async () => {
+        await mockApi.removeFolder("folder-field-2024");
+        const field = (await mockApi.getFolderTree()).find((volume) => volume.id === "vol-field");
+        expect(field?.folders.some((folder) => folder.path === "/Volumes/FieldDrive/2024")).toBe(false);
+        await expect(mockApi.removeFolder("nope")).rejects.toMatchObject({ name: "ApiError", code: "not_found" });
+    });
+
+    it("updateFolder patches sync mode and name, and rejects an unknown id", async () => {
+        await mockApi.updateFolder("folder-studio", { syncMode: "manual", name: "Renamed" });
+        const studio = (await mockApi.getFolderTree()).find((volume) => volume.id === "vol-studio");
+        expect(studio?.folders[0].syncMode).toBe("manual");
+        expect(studio?.folders[0].name).toBe("Renamed");
+        await expect(mockApi.updateFolder("nope", { syncMode: "manual" })).rejects.toMatchObject({
+            name: "ApiError",
+            code: "not_found",
+        });
+    });
+
+    it("pickDirectory resolves with a fake chosen path", async () => {
+        await expect(mockApi.pickDirectory()).resolves.toBe("/Volumes/Untitled/New Folder");
     });
 });

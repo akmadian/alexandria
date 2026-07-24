@@ -31,7 +31,7 @@ const (
 	TopicCatalog Topic = "catalog"
 	// TopicJobs carries background-work progress and completion (C9).
 	TopicJobs Topic = "jobs"
-	// TopicWatcher carries source connectivity / watcher status. Producer lands
+	// TopicWatcher carries volume connectivity / watcher status. Producer lands
 	// with the impl/12 watcher supervisor (DEFERRED §2); the type is declared now.
 	TopicWatcher Topic = "watcher"
 	// TopicSync carries XMP conflict/apply notifications. Reserved for the impl/06
@@ -55,9 +55,9 @@ const (
 	EventJobProgress EventType = "progress"
 	// EventJobDone (topic jobs): a job reached a terminal state; carries the summary.
 	EventJobDone EventType = "done"
-	// EventSourceStatus (topic watcher): a source's connectivity/watch mode changed.
+	// EventVolumeStatus (topic watcher): a volume's connectivity/watch mode changed.
 	// Producer lands with the watcher supervisor (DEFERRED §2); declared now.
-	EventSourceStatus EventType = "sourceStatus"
+	EventVolumeStatus EventType = "volumeStatus"
 )
 
 // JobState is a job's lifecycle state. running rides on progress events; the three
@@ -103,7 +103,7 @@ type Envelope struct {
 // measurably needs selective invalidation. Consumers may ignore it entirely and
 // invalidate the active view.
 type CatalogChange struct {
-	Scope string   `json:"scope,omitempty"` // "assets" | "collections" | "tags" | "sources"
+	Scope string   `json:"scope,omitempty"` // "assets" | "collections" | "tags" | "volumes"
 	IDs   []string `json:"ids,omitempty"`   // reserved; not populated at launch
 }
 
@@ -162,12 +162,12 @@ type HistoryState struct {
 	RedoLabel string `json:"redoLabel,omitempty"`
 }
 
-// SourceStatus is the watcher/sourceStatus payload. Shaped so DEFERRED §2's fuller
+// VolumeStatus is the watcher/volumeStatus payload. Shaped so DEFERRED §2's fuller
 // snapshot (mode events|polling|offline, last reconcile, dirty count) extends it
 // additively — no new event type — when the watcher supervisor lands.
-type SourceStatus struct {
-	SourceID string `json:"sourceId"`
-	Status   string `json:"status"` // domain.SourceConnectivity string
+type VolumeStatus struct {
+	VolumeID string `json:"volumeId"`
+	Status   string `json:"status"` // domain.VolumeConnectivity string
 }
 
 // --- The catalog: single source of truth for topic+payload per type ---------
@@ -186,7 +186,7 @@ var eventCatalog = map[EventType]eventSpec{
 	EventHistoryChanged: {TopicCatalog, HistoryState{}},
 	EventJobProgress:    {TopicJobs, JobProgress{}},
 	EventJobDone:        {TopicJobs, JobDone{}},
-	EventSourceStatus:   {TopicWatcher, SourceStatus{}},
+	EventVolumeStatus:   {TopicWatcher, VolumeStatus{}},
 }
 
 // validTopics is the closed set an event may ride. TopicSync has no types yet

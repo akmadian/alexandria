@@ -21,10 +21,10 @@ export type TokenField =
   | "lensModel"
   | "rating"
   | "sharpness"
-  | "source"
   | "tag"
   | "text"
   | "title"
+  | "volumeId"
   | "width";
 
 export type TokenOperator =
@@ -102,9 +102,9 @@ export const fieldGrammar = {
   lensModel: { operators: ["eq", "neq", "contains", "startsWith", "empty", "notEmpty"], kind: "text", suggestable: true },
   rating: { operators: ["eq", "neq", "gte", "lte", "empty", "notEmpty"], kind: "numeric", suggestable: false },
   sharpness: { operators: ["eq", "neq", "gte", "lte", "empty", "notEmpty"], kind: "numeric", suggestable: false },
-  source: { operators: ["in", "notIn"], kind: "entityReference", suggestable: false },
   tag: { operators: ["has", "lacks", "under", "notUnder", "empty", "notEmpty"], kind: "tagReference", suggestable: false },
   text: { operators: ["matches"], kind: "freeText", suggestable: false },
   title: { operators: ["eq", "neq", "contains", "startsWith", "empty", "notEmpty"], kind: "text", suggestable: false },
+  volumeId: { operators: ["in", "notIn"], kind: "entityReference", suggestable: false },
   width: { operators: ["eq", "neq", "gte", "lte", "empty", "notEmpty"], kind: "numeric", suggestable: false },
 } as const satisfies Record<TokenField, FieldGrammar>;

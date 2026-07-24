@@ -88,7 +88,7 @@ func TestValidateEventCatalog_CoversEveryDeclaredType(t *testing.T) {
 		EventHistoryChanged: TopicCatalog,
 		EventJobProgress:    TopicJobs,
 		EventJobDone:        TopicJobs,
-		EventSourceStatus:   TopicWatcher,
+		EventVolumeStatus:   TopicWatcher,
 	}
 	for eventType, topic := range want {
 		spec, ok := eventCatalog[eventType]

@@ -61,10 +61,10 @@ derive from the field name (virtual fields compile through joins instead).
 | `lensModel` | text | true | `lens_model` | eq, neq, contains, startsWith, empty, notEmpty | true |
 | `rating` | numeric | true | `rating` | eq, neq, gte, lte, empty, notEmpty | false |
 | `sharpness` | numeric | true | `sharpness` | eq, neq, gte, lte, empty, notEmpty | false |
-| `source` | entityReference | false | `source_id` | in, notIn | false |
 | `tag` | tagReference | true | `— (virtual)` | has, lacks, under, notUnder, empty, notEmpty | false |
 | `text` | freeText | false | `— (virtual)` | matches | false |
 | `title` | text | true | `title` | eq, neq, contains, startsWith, empty, notEmpty | false |
+| `volumeId` | entityReference | false | `volume_id` | in, notIn | false |
 | `width` | numeric | true | `width` | eq, neq, gte, lte, empty, notEmpty | false |
 
 ## Query shapes
@@ -80,17 +80,20 @@ derive from the field name (virtual fields compile through joins instead).
 - **ColorLabel**: `blue`, `green`, `orange`, `purple`, `red`, `yellow`
 - **Flag**: `pick`, `reject`
 - **FileStatus**: `missing`, `offline`, `online`
-- **SourceKind**: `external_drive`, `local`, `nfs`, `smb`
-- **SourceConnectivity**: `offline`, `online`
+- **VolumeKind**: `external_drive`, `local`, `nfs`, `smb`
+- **VolumeConnectivity**: `offline`, `online`
+- **SyncMode**: `manual`, `scheduled`, `watched`
 - **EnrichmentKind**: `clipping`, `phash`, `sharpness`, `thumbnail`
+- **CollectionKind**: `manual`, `smart`
+- **CreateFolderOutcomeKind**: `absorbed`, `already_tracked_within`, `created`, `needs_confirmation`
 
 ## Events (C8) and errors
 
 - **Topics**: `catalog`, `jobs`, `sync`, `watcher`
-- **Event types**: `changed`, `done`, `historyChanged`, `progress`, `sourceStatus`
+- **Event types**: `changed`, `done`, `historyChanged`, `progress`, `volumeStatus`
 - **Job states**: `cancelled`, `done`, `failed`, `running`
 - **ApiError kinds**: `degraded`, `domain`, `transport`, `unexpected`
-- **Error codes**: `conflict`, `not_found`, `query_invalid`, `query_version_too_new`, `source_offline`, `validation`
+- **Error codes**: `conflict`, `not_found`, `query_invalid`, `query_version_too_new`, `validation`, `volume_offline`
 
 ## Shared wire models (models.ts)
 
@@ -104,4 +107,10 @@ Reflected from Go structs whose json tags are the wire contract.
 - **JobSummary** (`internal/seam`) — Completion tally carried by JobDone.
 - **JobDone** (`internal/seam`) — jobs/done payload.
 - **HistoryState** (`internal/seam`) — catalog/historyChanged payload.
-- **SourceStatus** (`internal/seam`) — watcher/sourceStatus payload.
+- **VolumeStatus** (`internal/seam`) — watcher/volumeStatus payload.
+- **VolumeNode** (`internal/seam`) — A storage volume with its tracked-root folders — a node in the getFolderTree forest (D41).
+- **FolderNode** (`internal/seam`) — One node in a volume's folder tree; recursive via children (D41).
+- **CollectionNode** (`internal/seam`) — A collection projected for the rail; flat list, parentId adjacency (D41).
+- **FolderBehaviorChange** (`internal/seam`) — One tracked root whose sync policy would change under a proposed absorb (D41).
+- **CreateFolderOutcome** (`internal/seam`) — The disposition of a createFolder attempt plus the folders it touched (D41).
+- **FolderPatch** (`internal/seam`) — The sparse updateFolder input (name / sync mode).

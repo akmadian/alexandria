@@ -17,20 +17,39 @@ import (
 	"github.com/akmadian/alexandria/internal/testutil"
 )
 
-// fakeSourceGetter resolves a single source (or an error), standing in for the
-// source repo so the import tests need no database.
-type fakeSourceGetter struct {
-	source *domain.Source
+// fakeFolderGetter resolves a single tracked folder (or an error), standing in
+// for the folder repo so the import tests need no database.
+type fakeFolderGetter struct {
+	folder *domain.Folder
 	err    error
 }
 
-func (f *fakeSourceGetter) Get(_ context.Context, _ string) (*domain.Source, error) {
-	return f.source, f.err
+func (f *fakeFolderGetter) Get(_ context.Context, _ string) (*domain.Folder, error) {
+	return f.folder, f.err
 }
 
-func onlineSource() *domain.Source {
-	return &domain.Source{ID: "src-1", BasePath: "/tmp/whatever", Connectivity: domain.SourceOnline}
+// fakeVolumeGetter resolves the folder's volume for the offline pre-check.
+type fakeVolumeGetter struct {
+	volume *domain.Volume
+	err    error
 }
+
+func (f *fakeVolumeGetter) Get(_ context.Context, _ string) (*domain.Volume, error) {
+	return f.volume, f.err
+}
+
+// onlineFolderVolume returns a tracked folder plus its online volume.
+func onlineFolderVolume() (*domain.Folder, *domain.Volume) {
+	return &domain.Folder{ID: "folder-1", VolumeID: "vol-1", Path: ""},
+		&domain.Volume{ID: "vol-1", Connectivity: domain.VolumeOnline}
+}
+
+func newImportServiceFor(folder *domain.Folder, volume *domain.Volume, run seamRun, emitter seam.Emitter) *seam.ImportService {
+	return seam.NewImportService(&fakeFolderGetter{folder: folder}, &fakeVolumeGetter{volume: volume}, importer.NewJobs(), run, emitter)
+}
+
+// seamRun mirrors the (unexported) runImport signature the service takes.
+type seamRun = func(ctx context.Context, jobID string, folder *domain.Folder, onProgress func(importer.Progress)) (importer.ImportResult, error)
 
 // waitFor polls until cond is true or the deadline passes — the events an import
 // job emits arrive from a goroutine, so tests synchronize on the captured set
@@ -56,14 +75,15 @@ func lastEvent(events []capturedEvent) capturedEvent {
 // injected run stands in for the real pipeline so no walk or DB is needed.
 func TestStartImport_EmitsProgressThenDone(t *testing.T) {
 	emitter := &fakeEmitter{}
-	run := func(_ context.Context, jobID string, _ *domain.Source, onProgress func(importer.Progress)) (importer.ImportResult, error) {
+	run := func(_ context.Context, jobID string, _ *domain.Folder, onProgress func(importer.Progress)) (importer.ImportResult, error) {
 		onProgress(importer.Progress{JobID: jobID, Kind: "import", Done: 5, Total: 0, TotalKnown: false})
 		onProgress(importer.Progress{JobID: jobID, Kind: "import", Done: 10, Total: 10, TotalKnown: true})
 		return importer.ImportResult{Added: 10, Skipped: 2}, nil
 	}
-	service := seam.NewImportService(&fakeSourceGetter{source: onlineSource()}, importer.NewJobs(), run, emitter)
+	folder, volume := onlineFolderVolume()
+	service := newImportServiceFor(folder, volume, run, emitter)
 
-	jobID, err := service.StartImport("src-1")
+	jobID, err := service.StartImport("folder-1")
 	if err != nil {
 		t.Fatalf("StartImport: %v", err)
 	}
@@ -109,14 +129,15 @@ func TestStartImport_EmitsProgressThenDone(t *testing.T) {
 func TestStartImport_CancelEmitsCancelled(t *testing.T) {
 	emitter := &fakeEmitter{}
 	started := make(chan struct{})
-	run := func(ctx context.Context, _ string, _ *domain.Source, _ func(importer.Progress)) (importer.ImportResult, error) {
+	run := func(ctx context.Context, _ string, _ *domain.Folder, _ func(importer.Progress)) (importer.ImportResult, error) {
 		close(started)
 		<-ctx.Done() // block until CancelJob fires
 		return importer.ImportResult{Added: 3}, ctx.Err()
 	}
-	service := seam.NewImportService(&fakeSourceGetter{source: onlineSource()}, importer.NewJobs(), run, emitter)
+	folder, volume := onlineFolderVolume()
+	service := newImportServiceFor(folder, volume, run, emitter)
 
-	jobID, err := service.StartImport("src-1")
+	jobID, err := service.StartImport("folder-1")
 	if err != nil {
 		t.Fatalf("StartImport: %v", err)
 	}
@@ -143,12 +164,13 @@ func TestStartImport_CancelEmitsCancelled(t *testing.T) {
 // with the diagnostic detail attached.
 func TestStartImport_FailureEmitsFailed(t *testing.T) {
 	emitter := &fakeEmitter{}
-	run := func(_ context.Context, _ string, _ *domain.Source, _ func(importer.Progress)) (importer.ImportResult, error) {
+	run := func(_ context.Context, _ string, _ *domain.Folder, _ func(importer.Progress)) (importer.ImportResult, error) {
 		return importer.ImportResult{}, errors.New("catalog exploded")
 	}
-	service := seam.NewImportService(&fakeSourceGetter{source: onlineSource()}, importer.NewJobs(), run, emitter)
+	folder, volume := onlineFolderVolume()
+	service := newImportServiceFor(folder, volume, run, emitter)
 
-	if _, err := service.StartImport("src-1"); err != nil {
+	if _, err := service.StartImport("folder-1"); err != nil {
 		t.Fatalf("StartImport: %v", err)
 	}
 	waitFor(t, func() bool {
@@ -169,32 +191,34 @@ func TestStartImport_FailureEmitsFailed(t *testing.T) {
 // no one is listening.
 func TestNewImportService_NilEmitterUsesNop(t *testing.T) {
 	progressed := make(chan struct{})
-	run := func(_ context.Context, jobID string, _ *domain.Source, onProgress func(importer.Progress)) (importer.ImportResult, error) {
+	run := func(_ context.Context, jobID string, _ *domain.Folder, onProgress func(importer.Progress)) (importer.ImportResult, error) {
 		onProgress(importer.Progress{JobID: jobID}) // routed to the nop sink
 		close(progressed)
 		return importer.ImportResult{}, nil
 	}
-	service := seam.NewImportService(&fakeSourceGetter{source: onlineSource()}, importer.NewJobs(), run, nil)
+	folder, volume := onlineFolderVolume()
+	service := newImportServiceFor(folder, volume, run, nil)
 
-	if _, err := service.StartImport("src-1"); err != nil {
+	if _, err := service.StartImport("folder-1"); err != nil {
 		t.Fatalf("StartImport: %v", err)
 	}
 	<-progressed // the nop emitter handled at least the progress event without panic
 }
 
-// TestStartImport_OfflineSourceRejected covers the up-front guard: an offline
-// source returns source_offline before any job starts, and emits nothing.
-func TestStartImport_OfflineSourceRejected(t *testing.T) {
+// TestStartImport_OfflineVolumeRejected covers the up-front guard: an offline
+// volume returns volume_offline before any job starts, and emits nothing.
+func TestStartImport_OfflineVolumeRejected(t *testing.T) {
 	emitter := &fakeEmitter{}
-	offline := &domain.Source{ID: "src-1", BasePath: "/tmp/x", Connectivity: domain.SourceOffline}
-	run := func(context.Context, string, *domain.Source, func(importer.Progress)) (importer.ImportResult, error) {
-		t.Fatal("run must not be called for an offline source")
+	folder := &domain.Folder{ID: "folder-1", VolumeID: "vol-1", Path: "x"}
+	offline := &domain.Volume{ID: "vol-1", Connectivity: domain.VolumeOffline}
+	run := func(context.Context, string, *domain.Folder, func(importer.Progress)) (importer.ImportResult, error) {
+		t.Fatal("run must not be called for an offline volume")
 		return importer.ImportResult{}, nil
 	}
-	service := seam.NewImportService(&fakeSourceGetter{source: offline}, importer.NewJobs(), run, emitter)
+	service := newImportServiceFor(folder, offline, run, emitter)
 
-	_, err := service.StartImport("src-1")
-	assertDomainCode(t, err, "source_offline")
+	_, err := service.StartImport("folder-1")
+	assertDomainCode(t, err, "volume_offline")
 	if len(emitter.snapshot()) != 0 {
 		t.Error("a rejected import must emit nothing")
 	}
@@ -203,21 +227,18 @@ func TestStartImport_OfflineSourceRejected(t *testing.T) {
 // TestStartImport_RealImporterEndToEnd is the spec §6 acceptance with a REAL
 // importer (not a fake run): a seeded filesystem is ingested through the actual
 // pipeline, progress events arrive, and jobs/done carries a summary whose Added
-// count matches the rows committed to the DB. This is what proves the
-// Progress→envelope and ImportResult→summary mappings against real engine output,
-// where the ImportService unit tests only prove the dispatch logic. The app host's
-// os.DirFS + thumbnailer wiring (app.go host.runImport) stays a wails-dev concern;
-// here the run closure mirrors it over an in-memory FS.
+// count matches the rows committed to the DB.
 func TestStartImport_RealImporterEndToEnd(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "photos")
+	volume := testutil.NewTestVolume(t, db, "photos")
+	folder := testutil.NewTestFolder(t, db, volume.ID, "")
 	assets := &sqlite.AssetRepo{DB: db}
 	fsys := fstest.MapFS{
 		"a.jpg":     {Data: []byte("jpeg-a")},
 		"b.png":     {Data: []byte("png-b")},
 		"notes.txt": {Data: []byte("unsupported")}, // skipped by the scanner
 	}
-	run := func(ctx context.Context, jobID string, src *domain.Source, onProgress func(importer.Progress)) (importer.ImportResult, error) {
+	run := func(ctx context.Context, jobID string, folder *domain.Folder, onProgress func(importer.Progress)) (importer.ImportResult, error) {
 		ingester := &importer.Importer{
 			Reader:     assets,
 			Obs:        assets,
@@ -227,12 +248,13 @@ func TestStartImport_RealImporterEndToEnd(t *testing.T) {
 			Log:        log.New(io.Discard),
 			OnProgress: onProgress,
 		}
-		return ingester.RunJob(ctx, jobID, src, fsys)
+		target := importer.Target{VolumeID: folder.VolumeID, WalkRoot: folder.Path, Name: folder.Name}
+		return ingester.RunJob(ctx, jobID, target, fsys)
 	}
 	emitter := &fakeEmitter{}
-	service := seam.NewImportService(&fakeSourceGetter{source: source}, importer.NewJobs(), run, emitter)
+	service := seam.NewImportService(&fakeFolderGetter{folder: folder}, &fakeVolumeGetter{volume: volume}, importer.NewJobs(), run, emitter)
 
-	if _, err := service.StartImport(source.ID); err != nil {
+	if _, err := service.StartImport(folder.ID); err != nil {
 		t.Fatalf("StartImport: %v", err)
 	}
 	waitFor(t, func() bool {

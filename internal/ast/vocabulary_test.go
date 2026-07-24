@@ -96,7 +96,7 @@ func TestDerivedGrammar_Golden(t *testing.T) {
 		ast.FieldHeight:      withPresence(numeric),
 		ast.FieldCapturedAt:  withPresence(date),
 		ast.FieldIngestedAt:  date,
-		ast.FieldSource:      enum,
+		ast.FieldVolume:      enum,
 		ast.FieldTag:         withPresence([]ast.Operator{ast.OpHas, ast.OpLacks, ast.OpUnder, ast.OpNotUnder}),
 		ast.FieldText:        {ast.OpMatches},
 		ast.FieldCameraMake:  withPresence(text),
@@ -145,7 +145,7 @@ func TestFieldColumns(t *testing.T) {
 		ast.FieldFileType:   "file_type",
 		ast.FieldCapturedAt: "captured_at",
 		ast.FieldCameraMake: "camera_make",
-		ast.FieldSource:     "source_id",
+		ast.FieldVolume:     "volume_id",
 	}
 	for field, want := range cases {
 		if columns[field] != want {

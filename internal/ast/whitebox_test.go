@@ -50,7 +50,7 @@ func TestStrategies_RejectForeignOperators(t *testing.T) {
 	if _, _, err := compileEnumColumn("flag", true, badLeaf); err == nil {
 		t.Error("enum strategy: expected unsupported-operator error")
 	}
-	if _, _, err := compileEntityColumn("source_id", badLeaf); err == nil {
+	if _, _, err := compileEntityColumn("volume_id", badLeaf); err == nil {
 		t.Error("entity strategy: expected unsupported-operator error")
 	}
 	if _, _, err := compileTag(Leaf{Field: FieldTag, Cmp: OpEq, Value: "x"}); err == nil {
@@ -191,7 +191,7 @@ func TestValidateValue_Shapes(t *testing.T) {
 		{"fileType unknown member", Leaf{Field: FieldFileType, Cmp: OpIn, Value: []string{"hologram"}}, true},
 		{"colorLabel unknown member", Leaf{Field: FieldColorLabel, Cmp: OpIn, Value: []string{"mauve"}}, true},
 		{"fileStatus unknown member", Leaf{Field: FieldFileStatus, Cmp: OpIn, Value: []string{"lost"}}, true},
-		{"entity in wrong type", Leaf{Field: FieldSource, Cmp: OpIn, Value: "s1"}, true},
+		{"entity in wrong type", Leaf{Field: FieldVolume, Cmp: OpIn, Value: "s1"}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -219,10 +219,10 @@ func TestValidateEnumAndEntity_ScalarBranches(t *testing.T) {
 	if err := validateEnumMember("__notAnEnumField", "anything"); err != nil {
 		t.Errorf("non-enum field passes membership: %v", err)
 	}
-	if err := validateEntityRefValue(FieldSource, OpEq, "s1"); err != nil {
+	if err := validateEntityRefValue(FieldVolume, OpEq, "s1"); err != nil {
 		t.Errorf("scalar entity string: %v", err)
 	}
-	if err := validateEntityRefValue(FieldSource, OpEq, 3.0); err == nil {
+	if err := validateEntityRefValue(FieldVolume, OpEq, 3.0); err == nil {
 		t.Error("scalar entity non-string: expected error")
 	}
 }

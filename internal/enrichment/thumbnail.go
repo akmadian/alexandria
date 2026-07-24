@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"path/filepath"
 	"time"
 
 	"github.com/akmadian/alexandria/internal/assettype"
@@ -21,20 +20,21 @@ import (
 // a strategy needs. This file owns only the glue: absolute-path resolution,
 // strategy dispatch, DLQ reason taxonomy, and the artifact commit.
 
-// SourceResolver is the one capability producers need from the source table:
-// resolving an asset's source so its base path can anchor an absolute file
-// path. Deliberately not catalog.SourceRepository — a background producer must
-// not structurally hold source mutation (narrowest-interface doctrine,
-// catalog/interfaces.go). *sqlite.SourceRepo satisfies it.
-type SourceResolver interface {
-	Get(ctx context.Context, id string) (*domain.Source, error)
+// VolumeResolver is the one capability producers need to turn a stored key back
+// into a file on disk: the absolute path of an asset's (volume, volume-relative
+// path). The catalog stores (volume_id, relative_path) and the mount point is
+// resolved live, so producers cannot join it themselves. Deliberately narrow —
+// a background producer holds no volume mutation (narrowest-interface doctrine,
+// catalog/interfaces.go). *volume.Resolver satisfies it.
+type VolumeResolver interface {
+	Absolute(ctx context.Context, volumeID, relativePath string) (string, error)
 }
 
-// thumbnailProducer returns the thumbnail ProduceFunc. sources resolves an
-// asset's source base path — the catalog stores (source_id, relative_path),
-// but strategies (and the exiftool daemon in particular) need a real absolute
-// path on disk.
-func thumbnailProducer(thumbnails *thumbnailer.Thumbnailer, sources SourceResolver) ProduceFunc {
+// thumbnailProducer returns the thumbnail ProduceFunc. volumes resolves an
+// asset's absolute path — strategies (and the exiftool daemon in particular)
+// need a real absolute path on disk, which only the live mount resolution can
+// supply.
+func thumbnailProducer(thumbnails *thumbnailer.Thumbnailer, volumes VolumeResolver) ProduceFunc {
 	return func(ctx context.Context, asset *domain.Asset, _ func()) (ApplyFunc, error) {
 		handler, known := assettype.Classify(asset.Extension)
 		if !known || handler.Thumb == nil {
@@ -43,14 +43,10 @@ func thumbnailProducer(thumbnails *thumbnailer.Thumbnailer, sources SourceResolv
 			// can only fail; make the reason honest.
 			return nil, Fail("not_applicable", fmt.Errorf("no thumbnail strategy for extension %q", asset.Extension))
 		}
-		source, err := sources.Get(ctx, asset.SourceID)
+		absolutePath, err := volumes.Absolute(ctx, asset.VolumeID, asset.RelativePath)
 		if err != nil {
-			return nil, fmt.Errorf("resolve source %s: %w", asset.SourceID, err)
+			return nil, Fail("volume_unresolved", fmt.Errorf("resolve volume %s for asset %s: %w", asset.VolumeID, asset.ID, err))
 		}
-		if source == nil {
-			return nil, Fail("source_unknown", fmt.Errorf("asset %s references unknown source %s", asset.ID, asset.SourceID))
-		}
-		absolutePath := filepath.Join(source.BasePath, asset.RelativePath)
 		if err := handler.Thumb(thumbnails, ctx, absolutePath, asset.ID); err != nil {
 			return nil, Fail(thumbnailReason(err), err)
 		}

@@ -24,7 +24,7 @@ export interface Query {
 interface ScopePayloads {
     library: object;
     collection: { id: string };
-    folder: { sourceId: string; path: string; recursive?: boolean };
+    folder: { volumeId: string; path: string; recursive?: boolean };
     tag: { id: string };
 }
 type ScopePayloadsComplete = ScopePayloads extends Record<ScopeKind, object> ? ScopePayloads : never;

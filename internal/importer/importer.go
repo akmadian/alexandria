@@ -6,7 +6,6 @@ import (
 	"io/fs"
 
 	"github.com/akmadian/alexandria/internal/catalog"
-	"github.com/akmadian/alexandria/internal/domain"
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/gospan"
@@ -64,10 +63,31 @@ type Importer struct {
 	OnProgress func(Progress)
 
 	// OnAssetCommitted, if set, fires after an asset is committed (batch or
-	// single-file) with the asset ID and source. The XMP sync trigger uses this
-	// to run SyncSidecar for assets that have a companion .xmp sidecar. Errors
-	// from the hook are logged, never fatal — sync is best-effort at ingest time.
-	OnAssetCommitted func(ctx context.Context, source *domain.Source, assetID string, relativePath string)
+	// single-file) with the asset ID, its volume, and its volume-relative path.
+	// The XMP sync trigger uses this to run SyncSidecar for assets that have a
+	// companion .xmp sidecar. Errors from the hook are logged, never fatal — sync
+	// is best-effort at ingest time.
+	OnAssetCommitted func(ctx context.Context, volumeID string, assetID string, relativePath string)
+}
+
+// Target is what a run walks and how its assets key (the D24 rekey). The walk's
+// filesystem (fsys) is rooted at the volume's mount point, so every walk-relative
+// path IS volume-relative and assets/sidecars key on (VolumeID, that path).
+// WalkRoot is the tracked folder's volume-relative path — the subtree to walk;
+// "" walks the whole volume.
+type Target struct {
+	VolumeID string
+	WalkRoot string // volume-relative; "" = the whole volume
+	Name     string // display, for logs
+}
+
+// walkStart is the fs.WalkDir start path for a target: "." at the volume root,
+// else the folder's volume-relative path.
+func (t Target) walkStart() string {
+	if t.WalkRoot == "" {
+		return "."
+	}
+	return t.WalkRoot
 }
 
 // ImportError records one file that failed a stage. Per-file failures never
@@ -91,29 +111,29 @@ type ImportResult struct {
 	Errors    []ImportError
 }
 
-// Run scans fsys — the resolved filesystem for source — and indexes every
-// supported file into the catalog through the concurrent pipeline. source must
-// already be registered; the importer neither creates nor resolves sources.
-// Only catastrophic failures return an error; per-file failures land in the
-// result (and the DLQ) and the scan continues.
-func (imp *Importer) Run(ctx context.Context, source *domain.Source, fsys fs.FS) (ImportResult, error) {
-	return imp.RunJob(ctx, "", source, fsys)
+// Run scans fsys — the volume-rooted filesystem for target — and indexes every
+// supported file under target.WalkRoot into the catalog through the concurrent
+// pipeline. The volume must already exist (the path resolver mints it); the
+// importer neither creates nor resolves volumes. Only catastrophic failures
+// return an error; per-file failures land in the result (and the DLQ) and the
+// scan continues.
+func (imp *Importer) Run(ctx context.Context, target Target, fsys fs.FS) (ImportResult, error) {
+	return imp.RunJob(ctx, "", target, fsys)
 }
 
 // IngestFile indexes a single file (the watcher path): the same stages as the
 // pipeline, minus the walk, the skip gate, and batching. A batch of one, run
-// sequentially — the hint consumer for impl/05. A gone path marks the asset
-// missing (with a delete-side merge); a present file whose content matches a
-// missing asset relinks to it — including a rename, since the match is on content
-// alone, so a mv a.jpg b.jpg heals without any OS rename-pairing.
-func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys fs.FS, name string) error {
+// sequentially — the hint consumer for impl/05. name is volume-relative (the
+// walk fsys is volume-rooted). A gone path marks the asset missing (D20: no
+// move detection); a present file is ingested.
+func (imp *Importer) IngestFile(ctx context.Context, target Target, fsys fs.FS, name string) error {
 	info, err := fs.Stat(fsys, name)
 	if err != nil {
-		// Gone → the SAME action the walk-end diff takes: mark missing, attempting a
-		// delete-side merge first. This is what makes a watcher-fed delete heal
-		// identically to a walk-detected one (impl/05 corrected model).
+		// Gone → the SAME action the walk-end diff takes: mark missing. This is what
+		// makes a watcher-fed delete heal identically to a walk-detected one (impl/05
+		// corrected model).
 		if errors.Is(err, fs.ErrNotExist) {
-			return imp.markGone(ctx, source, name)
+			return imp.markGone(ctx, target, name)
 		}
 		return err // transient (perms, EIO) — leave status as-is; reconcile heals
 	}
@@ -127,18 +147,18 @@ func (imp *Importer) IngestFile(ctx context.Context, source *domain.Source, fsys
 	if err != nil {
 		return err
 	}
-	verdict, existing, err := imp.classify(ctx, source, &scanned, hash, nil, fileLogger)
+	verdict, existing, err := imp.classify(ctx, target, &scanned, hash, nil, fileLogger)
 	if err != nil {
 		return err
 	}
 	extractedMetadata := imp.metadataFor(fsys, &scanned, verdict, fileLogger)
-	assetID, err := imp.persist(ctx, source, &scanned, hash, &extractedMetadata, verdict, existing, fileLogger)
+	assetID, err := imp.persist(ctx, target, &scanned, hash, &extractedMetadata, verdict, existing, fileLogger)
 	if err != nil {
 		return err
 	}
-	fileLogger.Info("ingested file", "source", source.Name, "path", scanned.relPath, "verdict", verdict, "assetID", assetID)
+	fileLogger.Info("ingested file", "volume", target.Name, "path", scanned.relPath, "verdict", verdict, "assetID", assetID)
 	if imp.OnAssetCommitted != nil {
-		imp.OnAssetCommitted(ctx, source, assetID, scanned.relPath)
+		imp.OnAssetCommitted(ctx, target.VolumeID, assetID, scanned.relPath)
 	}
 	return nil
 }

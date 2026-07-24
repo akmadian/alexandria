@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/akmadian/alexandria/internal/domain"
+	"github.com/akmadian/alexandria/internal/importer"
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/charmbracelet/log"
 	"github.com/rjeczalik/notify"
@@ -75,13 +75,13 @@ func TestWatcher_SidecarHintFiresCallbackAndIngests(t *testing.T) {
 	fired := make(chan call, 1)
 
 	watcher := &Watcher{
-		Ingester: spy,
-		Source:   &domain.Source{ID: "src-1", Name: "test"},
-		Root:     root,
-		Log:      log.New(io.Discard),
-		Debounce: 30 * time.Millisecond,
-		Settings: settings.DefaultSettings(),
-		SidecarChanged: func(_ context.Context, _ *domain.Source, abs, rel string) {
+		Ingester:   spy,
+		Target:     importer.Target{VolumeID: "vol-1", Name: "test"},
+		MountPoint: root,
+		Log:        log.New(io.Discard),
+		Debounce:   30 * time.Millisecond,
+		Settings:   settings.DefaultSettings(),
+		SidecarChanged: func(_ context.Context, _ importer.Target, abs, rel string) {
 			fired <- call{abs, rel}
 		},
 		events: func(context.Context, string) (<-chan Event, error) { return events, nil },

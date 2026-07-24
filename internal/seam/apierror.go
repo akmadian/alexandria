@@ -50,7 +50,7 @@ const (
 	CodeQueryVersionTooNew ErrorCode = "query_version_too_new"
 	CodeConflict           ErrorCode = "conflict"
 	CodeValidation         ErrorCode = "validation"
-	CodeSourceOffline      ErrorCode = "source_offline"
+	CodeVolumeOffline      ErrorCode = "volume_offline"
 )
 
 // ApiError is the single wire error shape. It implements error, and its Error()
@@ -92,7 +92,7 @@ func normalizeError(err error) error {
 		notFound      *domain.NotFoundError
 		conflict      *domain.ConflictError
 		validation    *domain.ValidationError
-		sourceOffline *domain.SourceOfflineError
+		volumeOffline *domain.VolumeOfflineError
 		versionTooNew *ast.ErrVersionTooNew
 	)
 	switch {
@@ -102,8 +102,8 @@ func normalizeError(err error) error {
 		return &ApiError{Kind: KindDomain, Code: CodeConflict, Detail: conflict.Error()}
 	case errors.As(err, &validation):
 		return &ApiError{Kind: KindDomain, Code: CodeValidation, Detail: validation.Error()}
-	case errors.As(err, &sourceOffline):
-		return &ApiError{Kind: KindDomain, Code: CodeSourceOffline, Detail: sourceOffline.Error()}
+	case errors.As(err, &volumeOffline):
+		return &ApiError{Kind: KindDomain, Code: CodeVolumeOffline, Detail: volumeOffline.Error()}
 	case errors.As(err, &versionTooNew):
 		return &ApiError{Kind: KindDomain, Code: CodeQueryVersionTooNew, Detail: versionTooNew.Error()}
 	case isQueryValidationError(err):

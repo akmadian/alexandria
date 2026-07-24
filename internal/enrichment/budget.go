@@ -16,8 +16,8 @@ import (
 //     fairness; this caps the SUM, so enrichment can never oversubscribe the
 //     machine. Go cannot nice a goroutine, so admission is the only throttle —
 //     which is why the user-facing effort dial maps onto it.
-//   - sourceReadTokens — per-SOURCE read-depth caps (see settings.EnrichmentConfig for
-//     why per-source, not per-device).
+//   - volumeReadTokens — per-VOLUME read-depth caps (see settings.EnrichmentConfig for
+//     why per-volume, an approximation of per-device).
 
 // budget wraps a weighted semaphore whose usable capacity shrinks and grows
 // with the effort dial. The semaphore itself is fixed at full capacity; the
@@ -166,34 +166,36 @@ func (b *cpuBudget) tokensFor(level string) int64 {
 	}
 }
 
-// sourceReadTokens caps concurrent producer reads per source, lazily minting one
-// semaphore per source ID.
-type sourceReadTokens struct {
+// volumeReadTokens caps concurrent producer reads per volume, lazily minting one
+// semaphore per volume ID. A volume approximates a physical device strictly
+// better than a source did (D41 / DEFERRED §11) — real device detection stays
+// deferred.
+type volumeReadTokens struct {
 	depth    int64
 	mu       sync.Mutex
-	bySource map[string]*semaphore.Weighted
+	byVolume map[string]*semaphore.Weighted
 }
 
-func newSourceReadTokens(depth int64) *sourceReadTokens {
+func newVolumeReadTokens(depth int64) *volumeReadTokens {
 	if depth < 1 {
 		depth = 1
 	}
-	return &sourceReadTokens{depth: depth, bySource: make(map[string]*semaphore.Weighted)}
+	return &volumeReadTokens{depth: depth, byVolume: make(map[string]*semaphore.Weighted)}
 }
 
-func (pool *sourceReadTokens) acquire(ctx context.Context, sourceID string) error {
-	return pool.sourceSemaphore(sourceID).Acquire(ctx, 1)
+func (pool *volumeReadTokens) acquire(ctx context.Context, volumeID string) error {
+	return pool.volumeSemaphore(volumeID).Acquire(ctx, 1)
 }
 
-func (pool *sourceReadTokens) release(sourceID string) {
-	pool.sourceSemaphore(sourceID).Release(1)
+func (pool *volumeReadTokens) release(volumeID string) {
+	pool.volumeSemaphore(volumeID).Release(1)
 }
 
-func (pool *sourceReadTokens) sourceSemaphore(sourceID string) *semaphore.Weighted {
+func (pool *volumeReadTokens) volumeSemaphore(volumeID string) *semaphore.Weighted {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-	if pool.bySource[sourceID] == nil {
-		pool.bySource[sourceID] = semaphore.NewWeighted(pool.depth)
+	if pool.byVolume[volumeID] == nil {
+		pool.byVolume[volumeID] = semaphore.NewWeighted(pool.depth)
 	}
-	return pool.bySource[sourceID]
+	return pool.byVolume[volumeID]
 }

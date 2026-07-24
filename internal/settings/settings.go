@@ -63,10 +63,10 @@ type EnrichmentConfig struct {
 	// It maps to CPU-budget token counts inside internal/enrichment; admission
 	// control is the only throttle Go offers (you cannot nice a goroutine).
 	Effort string `json:"effort"`
-	// IOTokens caps concurrent producer reads per source. ponytail: per-SOURCE,
-	// not per-device — real device awareness (spinning vs solid state, SATA vs
-	// Thunderbolt vs USB…) is a detection layer of its own, deferred until slow
-	// scans on real hardware ask for it (DEFERRED §11).
+	// IOTokens caps concurrent producer reads per volume. ponytail: per-VOLUME
+	// (an approximation of per-device), not real device awareness (spinning vs
+	// solid state, SATA vs Thunderbolt vs USB…) — that detection is a layer of
+	// its own, deferred until slow scans on real hardware ask for it (DEFERRED §11).
 	IOTokens int `json:"ioTokens"`
 }
 

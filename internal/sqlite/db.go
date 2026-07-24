@@ -26,7 +26,8 @@ func NewStore(db *sql.DB) *Store { return &Store{DB: db} }
 // Repos bundles the repositories bound to one DBTX (the DB itself, or a tx).
 type Repos struct {
 	Assets      *AssetRepo
-	Sources     *SourceRepo
+	Volumes     *VolumeRepo
+	Folders     *FolderRepo
 	Dups        *DuplicateRepo
 	Sidecars    *SidecarRepo
 	Imports     *ImportRepo
@@ -38,7 +39,8 @@ type Repos struct {
 func reposFor(queryer DBTX) Repos {
 	return Repos{
 		Assets:      &AssetRepo{DB: queryer},
-		Sources:     &SourceRepo{DB: queryer},
+		Volumes:     &VolumeRepo{DB: queryer},
+		Folders:     &FolderRepo{DB: queryer},
 		Dups:        &DuplicateRepo{DB: queryer},
 		Sidecars:    &SidecarRepo{DB: queryer},
 		Imports:     &ImportRepo{DB: queryer},

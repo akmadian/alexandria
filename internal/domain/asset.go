@@ -45,7 +45,7 @@ const (
 
 type Asset struct {
 	ID             string
-	SourceID       string
+	VolumeID       string
 	RelativePath   string
 	FileStatus     FileStatus
 	LastVerifiedAt *time.Time

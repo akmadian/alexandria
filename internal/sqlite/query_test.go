@@ -17,7 +17,7 @@ func TestQueryAssets_BasicFilter(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
@@ -50,7 +50,7 @@ func TestQueryAssets_ExcludesDeleted(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "live.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "dead.jpg")
@@ -76,20 +76,20 @@ func TestQueryAssets_SourceScope(t *testing.T) {
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
 
-	src1 := testutil.NewTestSource(t, db, "src1")
-	src2 := testutil.NewTestSource(t, db, "src2")
+	src1 := testutil.NewTestVolume(t, db, "src1")
+	src2 := testutil.NewTestVolume(t, db, "src2")
 	testutil.NewTestAsset(t, db, src1.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src2.ID, "b.jpg")
 
 	query := ast.Query{
 		Version: ast.Version,
-		Scope:   &ast.Scope{Kind: ast.ScopeFolder, SourceID: src1.ID, Recursive: true},
+		Scope:   &ast.Scope{Kind: ast.ScopeFolder, VolumeID: src1.ID, Recursive: true},
 	}
 	rows, total, err := repo.QueryAssets(ctx, query, defaultArrangement(), ast.Page{Limit: 10})
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
-	if total != 1 || rows[0].SourceID != src1.ID {
+	if total != 1 || rows[0].VolumeID != src1.ID {
 		t.Fatalf("expected source src1, got total=%d rows=%v", total, rows)
 	}
 }
@@ -98,7 +98,7 @@ func TestQueryAssets_NestedBooleanLogic(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
@@ -168,7 +168,7 @@ func TestQueryAssets_EmptyOperator(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "rated.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "unrated.jpg")
@@ -194,7 +194,7 @@ func TestAssetIDSlice_MatchesQueryAssets(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	for _, name := range []string{"a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg"} {
 		testutil.NewTestAsset(t, db, src.ID, name)
@@ -225,7 +225,7 @@ func TestIndexOfAsset_InvertsIDSlice(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
@@ -262,7 +262,7 @@ func TestApplyTriagePatchByQuery_SingleStatement(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	for _, name := range []string{"a.jpg", "b.jpg", "c.jpg", "d.jpg"} {
 		testutil.NewTestAsset(t, db, src.ID, name)
@@ -297,7 +297,7 @@ func TestReadTriageStates(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "b.jpg")
@@ -333,12 +333,12 @@ func TestReadTriageStates(t *testing.T) {
 func TestDistinctValues(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	now := time.Now().UTC().Truncate(time.Second)
 	cameraMake := "Canon"
 	asset := &domain.Asset{
-		ID: "a1", SourceID: src.ID, RelativePath: "a.jpg",
+		ID: "a1", VolumeID: src.ID, RelativePath: "a.jpg",
 		FileStatus: domain.FileStatusOnline, Filename: "a.jpg",
 		Extension: "jpg", MIMEType: "image/jpeg", FileType: domain.FileTypeImage,
 		SizeBytes: 1024, MTime: now, PartialHash: "h1",
@@ -362,7 +362,7 @@ func TestQueryAssets_TagFilter(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "tagged.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "untagged.jpg")
@@ -406,7 +406,7 @@ func TestQueryAssets_TagUnderHierarchy(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "deep.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "other.jpg")
@@ -440,7 +440,7 @@ func TestQueryAssets_TagTombstoneRespected(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -469,7 +469,7 @@ func TestQueryAssets_FTSMatchesTags(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "photo.jpg")
 
@@ -496,7 +496,7 @@ func TestQueryAssets_FTSAncestorTagName(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "event.jpg")
 
@@ -523,7 +523,7 @@ func TestQueryAssets_Pagination(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	for i := 0; i < 10; i++ {
 		testutil.NewTestAsset(t, db, src.ID, string(rune('a'+i))+".jpg")
@@ -570,7 +570,7 @@ func TestQueryAssets_RoundTripsDurationAndCameraModel(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, src.ID, "clip.mp4")
 
 	if _, err := db.Exec(
@@ -603,7 +603,7 @@ func TestQueryAssets_DateWithinRolling(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "recent.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "old.jpg")
@@ -640,7 +640,7 @@ func TestQueryAssets_DateWithinConcreteAnchor(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "inside.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "outside.jpg")
@@ -676,7 +676,7 @@ func TestQueryAssets_DateNotWithin(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "recent.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "old.jpg")
@@ -724,7 +724,7 @@ func TestQueryAssets_LikeContainsEscapesMetacharacters(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "photo_100%.jpg") // the metacharacter-bearing name
 	testutil.NewTestAsset(t, db, src.ID, "photo1000.jpg")  // would match "100%" if % were a wildcard
@@ -748,7 +748,7 @@ func TestQueryAssets_LikeStartsWithEscapesUnderscore(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "photo_100%.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "photo1000.jpg")
@@ -778,7 +778,7 @@ func TestQueryAssets_FTSFilenameWithOperators(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, `report*NEAR"final.jpg`) // tokens: report, near, final
 	testutil.NewTestAsset(t, db, src.ID, "plain.jpg")
@@ -800,7 +800,7 @@ func TestQueryAssets_FTSTagWithOperators(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "genre.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "other.jpg")
@@ -835,7 +835,7 @@ func TestQueryAssets_PaginationStableUnderTiedSortValues(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	const assetCount = 12
 	ids := make([]string, 0, assetCount)
@@ -885,7 +885,7 @@ func TestQueryAssets_ScopeTag(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	testutil.NewTestAsset(t, db, src.ID, "tagged-a.jpg")
 	testutil.NewTestAsset(t, db, src.ID, "tagged-b.jpg")
@@ -945,8 +945,8 @@ func TestQueryAssets_MergeScopeWithScopeAndUserFilter(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	srcA := testutil.NewTestSource(t, db, "srcA")
-	srcB := testutil.NewTestSource(t, db, "srcB")
+	srcA := testutil.NewTestVolume(t, db, "srcA")
+	srcB := testutil.NewTestVolume(t, db, "srcB")
 
 	// winner satisfies all three; each decoy fails exactly one constraint.
 	winner := testutil.NewTestAsset(t, db, srcA.ID, "winner.jpg")
@@ -979,7 +979,7 @@ func TestQueryAssets_MergeScopeWithScopeAndUserFilter(t *testing.T) {
 	// filter; storedWhere is the smart collection's persisted predicate.
 	outer := ast.Query{
 		Version: ast.Version,
-		Scope:   &ast.Scope{Kind: ast.ScopeFolder, SourceID: srcA.ID, Recursive: true},
+		Scope:   &ast.Scope{Kind: ast.ScopeFolder, VolumeID: srcA.ID, Recursive: true},
 		Where:   ast.Leaf{Field: ast.FieldFlag, Cmp: ast.OpIn, Value: []string{"pick"}},
 	}
 	storedWhere := ast.Leaf{Field: ast.FieldRating, Cmp: ast.OpGte, Value: float64(4)}
@@ -1002,7 +1002,7 @@ func TestQueryAssets_CompoundMultiField(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 
 	// Filenames carry the "sunset" FTS token except the text decoy.
 	winner := testutil.NewTestAsset(t, db, src.ID, "winner-sunset.jpg")    // matches all four

@@ -16,7 +16,7 @@
 // Execution shape: one dispatcher goroutine owning per-node priority queues
 // (container/heap; hinted band over import recency), per-definition worker
 // pools running one uniform job template, a weighted CPU budget with a
-// user-facing effort dial, per-source I/O tokens, and ONE batched writer
+// user-facing effort dial, per-volume I/O tokens, and ONE batched writer
 // goroutine — the one-cook rule; ingest's writer and this one take orderly
 // turns at the WAL lock. Write ordering is a contract: DB write → clear
 // tracker bit → emit, so an invalidation never races a stale read.
@@ -74,7 +74,7 @@ type Config struct {
 	// passes). Nil is off — a ~4ns no-op per call (D30).
 	Tracer *gospan.Tracer
 	// Machine supplies the worker-count overrides (Workers.Enrichment.<kind>),
-	// the effort dial's starting level, and the per-source I/O depth.
+	// the effort dial's starting level, and the per-volume I/O depth.
 	Machine settings.Machine
 	// BudgetCapacity overrides the CPU-budget token capacity; 0 means NumCPU.
 	// Tests pin it for determinism; production leaves it 0.
@@ -118,7 +118,7 @@ type Engine struct {
 
 	tracker    *InFlightTracker
 	budget     *cpuBudget
-	readTokens *sourceReadTokens
+	readTokens *volumeReadTokens
 
 	requests         chan workRequest
 	results          chan *jobResult
@@ -169,7 +169,7 @@ func New(config *Config) (*Engine, error) {
 		initialEffort:       initialEffort,
 		tracker:             NewInFlightTracker(),
 		budget:              newCPUBudget(capacity, config.Log),
-		readTokens:          newSourceReadTokens(readDepth),
+		readTokens:          newVolumeReadTokens(readDepth),
 		requests:            make(chan workRequest),
 		results:             make(chan *jobResult, 64),
 		hints:               make(chan []string, 1),

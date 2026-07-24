@@ -29,7 +29,7 @@ type queryJSON struct {
 type scopeJSON struct {
 	Kind      ScopeKind `json:"kind"`
 	ID        string    `json:"id,omitempty"`
-	SourceID  string    `json:"sourceId,omitempty"`
+	VolumeID  string    `json:"volumeId,omitempty"`
 	Path      string    `json:"path,omitempty"`
 	Recursive bool      `json:"recursive,omitempty"`
 }
@@ -40,7 +40,7 @@ func (q Query) MarshalJSON() ([]byte, error) {
 		out.Scope = &scopeJSON{
 			Kind:      q.Scope.Kind,
 			ID:        q.Scope.ID,
-			SourceID:  q.Scope.SourceID,
+			VolumeID:  q.Scope.VolumeID,
 			Path:      q.Scope.Path,
 			Recursive: q.Scope.Recursive,
 		}
@@ -75,7 +75,7 @@ func (q *Query) UnmarshalJSON(data []byte) error {
 		q.Scope = &Scope{
 			Kind:      raw.Scope.Kind,
 			ID:        raw.Scope.ID,
-			SourceID:  raw.Scope.SourceID,
+			VolumeID:  raw.Scope.VolumeID,
 			Path:      raw.Scope.Path,
 			Recursive: raw.Scope.Recursive,
 		}

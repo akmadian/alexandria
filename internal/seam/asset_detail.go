@@ -19,7 +19,7 @@ import (
 // enrichment-service lookup keyed by asset.
 type AssetDetail struct {
 	ID           string            `json:"id"`
-	SourceID     string            `json:"sourceId"`
+	VolumeID     string            `json:"volumeId"`
 	Filename     string            `json:"filename"`
 	Extension    string            `json:"extension"`
 	MIMEType     string            `json:"mimeType"`
@@ -67,7 +67,7 @@ type AssetDetail struct {
 func detailFromAsset(asset *domain.Asset) AssetDetail {
 	return AssetDetail{
 		ID:           asset.ID,
-		SourceID:     asset.SourceID,
+		VolumeID:     asset.VolumeID,
 		Filename:     asset.Filename,
 		Extension:    asset.Extension,
 		MIMEType:     asset.MIMEType,

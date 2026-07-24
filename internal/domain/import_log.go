@@ -8,7 +8,7 @@ import "time"
 // the DLQ rows (ImportError) minted during the run.
 type ImportSession struct {
 	ID         string
-	SourceID   string
+	VolumeID   string
 	Kind       string // import | reconcile | watch
 	StartedAt  time.Time
 	FinishedAt *time.Time

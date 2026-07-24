@@ -15,7 +15,6 @@ import { log } from "@/lib/logger";
 import type { seam } from "../../wailsjs/go/models";
 import * as AssetServiceBinding from "../../wailsjs/go/seam/AssetService";
 import * as ImportServiceBinding from "../../wailsjs/go/seam/ImportService";
-import * as SourceServiceBinding from "../../wailsjs/go/seam/SourceService";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
 import type {
     AlexandriaAPI,
@@ -25,8 +24,6 @@ import type {
     AssetRow,
     Page,
     Query,
-    Source,
-    SourceInput,
     TriagePatch,
     UpdateTarget,
 } from "./contract";
@@ -130,6 +127,15 @@ function toGridRow(row: AssetRowModel): AssetRow {
     return { ...row, kind: "asset", thumbURL: thumbnailURL(row.id) };
 }
 
+// The browser-rail seam (getFolderTree/listCollections/createFolder/removeFolder/
+// updateFolder/pickDirectory) is contract-only this round (task 42, mock-first).
+// Its Wails bindings + the real directory dialog are task 45's join; until then
+// these methods reject loudly rather than silently no-op, so a premature caller
+// fails visibly. The mock is the live implementation under `bun run dev`.
+function railNotWired(method: string): ApiError {
+    return new ApiError("unexpected", `${method} is not wired to the Wails adapter yet (task 45)`);
+}
+
 // The four C8 topics are Wails channel names (events_wails.go emits on
 // `string(topic)`), so subscribing is one EventsOn per topic; the envelope rides
 // as the single event datum. Kept as EventTopic[] so a new generated topic fails
@@ -178,25 +184,33 @@ export const wailsApi: AlexandriaAPI = {
         }
     },
 
-    async listSources(): Promise<Source[]> {
-        try {
-            return await SourceServiceBinding.ListSources();
-        } catch (rejection) {
-            throw toApiError(rejection);
-        }
+    getFolderTree() {
+        return Promise.reject(railNotWired("getFolderTree"));
     },
 
-    async createSource(input: SourceInput): Promise<Source> {
-        try {
-            return await SourceServiceBinding.CreateSource(input);
-        } catch (rejection) {
-            throw toApiError(rejection);
-        }
+    listCollections() {
+        return Promise.reject(railNotWired("listCollections"));
     },
 
-    async startImport(sourceId: string): Promise<string> {
+    createFolder() {
+        return Promise.reject(railNotWired("createFolder"));
+    },
+
+    removeFolder() {
+        return Promise.reject(railNotWired("removeFolder"));
+    },
+
+    updateFolder() {
+        return Promise.reject(railNotWired("updateFolder"));
+    },
+
+    pickDirectory() {
+        return Promise.reject(railNotWired("pickDirectory"));
+    },
+
+    async startImport(folderId: string): Promise<string> {
         try {
-            return await ImportServiceBinding.StartImport(sourceId);
+            return await ImportServiceBinding.StartImport(folderId);
         } catch (rejection) {
             throw toApiError(rejection);
         }

@@ -12,7 +12,7 @@ import (
 
 func TestEnrichmentRepo_DLQLifecycle(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "dlq")
+	source := testutil.NewTestVolume(t, db, "dlq")
 	asset := testutil.NewTestAsset(t, db, source.ID, "broken.jpg")
 	repo := &sqlite.EnrichmentRepo{DB: db}
 	ctx := context.Background()
@@ -57,7 +57,7 @@ func TestEnrichmentRepo_DLQLifecycle(t *testing.T) {
 // those), and ClearFailures wipes ALL of an asset's DLQ rows across kinds.
 func TestEnrichmentRepo_ReimportStalenessClear(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "staleness")
+	source := testutil.NewTestVolume(t, db, "staleness")
 	edited := testutil.NewTestAsset(t, db, source.ID, "edited.jpg")
 	untouched := testutil.NewTestAsset(t, db, source.ID, "untouched.jpg")
 	assets := &sqlite.AssetRepo{DB: db}
@@ -106,7 +106,7 @@ func TestEnrichmentRepo_ReimportStalenessClear(t *testing.T) {
 
 func TestEnrichmentRepo_ListMissingArtifacts(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "scan")
+	source := testutil.NewTestVolume(t, db, "scan")
 	older := testutil.NewTestAsset(t, db, source.ID, "older.jpg")
 	newer := testutil.NewTestAsset(t, db, source.ID, "newer.jpg")
 	enriched := testutil.NewTestAsset(t, db, source.ID, "done.jpg")
@@ -176,7 +176,7 @@ func TestEnrichmentRepo_ListMissingArtifacts(t *testing.T) {
 
 func TestEnrichmentRepo_MissingAndEligible(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "eligible")
+	source := testutil.NewTestVolume(t, db, "eligible")
 	pending := testutil.NewTestAsset(t, db, source.ID, "pending.jpg")
 	enriched := testutil.NewTestAsset(t, db, source.ID, "done.jpg")
 	repo := &sqlite.EnrichmentRepo{DB: db}

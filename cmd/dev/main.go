@@ -36,6 +36,7 @@ import (
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
+	"github.com/akmadian/alexandria/internal/volume"
 	"github.com/akmadian/alexandria/internal/watcher"
 	"github.com/akmadian/gospan"
 	gospansqlite "github.com/akmadian/gospan/sqlite"
@@ -96,6 +97,7 @@ usage:
   dev errors          [--catalog <dir>]            dump the latest session's DLQ
   dev sessions        [--catalog <dir>]            list recent import sessions
   dev rebuild fts     [--catalog <dir>]            rebuild the FTS index
+  dev rebuild pathkeys [--catalog <dir>]           rebuild the path_key (NFC) column
   dev jobs graph      [--format dot|ascii]         render the enrichment job graph
 
 worker pools (import):
@@ -245,7 +247,7 @@ type enrichmentRig struct {
 // previews degrade to tool_unavailable DLQ rows without it), the canonical
 // job-definition registry, and the engine itself. thumbnailWorkers > 0
 // overrides the thumbnail pool size (the harness's fast-local-import knob).
-func startEnrichment(ctx context.Context, catalog *openedCatalog, tracer *gospan.Tracer, thumbnailWorkers int) (*enrichmentRig, error) {
+func startEnrichment(ctx context.Context, catalog *openedCatalog, resolver *volume.Resolver, tracer *gospan.Tracer, thumbnailWorkers int) (*enrichmentRig, error) {
 	settingsSnapshot := catalog.currentSettings()
 	thumbnails := thumbnailer.New(catalog.thumbDir)
 	if settingsSnapshot.ThumbnailQuality > 0 {
@@ -271,7 +273,7 @@ func startEnrichment(ctx context.Context, catalog *openedCatalog, tracer *gospan
 		}
 		machine.Workers.Enrichment["thumbnail"] = thumbnailWorkers
 	}
-	definitions := enrichment.Definitions(thumbnails, &sqlite.SourceRepo{DB: catalog.store.DB})
+	definitions := enrichment.Definitions(thumbnails, resolver)
 	enrichmentRepo := &sqlite.EnrichmentRepo{DB: catalog.store.DB}
 	engine, err := enrichment.New(&enrichment.Config{
 		Definitions: definitions,
@@ -366,36 +368,34 @@ func cpuBoundWorkers() int {
 	return max(1, runtime.NumCPU()*3/4)
 }
 
-// ensureSource finds the source rooted at absolutePath, creating it if absent.
-// The harness works with one source per tree — the same source is reused across
-// runs so idempotency and reconcile behave as they would in the real app.
-func ensureSource(ctx context.Context, catalog *openedCatalog, absolutePath string) (*domain.Source, error) {
-	sources := &sqlite.SourceRepo{DB: catalog.store.DB}
-	existing, err := sources.List(ctx)
+// newResolver builds the path→volume resolver over the catalog's volume table
+// and the OS prober. One resolver per run is shared between folder-add and
+// enrichment so its in-session mount cache is warm for both (D24).
+func newResolver(catalog *openedCatalog) *volume.Resolver {
+	return volume.NewResolver(&sqlite.VolumeRepo{DB: catalog.store.DB}, volume.NewSystemProber(), log.Default())
+}
+
+// resolveTarget ensures a tracked folder at absolutePath (find-or-create volume,
+// quiet folder-add) and returns the importer target plus the volume's current
+// mount point (the DirFS root). The same tree resolves to the same volume across
+// runs, so idempotency and reconcile behave as they would in the real app.
+func resolveTarget(ctx context.Context, catalog *openedCatalog, resolver *volume.Resolver, absolutePath string) (importer.Target, string, error) {
+	manager := volume.NewManager(resolver, &sqlite.FolderRepo{DB: catalog.store.DB}, log.Default())
+	// confirm=true: the harness always proceeds (absorbs quietly); the four-outcome
+	// union is exercised by the seam/tests, not this convenience path.
+	if _, err := manager.CreateFolder(ctx, absolutePath, domain.SyncModeManual, true); err != nil {
+		return importer.Target{}, "", err
+	}
+	resolved, err := resolver.Resolve(ctx, absolutePath)
 	if err != nil {
-		return nil, err
+		return importer.Target{}, "", err
 	}
-	for _, source := range existing {
-		if source.BasePath == absolutePath {
-			return source, nil
-		}
+	target := importer.Target{
+		VolumeID: resolved.VolumeID,
+		WalkRoot: resolved.RelativePath,
+		Name:     filepath.Base(absolutePath),
 	}
-	now := time.Now().UTC()
-	source := &domain.Source{
-		ID:              domain.NewID(),
-		Name:            filepath.Base(absolutePath),
-		Kind:            domain.SourceKindLocal,
-		BasePath:        absolutePath,
-		ScanRecursively: true,
-		Enabled:         true,
-		Connectivity:    domain.SourceOnline,
-		CreatedAt:       now,
-		UpdatedAt:       now,
-	}
-	if err := sources.Create(ctx, source); err != nil {
-		return nil, err
-	}
-	return source, nil
+	return target, resolved.MountPoint, nil
 }
 
 func cmdImport(args []string) error {
@@ -427,7 +427,8 @@ func cmdImport(args []string) error {
 	defer func() { _ = catalog.close() }()
 
 	ctx := context.Background()
-	source, err := ensureSource(ctx, catalog, absolutePath)
+	resolver := newResolver(catalog)
+	target, mountPoint, err := resolveTarget(ctx, catalog, resolver, absolutePath)
 	if err != nil {
 		return err
 	}
@@ -465,7 +466,7 @@ func cmdImport(args []string) error {
 	// budget arbitrates between them); ingest's post-commit hook nudges its
 	// dispatcher, and the on-open scan has already queued any backlog from
 	// previous runs.
-	rig, err := startEnrichment(ctx, catalog, tracer, *thumbnailWorkers)
+	rig, err := startEnrichment(ctx, catalog, resolver, tracer, *thumbnailWorkers)
 	if err != nil {
 		return err
 	}
@@ -488,7 +489,7 @@ func cmdImport(args []string) error {
 	}
 	ingester := newIngester(catalog)
 	ingester.Tracer = tracer
-	ingester.OnAssetCommitted = func(context.Context, *domain.Source, string, string) {
+	ingester.OnAssetCommitted = func(context.Context, string, string, string) {
 		rig.engine.RequestScan() // a hint, coalesced; the scan stays the authority
 	}
 	// Worker counts come from machine.json (via newIngester); the dev flags override
@@ -516,7 +517,7 @@ func cmdImport(args []string) error {
 	done := make(chan importer.ImportResult, 1)
 	var runErr error
 	jobID := jobs.Start("import", func(jobCtx context.Context, id string) {
-		result, e := ingester.RunJob(jobCtx, id, source, os.DirFS(absolutePath))
+		result, e := ingester.RunJob(jobCtx, id, target, os.DirFS(mountPoint))
 		runErr = e
 		done <- result
 	})
@@ -697,14 +698,15 @@ func cmdReconcile(args []string) error {
 	defer func() { _ = catalog.close() }()
 
 	ctx := context.Background()
-	source, err := ensureSource(ctx, catalog, absolutePath)
+	resolver := newResolver(catalog)
+	target, mountPoint, err := resolveTarget(ctx, catalog, resolver, absolutePath)
 	if err != nil {
 		return err
 	}
 	// "Reconcile is a schedule, not a component" (D14): a reconcile is just the
 	// pipeline in full-walk mode. The walk-end diff marks vanished files missing and
 	// the matrix relinks reappeared ones — the standalone Reconcile retired in 05.3.
-	result, err := newIngester(catalog).Run(ctx, source, os.DirFS(absolutePath))
+	result, err := newIngester(catalog).Run(ctx, target, os.DirFS(mountPoint))
 	if err != nil {
 		return err
 	}
@@ -734,28 +736,29 @@ func cmdWatch(args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	source, err := ensureSource(ctx, catalog, absolutePath)
+	resolver := newResolver(catalog)
+	target, mountPoint, err := resolveTarget(ctx, catalog, resolver, absolutePath)
 	if err != nil {
 		return err
 	}
 	// The engine converges watcher-ingested files live: every committed asset
 	// nudges the dispatcher, and the on-open scan already covered the backlog.
-	rig, err := startEnrichment(ctx, catalog, nil, 0)
+	rig, err := startEnrichment(ctx, catalog, resolver, nil, 0)
 	if err != nil {
 		return err
 	}
 	defer rig.stop()
 	ingester := newIngester(catalog)
-	ingester.OnAssetCommitted = func(context.Context, *domain.Source, string, string) {
+	ingester.OnAssetCommitted = func(context.Context, string, string, string) {
 		rig.engine.RequestScan()
 	}
 	fileWatcher := &watcher.Watcher{
-		Ingester: ingester,
-		Obs:      &sqlite.AssetRepo{DB: catalog.store.DB}, // the one sanctioned write: connectivity
-		Source:   source,
-		Root:     absolutePath,
-		Settings: catalog.currentSettings(), // D18 intake filter is Settings.Ignored
-		Log:      log.Default(),
+		Ingester:   ingester,
+		Obs:        &sqlite.AssetRepo{DB: catalog.store.DB}, // the one sanctioned write: connectivity
+		Target:     target,
+		MountPoint: mountPoint,
+		Settings:   catalog.currentSettings(), // D18 intake filter is Settings.Ignored
+		Log:        log.Default(),
 	}
 	fmt.Fprintf(os.Stderr, "watching %s — Ctrl-C to stop\n", absolutePath)
 	if err := fileWatcher.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -826,9 +829,10 @@ func cmdSessions(args []string) error {
 }
 
 func cmdRebuild(args []string) error {
-	if len(args) < 1 || args[0] != "fts" {
-		return fmt.Errorf("usage: dev rebuild fts --catalog <dir>")
+	if len(args) < 1 || (args[0] != "fts" && args[0] != "pathkeys") {
+		return fmt.Errorf("usage: dev rebuild <fts|pathkeys> --catalog <dir>")
 	}
+	target := args[0]
 	flags := flag.NewFlagSet("rebuild", flag.ExitOnError)
 	catalogPath := flags.String("catalog", "", "catalog dir")
 	if err := flags.Parse(args[1:]); err != nil {
@@ -840,9 +844,17 @@ func cmdRebuild(args []string) error {
 	}
 	defer func() { _ = catalog.close() }()
 
-	if err := sqlite.RebuildFTS(context.Background(), catalog.store.DB); err != nil {
-		return err
+	switch target {
+	case "fts":
+		if err := sqlite.RebuildFTS(context.Background(), catalog.store.DB); err != nil {
+			return err
+		}
+		fmt.Println("fts rebuilt")
+	case "pathkeys":
+		if err := sqlite.RebuildPathKeys(context.Background(), catalog.store.DB); err != nil {
+			return err
+		}
+		fmt.Println("path_key rebuilt")
 	}
-	fmt.Println("fts rebuilt")
 	return nil
 }

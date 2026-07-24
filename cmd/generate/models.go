@@ -34,7 +34,13 @@ var modelManifest = []struct {
 	{seamPackage, "JobSummary", "Completion tally carried by JobDone."},
 	{seamPackage, "JobDone", "jobs/done payload."},
 	{seamPackage, "HistoryState", "catalog/historyChanged payload."},
-	{seamPackage, "SourceStatus", "watcher/sourceStatus payload."},
+	{seamPackage, "VolumeStatus", "watcher/volumeStatus payload."},
+	{seamPackage, "VolumeNode", "A storage volume with its tracked-root folders — a node in the getFolderTree forest (D41)."},
+	{seamPackage, "FolderNode", "One node in a volume's folder tree; recursive via children (D41)."},
+	{seamPackage, "CollectionNode", "A collection projected for the rail; flat list, parentId adjacency (D41)."},
+	{seamPackage, "FolderBehaviorChange", "One tracked root whose sync policy would change under a proposed absorb (D41)."},
+	{seamPackage, "CreateFolderOutcome", "The disposition of a createFolder attempt plus the folders it touched (D41)."},
+	{seamPackage, "FolderPatch", "The sparse updateFolder input (name / sync mode)."},
 }
 
 // enumImports maps named Go enum types to the generated union file that
@@ -42,9 +48,10 @@ var modelManifest = []struct {
 // fatal error — extend deliberately, never coerce silently.
 var enumImports = map[string]string{
 	"FileType": "enums", "ColorLabel": "enums", "Flag": "enums",
-	"FileStatus": "enums", "SourceKind": "enums", "SourceConnectivity": "enums",
-	"EnrichmentKind": "enums",
-	"Topic":          "events", "EventType": "events", "JobState": "events",
+	"FileStatus": "enums", "VolumeKind": "enums", "VolumeConnectivity": "enums",
+	"EnrichmentKind": "enums", "CollectionKind": "enums", "SyncMode": "enums",
+	"CreateFolderOutcomeKind": "enums",
+	"Topic":                   "events", "EventType": "events", "JobState": "events",
 }
 
 func renderModels() []byte {

@@ -169,7 +169,7 @@
         "nfs": "Network share (NFS)",
         "unknown": "Source"
     },
-    "sourceStatus": {
+    "volumeStatus": {
         "active": "Online",
         "offline": "Offline"
     },

@@ -14,6 +14,7 @@ import (
 	"github.com/akmadian/alexandria/internal/settings"
 	"github.com/akmadian/alexandria/internal/sqlite"
 	"github.com/akmadian/alexandria/internal/thumbnailer"
+	"github.com/akmadian/alexandria/internal/volume"
 )
 
 // host is the app-host composition root: it owns the process-lifetime catalog
@@ -28,7 +29,8 @@ type host struct {
 	settings    *settings.Service
 	thumbDir    string
 	emitter     *seam.WailsEmitter
-	sources     *seam.SourceService
+	resolver    *volume.Resolver
+	volumes     *seam.VolumeService
 	assets      *seam.AssetService
 	collections *seam.CollectionService
 	settingsAPI *seam.SettingsService
@@ -63,7 +65,8 @@ func newHost() (*host, error) {
 	}
 
 	assetRepo := &sqlite.AssetRepo{DB: catalog.DB}
-	sourceRepo := &sqlite.SourceRepo{DB: catalog.DB}
+	volumeRepo := &sqlite.VolumeRepo{DB: catalog.DB}
+	folderRepo := &sqlite.FolderRepo{DB: catalog.DB}
 	emitter := seam.NewWailsEmitter()
 
 	newHost := &host{
@@ -71,7 +74,8 @@ func newHost() (*host, error) {
 		settings:    settingsService,
 		thumbDir:    filepath.Join(dir, "thumbnails"),
 		emitter:     emitter,
-		sources:     seam.NewSourceService(sourceRepo),
+		resolver:    volume.NewResolver(volumeRepo, volume.NewSystemProber(), log.Default()),
+		volumes:     seam.NewVolumeService(volumeRepo),
 		assets:      seam.NewAssetService(assetRepo, assetRepo, seam.WithEmitter(emitter)),
 		collections: seam.NewCollectionService(&sqlite.CollectionRepo{DB: catalog.DB}, seam.WithEmitter(emitter)),
 		settingsAPI: seam.NewSettingsService(settingsService.Settings, settingsService.Keybindings),
@@ -79,7 +83,7 @@ func newHost() (*host, error) {
 	// ImportService needs a way to run an import that reports progress; the host
 	// owns the pipeline's dependencies, so it supplies that closure (runImport). The
 	// engine never imports Wails (D1) — it just hands over OnProgress and RunJob.
-	newHost.imports = seam.NewImportService(sourceRepo, importer.NewJobs(), newHost.runImport, emitter)
+	newHost.imports = seam.NewImportService(folderRepo, volumeRepo, importer.NewJobs(), newHost.runImport, emitter)
 	return newHost, nil
 }
 
@@ -88,7 +92,15 @@ func newHost() (*host, error) {
 // runImport the ImportService calls under the Jobs registry. The importer is built
 // per run so its OnProgress closes over this call's callback with no shared state
 // (mirrors cmd/dev's newIngester wiring).
-func (h *host) runImport(ctx context.Context, jobID string, source *domain.Source, onProgress func(importer.Progress)) (importer.ImportResult, error) {
+func (h *host) runImport(ctx context.Context, jobID string, folder *domain.Folder, onProgress func(importer.Progress)) (importer.ImportResult, error) {
+	// The session mount cache answers "where is this volume mounted right now".
+	// ponytail: cold cache (app restarted, folder tracked in a prior session) errors
+	// loudly here — the cold-start mount-enumeration layer is task-45 bind territory;
+	// no import UI calls this path before then.
+	mountPoint, err := h.resolver.MountPoint(ctx, folder.VolumeID)
+	if err != nil {
+		return importer.ImportResult{}, err
+	}
 	assetRepo := &sqlite.AssetRepo{DB: h.catalog.DB}
 	set := h.settings.Settings.Get()
 	thumb := thumbnailer.New(h.thumbDir)
@@ -106,14 +118,15 @@ func (h *host) runImport(ctx context.Context, jobID string, source *domain.Sourc
 		Log:        log.Default(),
 		OnProgress: onProgress,
 	}
-	return ingester.RunJob(ctx, jobID, source, os.DirFS(source.BasePath))
+	target := importer.Target{VolumeID: folder.VolumeID, WalkRoot: folder.Path, Name: folder.Name}
+	return ingester.RunJob(ctx, jobID, target, os.DirFS(mountPoint))
 }
 
 // boundServices is the list Wails binds and generates TypeScript for. Each new
 // seam service (impl/16 events & jobs) joins this slice — one line, no new seam
 // plumbing.
 func (h *host) boundServices() []any {
-	return []any{h.sources, h.assets, h.collections, h.settingsAPI, h.imports}
+	return []any{h.volumes, h.assets, h.collections, h.settingsAPI, h.imports}
 }
 
 // onStartup fires once the webview context exists. It binds that context into the

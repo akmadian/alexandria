@@ -79,7 +79,7 @@ func TestCrosswalks(t *testing.T) {
 // fieldStructNames maps ast fields to their domain.Asset struct field where
 // mechanical capitalization isn't enough. Virtual fields have no struct field.
 var fieldStructNames = map[ast.Field]string{
-	ast.FieldSource: "SourceID",
+	ast.FieldVolume: "VolumeID",
 	ast.FieldTag:    "", // junction table, not a column
 	ast.FieldText:   "", // FTS, not a column
 }
@@ -174,7 +174,7 @@ func checkAssetFieldsAccountedFor(t *testing.T) {
 // column-name lists: a typo'd column, bad join, or invalid SQL fails here.
 func checkGrammarExecutes(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "crosswalk")
+	source := testutil.NewTestVolume(t, db, "crosswalk")
 	testutil.NewTestAsset(t, db, source.ID, "probe.jpg")
 	now := time.Now()
 
@@ -201,8 +201,8 @@ func checkGrammarExecutes(t *testing.T) {
 	// Scopes execute too (folder in both modes, collection, tag).
 	scopes := []ast.Scope{
 		{Kind: ast.ScopeLibrary},
-		{Kind: ast.ScopeFolder, SourceID: source.ID, Recursive: true},
-		{Kind: ast.ScopeFolder, SourceID: source.ID, Path: "2026/07"},
+		{Kind: ast.ScopeFolder, VolumeID: source.ID, Recursive: true},
+		{Kind: ast.ScopeFolder, VolumeID: source.ID, Path: "2026/07"},
 		{Kind: ast.ScopeCollection, ID: "c1"},
 		{Kind: ast.ScopeTag, ID: "t1"},
 	}

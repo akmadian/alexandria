@@ -19,11 +19,11 @@ type ImportRepo struct {
 // Start inserts a fresh session row and returns its id. It commits immediately
 // (autocommit) so the batched-write transactions that follow can reference it
 // via the import_errors foreign key.
-func (r *ImportRepo) Start(ctx context.Context, sourceID, kind string) (string, error) {
+func (r *ImportRepo) Start(ctx context.Context, volumeID, kind string) (string, error) {
 	sessionID := domain.NewID()
 	_, err := r.DB.ExecContext(ctx,
-		"INSERT INTO import_sessions (id, source_id, kind, started_at) VALUES (?, ?, ?, ?)",
-		sessionID, sourceID, kind, formatTime(time.Now().UTC()))
+		"INSERT INTO import_sessions (id, volume_id, kind, started_at) VALUES (?, ?, ?, ?)",
+		sessionID, volumeID, kind, formatTime(time.Now().UTC()))
 	if err != nil {
 		return "", err
 	}
@@ -100,7 +100,7 @@ func (r *ImportRepo) ListErrors(ctx context.Context, sessionID string) ([]*domai
 // ListSessions returns recent sessions (newest first).
 func (r *ImportRepo) ListSessions(ctx context.Context, limit int) ([]*domain.ImportSession, error) {
 	rows, err := r.DB.QueryContext(ctx,
-		`SELECT id, source_id, kind, started_at, finished_at, added, updated, moved, skipped, dups, errors,
+		`SELECT id, volume_id, kind, started_at, finished_at, added, updated, moved, skipped, dups, errors,
 			skipped_unknown_json, skipped_ignored_json
 			FROM import_sessions ORDER BY started_at DESC LIMIT ?`, limit)
 	if err != nil {
@@ -113,7 +113,7 @@ func (r *ImportRepo) ListSessions(ctx context.Context, limit int) ([]*domain.Imp
 		var session domain.ImportSession
 		var startedAt string
 		var finishedAt, unknownJSON, ignoredJSON sql.NullString
-		if err := rows.Scan(&session.ID, &session.SourceID, &session.Kind, &startedAt, &finishedAt,
+		if err := rows.Scan(&session.ID, &session.VolumeID, &session.Kind, &startedAt, &finishedAt,
 			&session.Added, &session.Updated, &session.Moved, &session.Skipped, &session.Dups, &session.Errors,
 			&unknownJSON, &ignoredJSON); err != nil {
 			return nil, err

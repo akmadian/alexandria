@@ -31,7 +31,7 @@ type spyIngester struct {
 
 func newSpy() *spyIngester { return &spyIngester{fired: make(chan struct{}, 64)} }
 
-func (s *spyIngester) Run(context.Context, *domain.Source, fs.FS) (importer.ImportResult, error) {
+func (s *spyIngester) Run(context.Context, importer.Target, fs.FS) (importer.ImportResult, error) {
 	s.mu.Lock()
 	s.runs++
 	s.mu.Unlock()
@@ -39,7 +39,7 @@ func (s *spyIngester) Run(context.Context, *domain.Source, fs.FS) (importer.Impo
 	return importer.ImportResult{}, nil
 }
 
-func (s *spyIngester) IngestFile(_ context.Context, _ *domain.Source, _ fs.FS, name string) error {
+func (s *spyIngester) IngestFile(_ context.Context, _ importer.Target, _ fs.FS, name string) error {
 	s.mu.Lock()
 	s.ingests = append(s.ingests, name)
 	s.mu.Unlock()
@@ -88,13 +88,13 @@ func startWatcher(t *testing.T) (string, chan Event, *spyIngester) {
 	events := make(chan Event, 64)
 	spy := newSpy()
 	watcher := &Watcher{
-		Ingester: spy,
-		Source:   &domain.Source{ID: "src-1", Name: "test"},
-		Root:     root,
-		Log:      log.New(io.Discard),
-		Debounce: 30 * time.Millisecond,
-		Settings: settings.DefaultSettings(), // D18 intake filter is Settings.Ignored
-		events:   func(context.Context, string) (<-chan Event, error) { return events, nil },
+		Ingester:   spy,
+		Target:     importer.Target{VolumeID: "vol-1", Name: "test"},
+		MountPoint: root,
+		Log:        log.New(io.Discard),
+		Debounce:   30 * time.Millisecond,
+		Settings:   settings.DefaultSettings(), // D18 intake filter is Settings.Ignored
+		events:     func(context.Context, string) (<-chan Event, error) { return events, nil },
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -109,13 +109,13 @@ func startWatcher(t *testing.T) (string, chan Event, *spyIngester) {
 // to satisfy the interface and must never be called (they panic if they are).
 type spyObs struct {
 	mu    sync.Mutex
-	calls []bool // online value of each MarkConnectivityBySource call, in order
+	calls []bool // online value of each MarkConnectivityByVolume call, in order
 	fired chan struct{}
 }
 
 func newSpyObs() *spyObs { return &spyObs{fired: make(chan struct{}, 16)} }
 
-func (o *spyObs) MarkConnectivityBySource(_ context.Context, _ string, online bool) error {
+func (o *spyObs) MarkConnectivityByVolume(_ context.Context, _ string, online bool) error {
 	o.mu.Lock()
 	o.calls = append(o.calls, online)
 	o.mu.Unlock()
@@ -243,8 +243,8 @@ func TestWatcher_PollFlipsConnectivityOnUnmount(t *testing.T) {
 	watcher := &Watcher{
 		Ingester:     spy,
 		Obs:          obs,
-		Source:       &domain.Source{ID: "src-1", Name: "test"},
-		Root:         root,
+		Target:       importer.Target{VolumeID: "vol-1", Name: "test"},
+		MountPoint:   root,
 		Log:          log.New(io.Discard),
 		PollInterval: 20 * time.Millisecond,
 		events:       func(context.Context, string) (<-chan Event, error) { return make(chan Event), nil },
@@ -274,8 +274,8 @@ func TestWatcher_SubscribeFailureDegradesToPolling(t *testing.T) {
 	watcher := &Watcher{
 		Ingester:     spy,
 		Obs:          newSpyObs(),
-		Source:       &domain.Source{ID: "src-1", Name: "test"},
-		Root:         root,
+		Target:       importer.Target{VolumeID: "vol-1", Name: "test"},
+		MountPoint:   root,
 		Log:          log.New(io.Discard),
 		PollInterval: 20 * time.Millisecond,
 		events: func(context.Context, string) (<-chan Event, error) {

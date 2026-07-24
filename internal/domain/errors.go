@@ -3,7 +3,7 @@ package domain
 import "fmt"
 
 // Generic, cross-cutting errors. Domain-specific errors live with their type:
-// SourceOfflineError in source.go.
+// VolumeOfflineError in volume.go.
 
 type NotFoundError struct {
 	Resource string

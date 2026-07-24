@@ -247,7 +247,7 @@ func TestAddToCollection_RepoErrorMapsToUnexpected(t *testing.T) {
 // service is bound to a real repo (the construction app.go uses), not just a fake.
 func TestCollectionService_OverRealCatalog(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	source := testutil.NewTestSource(t, db, "photos")
+	source := testutil.NewTestVolume(t, db, "photos")
 	asset := testutil.NewTestAsset(t, db, source.ID, "a.jpg")
 	service := seam.NewCollectionService(&sqlite.CollectionRepo{DB: db})
 

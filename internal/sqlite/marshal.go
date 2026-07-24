@@ -71,6 +71,12 @@ func nullFloat64Ptr(nf sql.NullFloat64) *float64 {
 	return &nf.Float64
 }
 
+// rowScanner is the common surface of *sql.Row and *sql.Rows the scan helpers
+// share, so one scan function serves both the single-row and the iterating path.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
 func checkRowsAffected(res sql.Result, resource, id string) error {
 	n, err := res.RowsAffected()
 	if err != nil {

@@ -16,7 +16,7 @@ type Query struct {
 
 // ScopeKind identifies what the scope selects. The alphabet is the
 // Scope vocabulary (C1, docs/frontend-architecture.md): library = everything; folder = a directory
-// subtree within a source; collection/tag = membership.
+// subtree within a volume; collection/tag = membership.
 type ScopeKind string
 
 const (
@@ -27,14 +27,14 @@ const (
 )
 
 // Scope narrows the query to a specific container. Kind decides which fields
-// are meaningful: collection/tag carry ID; folder carries SourceID + Path
+// are meaningful: collection/tag carry ID; folder carries VolumeID + Path
 // (+ Recursive); library carries nothing.
 type Scope struct {
 	Kind ScopeKind
 	ID   string // collection/tag only
-	// Folder scope: the source and the relative directory path within it.
-	// Path "" means the source root. Recursive false = direct children only.
-	SourceID  string
+	// Folder scope: the volume and the volume-relative directory path within it.
+	// Path "" means the volume root. Recursive false = direct children only.
+	VolumeID  string
 	Path      string
 	Recursive bool
 }

@@ -15,7 +15,7 @@ import (
 // that the DLQ viewer depends on.
 func TestImportRepo_SessionRoundTrip(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	repo := &sqlite.ImportRepo{DB: db}
 	ctx := context.Background()
 
@@ -77,7 +77,7 @@ func TestImportRepo_SessionRoundTrip(t *testing.T) {
 // and must never stamp finished_at — that is Finish's job alone.
 func TestImportRepo_UpdateCountsMidFlight(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	repo := &sqlite.ImportRepo{DB: db}
 	ctx := context.Background()
 
@@ -112,7 +112,7 @@ func TestImportRepo_UpdateCountsMidFlight(t *testing.T) {
 // non-nil map or a "null" string.
 func TestImportRepo_EmptyTalliesRoundTripNil(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	repo := &sqlite.ImportRepo{DB: db}
 	ctx := context.Background()
 
@@ -138,7 +138,7 @@ func TestImportRepo_EmptyTalliesRoundTripNil(t *testing.T) {
 // most recently started.
 func TestImportRepo_ListSessionsLimit(t *testing.T) {
 	db := testutil.NewTestDB(t)
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	repo := &sqlite.ImportRepo{DB: db}
 	ctx := context.Background()
 
@@ -164,7 +164,7 @@ func TestAssetRepo_DeleteByID_HardDeleteCascades(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	repo := &sqlite.AssetRepo{DB: db}
 	ctx := context.Background()
-	src := testutil.NewTestSource(t, db, "s")
+	src := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, src.ID, "gone.jpg")
 
 	now := "2026-01-01T00:00:00Z"

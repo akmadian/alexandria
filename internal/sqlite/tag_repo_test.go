@@ -96,7 +96,7 @@ func TestEnsureTag_FindOrCreate(t *testing.T) {
 func TestImportKeywords_DedupeAndUnion(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	store := sqlite.NewStore(db)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "photo.jpg")
 	ctx := context.Background()
 
@@ -145,7 +145,7 @@ func TestImportKeywords_DedupeAndUnion(t *testing.T) {
 func TestImportKeywords_TombstoneRespected(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	store := sqlite.NewStore(db)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	asset := testutil.NewTestAsset(t, db, source.ID, "photo.jpg")
 	ctx := context.Background()
 
@@ -181,7 +181,7 @@ func TestImportKeywords_TombstoneRespected(t *testing.T) {
 func TestSubtreeFilter(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	store := sqlite.NewStore(db)
-	source := testutil.NewTestSource(t, db, "s")
+	source := testutil.NewTestVolume(t, db, "s")
 	tokyo := testutil.NewTestAsset(t, db, source.ID, "tokyo.jpg")
 	osaka := testutil.NewTestAsset(t, db, source.ID, "osaka.jpg")
 	ctx := context.Background()
