@@ -1,0 +1,23 @@
+- A digital asset manager for MacOS
+- Handles MANY file types. Images, videos, audio, vector files, etc. It understands and works with your workflow.
+- It doesn't phone home, unless you allow it to, and even then your content is never shared, only fully anonymous and transparent analytics to help me figure out what people actually use/want.
+- Your files stay yours. There will never be ANY Adobe cutting you off from your files type fuckery.
+
+New Names?
+- Pergamum - Alexandria's rival library where parchment was invented because alexandria embargoed papyrus.
+
+Platforms
+- Mac first. I'd rather ship an excellent mac app than ship a shitty cross platform app, or ship nothing at all because I bit off more than I can chew.
+- If people want Windows, can consider it then.
+- No feature parity guarantees. If MacOS uses Apple's RAW engine for RAW processing, obviously it won't be the same on Windows. Core library features - files, indexing, search, collections are portable in principle.
+
+Pricing Model
+- Pricing and payments are not a consolation prize or out of greed, it's to help me continue to dedicate time to the project. It's a sustainability decision.
+- Aseprite is a good model - compile-it-yourself-free, pay for builds if you're a business
+- Full source available, if someone wants to clone and build themselves, I won't stop them. But the technical knowledge and logistical compromises are real.
+- For personal use, is free/ pay what you want
+- For businesses, is paid. Businesses often self-comply. Sublime text is a good example - survived a decade on eternal free trial with a nag screen.
+- Conditions of Payment
+    - You get a license key - friction and a receipt, not DRM.
+    - No warranty, provided as-is
+    - No tech support other than what I can provide as a project maintainer. Support requests go to GitHub ticket.
