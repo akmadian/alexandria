@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0262D01E30528B480057508F /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 0262D01D30528B480057508F /* GRDB */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		0262CFCB30525FE30057508F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0262D01E30528B480057508F /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Alexandria;
 			packageProductDependencies = (
+				0262D01D30528B480057508F /* GRDB */,
 			);
 			productName = Alexandria;
 			productReference = 0262CFBD30525FE10057508F /* Alexandria.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 0262CFB430525FE10057508F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0262D01C30528B480057508F /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0262CFBE30525FE10057508F /* Products */;
 			projectDirPath = "";
@@ -563,6 +572,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0262D01C30528B480057508F /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0262D01D30528B480057508F /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0262D01C30528B480057508F /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0262CFB530525FE10057508F /* Project object */;
 }

@@ -7,6 +7,6 @@
 
 import Foundation
 
-struct File {
-	let id = UUID
-}
+/// Scaffold placeholder; the records round mints the real File against the
+/// v0 schema (Core/Catalog/CatalogSchema.swift).
+struct File {}

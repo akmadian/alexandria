@@ -5,10 +5,15 @@
 //  Created by ari on 9/9/26.
 //
 
+import Foundation
+
 extension UUID {
-	static func v7() -> Self {
-		let timestamp = UInt64(Date.now.timeIntervalSince1970 * 1000)
-		var uuidBytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (
+	/// A UUIDv7: 48-bit big-endian Unix-millisecond timestamp, then version
+	/// and variant bits over random tails — time-ordered, so ids minted
+	/// together sort and insert together. `instant` is injectable for tests.
+	static func v7(at instant: Date = .now) -> Self {
+		let timestamp = UInt64(instant.timeIntervalSince1970 * 1000)
+		let uuidBytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (
 			UInt8((timestamp >> 40) & 0xFF),
 			UInt8((timestamp >> 32) & 0xFF),
 			UInt8((timestamp >> 24) & 0xFF),
@@ -28,4 +33,4 @@ extension UUID {
 		)
 		return UUID(uuid: uuidBytes)
 	}
-}   
+}

@@ -60,11 +60,15 @@ Only what was explicitly discussed and agreed. Anything not listed is archaeolog
   files; in the data model a folder's contents are *observed* (disk truth) and a
   collection's membership is *authored* (judgment) — those never entangle in
   storage. Smart collections store the predicate, never the membership.
-- **Metadata vocabulary.** Steal the schema, own the extraction: Spotlight's
-  `kMDItem*` attribute set is the cross-type naming prior art, but Spotlight itself
-  is never a runtime dependency (doesn't index network volumes — NAS is the core
-  scenario). Extraction via ImageIO/AVFoundation natively, exiftool as subprocess
-  for the long tail.
+- **Metadata vocabulary** *(amended 2026-09-10, Ari — the original overstated a
+  blanket Spotlight ban he never made)*: Alexandria's field catalog is its own,
+  with its own names; Spotlight's `kMDItem*` attribute set is one reference
+  checklist among others (exiftool tag groups, IPTC Core) when populating it.
+  NSMetadataItem is not the catalog's extraction path and its attribute model
+  doesn't enter the database (indexing is unreliable on network volumes — NAS is
+  the core scenario — and importer-dependent across machines); Spotlight APIs
+  elsewhere are fine where they earn their place. Extraction via
+  ImageIO/AVFoundation natively, exiftool as subprocess for the long tail.
 - **Portability promise (Ari's framing).** Files stay exactly where the user put
   them; judgments are exportable — sidecars, write-to-file where the format allows,
   eventually full catalog-to-JSON export. The promise is about the user's data,
