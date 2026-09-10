@@ -4,7 +4,9 @@
 - External-editor round trip modeled on LrC "Edit in Photoshop": the returned file auto-imports and is linked to its original
 - Video: trim a clip, save as new file or overwrite (iPhone Photos-style affordance)
 - Rescan on demand: user-invoked re-examination of a folder/volume; no background watcher in v1
+- Relocating a moved folder (e.g. working SSD → archive) is a simple, cheap repair: update the path — not an expensive rescan or mass update. This is a common event
 - Routine multi-file pairs (e.g. RAW+JPEG) collapse to one grid item; the inspector discloses the constituent files; groups can be dissolved
+- Files are grouped into assets automatically at import, driven by grouping rules (RAW+JPEG pairing the canonical case)
 - Grouping automation is consent-based: explicit invocation (e.g. auto-stack by capture time) or opt-in use of camera-embedded bracket metadata; a global toggle disables all auto-grouping
 - Full keybinding system, professional-grade: judgments, view switching, navigation, actions — core workflows operable keyboard-only
 - NLE/creative project files are importable, trackable, and openable in their owning app; deeper understanding (e.g. enumerating referenced media) only where vendor formats permit, with honest messaging where they don't
@@ -14,9 +16,10 @@
 - Export presets: format, resize (long edge / short edge / pixel dimensions), quality, and templated file naming
 - Keywords: hierarchical, exported to standard XMP/IPTC fields; the single labeling system — no separate "tags" concept. Color labels supported, post-v0
 - Import splits into import-critical work (the minimum for a first browsable state) and deferrable enrichment (duplicate detection, face detection, etc. can land after) — design principle for the import pipeline
+- Filtering is the primary query workhorse, above search: predicate filtering over judgments (e.g. rating ≥ 2), filenames, keywords, and metadata fields
 - Search as a user-facing verb over filenames, keywords, and metadata; full-text search post-v0; semantic/natural-language search (on-device embeddings) definitely in, not necessarily P0
 - On-device AI auto-tagging that learns the user's own keyword vocabulary and habits; content never leaves the device except by explicit user action
-- Loupe view for a single work, with access to its constituent files; zoom to 100%; compare view
+- Loupe view for a single work, with access to its constituent files; compare view; zoom: fit and fill (LrC-style), 100% among the supported levels — whether arbitrary percentage zoom levels exist is unsettled
 - Lights-out mode (dim everything but the image) and full-screen mode, each a single keystroke
 - Video playback handles pro formats well (4:2:2 log, RAW video)
 - Batch rename; move/reorganize files between folders from within the app
@@ -25,9 +28,11 @@
 - Catalog backup as a user-visible verb: configurable schedule, configurable location (network shares included), retention/pruning
 - Undo/redo for judgments
 - Offline volumes: browse, search, and judge media on unplugged volumes from the cached index and previews
+- Volume identity: filesystem UUID if available, otherwise a path (network shares: server + share name — never the mount point). Identity is best-effort by design: ambiguous re-identification is surfaced as a predictable, easy user repair, never a silent guess
 - Export finishing integrated, not plugins: watermarking, borders, social-format splitting (e.g. panorama → sequence of square tiles)
 - Delete-from-disk moves files to the system Trash; the confirmation notes recoverability
 - Import progress is deterministic and detailed: the import is sized up front; per-stage progress (cataloged / thumbnails / metadata …) is visible; no fake time estimates — an honest spinner beats a lying progress bar
+- An in-progress import can be canceled
 - Grid sort: user-selectable sort key and direction
 - Multi-select everywhere, including discontiguous selections
 - Inspector displays work/file metadata
@@ -51,6 +56,7 @@ Durability & trust:
 - A judgment is durably committed the moment its gesture completes; a crash or power loss a second later loses nothing
 - The catalog survives crashes without corruption; a failed integrity check has a recovery path, never a shrug
 - User actions give positive feedback: pending vs completed vs failed is always visible
+- Displayed counts and displayed items never disagree
 
 Privacy:
 - Content and metadata never leave the device except by explicit user action; optional analytics are anonymous and transparent (see "what even is alexandria?")
@@ -62,6 +68,7 @@ Respect:
 Responsiveness & resilience:
 - The UI never blocks on I/O; a hung network volume never hangs the app; when the app is busy, what it's doing is visible — no mystery freezes
 - Interrupted work (import, enrichment) resumes or recovers to a known state after a crash or quit; the catalog is never ambiguous about what completed
+- The user's place — scroll, cursor, selection — survives ordinary events
 
 Citizenship:
 - Alexandria coexists with heavy creative software: background work throttles on battery, thermals, and system load; memory stays proportional to what's visible, not library size; frugal with RAM, storage, and compute generally
@@ -76,6 +83,9 @@ Citizenship:
 
 ## BIGGEST OPEN QUESTIONS
 - Atomic unit - files or groups? → ANSWERED in the noun round: the asset (neither — the question predated fileless assets)
+- Does rescan-on-demand run through the standard import pipeline, or is it a separate path? (import round)
+- Do keywords attach to the file or the asset? → ANSWERED (2026-09-09, schema round): the asset. Write-back fan-out (which files receive them) is a separate, open write-back question
+- Do filters, smart collections, and (arguably) search share one underlying predicate/query language that translates to database queries? → PARTIALLY ANSWERED (2026-09-09): we roll our own predicate representation and own its serialization (ratified). Exact sharing across filters / smart collections / search, and the representation's shape, are schema-round work
 
 ## My Personal Wish List
 - In app RAW photo editing with soft proofing - LrC style. Full fat export tooling, print proofing, and even, dare I say, the ability to replace Epson print layout.
@@ -117,6 +127,7 @@ How would we do this?
 - Is there a decentralized model that can make this work? Local network p2p communication? Network protocols and decentralized mesh protocols have advanced a lot in recent years, is there something there we can integrate in the future? This would keep certain subsets of files synced across workstations with no central server.
 
 ## Backlog (maybe-someday; tracked, not core requirements)
+- File-grain search/query surface (find files, not just assets — e.g. a specific filename, all sidecars on a volume); presentation undecided. Constraint it leaves on the present: the predicate language must not hardwire assets as the only queryable population
 - Aesthetic scoring (experiment-grade — deeply subjective)
 - Pinned items in collections (always-first regardless of sort; likely retrofittable)
 - MCP / AI-model integration as an opt-in module, off by default

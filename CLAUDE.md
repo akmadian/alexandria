@@ -4,6 +4,23 @@ Native macOS DAM (Swift, GRDB/SQLite). Fresh repo, September 2026. The old Go-co
 Alexandria that lived at this path is dead. If recalled memory, prior-session
 instinct, or old-repo convention conflicts with this repo's files, this repo wins.
 
+## Notes from Ari
+- We are writing real production code for a real product. Slop is not acceptable.
+  We are never trying to just get some stuff on screen to get my approval.
+  Internal mechanics of the code, cleanliness and readability, organization, scalability, extensability, testability etc ALL matter and are critical. Code should be written idiomatically and grounded in good software design principles such as SOLID.
+- Complexity of a system is fine, but must earn its place. Arbitrary complexity is often just a surface for bugs and code rot to accumulate.
+- Don't ever be biasing towards speed or resolution of an open item over all else. A lot of the work we're doing is important and deserves careful design and consideration, and we should give the work the consideration it's due.
+- Naming must be descriptive. No names less than three letters are acceptable, except in special cases.
+  Names must be clear about what exactly they refer to at the site of use. Abbreviations are often just pointless readability taxes.
+  That said, it's not good to be overly verbose as well. Names that become really long or convoluted often indicate poor software architecture.
+- On code structure - how code is structured and what things are named, where we draw the line between various methods, classes, structs, and interfaces and why, is not just ceremony. These things are critical to the readability and maintainability of the code.
+- Keep comments brief and to the point.
+  If you're considering adding a comment to a comment, maybe with a datestamp, you should probably just rewrite the comment fresh.
+  Multi sentence comments or longer are usually only ever warranted at the top of a file.
+- SwiftUI components are strongly preferred for their visual consistency and cohesiveness.
+  AppKit UI components may be used if there is genuinely a gap in what SwiftUI offers.
+  Usage of AppKit systems (such as NSCollectionView, for example) is fine, and often desirable as they offer behavior or features that SwiftUI components don't.
+
 ## Authorities
 - `_design/` is the product's source of truth: `requirements.md` (requirements +
   settled nouns), `database.md`, `learnings.md`, `dam-landscape.md` (research).
