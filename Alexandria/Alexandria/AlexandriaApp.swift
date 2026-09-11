@@ -36,7 +36,7 @@ struct AlexandriaApp: App {
 					
 					if panel.runModal() == .OK, let url = panel.url {
 						print("CMD: Import Folder - Selected \(url)")
-						let run = ImportRun(folderUrl: url)
+						let run = ImportRun(folderUrl: url, catalog: catalog)
 						run.start()
 					}
 				}

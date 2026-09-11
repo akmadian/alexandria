@@ -46,7 +46,7 @@ struct CatalogSchemaTests {
 			)
 			try database.execute(
 				sql: """
-				INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, stem, extension, kind, size_bytes, modified_at, content_hash)
+				INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, file_stem, file_extension, kind, size_bytes, modified_at, content_hash)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""",
 				arguments: [
@@ -78,7 +78,7 @@ struct CatalogSchemaTests {
 		}
 		let file = try #require(row)
 		let name: String = file["name"]
-		let stem: String = file["stem"]
+		let stem: String = file["file_stem"]
 		let assetID: String = file["asset_id"]
 		let missing: Bool = file["missing"]
 		#expect(name == "DSC_0142.RAF")
@@ -94,7 +94,7 @@ struct CatalogSchemaTests {
 			try catalog.databaseWriter.write { database in
 				try database.execute(
 					sql: """
-					INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, stem, extension, kind, size_bytes, modified_at)
+					INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, file_stem, file_extension, kind, size_bytes, modified_at)
 					VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
 					""",
 					arguments: [
@@ -113,7 +113,7 @@ struct CatalogSchemaTests {
 		try catalog.databaseWriter.write { database in
 			try database.execute(
 				sql: """
-				INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, stem, extension, kind, size_bytes, modified_at)
+				INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, file_stem, file_extension, kind, size_bytes, modified_at)
 				VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
 				""",
 				arguments: [
@@ -230,7 +230,7 @@ struct CatalogSchemaTests {
 			try catalog.databaseWriter.write { database in
 				try database.execute(
 					sql: """
-					INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, stem, extension, kind, size_bytes, modified_at)
+					INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, file_stem, file_extension, kind, size_bytes, modified_at)
 					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					""",
 					arguments: [

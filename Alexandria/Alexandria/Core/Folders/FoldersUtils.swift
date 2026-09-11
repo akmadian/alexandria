@@ -7,6 +7,8 @@
 
 import Foundation
 
-func resolveParentVolume(url: URL) -> String? {
-	
+/// The identity of the volume containing `url`; nil = unidentified.
+func resolveParentVolume(url: URL) -> VolumeIdentity? {
+	let values = try? url.resourceValues(forKeys: [.volumeUUIDStringKey])
+	return VolumeIdentity(uuid: values?.volumeUUIDString)
 }

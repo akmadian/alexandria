@@ -13,17 +13,45 @@ internal import UniformTypeIdentifiers
 ///
 /// A format's KIND is the coarse class recorded on file rows; the asset's
 /// kind is derived later, at formation, from its member files — the registry
-/// never speaks about assets. Capability columns (metadata extraction,
-/// thumbnailing, pairing class) join with their consuming rounds; a missing
-/// capability degrades gracefully — skip the work, show the generic card,
-/// never error.
-nonisolated struct FileFormat: Hashable, Sendable {
+/// never speaks about assets. Capability columns join with their consuming
+/// rounds; a missing capability degrades gracefully — skip the work, show
+/// the generic card, never error.
+nonisolated struct FileFormat: Sendable {
 	/// Dispatch keys: lowercase, no dot. Empty only for the family and floor
 	/// entries, which are reached by UTType conformance, never by extension.
 	let extensions: Set<String>
 	/// Platform anchor where a stable constant exists; informational, not a key.
 	let contentType: UTType?
 	let kind: FileKind
+	/// Metadata extraction, import-critical. nil = no extractor yet.
+	let extractMetadata: (any MetadataExtracting)?
+
+	init(
+		extensions: Set<String>,
+		contentType: UTType?,
+		kind: FileKind,
+		extractMetadata: (any MetadataExtracting)? = nil
+	) {
+		self.extensions = extensions
+		self.contentType = contentType
+		self.kind = kind
+		self.extractMetadata = extractMetadata
+	}
+}
+
+// Identity is what the row IS (extensions, anchor, kind) — capability
+// wiring is not identity, and existentials can't synthesize equality anyway.
+extension FileFormat: Hashable {
+	static func == (lhs: FileFormat, rhs: FileFormat) -> Bool {
+		lhs.extensions == rhs.extensions
+			&& lhs.contentType == rhs.contentType
+			&& lhs.kind == rhs.kind
+	}
+
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(extensions)
+		hasher.combine(kind)
+	}
 }
 
 // MARK: - Resolution
@@ -50,8 +78,14 @@ extension FileFormat {
 	}
 
 	/// Conformance-reached entries: recognizably image/video/audio, no row.
-	static let genericImage = FileFormat(extensions: [], contentType: .image, kind: .image)
-	static let genericVideo = FileFormat(extensions: [], contentType: .movie, kind: .video)
+	static let genericImage = FileFormat(
+		extensions: [], contentType: .image, kind: .image,
+		extractMetadata: ImagePropertiesExtractor()
+	)
+	static let genericVideo = FileFormat(
+		extensions: [], contentType: .movie, kind: .video,
+		extractMetadata: VideoPropertiesExtractor()
+	)
 	static let genericAudio = FileFormat(extensions: [], contentType: .audio, kind: .audio)
 	/// The universal floor.
 	static let unrecognized = FileFormat(extensions: [], contentType: nil, kind: .other)
@@ -67,31 +101,35 @@ extension FileFormat {
 // MARK: - The table
 
 extension FileFormat {
+	private static let imageProperties: any MetadataExtracting = ImagePropertiesExtractor()
+	private static let videoProperties: any MetadataExtracting = VideoPropertiesExtractor()
+
 	static let all: [FileFormat] = [
 		// images
-		FileFormat(extensions: ["jpg", "jpeg"], contentType: .jpeg, kind: .image),
-		FileFormat(extensions: ["png"], contentType: .png, kind: .image),
-		FileFormat(extensions: ["gif"], contentType: .gif, kind: .image),
-		FileFormat(extensions: ["webp"], contentType: .webP, kind: .image),
-		FileFormat(extensions: ["tif", "tiff"], contentType: .tiff, kind: .image),
-		FileFormat(extensions: ["heic"], contentType: .heic, kind: .image),
-		FileFormat(extensions: ["bmp"], contentType: .bmp, kind: .image),
-		// camera raw — one row per format: capabilities will differ per vendor.
-		// No stable per-vendor UTType constants; rawness is a facet, kind is image.
-		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image),
-		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image),
-		FileFormat(extensions: ["nef"], contentType: nil, kind: .image),
-		FileFormat(extensions: ["arw"], contentType: nil, kind: .image),
-		FileFormat(extensions: ["dng"], contentType: nil, kind: .image),
-		FileFormat(extensions: ["orf"], contentType: nil, kind: .image),
-		FileFormat(extensions: ["raf"], contentType: nil, kind: .image),
-		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image),
+		FileFormat(extensions: ["jpg", "jpeg"], contentType: .jpeg, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["png"], contentType: .png, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["gif"], contentType: .gif, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["webp"], contentType: .webP, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["tif", "tiff"], contentType: .tiff, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["heic"], contentType: .heic, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["bmp"], contentType: .bmp, kind: .image, extractMetadata: imageProperties),
+		// camera raw — one row per format: capabilities will differ per
+		// vendor. No stable per-vendor UTType constants; rawness is a facet,
+		// kind is image. ImageIO reads their EXIF natively.
+		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["nef"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["arw"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["dng"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["orf"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, extractMetadata: imageProperties),
 		// video
-		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video),
-		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video),
-		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video),
-		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video),
-		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video),
+		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, extractMetadata: videoProperties),
+		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, extractMetadata: videoProperties),
+		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video, extractMetadata: videoProperties),
+		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video, extractMetadata: videoProperties),
+		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video, extractMetadata: videoProperties),
 		// audio
 		FileFormat(extensions: ["mp3"], contentType: .mp3, kind: .audio),
 		FileFormat(extensions: ["wav"], contentType: .wav, kind: .audio),

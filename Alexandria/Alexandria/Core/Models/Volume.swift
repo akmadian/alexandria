@@ -9,6 +9,7 @@ import Foundation
 import GRDB
 
 enum VolumeKind: String, Codable {
+	// Matches the schema CHECK: ('local', 'external', 'network').
 	case local = "local"
 	case external = "external"
 	case network = "network"

@@ -39,7 +39,10 @@ extension Catalog {
 	}
 	
 	func createFolder(folderUrl: URL) async throws -> Folder {
-		
+		// TODO(ari): root minting — volume probe, findOrCreateVolume,
+		// root_path derivation, root folder row. Placeholder so the target
+		// compiles; crashes loudly if reached.
+		fatalError("createFolder(folderUrl:) is not implemented yet")
 	}
 	
 	func createFolder(folder: Folder) async throws -> Folder? {
