@@ -74,6 +74,9 @@ nonisolated enum CatalogSchema {
 	CREATE TABLE files (
 	    id             TEXT PRIMARY KEY,
 	    folder_id      TEXT NOT NULL REFERENCES folders(id) ON DELETE RESTRICT,
+	    -- NULL = formation pending (formation round, 2026-09-11): asset
+	    -- formation is a distinct pass after commit, the thumbnail_at idiom.
+	    -- Only orphan sidecars stay pending past their import.
 	    asset_id       TEXT REFERENCES assets(id) ON DELETE RESTRICT,
 	    import_id      TEXT NOT NULL REFERENCES imports(id) ON DELETE RESTRICT,  -- [obs] the import that added this file
 	    name           TEXT NOT NULL,     -- [obs] on-disk bytes, extension included
@@ -87,10 +90,10 @@ nonisolated enum CatalogSchema {
 	    missing        INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),  -- [obs] rescan verdict
 	    metadata       TEXT,              -- [obs] JSON, field-catalog keys; promotion mints generated columns
 	    thumbnail_at   TEXT,              -- [der] NULL = pending; the missing artifact IS the queue
-	    formation_rule TEXT,              -- [der] the named rule that admitted this file to its asset; NULL = manual
-	    -- Universal minting at statement time: a non-sidecar file cannot commit
-	    -- unassetted, so formation must run inside the import's own transaction.
-	    CHECK (kind = 'sidecar' OR asset_id IS NOT NULL)
+	    -- [der] the rule that admitted this file to its asset — a historical
+	    -- fact, never "the rule that would match now". NULL = not yet formed
+	    -- (or a future manual admission).
+	    formation_rule TEXT
 	);
 
 	CREATE UNIQUE INDEX idx_files_identity ON files(folder_id, name_key);

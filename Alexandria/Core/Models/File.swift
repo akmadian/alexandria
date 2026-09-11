@@ -15,7 +15,7 @@ nonisolated struct File: Identifiable, CatalogRecord {
 	
 	var id: Identifier<File>
 	var folderId: Identifier<Folder>
-	var assetId: Identifier<Asset>?     // NULL = sidecar (minting CHECK's other arm)
+	var assetId: Identifier<Asset>?     // NULL = formation pending
 	var importId: Identifier<Import>
 	var name: String
 	var nameKey: String
@@ -50,9 +50,12 @@ nonisolated struct File: Identifiable, CatalogRecord {
 	}
 	
 	enum Columns {
+		static let id = Column(CodingKeys.id)
 		static let folderId = Column(CodingKeys.folderId)
 		static let assetId = Column(CodingKeys.assetId)
+		static let importId = Column(CodingKeys.importId)
 		static let nameKey = Column(CodingKeys.nameKey)
 		static let fileStem = Column(CodingKeys.fileStem)
+		static let formationRule = Column(CodingKeys.formationRule)
 	}
 }

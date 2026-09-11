@@ -28,6 +28,7 @@ instinct, or old-repo convention conflicts with this repo's files, this repo win
   Whenever we use a component, we should consider how to make maximal use of that component's features.
 - When I ask you to explain something to me, you MAY NOT write code into the repo until I give you explicit approval.
 - Always wait for my approval before committing.
+- Nothing except a message as explicit as "build it" is approval to build. An affirmation of a pattern or response is not approval to build.
 
 ## Register — the prime discipline
 - Research findings are delivered in chat. They never go into files.

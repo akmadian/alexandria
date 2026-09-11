@@ -10,7 +10,7 @@
 import Foundation
 import Logging
 
-enum Log {
+nonisolated enum Log {
     static let subsystem = Bundle.main.bundleIdentifier ?? "com.alexandria"
 
     /// Wire swift-log to OSLog (Xcode/Console, colored by level) and a text

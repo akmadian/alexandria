@@ -5,7 +5,7 @@
 //  Created by ari on 9/10/26.
 //
 
-struct PreparedFile: Sendable {
+nonisolated struct PreparedFile: Sendable {
 	let discovered: DiscoveredFile
 	let name: String
 	let nameKey: String

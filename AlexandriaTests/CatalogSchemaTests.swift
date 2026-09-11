@@ -87,24 +87,28 @@ struct CatalogSchemaTests {
 		#expect(missing == false)
 	}
 
-	@Test func nonSidecarFileCannotCommitWithoutAnAsset() throws {
+	/// Formation round, 2026-09-11: formation is a distinct pass after commit,
+	/// so any kind commits unassetted — NULL asset_id = formation pending.
+	@Test func filesCommitUnassettedAsFormationPending() throws {
 		let catalog = try makeCatalog()
 		let chain = try seedChain(catalog)
-		#expect(throws: DatabaseError.self) {
-			try catalog.databaseWriter.write { database in
-				try database.execute(
-					sql: """
-					INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, file_stem, file_extension, kind, size_bytes, modified_at)
-					VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
-					""",
-					arguments: [
-						UUID.v7().uuidString, chain.folderID, chain.importID,
-						"DSC_0143.RAF", "DSC_0143.RAF", "dsc_0143", "raf", "image",
-						1024, "2026-08-14T09:31:04.000Z",
-					]
-				)
-			}
+		try catalog.databaseWriter.write { database in
+			try database.execute(
+				sql: """
+				INSERT INTO files (id, folder_id, asset_id, import_id, name, name_key, file_stem, file_extension, kind, size_bytes, modified_at)
+				VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+				""",
+				arguments: [
+					UUID.v7().uuidString, chain.folderID, chain.importID,
+					"DSC_0143.RAF", "DSC_0143.RAF", "dsc_0143", "raf", "image",
+					1024, "2026-08-14T09:31:04.000Z",
+				]
+			)
 		}
+		let pending = try catalog.databaseWriter.read { database in
+			try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM files WHERE asset_id IS NULL")
+		}
+		#expect(pending == 1)
 	}
 
 	@Test func sidecarFileCommitsUnattached() throws {

@@ -10,7 +10,7 @@
 import Logging
 import os
 
-struct OSLogHandler: LogHandler {
+nonisolated struct OSLogHandler: LogHandler {
     let label: String
     private let logger: os.Logger
 
@@ -39,7 +39,7 @@ struct OSLogHandler: LogHandler {
     }
 }
 
-private extension Logging.Logger.Level {
+private nonisolated extension Logging.Logger.Level {
     var osLogType: OSLogType {
         switch self {
         case .trace, .debug: return .debug

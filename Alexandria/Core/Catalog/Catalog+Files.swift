@@ -15,6 +15,14 @@ nonisolated struct BatchOutcome: Sendable {
 }
 
 extension Catalog {
+	/// Every file of one import — asset formation's input: the unformed are
+	/// its worklist, the formed are join targets.
+	func files(inImport importId: Identifier<Import>) async throws -> [File] {
+		try await reader.read { database in
+			try File.filter(File.Columns.importId == importId).fetchAll(database)
+		}
+	}
+
 	func recordNewFileBatch(
 		_ prepared: [PreparedFile],
 		importId: Identifier<Import>,
@@ -46,26 +54,18 @@ extension Catalog {
 					continue
 				}
 				
-				// Formation, v0 rule: every non-sidecar file gets its own asset.
-				var assetId: Identifier<Asset>? = nil
-				var formationRule: String? = nil
-				if file.discovered.format.kind != .sidecar {
-					let asset = Asset(id: .mint(), kind: file.discovered.format.kind.rawValue,
-									  rating: nil, flag: nil, representativeFileId: nil)
-					try asset.insert(database)
-					assetId = asset.id
-					formationRule = "one_asset_per_file"
-				}
-				
+				// Files commit unassetted: asset formation is a distinct pass
+				// after the batch (AssetFormation.form via ImportRun.formAssets),
+				// never chained in here.
 				let record = File(
-					id: .mint(), folderId: folderId, assetId: assetId, importId: importId,
+					id: .mint(), folderId: folderId, assetId: nil, importId: importId,
 					name: file.name, nameKey: file.nameKey,
 					fileStem: file.fileStem, fileExtension: file.fileExtension,
 					kind: file.discovered.format.kind,
 					sizeBytes: file.discovered.size, modifiedAt: file.discovered.modifiedAt,
 					contentHash: file.contentHash, missing: false,
 					metadata: try file.metadata?.databaseJSON(),
-					thumbnailAt: nil, formationRule: formationRule
+					thumbnailAt: nil, formationRule: nil
 				)
 				try record.insert(database)
 				

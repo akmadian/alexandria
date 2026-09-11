@@ -47,13 +47,31 @@ nonisolated struct FileMetadata: Codable, Equatable, Sendable {
 
 nonisolated extension FileMetadata {
 	/// The `files.metadata` column form: deterministic (sorted keys),
-	/// snake_case, ISO 8601 dates.
+	/// snake_case, ISO 8601 dates. Dates use `.iso8601` (second precision) —
+	/// deliberately coarser than the millisecond column format: EXIF capture
+	/// times are second-granularity and this encoder is the blob's only
+	/// writer. If sub-second capture evidence ever matters, move encode AND
+	/// decode to catalogDateFormatter together — a one-sided change makes
+	/// every existing blob undecodable.
 	func databaseJSON() throws -> String {
 		let encoder = JSONEncoder()
 		encoder.keyEncodingStrategy = .convertToSnakeCase
 		encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
 		encoder.dateEncodingStrategy = .iso8601
 		return String(decoding: try encoder.encode(self), as: UTF8.self)
+	}
+
+	/// databaseJSON()'s round trip: reads the column form back. nil for
+	/// undecodable content — consumers (formation's evidence guards) treat
+	/// missing metadata as absent evidence, never as an error.
+	init?(databaseJSON: String) {
+		let decoder = JSONDecoder()
+		decoder.keyDecodingStrategy = .convertFromSnakeCase
+		decoder.dateDecodingStrategy = .iso8601
+		guard let decoded = try? decoder.decode(FileMetadata.self, from: Data(databaseJSON.utf8)) else {
+			return nil
+		}
+		self = decoded
 	}
 }
 

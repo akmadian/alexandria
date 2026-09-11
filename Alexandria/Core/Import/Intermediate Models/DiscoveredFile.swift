@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct DiscoveredFile: Sendable {
+nonisolated struct DiscoveredFile: Sendable {
 	let url: URL
 	let size: Int
 	let modifiedAt: Date

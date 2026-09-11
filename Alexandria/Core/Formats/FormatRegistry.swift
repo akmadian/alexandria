@@ -23,6 +23,10 @@ nonisolated struct FileFormat: Sendable {
 	/// Platform anchor where a stable constant exists; informational, not a key.
 	let contentType: UTType?
 	let kind: FileKind
+	/// Rawness is a facet, never a kind: a camera capture as opposed to a
+	/// rendition. Consumed by asset formation's raw_rendition_pair rule
+	/// (formation round, 2026-09-11).
+	let isRawCapture: Bool
 	/// Metadata extraction, import-critical. nil = no extractor yet.
 	let metadataExtractor: (any MetadataExtracting)?
 
@@ -30,11 +34,13 @@ nonisolated struct FileFormat: Sendable {
 		extensions: Set<String>,
 		contentType: UTType?,
 		kind: FileKind,
+		isRawCapture: Bool = false,
 		metadataExtractor: (any MetadataExtracting)? = nil
 	) {
 		self.extensions = extensions
 		self.contentType = contentType
 		self.kind = kind
+		self.isRawCapture = isRawCapture
 		self.metadataExtractor = metadataExtractor
 	}
 }
@@ -116,14 +122,14 @@ nonisolated extension FileFormat {
 		// camera raw — one row per format: capabilities will differ per
 		// vendor. No stable per-vendor UTType constants; rawness is a facet,
 		// kind is image. ImageIO reads their EXIF natively.
-		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["nef"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["arw"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["dng"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["orf"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["nef"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["arw"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["dng"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["orf"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
 		// video
 		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, metadataExtractor: videoProperties),
 		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, metadataExtractor: videoProperties),
