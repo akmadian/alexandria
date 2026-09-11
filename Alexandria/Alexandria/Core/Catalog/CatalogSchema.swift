@@ -22,12 +22,12 @@
 nonisolated enum CatalogSchema {
 	static let v0 = """
 	CREATE TABLE volumes (
-	    id       TEXT PRIMARY KEY,
+	    id       TEXT PRIMARY KEY, -- [] Who the volume is to the catalog
 	    -- Identity ladder: filesystem UUID | 'smb://host/share' (case-folded) |
 	    -- 'nfs://host/export'. NULL = not yet identified.
-	    identity TEXT,                                                            -- [obs]
+	    identity TEXT,                                                            -- [obs] How the catalog recognizes the volume when it shows up
 	    name     TEXT NOT NULL,                                                   -- [jdg] seeded from the volume label
-	    kind     TEXT NOT NULL CHECK (kind IN ('internal', 'external', 'network')) -- [obs]
+	    kind     TEXT NOT NULL CHECK (kind IN ('local', 'external', 'network')) -- [obs]
 	);
 
 	-- Found-or-created by identity; SQLite keeps NULLs distinct in unique
@@ -77,8 +77,8 @@ nonisolated enum CatalogSchema {
 	    import_id      TEXT NOT NULL REFERENCES imports(id) ON DELETE RESTRICT,  -- [obs] the import that added this file
 	    name           TEXT NOT NULL,     -- [obs] on-disk bytes, extension included
 	    name_key       TEXT NOT NULL,     -- [der] NFC(name): identity compare, case preserved
-	    stem           TEXT NOT NULL,     -- [der] lowercase+NFC, final-dot rule; the formation collision key
-	    extension      TEXT NOT NULL,     -- [der] lowercase+NFC final-dot tail; '' = none
+	    file_stem           TEXT NOT NULL,     -- [der] lowercase+NFC, final-dot rule; the formation collision key
+	    file_extension      TEXT NOT NULL,     -- [der] lowercase+NFC final-dot tail; '' = none
 	    kind           TEXT NOT NULL,     -- [der] filetype-registry verdict ('sidecar' included)
 	    size_bytes     INTEGER NOT NULL,  -- [obs] staleness gate, with modified_at
 	    modified_at    TEXT NOT NULL,     -- [obs] disk mtime; ±2s tolerance applies at compare, never at storage
@@ -94,7 +94,7 @@ nonisolated enum CatalogSchema {
 
 	CREATE UNIQUE INDEX idx_files_identity ON files(folder_id, name_key);
 	CREATE INDEX idx_files_asset  ON files(asset_id);
-	CREATE INDEX idx_files_stem   ON files(stem);  -- catalog-wide formation collision address
+	CREATE INDEX idx_files_stem   ON files(file_stem);  -- catalog-wide formation collision address
 	CREATE INDEX idx_files_import ON files(import_id);
 
 	-- The import DLQ: pre-identity failures, path-keyed, so a file that never

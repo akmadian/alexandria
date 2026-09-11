@@ -24,6 +24,25 @@ struct AlexandriaApp: App {
             ContentView()
                 .environment(\.catalog, catalog)
         }
+		.commands {
+			CommandGroup(after: .newItem) {
+				Button("Import Folder") {
+					print("CMD: Import Folder")
+					let panel = NSOpenPanel()
+					panel.canChooseFiles = false
+					panel.canChooseDirectories = true
+					panel.allowsMultipleSelection = false
+					panel.prompt = "Import Folder"
+					
+					if panel.runModal() == .OK, let url = panel.url {
+						print("CMD: Import Folder - Selected \(url)")
+						let run = ImportRun(folderUrl: url)
+						run.start()
+					}
+				}
+				.keyboardShortcut("I", modifiers: [.command])
+			}
+		}
     }
 }
 

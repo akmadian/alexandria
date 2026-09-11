@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0262D01E30528B480057508F /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 0262D01D30528B480057508F /* GRDB */; };
 		0262D044305337940057508F /* Puppy in Frameworks */ = {isa = PBXBuildFile; productRef = 0262D043305337940057508F /* Puppy */; };
+		0262D061305353290057508F /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 0262D060305353290057508F /* Algorithms */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0262D061305353290057508F /* Algorithms in Frameworks */,
 				0262D01E30528B480057508F /* GRDB in Frameworks */,
 				0262D044305337940057508F /* Puppy in Frameworks */,
 			);
@@ -121,6 +123,7 @@
 			packageProductDependencies = (
 				0262D01D30528B480057508F /* GRDB */,
 				0262D043305337940057508F /* Puppy */,
+				0262D060305353290057508F /* Algorithms */,
 			);
 			productName = Alexandria;
 			productReference = 0262CFBD30525FE10057508F /* Alexandria.app */;
@@ -207,6 +210,7 @@
 			packageReferences = (
 				0262D01C30528B480057508F /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				0262D042305337940057508F /* XCRemoteSwiftPackageReference "Puppy" */,
+				0262D05F305353290057508F /* XCRemoteSwiftPackageReference "swift-algorithms" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0262CFBE30525FE10057508F /* Products */;
@@ -594,6 +598,14 @@
 				minimumVersion = 0.11.0;
 			};
 		};
+		0262D05F305353290057508F /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-algorithms.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -606,6 +618,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0262D042305337940057508F /* XCRemoteSwiftPackageReference "Puppy" */;
 			productName = Puppy;
+		};
+		0262D060305353290057508F /* Algorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0262D05F305353290057508F /* XCRemoteSwiftPackageReference "swift-algorithms" */;
+			productName = Algorithms;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
