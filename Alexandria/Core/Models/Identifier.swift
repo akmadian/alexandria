@@ -10,7 +10,7 @@
 import Foundation
 import GRDB
 
-struct Identifier<Subject>: Hashable, Sendable {
+nonisolated struct Identifier<Subject>: Hashable, Sendable {
 	let rawValue: UUID
 	
 	init(rawValue: UUID) {
@@ -22,7 +22,7 @@ struct Identifier<Subject>: Hashable, Sendable {
 	}
 }
 
-extension Identifier: Codable {
+nonisolated extension Identifier: Codable {
 	// Encodes as uuidString, never as UUID: GRDB's primitive form for a bare
 	// UUID is a 16-byte BLOB, and the schema ratifies TEXT ids. The string
 	// leaf keeps the column readable in any sqlite3 shell.
@@ -44,7 +44,7 @@ extension Identifier: Codable {
 }
 
 // Same TEXT leaf for query arguments and filters.
-extension Identifier: DatabaseValueConvertible {
+nonisolated extension Identifier: DatabaseValueConvertible {
 	var databaseValue: DatabaseValue { rawValue.uuidString.databaseValue }
 
 	static func fromDatabaseValue(_ dbValue: DatabaseValue) -> Self? {

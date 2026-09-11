@@ -24,18 +24,18 @@ nonisolated struct FileFormat: Sendable {
 	let contentType: UTType?
 	let kind: FileKind
 	/// Metadata extraction, import-critical. nil = no extractor yet.
-	let extractMetadata: (any MetadataExtracting)?
+	let metadataExtractor: (any MetadataExtracting)?
 
 	init(
 		extensions: Set<String>,
 		contentType: UTType?,
 		kind: FileKind,
-		extractMetadata: (any MetadataExtracting)? = nil
+		metadataExtractor: (any MetadataExtracting)? = nil
 	) {
 		self.extensions = extensions
 		self.contentType = contentType
 		self.kind = kind
-		self.extractMetadata = extractMetadata
+		self.metadataExtractor = metadataExtractor
 	}
 }
 
@@ -80,11 +80,11 @@ nonisolated extension FileFormat {
 	/// Conformance-reached entries: recognizably image/video/audio, no row.
 	static let genericImage = FileFormat(
 		extensions: [], contentType: .image, kind: .image,
-		extractMetadata: ImagePropertiesExtractor()
+		metadataExtractor: ImagePropertiesExtractor()
 	)
 	static let genericVideo = FileFormat(
 		extensions: [], contentType: .movie, kind: .video,
-		extractMetadata: VideoPropertiesExtractor()
+		metadataExtractor: VideoPropertiesExtractor()
 	)
 	static let genericAudio = FileFormat(extensions: [], contentType: .audio, kind: .audio)
 	/// The universal floor.
@@ -106,30 +106,30 @@ nonisolated extension FileFormat {
 
 	static let all: [FileFormat] = [
 		// images
-		FileFormat(extensions: ["jpg", "jpeg"], contentType: .jpeg, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["png"], contentType: .png, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["gif"], contentType: .gif, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["webp"], contentType: .webP, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["tif", "tiff"], contentType: .tiff, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["heic"], contentType: .heic, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["bmp"], contentType: .bmp, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["jpg", "jpeg"], contentType: .jpeg, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["png"], contentType: .png, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["gif"], contentType: .gif, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["webp"], contentType: .webP, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["tif", "tiff"], contentType: .tiff, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["heic"], contentType: .heic, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["bmp"], contentType: .bmp, kind: .image, metadataExtractor: imageProperties),
 		// camera raw — one row per format: capabilities will differ per
 		// vendor. No stable per-vendor UTType constants; rawness is a facet,
 		// kind is image. ImageIO reads their EXIF natively.
-		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["nef"], contentType: nil, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["arw"], contentType: nil, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["dng"], contentType: nil, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["orf"], contentType: nil, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, extractMetadata: imageProperties),
-		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, extractMetadata: imageProperties),
+		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["nef"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["arw"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["dng"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["orf"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, metadataExtractor: imageProperties),
 		// video
-		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, extractMetadata: videoProperties),
-		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, extractMetadata: videoProperties),
-		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video, extractMetadata: videoProperties),
-		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video, extractMetadata: videoProperties),
-		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video, extractMetadata: videoProperties),
+		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, metadataExtractor: videoProperties),
+		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, metadataExtractor: videoProperties),
+		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video, metadataExtractor: videoProperties),
+		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video, metadataExtractor: videoProperties),
+		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video, metadataExtractor: videoProperties),
 		// audio
 		FileFormat(extensions: ["mp3"], contentType: .mp3, kind: .audio),
 		FileFormat(extensions: ["wav"], contentType: .wav, kind: .audio),

@@ -29,7 +29,7 @@ nonisolated struct ObservedVolume: Sendable {
 	}
 }
 
-extension ObservedVolume {
+nonisolated extension ObservedVolume {
 	/// One probe, one snapshot: constructing the observation is observing.
 	init(containing url: URL) throws {
 		let values = try url.resourceValues(forKeys: [

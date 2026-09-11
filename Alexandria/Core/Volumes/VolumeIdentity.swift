@@ -24,7 +24,7 @@ nonisolated enum VolumeIdentity: Hashable, Sendable {
 	}
 }
 
-extension VolumeIdentity: RawRepresentable, Codable, DatabaseValueConvertible {
+nonisolated extension VolumeIdentity: RawRepresentable, Codable, DatabaseValueConvertible {
 	/// The ratified TEXT column form, self-describing by shape (the network
 	/// rungs will carry a scheme prefix). Codable and DatabaseValueConvertible
 	/// ride this pair for free — stdlib and GRDB both honor RawRepresentable.

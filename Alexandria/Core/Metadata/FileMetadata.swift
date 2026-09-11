@@ -45,7 +45,7 @@ nonisolated struct FileMetadata: Codable, Equatable, Sendable {
 	var isEmpty: Bool { self == FileMetadata() }
 }
 
-extension FileMetadata {
+nonisolated extension FileMetadata {
 	/// The `files.metadata` column form: deterministic (sorted keys),
 	/// snake_case, ISO 8601 dates.
 	func databaseJSON() throws -> String {

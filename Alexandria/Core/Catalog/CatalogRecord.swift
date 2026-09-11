@@ -17,12 +17,15 @@ import GRDB
 /// nothing.
 nonisolated protocol CatalogRecord: Codable, FetchableRecord, PersistableRecord {}
 
-extension CatalogRecord {
-	static var databaseDateEncodingStrategy: DatabaseDateEncodingStrategy {
+// GRDB 7's customization points are per-column FUNCTIONS; a `static var` of
+// the same name silently witnesses nothing and GRDB falls back to its
+// default format — the shape of the original no-milliseconds bug.
+nonisolated extension CatalogRecord {
+	static func databaseDateEncodingStrategy(for column: String) -> DatabaseDateEncodingStrategy {
 		.formatted(catalogDateFormatter)
 	}
-	
-	static var databaseDateDecodingStrategy: DatabaseDateDecodingStrategy {
+
+	static func databaseDateDecodingStrategy(for column: String) -> DatabaseDateDecodingStrategy {
 		.formatted(catalogDateFormatter)
 	}
 }
@@ -30,9 +33,8 @@ extension CatalogRecord {
 /// THE catalog timestamp format — ratified: ISO 8601 UTC, millisecond
 /// precision, 'Z' suffix, so lexicographic order is chronological order.
 /// One definition; catalogTimestamp() and CatalogRecord's date strategies
-/// both ride it. DateFormatter is documented thread-safe for formatting,
-/// hence nonisolated(unsafe).
-nonisolated(unsafe) let catalogDateFormatter: DateFormatter = {
+/// both ride it. DateFormatter is Sendable (thread-safe for formatting).
+nonisolated let catalogDateFormatter: DateFormatter = {
 	let formatter = DateFormatter()
 	formatter.locale = Locale(identifier: "en_US_POSIX")
 	formatter.timeZone = TimeZone(identifier: "UTC")

@@ -11,13 +11,12 @@ import Testing
 
 struct MetadataExtractionTests {
 
-	/// repo-root/testdata, resolved from this source file's location.
+	/// repo-root/TestData, resolved from this source file's location.
 	private var testData: URL {
 		URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent()   // AlexandriaTests/
-			.deletingLastPathComponent()   // Alexandria/
 			.deletingLastPathComponent()   // repo root
-			.appending(path: "testdata")
+			.appending(path: "TestData")
 	}
 
 	// MARK: Image family
@@ -107,13 +106,13 @@ struct MetadataExtractionTests {
 	@Test func imageFamilyRowsShareTheImageExtractor() {
 		for ext in ["jpg", "raf", "heic", "orf"] {
 			let format = FileFormat.resolve(extension: ext, contentType: nil)
-			#expect(format.extractMetadata is ImagePropertiesExtractor, "missing wiring: \(ext)")
+			#expect(format.metadataExtractor is ImagePropertiesExtractor, "missing wiring: \(ext)")
 		}
 	}
 
 	@Test func sidecarsAndTheFloorHaveNoExtractorAndThatIsFine() {
-		#expect(FileFormat.resolve(extension: "xmp", contentType: nil).extractMetadata == nil)
-		#expect(FileFormat.unrecognized.extractMetadata == nil)
+		#expect(FileFormat.resolve(extension: "xmp", contentType: nil).metadataExtractor == nil)
+		#expect(FileFormat.unrecognized.metadataExtractor == nil)
 	}
 
 	// MARK: Pure helpers

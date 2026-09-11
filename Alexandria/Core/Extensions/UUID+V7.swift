@@ -7,7 +7,7 @@
 
 import Foundation
 
-extension UUID {
+nonisolated extension UUID {
 	/// A UUIDv7: 48-bit big-endian Unix-millisecond timestamp, then version
 	/// and variant bits over random tails — time-ordered, so ids minted
 	/// together sort and insert together. `instant` is injectable for tests.

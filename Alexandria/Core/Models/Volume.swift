@@ -8,14 +8,14 @@
 import Foundation
 import GRDB
 
-enum VolumeKind: String, Codable {
+nonisolated enum VolumeKind: String, Codable {
 	// Matches the schema CHECK: ('local', 'external', 'network').
 	case local = "local"
 	case external = "external"
 	case network = "network"
 }
 
-struct Volume: Identifiable, CatalogRecord {
+nonisolated struct Volume: Identifiable, CatalogRecord {
 	static let databaseTableName: String = "volumes"
 	static let databaseColumnDecodingStrategy: DatabaseColumnDecodingStrategy = .convertFromSnakeCase
 	static let databaseColumnEncodingStrategy: DatabaseColumnEncodingStrategy = .convertToSnakeCase
