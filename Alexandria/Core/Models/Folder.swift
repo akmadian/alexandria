@@ -7,7 +7,7 @@
 
 import GRDB
 
-struct Folder: Identifiable, Codable, FetchableRecord, PersistableRecord {
+struct Folder: Identifiable, CatalogRecord {
 	static let databaseTableName = "folders"
 
 	let id: Identifier<Folder>

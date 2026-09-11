@@ -7,6 +7,6 @@
 
 import GRDB
 
-struct Asset: Identifiable, Codable, FetchableRecord, PersistableRecord {
+struct Asset: Identifiable, CatalogRecord {
 	let id: Identifier<Asset>
 }

@@ -19,11 +19,3 @@ extension Catalog {
 		}
 	}
 }
-
-/// The ratified timestamp form: ISO 8601 UTC, millisecond precision, 'Z'
-/// suffix — lexicographic order is chronological order.
-nonisolated func catalogTimestamp(_ date: Date = .now) -> String {
-	let formatter = ISO8601DateFormatter()
-	formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-	return formatter.string(from: date)
-}

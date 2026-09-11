@@ -15,7 +15,7 @@ enum VolumeKind: String, Codable {
 	case network = "network"
 }
 
-struct Volume: Identifiable, Codable, FetchableRecord, PersistableRecord {
+struct Volume: Identifiable, CatalogRecord {
 	static let databaseTableName: String = "volumes"
 	static let databaseColumnDecodingStrategy: DatabaseColumnDecodingStrategy = .convertFromSnakeCase
 	static let databaseColumnEncodingStrategy: DatabaseColumnEncodingStrategy = .convertToSnakeCase

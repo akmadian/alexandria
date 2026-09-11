@@ -10,10 +10,12 @@ import GRDB
 
 /// Scaffold placeholder; the records round mints the real File against the
 /// v0 schema (Core/Catalog/CatalogSchema.swift).
-struct File: Identifiable, Codable, FetchableRecord, PersistableRecord {
+struct File: Identifiable, CatalogRecord {
 	static let databaseTableName: String = "files"
 	static let databaseColumnDecodingStrategy: DatabaseColumnDecodingStrategy = .convertFromSnakeCase
 	static let databaseColumnEncodingStrategy: DatabaseColumnEncodingStrategy = .convertToSnakeCase
+	static let databaseDateDecodingStrategy = DatabaseDateDecodingStrategy.iso8601
+	static let databaseDateEncodingStrategy = DatabaseDateEncodingStrategy.iso8601
 	
 	var id: Identifier<File>
 	var folderId: Identifier<Folder>

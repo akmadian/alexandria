@@ -55,7 +55,8 @@ nonisolated enum CatalogSchema {
 	    -- (files.import_id); counts are computed, never recorded.
 	    folder_id   TEXT REFERENCES folders(id) ON DELETE RESTRICT,
 	    started_at  TEXT NOT NULL,
-	    finished_at TEXT  -- NULL = never completed: the interrupted-import signal
+	    finished_at TEXT,  -- when the run ended; chronology only, outcome carries the semantics
+		outcome     TEXT CHECK (outcome IN ('completed', 'canceled', 'failed')) -- NULL = still running; NULL with no live run = interrupted
 	);
 
 	-- assets and files reference each other; SQLite resolves foreign keys at
@@ -114,7 +115,7 @@ nonisolated enum CatalogSchema {
 	-- artifact marker means not-yet UNLESS a row here says tried-and-failed.
 	CREATE TABLE file_errors (
 	    file_id     TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-	    task        TEXT NOT NULL,  -- 'thumbnail' is v0's only member
+	    task        TEXT NOT NULL,  -- v0 members: 'thumbnail', 'metadata'
 	    reason_code TEXT NOT NULL,  -- 'decode_failed' (terminal) vs retryable classes
 	    message     TEXT NOT NULL,
 	    attempts    INTEGER NOT NULL DEFAULT 1,
