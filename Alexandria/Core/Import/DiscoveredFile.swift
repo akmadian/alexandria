@@ -9,4 +9,7 @@ import Foundation
 
 struct DiscoveredFile {
 	let url: URL
+	let size: Int
+	let modifiedAt: Date
+	let format: FileFormat
 }

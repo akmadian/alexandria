@@ -11,6 +11,7 @@ import GRDB
 
 @main
 struct AlexandriaApp: App {
+	init() { Log.bootstrap() }
 
 	static let devCatalogDir = URL.applicationSupportDirectory
 		.appendingPathComponent("Alexandria")
@@ -27,7 +28,6 @@ struct AlexandriaApp: App {
 		.commands {
 			CommandGroup(after: .newItem) {
 				Button("Import Folder") {
-					print("CMD: Import Folder")
 					let panel = NSOpenPanel()
 					panel.canChooseFiles = false
 					panel.canChooseDirectories = true

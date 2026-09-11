@@ -18,8 +18,7 @@ enum Log {
     static func bootstrap() {
         LoggingSystem.bootstrap { label in
             MultiplexLogHandler([
-                OSLogHandler(label: label),
-                FileLogHandler(label: label),
+                OSLogHandler(label: label)
             ])
         }
     }

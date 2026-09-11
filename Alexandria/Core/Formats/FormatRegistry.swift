@@ -41,7 +41,7 @@ nonisolated struct FileFormat: Sendable {
 
 // Identity is what the row IS (extensions, anchor, kind) — capability
 // wiring is not identity, and existentials can't synthesize equality anyway.
-extension FileFormat: Hashable {
+nonisolated extension FileFormat: Hashable {
 	static func == (lhs: FileFormat, rhs: FileFormat) -> Bool {
 		lhs.extensions == rhs.extensions
 			&& lhs.contentType == rhs.contentType
@@ -56,7 +56,7 @@ extension FileFormat: Hashable {
 
 // MARK: - Resolution
 
-extension FileFormat {
+nonisolated extension FileFormat {
 	/// Total resolution: exact row by extension, else UTType family, else the
 	/// universal floor. Every file gets a format; strangers get modest
 	/// capabilities, never an error.
@@ -100,7 +100,7 @@ extension FileFormat {
 
 // MARK: - The table
 
-extension FileFormat {
+nonisolated extension FileFormat {
 	private static let imageProperties: any MetadataExtracting = ImagePropertiesExtractor()
 	private static let videoProperties: any MetadataExtracting = VideoPropertiesExtractor()
 

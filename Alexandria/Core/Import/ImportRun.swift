@@ -7,10 +7,13 @@
 
 import Foundation
 import Algorithms
+import Logging
 internal import UniformTypeIdentifiers
 
 @MainActor @Observable
 final class ImportRun {
+	private let log = Logger(label: "import")
+	
 	let id = Identifier<Import>.mint()  // = the imports row id: one identity, carried everywhere
 	private var folderUrl: URL
 	private var catalog: Catalog
@@ -19,7 +22,7 @@ final class ImportRun {
 	private var task: Task<Void, Error>?
 	
 	init(folderUrl: URL, catalog: Catalog) {
-		print("ImportRun: initialized with id \(id)")
+		self.log.info("New import run initialized", metadata: ["importId": "\(id.rawValue)"])
 		self.folderUrl = folderUrl
 		self.catalog = catalog
 		
@@ -28,6 +31,7 @@ final class ImportRun {
 	}
 	
 	func start() {
+		self.log.info("Starting import run")
 		task = Task(name: "import-\(id.rawValue)") {
 			// Phase 0: residence, then the run's bracket. Fail fast before
 			// any walking — probe (disk, off-main), then record (transactions).
@@ -40,11 +44,21 @@ final class ImportRun {
 			)
 			try await self.catalog.recordImportStarted(id: self.id, folderId: rootFolderId)
 
-			let discovered: [URL] = await self.walk(source: self.folderUrl)
-			self.totalFiles = discovered.count
+			var discovered: [DiscoveredFile] = []
+			do {
+				discovered = try await self.walk(dirSource: self.folderUrl)
+				self.totalFiles = discovered.count
+				self.log.info("Discovered \(self.totalFiles) files in \(self.folderUrl.lastPathComponent)")
+			} catch {
+				self.log.error("Failed to walk dir", metadata: [
+					"dir": "\(self.folderUrl)",
+					"error": "\(error)"
+				])
+				throw error
+			}
 
 			for batch in discovered.chunks(ofCount: 200) {
-				_ = batch  // TODO(ari): recordBatch — the recording slice
+				_ = batch
 			}
 		}
 	}
@@ -55,50 +69,76 @@ final class ImportRun {
 	}
 	
 	@concurrent
-	func walk(source: URL) async -> [URL] {
-		let enumerator = FileManager.default.enumerator(
-			at: source,
-			includingPropertiesForKeys: [.contentTypeKey, .fileAllocatedSizeKey, .nameKey]
-		)!
-		return enumerator.map { $0 as! URL }
-//		var allContentTypes: Set<String> = []
-//		var allMimeTypes: Set<String> = []
-//		var allFileExtensions: Set<String> = []
-//		var discovered: [String] = []
-//		
-//		for fileUrl in allUrls {
-//			let keys: Set<URLResourceKey> = [
-//				.contentTypeKey,
-//				.fileAllocatedSizeKey,
-//				.nameKey,
-//				
-//				.volumeURLKey,
-//				.volumeUUIDStringKey,
-//				.volumeNameKey,
-//				.volumeIsInternalKey,
-//				.volumeIsLocalKey
-//			]
-//			let values = try? fileUrl.resourceValues(forKeys: keys)
-//			let contentType: String = values?.contentType?.identifier ?? ""
-//			let mimeType: String = values?.contentType?.preferredMIMEType ?? ""
-//			let file_extension: String = values?.contentType?.preferredFilenameExtension ?? ""
-//			allContentTypes.insert(contentType)
-//			allMimeTypes.insert(mimeType)
-//			allFileExtensions.insert(file_extension)
-//			
-//			discovered.append(DiscoveredFile(url: fileUrl, size: <#T##Int64#>))
-//		}
-//		print(allContentTypes)
-//		print(allMimeTypes)
-//		print(allFileExtensions)
-//		// Given an importsource, unroll to files
-//		// Files should have
-//		//	- file registry key (kind)
-//		//	- siz
-//		return []
+	func walk(dirSource: URL) async throws -> [DiscoveredFile] {
+		var discovered: [DiscoveredFile] = []
+		
+		guard let enumerator = FileManager.default.enumerator(
+			at: dirSource,
+			includingPropertiesForKeys: [
+				.contentTypeKey,
+				.fileSizeKey,
+				.contentModificationDateKey,
+				.isDirectoryKey
+			],
+			options: [.skipsHiddenFiles, .skipsPackageDescendants],
+			errorHandler: { url, error in
+				self.log.error("Failed to enumerate dir", metadata: [
+					"url": "\(url)",
+					"error": "\(error)"
+				])
+				// TODO: import_errors
+				return true
+			}
+		) else {
+			throw ImportError.sourceUnreadable
+		}
+
+		while let fileUrl = enumerator.nextObject() as? URL {
+			let resourceValues: URLResourceValues
+			do {
+				resourceValues = try fileUrl.resourceValues(forKeys: [
+					.contentTypeKey,
+					.fileSizeKey,
+					.contentModificationDateKey,
+					.isDirectoryKey
+				])
+			} catch {
+				self.log.warning("Failed to read resource values", metadata: [
+					"url": "\(fileUrl)",
+					"error": "\(error)"
+				])
+				continue
+				// TODO: import_errors
+			}
+			
+			if resourceValues.isDirectory == true {
+				continue
+			}
+			
+			guard let size = resourceValues.fileSize,
+				  let mtime = resourceValues.contentModificationDate else {
+				self.log.warning("Missing size or mtime for file", metadata: ["url": "\(fileUrl)"])
+				continue
+				// TODO: import_errors
+			}
+			
+			let format = FileFormat.resolve(
+				extension: fileUrl.pathExtension,
+				contentType: resourceValues.contentType
+			)
+
+			discovered.append(
+				DiscoveredFile(
+					url: fileUrl,
+					size: size,
+					modifiedAt: mtime,
+					format: format
+				)
+			)
+		}
+		
+		return discovered
 	}
-	
-	
 
 	func cancel() { task?.cancel() }
 }
