@@ -30,6 +30,7 @@ struct Folder: Identifiable, Codable, FetchableRecord, PersistableRecord {
 	}
 
 	enum Columns {
+		static let volumeId = Column(CodingKeys.volumeId)
 		static let parentId = Column(CodingKeys.parentId)
 		static let nameKey = Column(CodingKeys.nameKey)
 		static let rootPath = Column(CodingKeys.rootPath)

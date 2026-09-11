@@ -24,4 +24,8 @@ struct Volume: Identifiable, Codable, FetchableRecord, PersistableRecord {
 	let identity: VolumeIdentity?
 	let name: String
 	let kind: VolumeKind
+
+	enum Columns {
+		static let identity = Column(CodingKeys.identity)
+	}
 }

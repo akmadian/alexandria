@@ -11,7 +11,7 @@ internal import UniformTypeIdentifiers
 
 @MainActor @Observable
 final class ImportRun {
-	let id = UUID.v7()
+	let id = Identifier<Import>.mint()  // = the imports row id: one identity, carried everywhere
 	private var folderUrl: URL
 	private var catalog: Catalog
 	private(set) var totalFiles = 0
@@ -28,16 +28,30 @@ final class ImportRun {
 	}
 	
 	func start() {
-		task = Task(name: "import-\(id)") {
-			var folder: Folder = try! await self.catalog.createFolder(folderUrl: self.folderUrl)
-			
-			let discovered: [URL] = await walk(source: self.folderUrl)
+		task = Task(name: "import-\(id.rawValue)") {
+			// Phase 0: residence, then the run's bracket. Fail fast before
+			// any walking — probe (disk, off-main), then record (transactions).
+			let observed = try await self.probeVolume(containing: self.folderUrl)
+			let volumeId = try await self.catalog.findOrCreateVolume(observed)
+			let rootFolderId = try await self.catalog.findOrCreateRootFolder(
+				named: self.folderUrl.lastPathComponent,
+				on: volumeId,
+				rootPath: observed.relativePath(of: self.folderUrl)
+			)
+			try await self.catalog.recordImportStarted(id: self.id, folderId: rootFolderId)
+
+			let discovered: [URL] = await self.walk(source: self.folderUrl)
 			self.totalFiles = discovered.count
-			
+
 			for batch in discovered.chunks(ofCount: 200) {
-				
+				_ = batch  // TODO(ari): recordBatch — the recording slice
 			}
 		}
+	}
+
+	@concurrent
+	private func probeVolume(containing url: URL) async throws -> ObservedVolume {
+		try ObservedVolume(containing: url)
 	}
 	
 	@concurrent

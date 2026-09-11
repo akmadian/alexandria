@@ -38,11 +38,33 @@ extension Catalog {
 		}
 	}
 	
-	func createFolder(folderUrl: URL) async throws -> Folder {
-		// TODO(ari): root minting — volume probe, findOrCreateVolume,
-		// root_path derivation, root folder row. Placeholder so the target
-		// compiles; crashes loudly if reached.
-		fatalError("createFolder(folderUrl:) is not implemented yet")
+	/// The root variant: keyed (volume_id, root_path) per idx_folders_root.
+	/// parentId nil + rootPath set is the shape CHECK's root arm.
+	func findOrCreateRootFolder(
+		named name: String,
+		on volumeId: Identifier<Volume>,
+		rootPath: String
+	) async throws -> Identifier<Folder> {
+		try await databaseWriter.write { database in
+			if let existing = try Folder
+				.filter(Folder.Columns.volumeId == volumeId)
+				.filter(Folder.Columns.rootPath == rootPath)
+				.fetchOne(database)
+			{
+				return existing.id
+			}
+
+			let folder = Folder(
+				id: .mint(),
+				volumeId: volumeId,
+				parentId: nil,
+				name: name,
+				nameKey: name.precomposedStringWithCanonicalMapping,
+				rootPath: rootPath
+			)
+			try folder.insert(database)
+			return folder.id
+		}
 	}
 	
 	func createFolder(folder: Folder) async throws -> Folder? {
