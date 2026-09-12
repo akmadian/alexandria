@@ -19,4 +19,14 @@ nonisolated enum Theme {
 		static let inspectorIdealWidth: CGFloat = 280
 		static let inspectorMaximumWidth: CGFloat = 420
 	}
+
+	/// Grid metrics, deliberately minimal this round: spacing and clamps
+	/// only. Cell styling belongs to the cell design round. (Column bounds
+	/// are behavior, not styling — they live with the hub's intent.)
+	enum Grid {
+		static let spacing: CGFloat = 8
+		static let inset: CGFloat = 12
+		static let minimumCellSide: CGFloat = 40
+		static let selectionRingWidth: CGFloat = 3
+	}
 }

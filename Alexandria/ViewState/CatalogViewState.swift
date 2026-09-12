@@ -44,6 +44,13 @@ final class CatalogViewState {
 	private(set) var selection: Set<SubjectID> = []
 	private(set) var cursor: SubjectID?
 
+	/// Grid density as target columns (ruled 2026-09-12): UI state that
+	/// should survive between launches lives HERE — the hub is the surface
+	/// the viewpoint round's persistence machinery will read and restore.
+	/// Renderer posture like viewMode: changes no question, reloads nothing.
+	private(set) var gridColumns = 5
+	static let gridColumnRange = 2...12
+
 	// MARK: Answer — what the observation last delivered
 
 	/// Every id the current question yields, in arrangement order. Replaced
@@ -99,6 +106,14 @@ final class CatalogViewState {
 	/// reloads.
 	func setViewMode(_ mode: ViewMode) {
 		viewMode = mode
+	}
+
+	/// Clamps to the sane range so every author (slider, future keys,
+	/// restored persistence) shares one rule.
+	func setGridColumns(_ count: Int) {
+		let clamped = min(max(count, Self.gridColumnRange.lowerBound), Self.gridColumnRange.upperBound)
+		guard clamped != gridColumns else { return }
+		gridColumns = clamped
 	}
 
 	/// Re-asks the current question unconditionally. The recovery lever for

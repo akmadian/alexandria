@@ -363,4 +363,24 @@ struct CatalogViewStateTests {
 		hub.moveCursor(to: .asset(Identifier<Asset>(rawValue: .v7())))
 		#expect(hub.cursor == .asset(older))
 	}
+
+	// MARK: Renderer posture
+
+	/// Grid density lives in the hub (ruled 2026-09-12: launch-surviving UI
+	/// state lives here for the viewpoint round's persistence to find), and
+	/// its one clamp rule serves every author — slider, keys, restore.
+	@Test func gridColumnsClampToTheirRange() throws {
+		let hub = CatalogViewState(catalog: try Catalog(DatabaseQueue()))
+		let range = CatalogViewState.gridColumnRange
+		#expect(range.contains(hub.gridColumns))
+
+		hub.setGridColumns(range.upperBound + 10)
+		#expect(hub.gridColumns == range.upperBound)
+
+		hub.setGridColumns(range.lowerBound - 10)
+		#expect(hub.gridColumns == range.lowerBound)
+
+		hub.setGridColumns(7)
+		#expect(hub.gridColumns == 7)
+	}
 }

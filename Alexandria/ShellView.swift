@@ -41,6 +41,8 @@ struct ShellView: View {
 		ToolbarSpacer(.flexible)
 		
 		ToolbarItemGroup(placement: .automatic) {
+			Button("Zoom Out", systemImage: "minus.magnifyingglass") {viewState.setGridColumns(viewState.gridColumns + 1)}
+			Button("Zoom In", systemImage: "plus.magnifyingglass") {viewState.setGridColumns(viewState.gridColumns - 1)}
 			Picker("View", selection: stageViewModeSelection) {
 				Label("Grid", systemImage: "square.grid.2x2").tag(ViewMode.grid)
 				Label("Loupe", systemImage: "loupe").tag(ViewMode.loupe)
