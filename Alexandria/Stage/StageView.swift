@@ -9,11 +9,11 @@ import SwiftUI
 
 struct StageView: View {
 	@Environment(CatalogViewState.self) private var viewState
-	
+
 	var body: some View {
 		switch viewState.viewMode {
 		case .grid:
-			Text("Grid")
+			GridView()
 		case .loupe:
 			Text("Loupe")
 		}
