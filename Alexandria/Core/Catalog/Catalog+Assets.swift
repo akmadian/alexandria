@@ -7,6 +7,41 @@ import Foundation
 import GRDB
 
 extension Catalog {
+	/// The file whose thumbnail stands for each asset, batched for a visible
+	/// window (grid round, 2026-09-12). `representative_file_id` when set;
+	/// until representative picking lands (formation TODO), it never is, so
+	/// the fallback carries the read: the asset's first file by id — stable,
+	/// arbitrary, and honest about being a stand-in. File-less assets are
+	/// absent from the result (the caller's placeholder case).
+	func representativeFileIds(
+		for assetIds: [Identifier<Asset>]
+	) async throws -> [Identifier<Asset>: Identifier<File>] {
+		guard !assetIds.isEmpty else { return [:] }
+		return try await reader.read { database in
+			let rows = try Row.fetchAll(
+				database,
+				sql: """
+				SELECT assets.id AS asset_id,
+				       COALESCE(
+				           assets.representative_file_id,
+				           (SELECT files.id FROM files
+				            WHERE files.asset_id = assets.id
+				            ORDER BY files.id LIMIT 1)
+				       ) AS file_id
+				FROM assets
+				WHERE assets.id IN (\(databaseQuestionMarks(count: assetIds.count)))
+				""",
+				arguments: StatementArguments(assetIds)
+			)
+			var result: [Identifier<Asset>: Identifier<File>] = [:]
+			for row in rows {
+				guard let fileId: Identifier<File> = row["file_id"] else { continue }
+				result[row["asset_id"]] = fileId
+			}
+			return result
+		}
+	}
+
 	/// The formation round's write verb: applies resolved clusters in one
 	/// transaction — mint or join per cluster, members bound with their
 	/// admitting rule's provenance, absorbed scaffolding assets merged into

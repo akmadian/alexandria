@@ -78,6 +78,25 @@ extension Catalog {
 		}
 	}
 
+	/// The thumbnail doorbell's confirmation (grid round, 2026-09-12): which
+	/// of these files are stamped. Write-before-stamp (thumbnails.md
+	/// invariant 4) means every returned id has bytes in the store — the
+	/// caller's loads cannot miss, and unstamped ids never cost disk IO.
+	func thumbnailedFileIds(
+		among ids: [Identifier<File>]
+	) async throws -> Set<Identifier<File>> {
+		guard !ids.isEmpty else { return [] }
+		return try await reader.read { database in
+			let stamped = try Identifier<File>.fetchAll(
+				database,
+				File.select(File.Columns.id, as: Identifier<File>.self)
+					.filter(ids.contains(File.Columns.id))
+					.filter(File.Columns.thumbnailAt != nil)
+			)
+			return Set(stamped)
+		}
+	}
+
 	/// One transaction per drained batch — the stamp granularity IS the UI's
 	/// shimmer wave (thumbnails.md invariant 5). Failures land as file_errors
 	/// residue and the worklist exclusion keeps them excluded: one attempt

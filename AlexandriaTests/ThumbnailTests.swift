@@ -179,6 +179,26 @@ struct ThumbnailStoreTests {
 		let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
 		#expect(image.width == 48 && image.height == 24)
 	}
+
+	/// The stage's confirmation read (grid round): stamped ids only —
+	/// unstamped and unknown ids never come back, so a heal pass never
+	/// retries dead loads.
+	@Test func thumbnailedFileIdsReturnsOnlyStamped() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/a.jpg"),
+			context.prepared("/Volumes/Test/Shoot/b.jpg"),
+		])
+		let files = try await context.catalog.files(inImport: context.importId)
+			.sorted { $0.name < $1.name }
+		try await context.catalog.recordThumbnails(generated: [files[0].id], failures: [])
+
+		let stamped = try await context.catalog.thumbnailedFileIds(
+			among: files.map(\.id) + [Identifier<File>.mint()]
+		)
+		#expect(stamped == [files[0].id])
+		#expect(try await context.catalog.thumbnailedFileIds(among: []).isEmpty)
+	}
 }
 
 // MARK: - Worklist and stamping (in-memory catalog)
