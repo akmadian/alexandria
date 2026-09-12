@@ -14,8 +14,9 @@ extension Catalog {
 	/// the caller mints on nil.
 	func unfinishedImport(inFolder folderId: Identifier<Folder>) async throws -> Identifier<Import>? {
 		try await reader.read { database in
-			// The id tie-break makes same-millisecond starts deterministic
-			// (UUIDv7 ids are time-ordered, so it is also chronological).
+			// The id tie-break makes same-millisecond starts deterministic —
+			// stable, not chronological: UUIDv7's within-millisecond tail
+			// is random.
 			let latest = try Import
 				.filter(Import.Columns.folderId == folderId)
 				.order(Import.Columns.startedAt.desc, Import.Columns.id.desc)

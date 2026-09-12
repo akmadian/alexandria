@@ -25,10 +25,19 @@ nonisolated enum Lens: Sendable {
 /// separately clearable.
 nonisolated enum Source: Hashable, Sendable {
 	case library
-	/// Direct membership only for now; whether a folder source reaches its
-	/// subtree is deliberately unsettled, for the browser round.
+	/// Subtree by ruling (browser round, 2026-09-11): a folder shows
+	/// everything in it AND its subfolders, no direct-only mode. A toggle
+	/// is maybe-later — the LrC record shows the buried mode switch is the
+	/// pain, not either behavior.
 	case folder(Identifier<Folder>)
+	/// One specific historical import. No sidebar row yet; a browsing UI
+	/// for import history is a future round.
 	case `import`(Identifier<Import>)
+	/// "Previous Import": the most recent import, resolved at fetch time so
+	/// each new import replaces the answer (LrC's settled meaning, ratified
+	/// 2026-09-11) — and because the compiled statement reads the imports
+	/// table, the observation re-delivers the moment a new import begins.
+	case latestImport
 }
 
 /// The ORDER BY: sort key + direction. Orders the working set, never
@@ -89,25 +98,51 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 		}
 		let order = "ORDER BY \(column) \(direction)"
 
+		// The subtree walk (ratified: a folder source reaches everything
+		// beneath it): the folder plus every descendant, by parent_id.
+		// UNION (not UNION ALL) so a parent_id cycle terminates instead of
+		// spinning — the schema doesn't forbid one, only the write path's
+		// shape. The trailing space is the separator for concatenation.
+		let subtree = "WITH RECURSIVE subtree(id) AS (SELECT ? UNION "
+			+ "SELECT folders.id FROM folders JOIN subtree ON folders.parent_id = subtree.id) "
+		// "Latest" is by started_at (ISO text: lexicographic order is
+		// chronological), id as the same-millisecond tiebreak. Outcome is
+		// deliberately ignored: a still-running import IS the previous
+		// import, growing live.
+		let latestImport = "(SELECT id FROM imports ORDER BY started_at DESC, id DESC LIMIT 1)"
+
 		switch lens {
 		case .assets:
+			// Narrowing sources drive the asset lens from files, not from a
+			// per-asset EXISTS over the whole assets table: measured 135x
+			// cheaper on a narrowed source at 40k assets (round review,
+			// 2026-09-11). `asset_id IS NOT NULL` is the formation-pending
+			// exclusion the EXISTS form got implicitly.
 			let sql: String
 			var arguments: StatementArguments = []
 			switch source {
 			case .library:
 				sql = "SELECT id FROM assets \(order)"
 			case .folder(let folder):
-				sql = """
-					SELECT id FROM assets WHERE EXISTS (SELECT 1 FROM files \
-					WHERE files.asset_id = assets.id AND files.folder_id = ?) \(order)
+				sql = subtree + """
+					SELECT DISTINCT asset_id FROM files \
+					WHERE folder_id IN subtree AND asset_id IS NOT NULL \
+					ORDER BY asset_id \(direction)
 					"""
 				arguments = [folder]
 			case .import(let run):
 				sql = """
-					SELECT id FROM assets WHERE EXISTS (SELECT 1 FROM files \
-					WHERE files.asset_id = assets.id AND files.import_id = ?) \(order)
+					SELECT DISTINCT asset_id FROM files \
+					WHERE import_id = ? AND asset_id IS NOT NULL \
+					ORDER BY asset_id \(direction)
 					"""
 				arguments = [run]
+			case .latestImport:
+				sql = """
+					SELECT DISTINCT asset_id FROM files \
+					WHERE import_id = \(latestImport) AND asset_id IS NOT NULL \
+					ORDER BY asset_id \(direction)
+					"""
 			}
 			return try Identifier<Asset>
 				.fetchAll(database, sql: sql, arguments: arguments)
@@ -120,11 +155,13 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 			case .library:
 				sql = "SELECT id FROM files \(order)"
 			case .folder(let folder):
-				sql = "SELECT id FROM files WHERE folder_id = ? \(order)"
+				sql = subtree + "SELECT id FROM files WHERE folder_id IN subtree \(order)"
 				arguments = [folder]
 			case .import(let run):
 				sql = "SELECT id FROM files WHERE import_id = ? \(order)"
 				arguments = [run]
+			case .latestImport:
+				sql = "SELECT id FROM files WHERE import_id = \(latestImport) \(order)"
 			}
 			return try Identifier<File>
 				.fetchAll(database, sql: sql, arguments: arguments)

@@ -17,11 +17,14 @@ import Testing
 import GRDB
 @testable import Alexandria
 
-/// Two tracked roots on one volume: the context's root holds two files
-/// under its import, "Second" holds one file under a second import — so
-/// every (lens, source) pair answers with a distinguishable working set.
+/// Two tracked roots on one volume: the context's root "Shoot" holds two
+/// files plus one in a nested "Sub" folder, all under the context's
+/// import; "Second" holds one file under a second, later import — so
+/// every (lens, source) pair answers with a distinguishable working set,
+/// and the subtree ruling has a nested folder to prove itself on.
 private struct TwoFolderFixture {
 	let context: ImportContext
+	let subFolder: Identifier<Folder>
 	let folderB: Identifier<Folder>
 	let importB: Identifier<Import>
 
@@ -30,8 +33,12 @@ private struct TwoFolderFixture {
 		try await context.record([
 			context.prepared("/Volumes/Test/Shoot/a.jpg"),
 			context.prepared("/Volumes/Test/Shoot/b.jpg"),
+			context.prepared("/Volumes/Test/Shoot/Sub/d.jpg"),
 		])
 		try await context.form()
+		let subFolder = try await context.catalog.databaseWriter.read {
+			try Folder.filter(Folder.Columns.nameKey == "Sub").fetchOne($0)!.id
+		}
 
 		let volumeId = try await context.catalog.databaseWriter.read {
 			try Volume.fetchAll($0).first!.id
@@ -39,6 +46,9 @@ private struct TwoFolderFixture {
 		let folderB = try await context.catalog.findOrCreateRootFolder(
 			named: "Second", on: volumeId, rootPath: "Second"
 		)
+		// latestImport resolves by started_at (ms-granular): make sure the
+		// second import's timestamp is genuinely later.
+		try await Task.sleep(for: .milliseconds(5))
 		let importB = Identifier<Import>.mint()
 		try await context.catalog.recordImportStarted(id: importB, folderId: folderB)
 		try await context.catalog.recordNewFileBatch(
@@ -48,7 +58,9 @@ private struct TwoFolderFixture {
 		)
 		let files = try await context.catalog.files(inImport: importB)
 		try await context.catalog.recordFormedAssets(AssetFormation.form(files: files).clusters)
-		return TwoFolderFixture(context: context, folderB: folderB, importB: importB)
+		return TwoFolderFixture(
+			context: context, subFolder: subFolder, folderB: folderB, importB: importB
+		)
 	}
 }
 
@@ -185,16 +197,22 @@ struct CatalogViewStateTests {
 		let importA = fixture.context.importId
 
 		let cases: [(Lens, Source, Int)] = [
-			(.assets, .library, 3),
-			(.files, .library, 3),
-			(.assets, .folder(folderA), 2),
-			(.files, .folder(folderA), 2),
+			(.assets, .library, 4),
+			(.files, .library, 4),
+			// folder(A) reaches Sub's file: the subtree ruling.
+			(.assets, .folder(folderA), 3),
+			(.files, .folder(folderA), 3),
+			(.assets, .folder(fixture.subFolder), 1),
+			(.files, .folder(fixture.subFolder), 1),
 			(.assets, .folder(fixture.folderB), 1),
 			(.files, .folder(fixture.folderB), 1),
-			(.assets, .import(importA), 2),
-			(.files, .import(importA), 2),
+			(.assets, .import(importA), 3),
+			(.files, .import(importA), 3),
 			(.assets, .import(fixture.importB), 1),
 			(.files, .import(fixture.importB), 1),
+			// importB started later, so it is the previous import.
+			(.assets, .latestImport, 1),
+			(.files, .latestImport, 1),
 		]
 		for (lens, source, expected) in cases {
 			let query = WorkingSetQuery(lens: lens, source: source, arrangement: Arrangement())
@@ -213,6 +231,32 @@ struct CatalogViewStateTests {
 	}
 
 	// MARK: The lens and the source, through the observation
+
+	@Test func aNewImportBecomesThePreviousImportLive() async throws {
+		let fixture = try await TwoFolderFixture.make()
+		let hub = CatalogViewState(catalog: fixture.context.catalog)
+		hub.setLens(.files)
+		hub.setSource(.latestImport)
+		try await eventually("previous import answer") { hub.workingSet.count == 1 }
+
+		// A third import BEGINS: the observation re-delivers (the compiled
+		// statement reads the imports table) and the previous import is now
+		// the new, still-empty one — the hub was never told.
+		try await Task.sleep(for: .milliseconds(5))
+		let importC = Identifier<Import>.mint()
+		try await fixture.context.catalog.recordImportStarted(
+			id: importC, folderId: fixture.folderB
+		)
+		try await eventually("new import takes over") { hub.workingSet.isEmpty }
+
+		// And it grows live as the import commits.
+		try await fixture.context.catalog.recordNewFileBatch(
+			[fixture.context.prepared("/Volumes/Test/Second/e.jpg")],
+			importId: importC, rootFolderId: fixture.folderB,
+			rootUrl: URL(fileURLWithPath: "/Volumes/Test/Second")
+		)
+		try await eventually("grows live") { hub.workingSet.count == 1 }
+	}
 
 	@Test func lensFlipAnswersWithFiles() async throws {
 		let context = try await ImportContext.make()
@@ -271,8 +315,8 @@ struct CatalogViewStateTests {
 		let hub = CatalogViewState(catalog: fixture.context.catalog)
 
 		// Three swaps before any delivery can land. Every question in the
-		// chain has a distinguishable answer — (3 assets), (3 files),
-		// (2 files), (1 file) — so ANY superseded answer landing late is
+		// chain has a distinguishable answer — (4 assets), (4 files),
+		// (3 files), (1 file) — so ANY superseded answer landing late is
 		// visible, not just one of them.
 		hub.setLens(.files)
 		hub.setSource(.folder(fixture.context.rootFolderId))
