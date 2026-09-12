@@ -8,14 +8,13 @@
 import SwiftUI
 
 struct ShellView: View {
-	@State private var browserPresented = true
 	@State private var inspectorPresented = true
 	
 	var body: some View {
 		NavigationSplitView {
 			BrowserView()
 		} detail: {
-			Text("body")
+			StageView()
 		}
 		.inspector(isPresented: $inspectorPresented) {
 			InspectorView()
