@@ -10,6 +10,22 @@ import Foundation
 import GRDB
 @testable import Alexandria
 
+/// A file-less asset minted at a fixed instant, inserted through the raw
+/// writer. This is the ONE fence exception for behavioral tests (besides
+/// the schema-fence tests' raw SQL): view-state ordering tests need
+/// id-CONTROLLED fixtures, and pipeline-minted UUIDv7 ids order randomly
+/// within a millisecond. The trade is real: a file-less asset is a state
+/// formation never produces and is invisible to folder/import sources —
+/// fixtures that need source reach go through ImportContext instead.
+nonisolated func seedAsset(
+	_ catalog: Catalog, at seconds: TimeInterval
+) async throws -> Identifier<Asset> {
+	let id = Identifier<Asset>(rawValue: .v7(at: Date(timeIntervalSince1970: seconds)))
+	let asset = Asset(id: id, kind: "image", rating: nil, flag: nil, representativeFileId: nil)
+	try await catalog.databaseWriter.write { try asset.insert($0) }
+	return id
+}
+
 /// An in-memory catalog with one volume, one tracked root, and an open
 /// import bracket — the substrate recordNewFileBatch and AssetFormation
 /// operate on.

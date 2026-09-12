@@ -19,16 +19,22 @@ struct AlexandriaApp: App {
 	// Dev scaffold: one hardcoded catalog until the open-catalog UI round.
 	let catalog: Catalog
 	let importService: ImportService
+	// One hub per open catalog. "Exactly one" is a fact about this
+	// composition root, never about the design.
+	let viewState: CatalogViewState
 
 	init() {
 		Log.bootstrap()
 		catalog = try! Catalog.open(at: Self.devCatalogDir)
 		importService = ImportService(catalog: catalog)
+		viewState = CatalogViewState(catalog: catalog)
 	}
 
     var body: some Scene {
 		Window("Alexandria", id: "main") {
-			ShellView().environment(\.catalog, catalog)
+			ShellView()
+				.environment(\.catalog, catalog)
+				.environment(viewState)
         }
 		.commands {
 			CommandGroup(after: .newItem) {

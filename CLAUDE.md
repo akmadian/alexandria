@@ -58,6 +58,8 @@ instinct, or old-repo convention conflicts with this repo's files, this repo win
   phenomenon, not the conclusion you hope for — leading-query research is a
   named defect.
 - Record rough targets as rough. Never overclaim a recorded feature's scope.
+- Vocabulary: a thing stored in the catalog database is a **record**, never a
+  "row" — "row" is reserved for a grid row of items on screen.
 
 ## Actions
 - No commits without Ari's explicit OK.
