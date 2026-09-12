@@ -378,7 +378,16 @@ struct AssetFormationTests {
 	/// ImportRun composes it, not re-implemented.
 	@Test @MainActor func formAssetsComposesReadDecidePersist() async throws {
 		let context = try await ImportContext.make()
-		let run = ImportRun(folderUrl: context.rootURL, catalog: context.catalog)
+		let run = ImportRun(
+			id: .mint(), folderUrl: context.rootURL, rootFolderId: context.rootFolderId,
+			volume: ObservedVolume(
+				identity: .filesystemUUID("0FA1-BATCH-FIXTURE"), name: "Test",
+				kind: .external, volumeRootURL: URL(fileURLWithPath: "/Volumes/Test")
+			),
+			catalog: context.catalog,
+			store: ThumbnailStore(catalogDirectory: FileManager.default.temporaryDirectory),
+			resuming: false
+		)
 		try await context.catalog.recordImportStarted(id: run.id, folderId: context.rootFolderId)
 		_ = try await context.catalog.recordNewFileBatch(
 			[

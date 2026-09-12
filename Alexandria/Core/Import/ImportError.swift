@@ -12,6 +12,9 @@ enum ImportError: Error {
 	/// A folder row's parent vanished mid-chain-mint: catalog corruption, not
 	/// a disk condition.
 	case folderChainBroken(pathKey: String)
+	/// Imports need the thumbnail store (ruled 2026-09-11), and the store
+	/// needs a catalog directory — an in-memory catalog cannot run imports.
+	case catalogHasNoDirectory
 }
 
 /// One pre-identity walk casualty: a path the walk saw but couldn't read, so

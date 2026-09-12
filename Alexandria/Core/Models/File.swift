@@ -56,6 +56,7 @@ nonisolated struct File: Identifiable, CatalogRecord {
 		static let importId = Column(CodingKeys.importId)
 		static let nameKey = Column(CodingKeys.nameKey)
 		static let fileStem = Column(CodingKeys.fileStem)
+		static let thumbnailAt = Column(CodingKeys.thumbnailAt)
 		static let formationRule = Column(CodingKeys.formationRule)
 	}
 }

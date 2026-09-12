@@ -8,22 +8,27 @@
 import SwiftUI
 import Foundation
 import GRDB
+import Logging
 
 @main
 struct AlexandriaApp: App {
-	init() { Log.bootstrap() }
-
 	static let devCatalogDir = URL.applicationSupportDirectory
 		.appendingPathComponent("Alexandria")
 		.appendingPathComponent("devcat")
 
 	// Dev scaffold: one hardcoded catalog until the open-catalog UI round.
-	let catalog = try! Catalog.open(at: Self.devCatalogDir)
+	let catalog: Catalog
+	let importService: ImportService
+
+	init() {
+		Log.bootstrap()
+		catalog = try! Catalog.open(at: Self.devCatalogDir)
+		importService = ImportService(catalog: catalog)
+	}
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environment(\.catalog, catalog)
+		Window("Alexandria", id: "main") {
+			ShellView().environment(\.catalog, catalog)
         }
 		.commands {
 			CommandGroup(after: .newItem) {
@@ -36,11 +41,19 @@ struct AlexandriaApp: App {
 					
 					if panel.runModal() == .OK, let url = panel.url {
 						print("CMD: Import Folder - Selected \(url)")
-						let run = ImportRun(folderUrl: url, catalog: catalog)
-						run.start()
+						Task {
+							do {
+								try await importService.startImport(of: url)
+							} catch {
+								Logger(label: "app").error("Import failed to start", metadata: [
+									"source": "\(url.path())",
+									"error": "\(error)",
+								])
+							}
+						}
 					}
 				}
-				.keyboardShortcut("I", modifiers: [.command])
+				.keyboardShortcut("I", modifiers: [.command, .shift])
 			}
 		}
     }

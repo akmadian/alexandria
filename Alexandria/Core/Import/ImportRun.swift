@@ -19,38 +19,80 @@ final class ImportRun {
 
 	let id: Identifier<Import>  // = the imports row id: one identity, carried everywhere
 	private let folderUrl: URL
+	private let rootFolderId: Identifier<Folder>
+	private let volume: ObservedVolume
 	private let catalog: Catalog
+	/// True when this run picked an unfinished import back up.
+	private let resuming: Bool
 	private(set) var totalFiles = 0
 	private(set) var completedFiles = 0
 	private(set) var skippedFiles = 0
+	private(set) var thumbnailedFiles = 0
+	private(set) var thumbnailFailures = 0
 	private var task: Task<Void, Error>?
 
-	init(folderUrl: URL, catalog: Catalog) {
-		let id = Identifier<Import>.mint()
+	/// Batch = width: the worklist pull size IS the parallelism — every task
+	/// in a drained batch runs concurrently, batches run serially. One
+	/// constant, one place; volume-aware policy is the named refinement.
+	private nonisolated static let thumbnailBatchWidth = 8
+	/// Per-file deadline (thumbnails.md invariant 2): abandon, not cancel —
+	/// without it one wedged decode is an import that never completes.
+	private nonisolated static let thumbnailDeadline: Duration = .seconds(30)
+
+	/// Required, not optional (ruled 2026-09-11): the grid IS the product and
+	/// thumbnails are its face — a run that could silently skip them would
+	/// ship a wall of shimmer behind one log line. ImportService provides it
+	/// or refuses to start the import.
+	private let thumbnailStore: ThumbnailStore
+
+	/// Identity and residence are the SERVICE's job (resume ruling,
+	/// 2026-09-11): a run is identified by its source, so ImportService
+	/// resolves source → root folder → unfinished-job-or-mint before this
+	/// init — which is what lets id and the correlated logger stay immutable.
+	init(
+		id: Identifier<Import>,
+		folderUrl: URL,
+		rootFolderId: Identifier<Folder>,
+		volume: ObservedVolume,
+		catalog: Catalog,
+		store: ThumbnailStore,
+		resuming: Bool
+	) {
 		var log = Logger(label: "import")
 		log[metadataKey: "importId"] = "\(id.rawValue)"
 		self.id = id
 		self.log = log
 		self.folderUrl = folderUrl
+		self.rootFolderId = rootFolderId
+		self.volume = volume
 		self.catalog = catalog
-
-		// Check volume tracked state, if not tracked, probably track it
-		// Probably gather some information about import size, how many files etc?
+		self.resuming = resuming
+		self.thumbnailStore = store
 	}
-	
+
 	func start() {
-		self.log.info("Starting import run")
+		self.log.info(resuming ? "Resuming import run" : "Starting import run")
 		task = Task(name: "import-\(id.rawValue)") {
-			// Phase 0: residence, then the run's bracket. Fail fast before
-			// any walking — probe (disk, off-main), then record (transactions).
-			let observed = try await self.probeVolume(containing: self.folderUrl)
-			let volumeId = try await self.catalog.findOrCreateVolume(observed)
-			let rootFolderId = try await self.catalog.findOrCreateRootFolder(
-				named: self.folderUrl.lastPathComponent,
-				on: volumeId,
-				rootPath: observed.relativePath(of: self.folderUrl)
+			// The run's bracket (residence already resolved by the service).
+			// A resumed bracket reopens: a canceled/failed row must read as
+			// running again until this run stamps its own ending.
+			if self.resuming {
+				try await self.catalog.recordImportResumed(id: self.id)
+			} else {
+				try await self.catalog.recordImportStarted(id: self.id, folderId: self.rootFolderId)
+			}
+
+			// The thumbnail worker: a structured child beside the record loop.
+			// The stream carries wake-ups, never work — the worklist query
+			// (thumbnail_at IS NULL) is the single source of truth. Conflated
+			// buffering makes nudges level-triggered: "something changed, go
+			// look". The defer guards the error paths — an unfinished stream
+			// is a worker awaiting nudges forever.
+			let (nudges, nudge) = AsyncStream.makeStream(
+				of: Void.self, bufferingPolicy: .bufferingNewest(1)
 			)
-			try await self.catalog.recordImportStarted(id: self.id, folderId: rootFolderId)
+			async let thumbnailing: Void = self.generateThumbnails(nudges: nudges)
+			defer { nudge.finish() }
 
 			// Bracket discipline: every ending past this point stamps an
 			// outcome. Only a dead process leaves the row open (NULL =
@@ -65,7 +107,7 @@ final class ImportRun {
 				])
 
 				try await self.catalog.recordImportErrors(
-					failures.map { (observed.relativePath(of: $0.url), $0.reasonCode, $0.message) },
+					failures.map { (self.volume.relativePath(of: $0.url), $0.reasonCode, $0.message) },
 					importId: self.id
 				)
 
@@ -76,10 +118,11 @@ final class ImportRun {
 					let prepared = await self.prepareFiles(batch: Array(batch))
 					let outcome = try await self.catalog.recordNewFileBatch(
 						prepared, importId: self.id,
-						rootFolderId: rootFolderId, rootUrl: self.folderUrl
+						rootFolderId: self.rootFolderId, rootUrl: self.folderUrl
 					)
 					self.completedFiles += outcome.recorded
 					self.skippedFiles += outcome.skipped
+					nudge.yield(())  // recorded rows ARE the thumbnail jobs; wake the worker
 
 					// Per-batch formation pass: assets trickle in behind the
 					// batches. A mid-import failure is retried by the next
@@ -118,6 +161,23 @@ final class ImportRun {
 						"count": "\(resolution.sidecarsPending)"
 					])
 				}
+
+				// Import-critical, non-blocking: thumbnailing never gated the
+				// batch loop, but the bracket waits for the drain — a
+				// thumbnail is part of ready-to-use. Per-file failures are
+				// residue; the WORKER dying fails the import (via this throw).
+				nudge.finish()
+				do {
+					try await thumbnailing
+				} catch is CancellationError {
+					throw CancellationError()
+				} catch {
+					self.log.error("Thumbnail worker failed; the import fails with it", metadata: [
+						"error": "\(error)"
+					])
+					throw error
+				}
+
 				try await self.catalog.recordImportFinished(id: self.id, outcome: .completed)
 				self.log.info("Import completed", metadata: [
 					"files": "\(self.totalFiles)",
@@ -126,20 +186,21 @@ final class ImportRun {
 					"walkFailures": "\(failures.count)",
 					"assets": "\(assetsMinted - assetsAbsorbed)",
 					"sidecarsPending": "\(resolution.sidecarsPending)",
+					"thumbnailed": "\(self.thumbnailedFiles)",
+					"thumbnailFailures": "\(self.thumbnailFailures)",
 				])
 			} catch is CancellationError {
-				try await self.catalog.recordImportFinished(id: self.id, outcome: .canceled)
+				self.log.info("Import canceled", metadata: [
+					"recorded": "\(self.completedFiles)",
+					"thumbnailed": "\(self.thumbnailedFiles)",
+				])
+				await self.recordEndingUncancelled(outcome: .canceled)
 			} catch {
 				self.log.error("Import failed", metadata: ["error": "\(error)"])
 				try? await self.catalog.recordImportFinished(id: self.id, outcome: .failed)
 				throw error
 			}
 		}
-	}
-
-	@concurrent
-	private func probeVolume(containing url: URL) async throws -> ObservedVolume {
-		try ObservedVolume(containing: url)
 	}
 
 	/// One asset-formation pass over this import's committed files — the
@@ -160,6 +221,119 @@ final class ImportRun {
 		return resolution
 	}
 	
+	/// The thumbnail worker (thumbnails.md) — formAssets's peer for the other
+	/// derived artifact. Wakes on each nudge and generates batches until the
+	/// worklist is empty; the run after the stream ends is the final sweep,
+	/// catching whatever the last nudge's run raced past. Idempotent like
+	/// formation: the database is the worklist, so re-running is always safe
+	/// and crash recovery is "run it again". Internal so a test can exercise
+	/// this exact composition.
+	@concurrent
+	func generateThumbnails(nudges: AsyncStream<Void>) async throws {
+		for await _ in nudges {
+			while try await self.generateThumbnailBatch(store: self.thumbnailStore) {}
+		}
+		while try await self.generateThumbnailBatch(store: self.thumbnailStore) {}
+	}
+
+	/// The ending stamp for a CANCELED run must land from inside the
+	/// just-cancelled task, and GRDB checks cancellation on every async
+	/// access — so the write hops to a fresh, uncancelled Task: the one
+	/// legitimate unstructured Task in the pipeline (cleanup after
+	/// cancellation is precisely what structured children cannot do).
+	private func recordEndingUncancelled(outcome: ImportOutcome) async {
+		let catalog = self.catalog
+		let id = self.id
+		let result = await Task { try await catalog.recordImportFinished(id: id, outcome: outcome) }.result
+		if case .failure(let error) = result {
+			self.log.error("Failed to record import ending", metadata: [
+				"outcome": "\(outcome.rawValue)",
+				"error": "\(error)",
+			])
+		}
+	}
+
+	/// One worklist batch: pull, generate every member concurrently (batch =
+	/// width), stamp all in one transaction — the UI's shimmer wave. Returns
+	/// whether anything was pending, so the caller loops until false.
+	/// Cancellation aborts the batch unrecorded — rows stay pending, and the
+	/// resumed run completes them (resume ruling, 2026-09-11); per-file
+	/// failures become file_errors residue, one attempt per file per import.
+	@concurrent
+	private func generateThumbnailBatch(store: ThumbnailStore) async throws -> Bool {
+		try Task.checkCancellation()
+		let pending = try await self.catalog.thumbnailPending(
+			inImport: self.id, under: self.rootFolderId, limit: Self.thumbnailBatchWidth
+		)
+		if pending.isEmpty { return false }
+
+		var generated: [Identifier<File>] = []
+		var failures: [(fileId: Identifier<File>, reasonCode: String, message: String)] = []
+		try await withThrowingTaskGroup(of: ThumbnailOutcome.self) { group in
+			for item in pending {
+				let fileId = item.file.id
+				let url = item.url(under: self.folderUrl)
+				let thumbnailer = FileFormat.resolve(
+					extension: item.file.fileExtension, recordedKind: item.file.kind
+				).thumbnailer
+				group.addTask {
+					guard let thumbnailer else {
+						// The kind filter admitted it but the resolved row
+						// has no capability — residue, or the row would
+						// re-query forever.
+						return .failed(fileId, reasonCode: "no_thumbnailer",
+						               message: "resolved format has no thumbnailer")
+					}
+					do {
+						try await withThumbnailDeadline(Self.thumbnailDeadline) {
+							let image = try await thumbnailer(url, ThumbnailStore.maxPixelSize)
+							try await store.write(image, for: fileId)
+						}
+						return .generated(fileId)
+					} catch is CancellationError {
+						throw CancellationError()
+					} catch ThumbnailError.timedOut {
+						return .failed(fileId, reasonCode: "timed_out",
+						               message: "no thumbnail within \(Self.thumbnailDeadline)")
+					} catch {
+						return .failed(fileId, reasonCode: "decode_failed", message: "\(error)")
+					}
+				}
+			}
+			for try await outcome in group {
+				switch outcome {
+				case .generated(let fileId):
+					generated.append(fileId)
+				case .failed(let fileId, let reasonCode, let message):
+					failures.append((fileId, reasonCode, message))
+				}
+			}
+		}
+
+		try await self.catalog.recordThumbnails(generated: generated, failures: failures)
+		await self.noteThumbnailProgress(generated: generated.count, failed: failures.count)
+		self.log.debug("Thumbnail batch recorded", metadata: [
+			"generated": "\(generated.count)",
+			"failed": "\(failures.count)",
+		])
+		// One warning per failure, named: "which file ate 30 seconds" must be
+		// answerable from the log, not only from file_errors via SQL.
+		let namesById = Dictionary(uniqueKeysWithValues: pending.map { ($0.file.id, $0.file.name) })
+		for failure in failures {
+			self.log.warning("Thumbnail failed; residue recorded", metadata: [
+				"file": "\(namesById[failure.fileId] ?? failure.fileId.rawValue.uuidString)",
+				"reason": "\(failure.reasonCode)",
+				"message": "\(failure.message)",
+			])
+		}
+		return true
+	}
+
+	private func noteThumbnailProgress(generated: Int, failed: Int) {
+		thumbnailedFiles += generated
+		thumbnailFailures += failed
+	}
+
 	@concurrent
 	func prepareFiles(batch: [DiscoveredFile]) async -> [PreparedFile] {
 		var prepared: [PreparedFile] = []
@@ -302,6 +476,12 @@ final class ImportRun {
 	}
 
 	func cancel() { task?.cancel() }
+
+	/// One drained file's fate — what the batch stamp transaction records.
+	private nonisolated enum ThumbnailOutcome: Sendable {
+		case generated(Identifier<File>)
+		case failed(Identifier<File>, reasonCode: String, message: String)
+	}
 	
 	nonisolated func sha256First64KB(from url: URL) -> String? {
 		let handle: FileHandle

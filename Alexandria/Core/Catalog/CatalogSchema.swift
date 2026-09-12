@@ -100,6 +100,12 @@ nonisolated enum CatalogSchema {
 	CREATE INDEX idx_files_asset  ON files(asset_id);
 	CREATE INDEX idx_files_stem   ON files(file_stem);  -- catalog-wide formation collision address
 	CREATE INDEX idx_files_import ON files(import_id);
+	-- The thumbnail worklist (thumbnails round, ratified 2026-09-11): pending
+	-- rows only, ordered — each drain pull is O(log n + batch) and the index
+	-- empties as stamps land. Errored files stay in it (thumbnail_at NULL);
+	-- the worklist's NOT EXISTS rejects them per pull, fine at realistic
+	-- error counts.
+	CREATE INDEX idx_files_thumbnail_pending ON files(import_id, id) WHERE thumbnail_at IS NULL;
 
 	-- The import DLQ: pre-identity failures, path-keyed, so a file that never
 	-- became a row still leaves visible residue.

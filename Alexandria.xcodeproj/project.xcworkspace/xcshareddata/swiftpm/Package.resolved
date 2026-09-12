@@ -1,5 +1,5 @@
 {
-  "originHash" : "209c8949b278dabab12f2c5554cdc5e990f647965d8958d1a6c469cc03ce4edf",
+  "originHash" : "c6821a3b532c9d8898d9d84b984f59aa37fe3a98b3e1786ca7bbd1efaa19f7fc",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -8,15 +8,6 @@
       "state" : {
         "branch" : "master",
         "revision" : "0d8cf958b4b66a0473ec6e6986eb9da462171da9"
-      }
-    },
-    {
-      "identity" : "puppy",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sushichop/Puppy",
-      "state" : {
-        "revision" : "c095c2abf314d84ed43bcfe0e7e8fe1e0c9007f0",
-        "version" : "0.11.0"
       }
     },
     {

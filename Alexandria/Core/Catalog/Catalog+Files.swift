@@ -14,12 +14,97 @@ nonisolated struct BatchOutcome: Sendable {
 	var failed = 0
 }
 
+/// One thumbnail worklist entry: the file plus its directory path relative
+/// to the import's root folder ('' = the root itself) — recomposed from the
+/// folder tree so the pass can reach the bytes on disk.
+nonisolated struct PendingThumbnail: Sendable {
+	let file: File
+	let relativeDirectory: String
+
+	/// The file's on-disk location under the import's root URL.
+	func url(under rootUrl: URL) -> URL {
+		var url = rootUrl
+		for component in relativeDirectory.split(separator: "/") {
+			url.append(path: String(component))
+		}
+		return url.appending(path: file.name)
+	}
+}
+
 extension Catalog {
 	/// Every file of one import — asset formation's input: the unformed are
 	/// its worklist, the formed are join targets.
 	func files(inImport importId: Identifier<Import>) async throws -> [File] {
 		try await reader.read { database in
 			try File.filter(File.Columns.importId == importId).fetchAll(database)
+		}
+	}
+
+	/// The thumbnail worklist (thumbnails.md): pending = `thumbnail_at IS
+	/// NULL`, minus missing files, minus kinds the registry never thumbnails,
+	/// minus files with residue — one attempt per file per import, the
+	/// file_errors table is the DLQ. Ordered by id (UUIDv7 = record order):
+	/// import-ordered, the ratified p0 ordering.
+	func thumbnailPending(
+		inImport importId: Identifier<Import>,
+		under rootFolderId: Identifier<Folder>,
+		limit: Int
+	) async throws -> [PendingThumbnail] {
+		let kinds = FileFormat.thumbnailingKinds.map(\.rawValue).sorted()
+		let request: SQLRequest<Row> = """
+			WITH RECURSIVE tree(id, path) AS (
+			    SELECT id, '' FROM folders WHERE id = \(rootFolderId)
+			    UNION ALL
+			    SELECT folders.id, tree.path || '/' || folders.name
+			    FROM folders JOIN tree ON folders.parent_id = tree.id
+			)
+			SELECT files.*, tree.path AS directory_path
+			FROM files JOIN tree ON files.folder_id = tree.id
+			WHERE files.import_id = \(importId)
+			  AND files.thumbnail_at IS NULL
+			  AND files.missing = 0
+			  AND files.kind IN \(kinds)
+			  AND NOT EXISTS (
+			      SELECT 1 FROM file_errors
+			      WHERE file_errors.file_id = files.id AND file_errors.task = 'thumbnail'
+			  )
+			ORDER BY files.id
+			LIMIT \(limit)
+			"""
+		return try await reader.read { database in
+			try Row.fetchAll(database, request).map { row in
+				PendingThumbnail(file: try File(row: row), relativeDirectory: row["directory_path"])
+			}
+		}
+	}
+
+	/// One transaction per drained batch — the stamp granularity IS the UI's
+	/// shimmer wave (thumbnails.md invariant 5). Failures land as file_errors
+	/// residue and the worklist exclusion keeps them excluded: one attempt
+	/// per file per import, NO retry counting (ruled 2026-09-11) — the
+	/// conflict clause is crash-proofing only, refreshing what happened last.
+	func recordThumbnails(
+		generated: [Identifier<File>],
+		failures: [(fileId: Identifier<File>, reasonCode: String, message: String)]
+	) async throws {
+		guard !generated.isEmpty || !failures.isEmpty else { return }
+		let stampedAt = catalogTimestamp()
+		try await databaseWriter.write { database in
+			try File
+				.filter(generated.contains(File.Columns.id))
+				.updateAll(database, File.Columns.thumbnailAt.set(to: stampedAt))
+			for failure in failures {
+				try database.execute(
+					sql: """
+						INSERT INTO file_errors (file_id, task, reason_code, message)
+						VALUES (?, 'thumbnail', ?, ?)
+						ON CONFLICT (file_id, task) DO UPDATE SET
+						    reason_code = excluded.reason_code,
+						    message = excluded.message
+						""",
+					arguments: [failure.fileId, failure.reasonCode, failure.message]
+				)
+			}
 		}
 	}
 

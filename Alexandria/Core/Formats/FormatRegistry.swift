@@ -4,6 +4,7 @@
 //
 
 import Foundation
+internal import CoreGraphics
 internal import UniformTypeIdentifiers
 
 /// One recognized file format — a row in the registry (registry round,
@@ -29,19 +30,25 @@ nonisolated struct FileFormat: Sendable {
 	let isRawCapture: Bool
 	/// Metadata extraction, import-critical. nil = no extractor yet.
 	let metadataExtractor: (any MetadataExtracting)?
+	/// Thumbnail generation (thumbnailing round, 2026-09-11): a domain-named
+	/// function from Core/Thumbnails/ThumbnailGeneration.swift. nil = this
+	/// format never thumbnails; the generic card is its permanent face.
+	let thumbnailer: (@Sendable (URL, Int) async throws -> CGImage)?
 
 	init(
 		extensions: Set<String>,
 		contentType: UTType?,
 		kind: FileKind,
 		isRawCapture: Bool = false,
-		metadataExtractor: (any MetadataExtracting)? = nil
+		metadataExtractor: (any MetadataExtracting)? = nil,
+		thumbnailer: (@Sendable (URL, Int) async throws -> CGImage)? = nil
 	) {
 		self.extensions = extensions
 		self.contentType = contentType
 		self.kind = kind
 		self.isRawCapture = isRawCapture
 		self.metadataExtractor = metadataExtractor
+		self.thumbnailer = thumbnailer
 	}
 }
 
@@ -78,19 +85,45 @@ nonisolated extension FileFormat {
 		return .unrecognized
 	}
 
+	/// Total resolution from recorded facts (extension + stored kind): exact
+	/// row, else the stored kind's family entry, else the floor. The thumbnail
+	/// pass's resolver — a catalog row was classified at import, and its
+	/// UTType is neither re-derivable nor wanted.
+	static func resolve(extension rawExtension: String, recordedKind: FileKind) -> FileFormat {
+		if let match = byExtension[normalize(extension: rawExtension)] {
+			return match
+		}
+		switch recordedKind {
+		case .image: return .genericImage
+		case .video: return .genericVideo
+		case .audio: return .genericAudio
+		default: return .unrecognized
+		}
+	}
+
 	static func normalize(extension rawExtension: String) -> String {
 		let trimmed = rawExtension.hasPrefix(".") ? String(rawExtension.dropFirst()) : rawExtension
 		return trimmed.lowercased()
 	}
 
+	/// Kinds that could ever thumbnail — the worklist query's SQL-side filter,
+	/// derived from the table so the registry stays the single source of truth.
+	static let thumbnailingKinds: Set<FileKind> = Set(
+		(all + [genericImage, genericVideo, genericAudio, unrecognized])
+			.filter { $0.thumbnailer != nil }
+			.map(\.kind)
+	)
+
 	/// Conformance-reached entries: recognizably image/video/audio, no row.
 	static let genericImage = FileFormat(
 		extensions: [], contentType: .image, kind: .image,
-		metadataExtractor: ImagePropertiesExtractor()
+		metadataExtractor: ImagePropertiesExtractor(),
+		thumbnailer: generateRasterThumbnail
 	)
 	static let genericVideo = FileFormat(
 		extensions: [], contentType: .movie, kind: .video,
-		metadataExtractor: VideoPropertiesExtractor()
+		metadataExtractor: VideoPropertiesExtractor(),
+		thumbnailer: generateVideoThumbnail
 	)
 	static let genericAudio = FileFormat(extensions: [], contentType: .audio, kind: .audio)
 	/// The universal floor.
@@ -112,30 +145,30 @@ nonisolated extension FileFormat {
 
 	static let all: [FileFormat] = [
 		// images
-		FileFormat(extensions: ["jpg", "jpeg"], contentType: .jpeg, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["png"], contentType: .png, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["gif"], contentType: .gif, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["webp"], contentType: .webP, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["tif", "tiff"], contentType: .tiff, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["heic"], contentType: .heic, kind: .image, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["bmp"], contentType: .bmp, kind: .image, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["jpg", "jpeg"], contentType: .jpeg, kind: .image, metadataExtractor: imageProperties, thumbnailer: generateRasterThumbnail),
+		FileFormat(extensions: ["png"], contentType: .png, kind: .image, metadataExtractor: imageProperties, thumbnailer: generateRasterThumbnail),
+		FileFormat(extensions: ["gif"], contentType: .gif, kind: .image, metadataExtractor: imageProperties, thumbnailer: generateRasterThumbnail),
+		FileFormat(extensions: ["webp"], contentType: .webP, kind: .image, metadataExtractor: imageProperties, thumbnailer: generateRasterThumbnail),
+		FileFormat(extensions: ["tif", "tiff"], contentType: .tiff, kind: .image, metadataExtractor: imageProperties, thumbnailer: generateRasterThumbnail),
+		FileFormat(extensions: ["heic"], contentType: .heic, kind: .image, metadataExtractor: imageProperties, thumbnailer: generateRasterThumbnail),
+		FileFormat(extensions: ["bmp"], contentType: .bmp, kind: .image, metadataExtractor: imageProperties, thumbnailer: generateRasterThumbnail),
 		// camera raw — one row per format: capabilities will differ per
 		// vendor. No stable per-vendor UTType constants; rawness is a facet,
 		// kind is image. ImageIO reads their EXIF natively.
-		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["nef"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["arw"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["dng"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["orf"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
-		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties),
+		FileFormat(extensions: ["cr2"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
+		FileFormat(extensions: ["cr3"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
+		FileFormat(extensions: ["nef"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
+		FileFormat(extensions: ["arw"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
+		FileFormat(extensions: ["dng"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
+		FileFormat(extensions: ["orf"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
+		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
+		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
 		// video
-		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, metadataExtractor: videoProperties),
-		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, metadataExtractor: videoProperties),
-		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video, metadataExtractor: videoProperties),
-		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video, metadataExtractor: videoProperties),
-		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video, metadataExtractor: videoProperties),
+		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
 		// audio
 		FileFormat(extensions: ["mp3"], contentType: .mp3, kind: .audio),
 		FileFormat(extensions: ["wav"], contentType: .wav, kind: .audio),
@@ -143,15 +176,15 @@ nonisolated extension FileFormat {
 		FileFormat(extensions: ["aac"], contentType: nil, kind: .audio),
 		FileFormat(extensions: ["m4a"], contentType: .mpeg4Audio, kind: .audio),
 		// vector
-		FileFormat(extensions: ["svg"], contentType: .svg, kind: .vector),
-		FileFormat(extensions: ["ai"], contentType: nil, kind: .vector),
-		FileFormat(extensions: ["eps"], contentType: nil, kind: .vector),
+		FileFormat(extensions: ["svg"], contentType: .svg, kind: .vector, thumbnailer: generateQuickLookThumbnail),
+		FileFormat(extensions: ["ai"], contentType: nil, kind: .vector, thumbnailer: generateQuickLookThumbnail),
+		FileFormat(extensions: ["eps"], contentType: nil, kind: .vector, thumbnailer: generateQuickLookThumbnail),
 		// documents
-		FileFormat(extensions: ["pdf"], contentType: .pdf, kind: .document),
-		FileFormat(extensions: ["psd"], contentType: nil, kind: .document),
-		FileFormat(extensions: ["indd"], contentType: nil, kind: .document),
+		FileFormat(extensions: ["pdf"], contentType: .pdf, kind: .document, thumbnailer: generateQuickLookThumbnail),
+		FileFormat(extensions: ["psd"], contentType: nil, kind: .document, thumbnailer: generateQuickLookThumbnail),
+		FileFormat(extensions: ["indd"], contentType: nil, kind: .document, thumbnailer: generateQuickLookThumbnail),
 		// editor working files
-		FileFormat(extensions: ["pxd"], contentType: nil, kind: .project),
+		FileFormat(extensions: ["pxd"], contentType: nil, kind: .project, thumbnailer: generateQuickLookThumbnail),
 		// sidecars — companions that describe another file; their content is
 		// about their subject, so no capabilities of their own.
 		FileFormat(extensions: ["xmp"], contentType: nil, kind: .sidecar),
