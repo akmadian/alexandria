@@ -17,9 +17,16 @@ nonisolated enum Log {
     /// file (readable, public). Call once at launch before anything logs.
     static func bootstrap() {
         LoggingSystem.bootstrap { label in
-            MultiplexLogHandler([
+            var handler = MultiplexLogHandler([
                 OSLogHandler(label: label)
             ])
+            #if DEBUG
+            // swift-log's default level is .info, which silently eats every
+            // .debug/.trace line in the app (grid round finding, 2026-09-12).
+            // Dev builds speak debug; release keeps the quiet default.
+            handler.logLevel = .debug
+            #endif
+            return handler
         }
     }
 }

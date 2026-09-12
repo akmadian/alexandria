@@ -60,6 +60,10 @@ instinct, or old-repo convention conflicts with this repo's files, this repo win
 - Record rough targets as rough. Never overclaim a recorded feature's scope.
 - Vocabulary: a thing stored in the catalog database is a **record**, never a
   "row" — "row" is reserved for a grid row of items on screen.
+- Deferred performance optimizations are marked in code with a searchable
+  `// PERF:` comment naming the idea and its trigger.
+- A behavioral fix ships with the test that would have caught it, in the
+  same change.
 - Design rounds run per `.claude/skills/design-round` — the one granted
   procedure lane. Laws live HERE; that file only sequences the work.
 
