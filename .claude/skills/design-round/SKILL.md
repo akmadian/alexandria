@@ -19,6 +19,9 @@ Ousterhout's design-it-twice.
 - **Grounding**: research is claim-triggered at any phase, never only
   upfront. Any load-bearing architectural or platform claim gets fetched
   docs or a DERIVED label. Search the phenomenon, not the conclusion.
+  Present the agenda before running it: each item is pain-point evidence
+  or established-pattern grounding, and names the ruling it feeds — an
+  item that can't name its ruling is cut.
 - **Presentation for review**: lead with the decision and its costs, then
   an enumerated list of rulings needed, each with a recommendation. Detail
   sits below the ask. No term of art that isn't load-bearing; load-bearing
@@ -44,7 +47,9 @@ genuinely different shapes and compare them against the pressures — the
 first idea is rarely the best, and alternatives named only to justify a
 favorite are not alternatives. Every field, method, and noun in a
 candidate traces to a pressure that generates it; a field with no pressure
-is smuggled. Code sketches go in chat.
+is smuggled. Placement is part of the shape: say where each new type and
+file lives and why, so it gets ruled with the design instead of
+renegotiated at the gate. Code sketches go in chat.
 
 **3. Pick and walk.** Pick with rationale, rejected candidates named with
 why. Then walk the picked shape by hand before believing in it: the hot
@@ -63,17 +68,21 @@ load-bearing rounds, offer Ari a fresh-context design reviewer (subagent,
 model pinned per policy, chat-only findings) as the design-time bookend to
 /round-review — his call, it costs tokens and reading time.
 
-**5. Scope statement.** Unprompted: what we're building, why, what's in,
-what's out, and why — with deliberately-unsettled markers on everything
-deferred so nothing returns silently. Then stop. The build gate is Ari's
-explicit word, per CLAUDE.md; arrive at it with everything he needs to
-rule and nothing he has to mine.
+**5. Scope statement.** Unprompted, two layers: it OPENS with the round's
+ratified-rulings ledger (every ruling Ari made this round, restated), then
+the design scope — what, why, in, out, deliberately-unsettled markers on
+everything deferred so nothing returns silently — then the concrete change
+manifest: every file touched, new vs edit, one line on what changes in
+each. Then stop. The build gate is Ari's explicit word, per CLAUDE.md;
+arrive at it with everything he needs to rule and nothing he has to mine.
 
 **6. Build.** Match the repo's conventions; tests pin ratified behavior,
 not implementation; any deviation from the stated scope is flagged in the
 report, never silent.
 
-**7. Close.** Dispatch /round-review; relay findings ranked with an
+**7. Close.** Dispatch /round-review, with the scope statement's
+rulings ledger flowing verbatim into the reviewer's authority section —
+ruling → gate → review, one list, no drift. Relay findings ranked with an
 agree/disagree judgment per finding and a proposed disposition. Then two
 lists for Ari: proposed doc deltas (which of the round's rulings deserve
 _design/ residence — written only on his word) and carried items (what was
