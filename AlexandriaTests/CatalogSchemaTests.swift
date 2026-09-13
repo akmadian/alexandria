@@ -62,7 +62,7 @@ struct CatalogSchemaTests {
 	@Test func migrationCreatesEveryTableAndEnforcesForeignKeys() throws {
 		let catalog = try makeCatalog()
 		try catalog.databaseWriter.read { database in
-			for table in ["volumes", "folders", "imports", "assets", "files", "import_errors", "file_errors"] {
+			for table in ["volumes", "folders", "imports", "assets", "files", "collections", "collection_members", "import_errors", "file_errors"] {
 				#expect(try database.tableExists(table), "missing table: \(table)")
 			}
 			let foreignKeysEnabled = try Bool.fetchOne(database, sql: "PRAGMA foreign_keys")

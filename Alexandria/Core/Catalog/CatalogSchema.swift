@@ -16,9 +16,8 @@
 /// meaningless without their parent, SET NULL only where a computed default
 /// catches the fall.
 ///
-/// Absent by design, arriving with their feature rounds: stacks, collections,
-/// keywords, FTS, XMP cursors, duplicate detection, the long-tail metadata
-/// store.
+/// Absent by design, arriving with their feature rounds: stacks, keywords,
+/// FTS, XMP cursors, duplicate detection, the long-tail metadata store.
 nonisolated enum CatalogSchema {
 	static let v0 = """
 	CREATE TABLE volumes (
@@ -106,6 +105,52 @@ nonisolated enum CatalogSchema {
 	-- the worklist's NOT EXISTS rejects them per pull, fine at realistic
 	-- error counts.
 	CREATE INDEX idx_files_thumbnail_pending ON files(import_id, id) WHERE thumbnail_at IS NULL;
+
+	-- Collections (collections round, 2026-09-12): authored, named, nestable
+	-- sets of assets — the user's work product, so every column here and in
+	-- collection_members is judgment-class. ONE noun: a collection holds
+	-- member assets AND child collections alike; there is no set/group type
+	-- (the LrC/Photos container wall is documented user pain). Names are
+	-- free-form and may duplicate, siblings included — identity is the id,
+	-- and nothing looks a collection up by name; emptiness is rejected at
+	-- the verb, not here. A future smart collection is a predicate column
+	-- on this table (filter round), never a second kind of thing.
+	CREATE TABLE collections (
+	    id        TEXT PRIMARY KEY,
+	    -- NULL = a root (multiple roots allowed). RESTRICT: deleting a
+	    -- subtree is a designed verb walking bottom-up, never a cascade.
+	    parent_id TEXT REFERENCES collections(id) ON DELETE RESTRICT,
+	    name      TEXT NOT NULL  -- [jdg] authored, as typed; never an identity
+	);
+
+	-- The subtree walk's join key (the folder tree gets this via its child
+	-- identity index; collections have no such index, so it's explicit).
+	CREATE INDEX idx_collections_parent ON collections(parent_id);
+
+	-- Manual membership ONLY, by ruling: a future smart collection computes
+	-- membership from its predicate and never writes here, and takes no
+	-- manual adds. The composite key makes duplicate membership structurally
+	-- impossible (bulk add is INSERT OR IGNORE, idempotent). CASCADE both
+	-- ways: a membership is meaningless without either parent.
+	CREATE TABLE collection_members (
+	    collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+	    asset_id      TEXT NOT NULL REFERENCES assets(id)      ON DELETE CASCADE,
+	    -- [jdg] the manual order: a fractional index (base-62 TEXT, binary
+	    -- compare), minted append-at-end on add so added-order IS the manual
+	    -- order until the first drag — there is no unordered state. An
+	    -- insert-between touches one row, never the tail (the LrC renumber
+	    -- lesson); floats were rejected outright (LrC's 52-reorder mantissa
+	    -- bug). See _design/collections.md.
+	    order_key     TEXT NOT NULL,
+	    PRIMARY KEY (collection_id, asset_id)
+	);
+
+	-- The ordered read rides this index — and UNIQUE turns a key collision
+	-- (a minting bug under the single writer) into a loud transaction
+	-- failure instead of LrC's silent identical-position rot.
+	CREATE UNIQUE INDEX idx_collection_members_order ON collection_members(collection_id, order_key);
+	-- The reverse verb: which collections hold this asset.
+	CREATE INDEX idx_collection_members_asset ON collection_members(asset_id);
 
 	-- The import DLQ: pre-identity failures, path-keyed, so a file that never
 	-- became a row still leaves visible residue.
