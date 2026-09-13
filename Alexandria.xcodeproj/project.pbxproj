@@ -10,6 +10,8 @@
 		0262D01E30528B480057508F /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 0262D01D30528B480057508F /* GRDB */; };
 		0262D061305353290057508F /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 0262D060305353290057508F /* Algorithms */; };
 		A11061073053AAAA0057508F /* Logging in Frameworks */ = {isa = PBXBuildFile; productRef = A11061063053AAAA0057508F /* Logging */; };
+		ABCDEF0000000000000000A2 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = ABCDEF0000000000000000A1 /* Nuke */; };
+		ABCDEF0000000000000000B2 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = ABCDEF0000000000000000B1 /* Nuke */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +63,7 @@
 				0262D061305353290057508F /* Algorithms in Frameworks */,
 				0262D01E30528B480057508F /* GRDB in Frameworks */,
 				A11061073053AAAA0057508F /* Logging in Frameworks */,
+				ABCDEF0000000000000000A2 /* Nuke in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,6 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ABCDEF0000000000000000B2 /* Nuke in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,6 +128,7 @@
 				0262D01D30528B480057508F /* GRDB */,
 				A11061063053AAAA0057508F /* Logging */,
 				0262D060305353290057508F /* Algorithms */,
+				ABCDEF0000000000000000A1 /* Nuke */,
 			);
 			productName = Alexandria;
 			productReference = 0262CFBD30525FE10057508F /* Alexandria.app */;
@@ -147,6 +152,7 @@
 			);
 			name = AlexandriaTests;
 			packageProductDependencies = (
+				ABCDEF0000000000000000B1 /* Nuke */,
 			);
 			productName = AlexandriaTests;
 			productReference = 0262CFCA30525FE30057508F /* AlexandriaTests.xctest */;
@@ -211,6 +217,7 @@
 				0262D01C30528B480057508F /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				A11061053053AAAA0057508F /* XCRemoteSwiftPackageReference "swift-log" */,
 				0262D05F305353290057508F /* XCRemoteSwiftPackageReference "swift-algorithms" */,
+				ABCDEF0000000000000000A3 /* XCRemoteSwiftPackageReference "Nuke" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0262CFBE30525FE10057508F /* Products */;
@@ -608,6 +615,14 @@
 				minimumVersion = 1.6.0;
 			};
 		};
+		ABCDEF0000000000000000A3 /* XCRemoteSwiftPackageReference "Nuke" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kean/Nuke.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.8.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -625,6 +640,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A11061053053AAAA0057508F /* XCRemoteSwiftPackageReference "swift-log" */;
 			productName = Logging;
+		};
+		ABCDEF0000000000000000A1 /* Nuke */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = ABCDEF0000000000000000A3 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = Nuke;
+		};
+		ABCDEF0000000000000000B1 /* Nuke */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = ABCDEF0000000000000000A3 /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = Nuke;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

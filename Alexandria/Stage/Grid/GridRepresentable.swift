@@ -16,7 +16,9 @@
 //
 
 import AppKit
+import GRDB
 import Logging
+import Nuke
 import SwiftUI
 import os
 
@@ -26,6 +28,8 @@ struct GridRepresentable: NSViewRepresentable {
 	var selection: Set<SubjectID>
 	var cursor: SubjectID?
 	var columns: Int
+	var catalog: Catalog
+	var imaging: StageImaging
 	var onSelectionChange: (Set<SubjectID>) -> Void
 	var onCursorMove: (SubjectID) -> Void
 	var onActivate: () -> Void
@@ -47,26 +51,38 @@ struct GridRepresentable: NSViewRepresentable {
 		collectionView.register(GridItem.self, forItemWithIdentifier: GridItem.identifier)
 		collectionView.dataSource = context.coordinator
 		collectionView.delegate = context.coordinator
-		context.coordinator.attach(collectionView)
+		collectionView.prefetchDataSource = context.coordinator
 
 		let scrollView = NSScrollView()
 		scrollView.documentView = collectionView
 		scrollView.hasVerticalScroller = true
+		context.coordinator.attach(collectionView)
 		return scrollView
 	}
 
 	func updateNSView(_ scrollView: NSScrollView, context: Context) {
 		let coordinator = context.coordinator
+		coordinator.configure(catalog: catalog, imaging: imaging)
 		coordinator.callbacks = Coordinator.Callbacks(
 			selection: onSelectionChange, cursor: onCursorMove, activate: onActivate
 		)
 		coordinator.apply(columns: columns)
 		coordinator.apply(workingSet: workingSet, answering: answeredQuery)
 		coordinator.mirror(selection: selection, cursor: cursor)
+		// A zoom (columns) or a window resize (width) can change the one bucket
+		// every cell wants; if it did, visible cells re-request at the new size.
+		coordinator.reevaluateBucket()
 	}
 
 	func makeCoordinator() -> Coordinator {
 		Coordinator()
+	}
+
+	/// Deterministic teardown when the renderer is removed (e.g. a grid→loupe
+	/// switch): cancel in-flight decodes and the stamp watch now, rather than
+	/// leaning on deinit timing and weak-self no-ops to clean up after us.
+	static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+		coordinator.teardown()
 	}
 
 	@MainActor final class Coordinator: NSObject {
@@ -93,8 +109,76 @@ struct GridRepresentable: NSViewRepresentable {
 		private weak var collectionView: NSCollectionView?
 		private let log = Logger(label: "grid")
 
+		// MARK: Image machinery (grid round, 2026-09-12)
+
+		/// The engine and the catalog, injected once from the stage. Optional
+		/// only because an in-memory catalog (previews/tests) has no thumbnail
+		/// store — then every cell stays on the placeholder ground.
+		private var imaging: StageImaging?
+		private var catalog: Catalog?
+		private var thumbnailStore: ThumbnailStore?
+		private var configured = false
+
+		/// The id→representative-file table: a per-session resolution cache,
+		/// filled lazily in visible/prefetch batches (never eagerly over the
+		/// whole working set — at the 1M scale target that read would be the
+		/// hitch we're avoiding). File-less assets never land here, so they
+		/// resolve to the placeholder ground.
+		/// PERF: unbounded for the session; if a full 1M scroll makes it heavy,
+		/// an LRU keyed on visited ids is the named upgrade.
+		private var fileOf: [SubjectID: Identifier<File>] = [:]
+
+		/// The decode size currently on screen for a live cell, so an instant
+		/// paint from cache is never overwritten by nothing and a late arrival
+		/// can't downgrade a sharper image. Cleared when the cell stops
+		/// displaying the id.
+		private var shownBucket: [SubjectID: DecodeBucket] = [:]
+
+		/// In-flight content decodes, one per visible cell. There is no second
+		/// lane: one size per cell, so nothing to upgrade and nothing to cancel
+		/// on behalf of a cosmetic pass.
+		private var contentTasks: [SubjectID: ImageTask] = [:]
+
+		/// Heal offers are one-shot per subject per session: a corrupt
+		/// thumbnail can't turn its ring into a retry loop.
+		private var healed: Set<SubjectID> = []
+
+		/// The one bucket every visible cell currently wants (cells are uniform
+		/// at a given zoom, so it's grid-wide). Re-evaluated on a zoom or resize
+		/// that changes it; when it changes, visible cells re-request. nil until
+		/// first evaluated.
+		private var currentBucket: DecodeBucket?
+
+		private var stampObservation: AnyDatabaseCancellable?
+
 		func attach(_ collectionView: NSCollectionView) {
 			self.collectionView = collectionView
+		}
+
+		/// Injected once from the stage. The store is derived from the
+		/// catalog's directory; the stamp watch starts here so the heal is live
+		/// for the session.
+		func configure(catalog: Catalog, imaging: StageImaging) {
+			guard !configured else { return }
+			configured = true
+			self.catalog = catalog
+			self.imaging = imaging
+			self.thumbnailStore = catalog.directory.map { ThumbnailStore(catalogDirectory: $0) }
+			startStampObservation()
+		}
+
+		/// Cancel everything this coordinator owns. Nuke `ImageTask`s do NOT
+		/// self-cancel when their reference is dropped (unlike the DB
+		/// cancellable), so without this a mode switch leaves the grid's
+		/// in-flight decodes running to completion; cancelling on the main
+		/// actor here stops them cleanly (Nuke 12.9: no callback after a
+		/// main-thread cancel).
+		func teardown() {
+			for task in contentTasks.values { task.cancel() }
+			contentTasks.removeAll()
+			imaging?.prefetcher.stopPrefetching()
+			stampObservation?.cancel()
+			stampObservation = nil
 		}
 
 		// MARK: Translation
@@ -123,6 +207,7 @@ struct GridRepresentable: NSViewRepresentable {
 				// for a fresh question and on the surviving cursor for a
 				// rebuild.
 				renderedQuery = query
+				resetLoading()
 				reindex(new)
 				collectionView.reloadData()
 				needsCursorReveal = true
@@ -244,6 +329,8 @@ struct GridRepresentable: NSViewRepresentable {
 			collectionView?.collectionViewLayout?.invalidateLayout()
 			collectionView?.layoutSubtreeIfNeeded()
 			restoreAnchor(anchor)
+			// The bucket re-evaluation (driven from updateNSView) picks up the
+			// new cell size and re-requests visible cells if the tier changed.
 		}
 
 		private func cellSize(in collectionView: NSCollectionView) -> NSSize {
@@ -271,6 +358,12 @@ extension GridRepresentable.Coordinator: NSCollectionViewDataSource {
 		guard let gridItem = item as? GridItem, let id = id(at: indexPath) else { return item }
 		gridItem.onDoubleClick = { [weak self] in self?.callbacks.activate() }
 		gridItem.represent(id)
+		// A recycled slot must not show its previous id's pixels. Paint from
+		// cache immediately if we have anything (so a reload/scope-change of
+		// already-seen content never blanks), otherwise the quiet ground.
+		// willDisplay then decodes the target. This is why a reload doesn't
+		// strobe: cached cells repaint in place, uncached ones show the ground.
+		paintFromCacheOrPlaceholder(id, into: gridItem)
 		return item
 	}
 }
@@ -281,6 +374,23 @@ extension GridRepresentable.Coordinator: NSCollectionViewDelegateFlowLayout {
 		sizeForItemAt indexPath: IndexPath
 	) -> NSSize {
 		cellSize(in: collectionView)
+	}
+
+	func collectionView(
+		_ collectionView: NSCollectionView, willDisplay item: NSCollectionViewItem,
+		forRepresentedObjectAt indexPath: IndexPath
+	) {
+		guard let id = id(at: indexPath) else { return }
+		requestContent(for: id)
+	}
+
+	func collectionView(
+		_ collectionView: NSCollectionView, didEndDisplaying item: NSCollectionViewItem,
+		forRepresentedObjectAt indexPath: IndexPath
+	) {
+		// The indexPath can be stale after a delete; the item knows its id.
+		guard let id = (item as? GridItem)?.representedID else { return }
+		stopLoading(id)
 	}
 
 	func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
@@ -301,6 +411,265 @@ extension GridRepresentable.Coordinator: NSCollectionViewDelegateFlowLayout {
 		if let last = touched.max(by: { $0.item < $1.item }), let id = id(at: last) {
 			callbacks.cursor(id)
 		}
+	}
+}
+
+// MARK: - Prefetching (speculation ahead of the viewport)
+
+extension GridRepresentable.Coordinator: NSCollectionViewPrefetching {
+	func collectionView(_ collectionView: NSCollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+		let ids = indexPaths.compactMap { id(at: $0) }
+		guard !ids.isEmpty else { return }
+		Task { [weak self] in
+			guard let self else { return }
+			await self.resolve(ids)
+			self.startPrefetch(ids)
+		}
+	}
+
+	func collectionView(_ collectionView: NSCollectionView, cancelPrefetchingForItemsAt indexPaths: [IndexPath]) {
+		stopPrefetch(indexPaths.compactMap { id(at: $0) })
+	}
+}
+
+// MARK: - The load path (grid round, 2026-09-12; rebuilt clean)
+
+extension GridRepresentable.Coordinator {
+
+	/// A visible cell's demand. One size per cell: paint the best cached size
+	/// instantly (progressive, never a blank), then decode to the cell's one
+	/// bucket if the cache doesn't already cover it. Resolution is a cache hit
+	/// on the common path (prefetch resolved it); a miss resolves this one id,
+	/// then re-checks the cell is still on screen before spending a decode.
+	func requestContent(for id: SubjectID) {
+		guard imaging != nil, thumbnailStore != nil else { return }
+		if let file = fileOf[id] {
+			startContent(id: id, file: file)
+			return
+		}
+		Task { [weak self] in
+			guard let self else { return }
+			await self.resolve([id])
+			guard let file = self.fileOf[id], self.isVisible(id) else { return }
+			self.startContent(id: id, file: file)
+		}
+	}
+
+	private func startContent(id: SubjectID, file: Identifier<File>) {
+		guard let imaging, let thumbnailStore else { return }
+		let url = thumbnailStore.url(for: file)
+		if let cached = imaging.cachedImage(file: file, fileURL: url, ladder: ThumbnailStore.decodeLadder) {
+			paint(cached.image, bucket: cached.bucket, for: id)
+		}
+		let bucket = currentBucketValue()
+		// The cache already covers this cell's size — nothing to decode.
+		if let shown = shownBucket[id], shown >= bucket { return }
+		let signpost = Signposts.grid.beginInterval("decode content")
+		// We only reach loadImage on a cache miss (a hit returned above), so
+		// this completion is asynchronous. A cancel — on didEndDisplaying,
+		// re-request, or teardown — happens on the main actor, and Nuke 12.9
+		// guarantees no callback after a main-thread cancel, so a superseded
+		// task never lands here to clobber a newer one. (A Nuke 13 upgrade
+		// delivers cancellation as .failure(.cancelled) and reopens this —
+		// guard task identity then.)
+		contentTasks[id]?.cancel()
+		let request = imaging.request(file: file, fileURL: url, bucket: bucket, urgency: .content)
+		contentTasks[id] = imaging.pipeline.loadImage(with: request) { [weak self] result in
+			MainActor.assumeIsolated {
+				Signposts.grid.endInterval("decode content", signpost)
+				guard let self else { return }
+				self.contentTasks[id] = nil
+				switch result {
+				case .success(let response):
+					self.paint(response.image, bucket: bucket, for: id)
+				case .failure(let error):
+					// Genuine failure (missing/corrupt bytes) — cancels don't
+					// arrive here on 12.9, so this is never cancellation noise.
+					self.log.debug("thumbnail decode failed", metadata: [
+						"error": "\(error)",
+					])
+				}
+			}
+		}
+	}
+
+	/// Paint from cache if we hold any size for this id, else the quiet ground.
+	/// Used at cell configure so a recycled slot never shows its previous id's
+	/// pixels and a reload of already-seen content never blanks.
+	func paintFromCacheOrPlaceholder(_ id: SubjectID, into item: GridItem) {
+		guard let imaging, let thumbnailStore, let file = fileOf[id] else {
+			shownBucket[id] = nil
+			item.showPlaceholder()
+			return
+		}
+		let url = thumbnailStore.url(for: file)
+		if let cached = imaging.cachedImage(file: file, fileURL: url, ladder: ThumbnailStore.decodeLadder) {
+			shownBucket[id] = cached.bucket
+			item.show(cached.image)
+		} else {
+			shownBucket[id] = nil
+			item.showPlaceholder()
+		}
+	}
+
+	/// Set pixels on whatever cell is at the id's position NOW — the recycling
+	/// guard lives here, once, against the id↔position table, not in the cell.
+	/// Larger-or-equal pixels only, so a late small decode can't downgrade
+	/// what's shown and the instant cache paint isn't clobbered.
+	private func paint(_ image: NSImage, bucket: DecodeBucket, for id: SubjectID) {
+		guard GridImaging.shouldPaint(incoming: bucket, over: shownBucket[id]) else { return }
+		shownBucket[id] = bucket
+		guard let collectionView, let path = indexPath(of: id),
+			let item = collectionView.item(at: path) as? GridItem else { return }
+		item.show(image)
+	}
+
+	private func stopLoading(_ id: SubjectID) {
+		contentTasks[id]?.cancel()
+		contentTasks[id] = nil
+		shownBucket[id] = nil
+	}
+
+	/// Cancels everything in flight for the outgoing question and clears the
+	/// per-cell paint state; the resolution cache and heal offers outlive it.
+	private func resetLoading() {
+		for task in contentTasks.values { task.cancel() }
+		contentTasks.removeAll()
+		shownBucket.removeAll()
+		imaging?.prefetcher.stopPrefetching()
+	}
+
+	// MARK: Resolution — SubjectID → representative file, batched
+
+	private func resolve(_ ids: [SubjectID]) async {
+		var assetIds: [Identifier<Asset>] = []
+		for id in ids where fileOf[id] == nil {
+			switch id {
+			case .file(let file): fileOf[id] = file
+			case .asset(let asset): assetIds.append(asset)
+			}
+		}
+		guard !assetIds.isEmpty, let catalog else { return }
+		let signpost = Signposts.grid.beginInterval("resolve batch")
+		defer { Signposts.grid.endInterval("resolve batch", signpost) }
+		do {
+			let map = try await catalog.representativeFileIds(for: assetIds)
+			for (asset, file) in map { fileOf[.asset(asset)] = file }
+			// Assets absent from the map are file-less — they stay unresolved
+			// and keep the placeholder ground (invariant 4).
+		} catch {
+			log.error("representative resolution failed", metadata: ["error": "\(error)"])
+		}
+	}
+
+	// MARK: Prefetch — same bucket as content, lowest urgency
+
+	/// Warms the memory cache ahead of the viewport at the SAME bucket a cell
+	/// will request and the lowest urgency: so a prefetched image is a real
+	/// cache hit when the cell displays (not a near-miss under a different
+	/// key), and speculation can never outrank a visible cell's demand.
+	private func startPrefetch(_ ids: [SubjectID]) {
+		guard let requests = prefetchRequests(ids) else { return }
+		imaging?.prefetcher.startPrefetching(with: requests)
+	}
+
+	private func stopPrefetch(_ ids: [SubjectID]) {
+		guard let requests = prefetchRequests(ids) else { return }
+		imaging?.prefetcher.stopPrefetching(with: requests)
+	}
+
+	private func prefetchRequests(_ ids: [SubjectID]) -> [ImageRequest]? {
+		guard let imaging, let thumbnailStore else { return nil }
+		let bucket = currentBucketValue()
+		let requests = ids.compactMap { id -> ImageRequest? in
+			guard let file = fileOf[id] else { return nil }
+			return imaging.request(
+				file: file, fileURL: thumbnailStore.url(for: file),
+				bucket: bucket, urgency: .preheat
+			)
+		}
+		return requests.isEmpty ? nil : requests
+	}
+
+	// MARK: Zoom / resize — the one legitimate re-request
+
+	/// The one bucket every visible cell wants can change on a zoom (columns)
+	/// or a window resize (width). When it does, re-request visible cells at
+	/// the new size — the old image holds until the new one swaps in
+	/// atomically, so a zoom sharpens without a blank. This is a deliberate
+	/// user action, not scroll churn — the only re-request outside display.
+	func reevaluateBucket() {
+		guard thumbnailStore != nil, let collectionView else { return }
+		let bucket = currentBucketValue()
+		guard bucket != currentBucket else { return }
+		currentBucket = bucket
+		for path in collectionView.indexPathsForVisibleItems() {
+			guard let id = id(at: path) else { continue }
+			requestContent(for: id)
+		}
+	}
+
+	// MARK: Heal — the stamp watch and its bounded re-ask
+
+	private func startStampObservation() {
+		guard let catalog else { return }
+		// One valueless event per commit that touches the thumbnail stamp
+		// (write-before-stamp means a stamp implies bytes). Ignored payload;
+		// the heal re-asks the bounded question itself.
+		stampObservation = DatabaseRegionObservation(tracking: File.select(File.Columns.thumbnailAt))
+			.start(in: catalog.databaseWriter) { [weak self] error in
+				self?.log.error("stamp observation stopped", metadata: ["error": "\(error)"])
+			} onChange: { [weak self] _ in
+				Task { @MainActor in self?.heal() }
+			}
+	}
+
+	/// A stamp landed. The event is valueless, so re-request the visible
+	/// placeholders — but only those whose bytes exist NOW (a `fileExists`
+	/// check), so a subject still awaiting its own write stays eligible for a
+	/// later stamp instead of burning its one-shot on a decode that must fail.
+	/// See `GridImaging.shouldOfferHeal` for the rule and why.
+	private func heal() {
+		guard let collectionView, let thumbnailStore else { return }
+		var offered = 0
+		for path in collectionView.indexPathsForVisibleItems() {
+			guard let id = id(at: path), let file = fileOf[id] else { continue }
+			let exists = FileManager.default.fileExists(atPath: thumbnailStore.url(for: file).path)
+			guard GridImaging.shouldOfferHeal(
+				placeholder: shownBucket[id] == nil,
+				inFlight: contentTasks[id] != nil,
+				alreadyOffered: healed.contains(id),
+				fileExists: exists
+			) else { continue }
+			healed.insert(id)
+			requestContent(for: id)
+			offered += 1
+		}
+		if offered > 0 {
+			log.debug("healed visible placeholders", metadata: ["count": "\(offered)"])
+		}
+	}
+
+	// MARK: Bucket selection from live geometry
+
+	private func currentBucketValue() -> DecodeBucket {
+		GridImaging.bucket(
+			forCellSide: currentCellSide(), scale: currentScale(), ladder: ThumbnailStore.decodeLadder
+		)
+	}
+
+	private func currentCellSide() -> CGFloat {
+		guard let collectionView else { return Theme.Grid.minimumCellSide }
+		return cellSize(in: collectionView).width
+	}
+
+	private func currentScale() -> CGFloat {
+		collectionView?.window?.backingScaleFactor ?? 2
+	}
+
+	private func isVisible(_ id: SubjectID) -> Bool {
+		guard let collectionView, let path = indexPath(of: id) else { return false }
+		return collectionView.indexPathsForVisibleItems().contains(path)
 	}
 }
 

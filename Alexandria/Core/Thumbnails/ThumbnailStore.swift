@@ -12,11 +12,31 @@ internal import UniformTypeIdentifiers
 /// prefix so the directory stays sane at the ~1M-item scale target.
 /// Regenerable by design: deleting the store loses nothing the source files
 /// can't rebuild.
+/// One decode size on the store's DCT ladder — a long-edge pixel count the
+/// stored JPEG can yield by pure inverse-DCT downscale. A value type so a
+/// pixel count can't be confused with any other Int, and so it keys the
+/// engine's cache unambiguously.
+nonisolated struct DecodeBucket: Comparable, Hashable, Sendable {
+	let pixels: Int
+	static func < (lhs: DecodeBucket, rhs: DecodeBucket) -> Bool { lhs.pixels < rhs.pixels }
+}
+
 nonisolated struct ThumbnailStore: Sendable {
-	/// The p0 thumbnail size: long edge, pixels. One size for now; a ladder
-	/// is a future round.
+	/// The p0 thumbnail size: long edge, pixels. One stored size; a stored
+	/// pyramid is a future round (grid.md: the ladder round).
 	static let maxPixelSize = 1024
 	private static let jpegQuality = 0.8
+
+	/// The decode ladder: the stored JPEG's DCT-native scales
+	/// (`maxPixelSize >> k`), smallest → largest. Each rung is a clean
+	/// inverse-DCT downscale of the stored file with no resampling pass, so
+	/// these are the only sizes a caller should ask this store to decode to.
+	/// A store fact, not a grid one — the sizes are a property of the stored
+	/// representation. The grid picks a rung from cell geometry; it does not
+	/// invent sizes.
+	static let decodeLadder: [DecodeBucket] = Array(
+		(0..<4).map { DecodeBucket(pixels: maxPixelSize >> $0) }.reversed()
+	)
 
 	let directory: URL
 

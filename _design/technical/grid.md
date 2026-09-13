@@ -19,8 +19,11 @@ them is machinery and must trace to one of them:
    blank where an image already was.
 4. A missing thumbnail is a quiet placeholder; placeholders heal live as
    an import lands (the catalog announces; the renderer picks up).
-5. Sharpness is owed to SETTLED viewports — "demand = settled visibility."
-   Soft-but-present during motion is correct, not a compromise.
+5. Visible images are sharp and scrolling never hitches. (This is a UX
+   promise. It earlier prescribed a mechanism — "small during motion, upgrade
+   on settle" — which was struck 2026-09-12: no battle-tested grid does it
+   and it caused a whole-viewport flash. Scroll cost is carried by request
+   priority + prefetch, not by resolution; sizing is one tier per cell.)
 6. Selection, cursor, arrows, click: native machinery, native feel.
 7. Every invariant holds while an import runs full-tilt.
 8. A delivery never moves the user's viewport, selection, or cursor
@@ -57,37 +60,48 @@ events. macOS `NSCollectionViewDiffableDataSource` is defective (no
 `difference(from:).inferringMoves()` with a change budget; past budget,
 reload.
 
-**The coordinator** owns the bookkeeping no library provides: the one
-id↔position table, same-question-diff vs new-question-replace (keyed on
-the hub's answered query), viewport anchoring across updates (capture
-topmost visible id + offset, restore after apply — invariant 8), the
-echo-guarded selection mirror, cursor reveal. This layer is bespoke
-because the ecosystem has no answer, not by preference.
+**The coordinator** owns the bookkeeping no library provides AND drives
+image loading (it is effects + tables; the pure decisions live in
+`GridImaging`, the Nuke calls in `StageImaging`): the one id↔position
+table, same-question-diff vs new-question-replace (keyed on the hub's
+answered query), viewport anchoring across updates (capture topmost
+visible id + offset, restore after apply — invariant 8), the echo-guarded
+selection mirror, cursor reveal, plus the load lifecycle — resolution,
+per-cell request on display, cancel on exit, prefetch, the stamp-watch
+heal, and the atomic paint routed through the id↔position table. This
+layer is bespoke because the ecosystem has no answer, not by preference.
 
-**The facade — `StageImagePipeline`** (name PROPOSED): one stage-owned
-type (owned by StageView, NOT the hub — the hub is question+position,
-never pixels; invariant 10 is why ownership sits above the renderers).
-Speaks Alexandria nouns only: cells and coordinator submit
-(SubjectID, target size, urgency) and hold a cancellable handle; Nuke
-types never leak past this file. If Nuke ever disappoints, the rip-out is
-this file's internals.
+**`StageImaging`** (RATIFIED 2026-09-12, built): the stage-owned owner of
+the Nuke pipeline + prefetcher + memory cache, and the ONE place a Nuke
+request is built (so every caller keys the cache identically). Owned by
+StageView, NOT the hub — the hub is question+position, never pixels;
+invariant 10 (cache outlives a renderer swap) is why ownership sits above
+the renderers. It is NOT a facade: the coordinator sees Nuke types
+directly. There is no rip-out-behind-an-interface goal — that was
+speculation struck this round; the boundary exists for ownership and
+consistent request construction, not concealment. Cells submit NOTHING:
+they are pure display sinks (`show`/`showPlaceholder`), and loading is the
+coordinator's job entirely.
 
-**Nuke's pipeline inside the facade** owns loading wholesale: coalescing,
+**Nuke, owned by `StageImaging`,** owns loading wholesale: coalescing,
 priority scheduling, prefetch, decode-at-target-size, caching. Start with
 Nuke's OWN cache and scheduling defaults. Do not pre-build compensations
 (see watchpoints).
 
 ## The Alexandria residue (each item cites what no library can know)
 
-- **Identity resolution**: SubjectID → representative file. Batched ONCE
-  per delivery (resolution is a property of the working set, not of
-  scrolling); loads await the delivery's query rather than querying
-  alone. File-less assets resolve to nil = placeholder.
+- **Identity resolution**: SubjectID → representative file. Batched in
+  visible/prefetch windows and cached for the session (RATIFIED 2026-09-12,
+  revised from "once per delivery": at the 1M scale target an eager whole-set
+  read is the hitch we're avoiding — resolution is windowed, keyed to the
+  delivered working set so results stay consistent). File-less assets resolve
+  to nil = placeholder.
 - **Store layout**: `Thumbnails/<id-suffix shard>/<id>.jpg`, one stored
   1024px JPEG per file (single stored size RATIFIED; a stored pyramid is
-  the ladder round's question). The facade maps file id → URL; Nuke
-  decodes from that URL directly.
-- **The doorbell**: `DatabaseRegionObservation` on the thumbnail-stamp
+  the ladder round's question). `ThumbnailStore` maps file id → URL and owns
+  the decode ladder (`maxPixelSize >> k`); `StageImaging` hands the URL to
+  Nuke, which decodes at the target bucket.
+- **The stamp watch**: `DatabaseRegionObservation` on the thumbnail-stamp
   column — one event per stamp-touching commit, no values, hopped to the
   main actor. The heal asks the bounded question (of visible placeholder
   cells, which are stamped now — stamp implies bytes, write-before-stamp
@@ -95,21 +109,27 @@ Nuke's OWN cache and scheduling defaults. Do not pre-build compensations
   subject per session, so a corrupt thumbnail can't turn every ring into
   a retry; unstamped subjects stay eligible. The importer never reaches
   into the renderer.
-- **Settled visibility** (RATIFIED): during scroll motion, visible cells
-  request a small/content size; on a ~150–200ms quiet period of the clip
-  view's bounds (covers momentum tails), the true size is requested as an
-  upgrade. Trivial to express over an engine with priorities; the rule is
-  the product's, the mechanism is a clamp plus a debounce.
+- **Sizing** (RATIFIED 2026-09-12, replacing the struck "settled visibility"
+  mechanism): ONE tier per cell — the smallest rung on the store's DCT ladder
+  covering the cell in physical pixels (cell points × backing scale), clamped
+  to the stored ceiling. Decoded once, cached, reused; re-requested only on a
+  cell-size change (zoom/resize) or heal, never on scroll. This is the
+  cross-system pattern (Apple Photos, Nuke, Kingfisher, SDWebImage, Lightroom,
+  Capture One). The ladder is a store fact (`ThumbnailStore.decodeLadder`,
+  `maxPixelSize >> k`): each rung is a clean inverse-DCT scale of the stored
+  JPEG, no resampling. Scroll cost lives in priority + prefetch (below), not
+  in resolution.
 
-## Engine policies (PROPOSED, to validate in the spike)
+## Engine policies (RATIFIED 2026-09-12; built)
 
 - Decode sizes on the DCT ladder of the stored JPEG: 128/256/512/1024,
-  picked from actual cell size in physical pixels.
-- Urgencies: content-for-visible > upgrade-on-settle > preheat. Prefetch
-  requests ONLY the content size at the lowest urgency — speculation must
-  be structurally unable to decode large or outrank demand.
+  picked from actual cell size in physical pixels. One size per cell.
+- Two urgencies: content-for-visible (high) > preheat (lowest). Prefetch
+  requests the SAME bucket a cell will request, at the lowest urgency — so a
+  prefetched image is a real cache hit and speculation cannot outrank demand.
 - A visible cell paints the best cached pixels of ANY size immediately
-  (progressive), and an upgrade never cancels or blanks what is shown.
+  (progressive), then the one target decode swaps in atomically; a paint
+  never downgrades what is shown.
 
 ## Watchpoints — failures already paid for; carry the tests, not the machinery
 
@@ -120,12 +140,17 @@ build a compensation only when the failure is observed again.
 1. **The storm**: speculative full-size decodes thrashing a bounded cache
    (301 sharp decodes, 50-thread explosion from one folder click). Watch:
    decode counts vs cells actually settled on.
-2. **Starvation**: content decodes queued behind cosmetic upgrades in a
-   FIFO lane (1.5s latency-to-pixels for a visible cell). Watch:
-   latency-to-pixels for cells entering the viewport.
-3. **Settle-blanking**: an upgrade cancelling a nearly-finished content
-   decode → blank cell at the moment of promised sharpening. Never
-   discard pixels, or work about to become pixels, without a replacement.
+2. **Starvation**: content decodes queued behind lower-value work
+   (1.5s latency-to-pixels for a visible cell). Priority carries this now
+   (content high, preheat lowest). Watch: latency-to-pixels for cells
+   entering the viewport.
+3. **Swap-flash / ground exposure**: replacing a cell's image must never
+   reveal the placeholder ground between old and new pixels. Fixed
+   structurally 2026-09-12 — the cell is a CALayer whose `contents` swap
+   inside an actions-disabled CATransaction, so there is no drawRect erase
+   and no implicit fade. (Supersedes the old "settle-blanking" watchpoint:
+   with one size per cell there is no upgrade to cancel content.) Watch:
+   any blank frame on scroll-stop, zoom, or scope change.
 4. **Cache thrash / eviction-as-steady-state**: watch eviction counts;
    invariant 2 is the tripwire. (The two-retention-policy split from the
    first build is the known compensation IF Nuke's single cache reproduces

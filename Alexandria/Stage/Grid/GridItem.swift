@@ -2,14 +2,20 @@
 //  GridItem.swift
 //  Alexandria
 //
-//  The deliberately dumb cell (grid round, 2026-09-12): an aspect-fit
-//  thumbnail slot and the native selection ring, nothing else. Image
-//  loading is deliberately absent — the engine is prescribed by
-//  _design/technical/grid.md — so the slot renders the quiet placeholder
-//  ground. Cell design (badges, labels, layout) is its own future round;
-//  that round replaces this item's CONTENT, while the
-//  represent/prepareForReuse contract with the coordinator is the slot's
-//  fixed edge.
+//  The deliberately dumb cell (grid round, 2026-09-12; rebuilt clean): a
+//  quiet placeholder ground, a thumbnail, and the native selection ring —
+//  nothing else. It asks for nothing and holds no request; whether the
+//  pixels it's handed are still the right ones for the id on screen is the
+//  coordinator's call, made against the one id↔position table before it ever
+//  calls `show`.
+//
+//  The image is the cell layer's `contents`, swapped inside an
+//  actions-disabled CATransaction — an atomic compositor swap that never
+//  erases to the ground and never runs an implicit fade. That is the
+//  structural fix for the swap-flash: there is no drawRect pass to catch the
+//  gray ground mid-swap, because there is no drawRect. Cell design (badges,
+//  labels) is its own future round; it replaces this content while the
+//  represent/reuse contract with the coordinator stays fixed.
 //
 
 import AppKit
@@ -21,23 +27,41 @@ import AppKit
 	/// Fires on double-click; the coordinator wires it to loupe activation.
 	var onDoubleClick: (() -> Void)?
 
-	private let thumbnailView = NSImageView()
 	private(set) var representedID: SubjectID?
 
 	override func loadView() {
 		let container = GridItemInteractionView()
 		container.wantsLayer = true
 		container.onDoubleClick = { [weak self] in self?.onDoubleClick?() }
-		thumbnailView.imageScaling = .scaleProportionallyUpOrDown
-		thumbnailView.translatesAutoresizingMaskIntoConstraints = false
-		container.addSubview(thumbnailView)
-		NSLayoutConstraint.activate([
-			thumbnailView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-			thumbnailView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-			thumbnailView.topAnchor.constraint(equalTo: container.topAnchor),
-			thumbnailView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-		])
+		guard let layer = container.layer else { view = container; return }
+		// The quiet ground shows through until (and in the letterbox bars of)
+		// an aspect-fit thumbnail — fixed geometry from first paint.
+		layer.backgroundColor = Theme.Grid.placeholder.cgColor
+		layer.contentsGravity = .resizeAspect
 		view = container
+	}
+
+	/// Display pixels the coordinator resolved for this slot, as an atomic
+	/// layer-contents swap — implicit animations off so nothing fades and the
+	/// ground is never revealed between old and new pixels.
+	func show(_ image: NSImage) {
+		guard let layer = view.layer else { return }
+		let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		layer.contentsScale = view.window?.backingScaleFactor ?? 2
+		layer.contents = cgImage
+		CATransaction.commit()
+	}
+
+	/// Fall back to the quiet ground — no thumbnail yet, or the slot was
+	/// recycled off its pixels. Also atomic, so a clear never flashes.
+	func showPlaceholder() {
+		guard let layer = view.layer else { return }
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		layer.contents = nil
+		CATransaction.commit()
 	}
 
 	func represent(_ id: SubjectID) {
@@ -47,11 +71,11 @@ import AppKit
 	override func prepareForReuse() {
 		super.prepareForReuse()
 		representedID = nil
-		thumbnailView.image = nil
+		showPlaceholder()
 	}
 
-	// Selection ring: driven by the native selection state, drawn as a
-	// layer border. Styling is deliberately minimal this round.
+	// Selection ring: driven by the native selection state, drawn as a layer
+	// border. Styling is deliberately minimal this round.
 	override var isSelected: Bool {
 		didSet { updateSelectionRing() }
 	}
@@ -68,8 +92,8 @@ import AppKit
 	}
 }
 
-/// The item's root view: passes clicks up to NSCollectionView's own
-/// tracking (selection stays native machinery) and surfaces double-clicks.
+/// The item's root view: passes clicks up to NSCollectionView's own tracking
+/// (selection stays native machinery) and surfaces double-clicks.
 @MainActor private final class GridItemInteractionView: NSView {
 	var onDoubleClick: (() -> Void)?
 

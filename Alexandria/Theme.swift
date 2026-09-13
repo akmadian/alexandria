@@ -5,6 +5,7 @@
 //  Created by ari on 9/11/26.
 //
 
+import AppKit
 import SwiftUI
 
 nonisolated enum Theme {
@@ -28,5 +29,9 @@ nonisolated enum Theme {
 		static let inset: CGFloat = 12
 		static let minimumCellSide: CGFloat = 40
 		static let selectionRingWidth: CGFloat = 3
+		/// The quiet ground a cell shows before (and beneath) its pixels, so
+		/// geometry is fixed from first paint and a missing thumbnail reads
+		/// as calm empty space, not a hole (grid.md invariant 3/4).
+		static let placeholder = NSColor.quaternaryLabelColor
 	}
 }

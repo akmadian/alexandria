@@ -12,6 +12,12 @@ import SwiftUI
 
 struct GridView: View {
 	@Environment(CatalogViewState.self) private var viewState
+	/// The grid reads the catalog directly for the things that aren't shared
+	/// question/position — thumbnail resolution and the stamp watch — exactly
+	/// as the browser reads it for its tree (hub doc: pixels never route
+	/// through the hub).
+	@Environment(\.catalog) private var catalog
+	let imaging: StageImaging
 
 	var body: some View {
 		GridRepresentable(
@@ -20,6 +26,8 @@ struct GridView: View {
 			selection: viewState.selection,
 			cursor: viewState.cursor,
 			columns: viewState.gridColumns,
+			catalog: catalog,
+			imaging: imaging,
 			onSelectionChange: { viewState.setSelection($0) },
 			onCursorMove: { viewState.moveCursor(to: $0) },
 			onActivate: { viewState.setViewMode(.loupe) }

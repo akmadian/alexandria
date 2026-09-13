@@ -10,10 +10,16 @@ import SwiftUI
 struct StageView: View {
 	@Environment(CatalogViewState.self) private var viewState
 
+	/// The image engine lives HERE, above the renderers, so its decoded-image
+	/// cache outlives a grid↔loupe swap (grid.md invariant 10). @State keeps
+	/// the one instance across body switches; loupe will share it when it
+	/// grows real pixels.
+	@State private var imaging = StageImaging()
+
 	var body: some View {
 		switch viewState.viewMode {
 		case .grid:
-			GridView()
+			GridView(imaging: imaging)
 		case .loupe:
 			Text("Loupe")
 		}
