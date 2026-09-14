@@ -51,6 +51,11 @@ extension Catalog {
 		limit: Int
 	) async throws -> [PendingThumbnail] {
 		let kinds = FileFormat.thumbnailingKinds.map(\.rawValue).sorted()
+		// UNION ALL knowingly, unlike the id-only subtree CTEs: the growing
+		// `path` column makes every recursive row distinct, so UNION would
+		// NOT terminate a parent cycle here anyway (rows never repeat) —
+		// the defense is that no write path can mint a folder cycle (disk
+		// truth; folders never re-parent).
 		let request: SQLRequest<Row> = """
 			WITH RECURSIVE tree(id, path) AS (
 			    SELECT id, '' FROM folders WHERE id = \(rootFolderId)

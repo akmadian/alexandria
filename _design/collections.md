@@ -69,13 +69,22 @@ Multiple roots are allowed. Membership is the user's work product
    the answer is a one-collection rebalance rewrite, `// PERF:`-marked at
    build, not pre-built.
 
-4. **Manual order is an `Arrangement.Key`**, offerable only for
+4. **Manual order is an `Arrangement.SortKey`** (the enum renamed from
+   `Key` at build, ruled 2026-09-14 — "key" alone was ambiguous), offerable only for
    collection sources. Switching to a regular sort is an explicit,
    non-destructive act — the keys sit untouched on the membership rows,
    so returning to manual restores it exactly. Drag-to-reorder is live
    only while arrangement = manual; in any other sort the gesture offers
    the switch, never a silent no-op and never a silent mode flip (LrC's
    ["does not support custom order" mystery](https://asktimgrey.com/2017/09/12/custom-sort-unavailable/)).
+   Ruled 2026-09-14 (verification review): manual consumes NO direction —
+   authored order has no ascending/descending (LrC's stance too), so
+   direction stays the user's property for the real sort keys, untouched
+   by entering or leaving manual. The chunk 4 UI disables the direction
+   control while manual is active. Rejected: pinning manual to ascending
+   (the pin leaked out on fallback — leaving a collection flipped the
+   library to oldest-first); remembering the pre-manual direction (a new
+   state field, proto-per-source-memory, which ruling 11 defers).
 
 5. **Union view order = the sectioned heuristic, single and
    deterministic**: depth-first walk of the subtree; a collection's own
@@ -87,6 +96,12 @@ Multiple roots are allowed. Membership is the user's work product
    disagree). Rejected: LrC parity (no manual order on parents — a
    wall); showing only own members in manual (hides data); byte-order
    sections in SQL (would diverge from the sidebar).
+   Precision added 2026-09-14: the Finder sequencing decides ONLY the
+   block sequence when several collections display in one grid — inside
+   any one collection, member order is always `order_key` bytes. Ruled:
+   sidebar/name order is the p0 block sequence; a user-configurable
+   block sequence is expected eventually (carried, likely one round with
+   sidebar tree manual ordering).
 
 6. **No reorder in a union view.** A child's member has no key in the
    parent, so the drag has no honest meaning — the alternatives were
@@ -122,6 +137,10 @@ Multiple roots are allowed. Membership is the user's work product
     a collection = the member assets' files, an asset's files adjacent
     in its manual slot. This dodges LrC's stacks/pairs-in-collections
     confusion class structurally: the pair is one asset everywhere.
+    DELIBERATELY UNSETTLED (ruled 2026-09-14): no files-lens machinery
+    over collections is built — the query answers EMPTY, pinned by test.
+    The sentence above records the leading shape, not a build grant;
+    re-open (which files, in what order) before building.
 
 11. **Out of this round, marked**: per-source arrangement memory (a
     TODO lands in the hub; prior art says per-source stickiness is
@@ -133,7 +152,10 @@ Multiple roots are allowed. Membership is the user's work product
     in the sidebar; stacks-in-collections display; import-time
     add-to-collection; covers; export/publish of collections;
     multi-writer key merging (sync's problem; TEXT keys take
-    writer-jitter without schema change).
+    writer-jitter without schema change); union block sequencing
+    configurability (added 2026-09-14; p0 = sidebar/name order, see
+    ruling 5); the files lens over collections (see ruling 10's
+    unsettled marker).
 
 ## The approved schema
 
@@ -192,7 +214,8 @@ code can qualify. Accepted for vocabulary fidelity.
 - **Manual read**: `ORDER BY order_key` rides `idx_collection_members_order`;
   the ordered scan IS the index scan.
 - **Files lens**: `JOIN files ON files.asset_id`, ordered by member key
-  then file id.
+  then file id. (Unbuilt — deferred 2026-09-14, ruling 10's marker; the
+  compiled query answers empty.)
 - **Reverse lookup**: one indexed read.
 - **Bulk add 10k**: one tail-key read, keys minted in memory, one
   transaction. **Reorder of M**: M row updates. Every verb = one
@@ -208,5 +231,8 @@ code can qualify. Accepted for vocabulary fidelity.
 
 1. Schema tables + Swift records. ← approved 2026-09-12
 2. `OrderKey` (pure) + catalog verb files + tests.
-3. `Source.collection` + `Arrangement.Key.manual` + hub guard + TODO.
+3. `Source.collection` + `Arrangement.SortKey.manual` + hub guard + TODO
+   — assets lens only (files lens deferred, ruling 10's marker); the
+   `SortKey` rename and the shared FinderOrder extraction ride along.
+   ← approved 2026-09-14
 4. Sidebar section + verbs UI + drag-to-add.

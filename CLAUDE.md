@@ -52,6 +52,11 @@ instinct, or old-repo convention conflicts with this repo's files, this repo win
   marker so it can't silently return.
 - Machinery earns its place: no speculative fields, no interfaces with one
   implementation, no config for constants. Deletion over addition.
+- One concept, one implementation: before hand-writing a query or algorithm
+  the codebase already answers, find the canonical implementation and reuse
+  it; when composition truly forces a copy, it preserves the canonical
+  semantics exactly and a comment names its master. Nearest-file precedent
+  never outranks same-concept precedent.
 - Ari's personal workflow validates primitives; it never becomes product
   defaults.
 - Ground architecture and UX claims in fetched prior art. Search for the

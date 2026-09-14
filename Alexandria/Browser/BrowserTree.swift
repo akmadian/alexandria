@@ -35,9 +35,8 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 	static let empty = BrowserTree(volumes: [])
 
 	/// Fetches and assembles the whole tree. Ordering is Finder-style
-	/// (ruled 2026-09-11): localizedStandardCompare on the display name —
-	/// "Shoot 9" before "Shoot 10" — with id as a total-order tiebreak.
-	/// Deterministic per locale, which is what a presentation ordering owes.
+	/// (ruled 2026-09-11): FinderOrder — localizedStandardCompare on the
+	/// display name, id as a total-order tiebreak.
 	static func fetch(_ database: Database) throws -> BrowserTree {
 		let volumes = try Volume.fetchAll(database)
 		let folders = try Folder.fetchAll(database)
@@ -52,16 +51,12 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 			}
 		}
 
-		func finderOrdered(_ names: (String, String), tiebreak: (UUID, UUID)) -> Bool {
-			switch names.0.localizedStandardCompare(names.1) {
-			case .orderedAscending: true
-			case .orderedDescending: false
-			case .orderedSame: tiebreak.0.uuidString < tiebreak.1.uuidString
-			}
-		}
 		func ordered(_ list: [Folder]) -> [Folder] {
 			list.sorted {
-				finderOrdered(($0.name, $1.name), tiebreak: ($0.id.rawValue, $1.id.rawValue))
+				FinderOrder.ascending(
+					(name: $0.name, id: $0.id.rawValue),
+					(name: $1.name, id: $1.id.rawValue)
+				)
 			}
 		}
 		var reached = 0
@@ -76,7 +71,10 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 
 		let volumeNodes = volumes
 			.sorted {
-				finderOrdered(($0.name, $1.name), tiebreak: ($0.id.rawValue, $1.id.rawValue))
+				FinderOrder.ascending(
+					(name: $0.name, id: $0.id.rawValue),
+					(name: $1.name, id: $1.id.rawValue)
+				)
 			}
 			.map { volume in
 				VolumeNode(

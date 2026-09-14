@@ -39,6 +39,9 @@ final class CatalogViewState {
 
 	private(set) var lens: Lens = .assets
 	private(set) var source: Source = .library
+	// TODO: (collections round, 2026-09-12, ratified) per-source arrangement
+	// memory — returning to a collection should restore the arrangement it
+	// was left in. Its own round; this stays single-valued until then.
 	private(set) var arrangement = Arrangement()
 	private(set) var viewMode: ViewMode = .grid
 	private(set) var selection: Set<SubjectID> = []
@@ -91,13 +94,42 @@ final class CatalogViewState {
 	func setSource(_ newSource: Source) {
 		guard newSource != source else { return }
 		source = newSource
+		// normalized(for:) only ever changes the sort key, so any
+		// difference here IS the manual fallback.
+		let normalized = arrangement.normalized(for: newSource)
+		if normalized != arrangement {
+			logManualFellBack(intent: "setSource", kept: normalized.direction)
+			arrangement = normalized
+		}
 		restartObservation()
 	}
 
+	/// The posture rule itself is Arrangement.normalized(for:) — pure, and
+	/// pinned synchronously over every cell. The hub owns only the effects:
+	/// apply it, tell the story in the log, and — by this guard — never
+	/// restart the observation for a question that didn't change.
 	func setArrangement(_ newArrangement: Arrangement) {
-		guard newArrangement != arrangement else { return }
-		arrangement = newArrangement
+		let normalized = newArrangement.normalized(for: source)
+		guard normalized != arrangement else { return }
+		if normalized.sortKey != newArrangement.sortKey {
+			logManualFellBack(intent: "setArrangement", kept: normalized.direction)
+		}
+		arrangement = normalized
 		restartObservation()
+	}
+
+	/// Authoring manual where it can't apply vs leaving a collection while
+	/// in it are different UX stories to a human reading a real run — the
+	/// intent says which. Fires only when the standing posture actually
+	/// changes; a request normalized into the status quo is silent.
+	private func logManualFellBack(
+		intent: StaticString, kept direction: Arrangement.Direction
+	) {
+		log.info("manual arrangement fell back to added", metadata: [
+			"intent": "\(intent)",
+			"direction": "\(direction)",
+			"source": "\(source)",
+		])
 	}
 
 	// MARK: Intents — posture that changes no question

@@ -44,6 +44,22 @@ nonisolated enum CollectionError: Error, Equatable {
 	case corruptOrderKey(String)
 }
 
+extension Collection {
+	/// The one subtree walk — this collection plus everything nested under
+	/// it — composed by every consumer (the verbs, the union's flat sort,
+	/// the manual walk), so the concept has ONE implementation. Seeded from
+	/// a real record: a nonexistent id walks NOTHING, never a phantom set
+	/// holding itself. UNION (not UNION ALL) so a parent cycle terminates
+	/// instead of spinning. Callers append their SELECT over `subtree`;
+	/// exactly one `?` argument, the root id.
+	static let subtreeCTE = """
+	WITH RECURSIVE subtree(id) AS (
+	    SELECT id FROM collections WHERE id = ?
+	    UNION
+	    SELECT collections.id FROM collections JOIN subtree ON collections.parent_id = subtree.id)
+	"""
+}
+
 extension Catalog {
 
 	// MARK: - The collections table
@@ -153,21 +169,15 @@ extension Catalog {
 	}
 
 	/// Every collection in the subtree rooted at `id`, the root included —
-	/// empty when `id` doesn't exist (the root is seeded from a real row,
-	/// so a stale id never reads as a phantom one-collection subtree).
-	/// UNION (not UNION ALL) so a parent cycle would terminate instead of
-	/// spinning — the same defensive shape as the folder subtree.
+	/// empty when `id` doesn't exist (Collection.subtreeCTE seeds from a
+	/// real record, so a stale id never reads as a phantom one-collection
+	/// subtree).
 	private nonisolated static func subtreeIds(
 		of id: Identifier<Collection>, in database: Database
 	) throws -> Set<Identifier<Collection>> {
 		try Set(Identifier<Collection>.fetchAll(
 			database,
-			sql: """
-			WITH RECURSIVE subtree(id) AS (
-			    SELECT id FROM collections WHERE id = ? UNION
-			    SELECT collections.id FROM collections JOIN subtree ON collections.parent_id = subtree.id)
-			SELECT id FROM subtree
-			""",
+			sql: Collection.subtreeCTE + " SELECT id FROM subtree",
 			arguments: [id]
 		))
 	}
