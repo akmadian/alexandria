@@ -156,6 +156,18 @@ final class CatalogViewState {
 		restartObservation()
 	}
 
+	/// Ruling 14 (collections round): deleting the subtree the user is
+	/// viewing retargets the source to the library — the working set never
+	/// stands on a question whose subject is gone. The delete flow hands in
+	/// the verb's returned subtree ids; any other source is untouched.
+	func collectionsWereDeleted(_ ids: Set<Identifier<Collection>>) {
+		guard case .collection(let viewed) = source, ids.contains(viewed) else { return }
+		log.info("viewed collection deleted; source falls back to library", metadata: [
+			"collection": "\(viewed.rawValue.uuidString)",
+		])
+		setSource(.library)
+	}
+
 	// MARK: Intents — position (pure memory, no database)
 
 	/// Replaces the selection; ids outside the working set drop (a renderer

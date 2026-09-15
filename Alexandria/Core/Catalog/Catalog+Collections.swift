@@ -134,7 +134,10 @@ extension Catalog {
 	/// satisfied. (Considered and rejected: `PRAGMA defer_foreign_keys`
 	/// would allow one DELETE for the whole subtree, but it relaxes EVERY
 	/// foreign-key check in the transaction, not just this one.)
-	func deleteCollection(_ id: Identifier<Collection>) async throws {
+	/// Returns the deleted ids so the caller can retarget a view standing
+	/// on any of them (ruling 14) without re-deriving the subtree.
+	@discardableResult
+	func deleteCollection(_ id: Identifier<Collection>) async throws -> Set<Identifier<Collection>> {
 		try await databaseWriter.write { database in
 			let ids = try Self.subtreeIds(of: id, in: database)
 			let memberships = try CollectionMember
@@ -165,6 +168,7 @@ extension Catalog {
 				"collections": "\(records.count)",
 				"memberships": "\(memberships)",
 			])
+			return ids
 		}
 	}
 

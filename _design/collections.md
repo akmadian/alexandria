@@ -80,8 +80,10 @@ Multiple roots are allowed. Membership is the user's work product
    Ruled 2026-09-14 (verification review): manual consumes NO direction —
    authored order has no ascending/descending (LrC's stance too), so
    direction stays the user's property for the real sort keys, untouched
-   by entering or leaving manual. The chunk 4 UI disables the direction
-   control while manual is active. Rejected: pinning manual to ascending
+   by entering or leaving manual. No sort/arrangement control exists yet
+   (checked at chunk 4: setArrangement has zero UI callers); when the
+   arrangement-picker round builds one, it disables the direction control
+   while manual is active. Rejected: pinning manual to ascending
    (the pin leaked out on fallback — leaving a collection flipped the
    library to oldest-first); remembering the pre-manual direction (a new
    state field, proto-per-source-memory, which ruling 11 defers).
@@ -155,7 +157,11 @@ Multiple roots are allowed. Membership is the user's work product
     writer-jitter without schema change); union block sequencing
     configurability (added 2026-09-14; p0 = sidebar/name order, see
     ruling 5); the files lens over collections (see ruling 10's
-    unsettled marker).
+    unsettled marker); the arrangement-picker round (added 2026-09-14:
+    no sort UI exists anywhere yet, so manual order is engine-level
+    only — the picker, the direction-control disable under manual, and
+    grid drag-to-REORDER are one coherent future round); widening the
+    sidebar filter to cover collections.
 
 ## The approved schema
 
@@ -235,4 +241,14 @@ code can qualify. Accepted for vocabulary fidelity.
    — assets lens only (files lens deferred, ruling 10's marker); the
    `SortKey` rename and the shared FinderOrder extraction ride along.
    ← approved 2026-09-14
-4. Sidebar section + verbs UI + drag-to-add.
+4. Sidebar section + verbs UI — no sort/arrangement UI (carried, see
+   ruling 11), delete confirm shows subtreeSummary's numbers,
+   deleteCollection returns the subtree ids so the ruling-14 retarget is
+   a testable hub intent. ← approved 2026-09-14
+   Drag-and-drop STRUCK from this chunk (ruled 2026-09-14): the first
+   build rode SwiftUI's dropDestination inside a List, which has a
+   confirmed multi-year Apple defect (rows never receive the drop), atop
+   an undeclared runtime UTType. Removed entirely — drag-to-add and
+   drag-to-re-parent are their own round, opening on the prior-art
+   question (onDrop vs declared-type plist vs AppKit-backed outline)
+   before any code.

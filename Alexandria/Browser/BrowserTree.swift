@@ -30,9 +30,19 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 		var outlineChildren: [FolderNode]? { children.isEmpty ? nil : children }
 	}
 
-	var volumes: [VolumeNode]
+	struct CollectionNode: Identifiable, Equatable, Sendable {
+		let id: Identifier<Collection>
+		let name: String
+		let children: [CollectionNode]
+	}
 
-	static let empty = BrowserTree(volumes: [])
+	var volumes: [VolumeNode]
+	/// The collection roots (collections round, chunk 4), FinderOrder like
+	/// everything else in the sidebar — and by construction the SAME
+	/// sequence the union walk sections by (one comparator, ruling 5).
+	var collections: [CollectionNode]
+
+	static let empty = BrowserTree(volumes: [], collections: [])
 
 	/// Fetches and assembles the whole tree. Ordering is Finder-style
 	/// (ruled 2026-09-11): FinderOrder — localizedStandardCompare on the
@@ -40,6 +50,7 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 	static func fetch(_ database: Database) throws -> BrowserTree {
 		let volumes = try Volume.fetchAll(database)
 		let folders = try Folder.fetchAll(database)
+		let collections = try Collection.fetchAll(database)
 
 		var childrenOf: [Identifier<Folder>: [Folder]] = [:]
 		var rootsOf: [Identifier<Volume>: [Folder]] = [:]
@@ -92,7 +103,46 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 				"total": "\(folders.count)",
 			])
 		}
-		return BrowserTree(volumes: volumeNodes)
+
+		// The collections tree (collections round, chunk 4): same assembly
+		// shape as folders — roots are parentId NULL, children FinderOrder.
+		var collectionChildren: [Identifier<Collection>: [Collection]] = [:]
+		var collectionRoots: [Collection] = []
+		for collection in collections {
+			if let parent = collection.parentId {
+				collectionChildren[parent, default: []].append(collection)
+			} else {
+				collectionRoots.append(collection)
+			}
+		}
+		func orderedCollections(_ list: [Collection]) -> [Collection] {
+			list.sorted {
+				FinderOrder.ascending(
+					(name: $0.name, id: $0.id.rawValue),
+					(name: $1.name, id: $1.id.rawValue)
+				)
+			}
+		}
+		var collectionsReached = 0
+		func collectionNode(_ collection: Collection) -> CollectionNode {
+			collectionsReached += 1
+			return CollectionNode(
+				id: collection.id,
+				name: collection.name,
+				children: orderedCollections(collectionChildren[collection.id] ?? []).map(collectionNode)
+			)
+		}
+		let collectionNodes = orderedCollections(collectionRoots).map(collectionNode)
+		if collectionsReached != collections.count {
+			// Same fence as folders: FK RESTRICT makes a dangling parent
+			// unreachable; loud if that ever stops being true.
+			Logger(label: "browser").warning("tree assembly dropped collections", metadata: [
+				"reached": "\(collectionsReached)",
+				"total": "\(collections.count)",
+			])
+		}
+
+		return BrowserTree(volumes: volumeNodes, collections: collectionNodes)
 	}
 
 	/// The filter field's behavior: a folder matching on its OWN name keeps
@@ -120,6 +170,9 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 				? nil
 				: VolumeNode(id: volume.id, name: volume.name, roots: roots)
 		}
-		return BrowserTree(volumes: volumes)
+		// The filter is the FOLDER filter (browser round: its prompt says
+		// so); collections pass through untouched. Widening it is a future
+		// call, not a silent behavior change.
+		return BrowserTree(volumes: volumes, collections: collections)
 	}
 }

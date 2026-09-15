@@ -613,6 +613,42 @@ struct CatalogViewStateTests {
 		}
 	}
 
+	/// Ruling 14, pinned: deleting the subtree the user is viewing
+	/// retargets the source to the library; deleting anything else leaves
+	/// the posture alone. The intent takes the delete verb's returned ids,
+	/// so "viewing a DESCENDANT of the deleted root" is covered too.
+	@Test func deletingTheViewedSubtreeRetargetsToLibrary() async throws {
+		let catalog = try Catalog(DatabaseQueue())
+		let a = try await seedAsset(catalog, at: 1_000)
+		let trips = try await catalog.createCollection(named: "Trips")
+		let child = try await catalog.createCollection(named: "Iceland", under: trips.id)
+		try await catalog.addMembers([a], to: child.id)
+		let unrelated = try await catalog.createCollection(named: "Picks")
+
+		let hub = CatalogViewState(catalog: catalog)
+		hub.setSource(.collection(child.id))
+		try await eventually("collection answer") {
+			hub.answeredQuery == WorkingSetQuery(
+				lens: .assets, source: .collection(child.id), arrangement: Arrangement()
+			)
+		}
+
+		// An unrelated delete leaves the posture alone.
+		let deletedUnrelated = try await catalog.deleteCollection(unrelated.id)
+		hub.collectionsWereDeleted(deletedUnrelated)
+		#expect(hub.source == .collection(child.id))
+
+		// Deleting the PARENT takes the viewed child with it: retarget.
+		let deleted = try await catalog.deleteCollection(trips.id)
+		hub.collectionsWereDeleted(deleted)
+		#expect(hub.source == .library)
+		try await eventually("library answer") {
+			hub.answeredQuery == WorkingSetQuery(
+				lens: .assets, source: .library, arrangement: Arrangement()
+			) && hub.workingSet == [.asset(a)]
+		}
+	}
+
 	/// A ghost collection id answers empty under both sort keys — never a
 	/// throw, never a phantom.
 	@Test func ghostCollectionSourceAnswersEmpty() async throws {

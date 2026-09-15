@@ -84,4 +84,27 @@ struct BrowserTreeTests {
 		#expect(tree.filtered(by: "") == tree)
 		#expect(tree.filtered(by: "   ") == tree)
 	}
+
+	/// The collections section (collections round, chunk 4): same assembly
+	/// shape as folders — roots are parentId NULL, siblings in Finder order
+	/// ("Shoot 9" before "Shoot 10", disagreeing with lexicographic AND
+	/// creation order), nesting recursive.
+	@Test func collectionsAssembleRootedNestedAndFinderOrdered() async throws {
+		let catalog = try Catalog(DatabaseQueue())
+		let trips = try await catalog.createCollection(named: "Trips")
+		let shoot10 = try await catalog.createCollection(named: "Shoot 10", under: trips.id)
+		_ = try await catalog.createCollection(named: "Shoot 9", under: trips.id)
+		_ = try await catalog.createCollection(named: "Grand", under: shoot10.id)
+		_ = try await catalog.createCollection(named: "Picks")
+
+		let tree = try await catalog.databaseWriter.read { try BrowserTree.fetch($0) }
+		#expect(tree.collections.map(\.name) == ["Picks", "Trips"])
+		let tripsNode = tree.collections[1]
+		#expect(tripsNode.children.map(\.name) == ["Shoot 9", "Shoot 10"])
+		#expect(tripsNode.children[1].children.map(\.name) == ["Grand"])
+
+		// The folder filter leaves collections untouched (it's the FOLDER
+		// filter by prompt; widening it is a future call, not a drift).
+		#expect(tree.filtered(by: "nope").collections == tree.collections)
+	}
 }

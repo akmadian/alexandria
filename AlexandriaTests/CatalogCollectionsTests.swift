@@ -407,4 +407,21 @@ struct CatalogCollectionsTests {
 		}
 		#expect(try await memberOrder(catalog, in: collection.id).isEmpty)
 	}
+
+	/// Chunk 4: the delete verb returns exactly the subtree it removed —
+	/// the ruling-14 retarget's input — and a ghost id returns empty.
+	@Test func deleteReturnsTheDeletedSubtreeIds() async throws {
+		let catalog = try makeCatalog()
+		let trips = try await catalog.createCollection(named: "Trips")
+		let child = try await catalog.createCollection(named: "Iceland", under: trips.id)
+		let grand = try await catalog.createCollection(named: "Raw", under: child.id)
+		let bystander = try await catalog.createCollection(named: "Picks")
+
+		let deleted = try await catalog.deleteCollection(trips.id)
+		#expect(deleted == Set([trips.id, child.id, grand.id]))
+		#expect(try await catalog.subtreeSummary(of: bystander.id).collections == 1)
+
+		let ghost = try await catalog.deleteCollection(Identifier<Collection>(rawValue: .v7()))
+		#expect(ghost.isEmpty)
+	}
 }
