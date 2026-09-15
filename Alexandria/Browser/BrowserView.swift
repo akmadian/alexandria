@@ -133,7 +133,6 @@ struct BrowserView: View {
 			}
 		}
 		.listStyle(.sidebar)
-		.searchable(text: $folderFilter, placement: .sidebar, prompt: "Filter Folders")
 		.task(id: ObjectIdentifier(catalog.databaseWriter)) {
 			model.start(catalog: catalog)
 		}

@@ -25,3 +25,8 @@ nonisolated struct Asset: Identifiable, CatalogRecord {
 		case representativeFileId = "representative_file_id"
 	}
 }
+
+// The flag is a stored column, so it speaks the database's language directly
+// (GRDB derives both directions from the String raw value) and not only
+// Codable's. Judgment writes bind it; reads decode it.
+nonisolated extension Asset.Flag: DatabaseValueConvertible {}

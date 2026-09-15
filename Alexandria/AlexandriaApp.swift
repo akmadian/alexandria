@@ -8,6 +8,7 @@
 import SwiftUI
 import Foundation
 import GRDB
+import GRDBQuery
 import Logging
 
 @main
@@ -34,6 +35,7 @@ struct AlexandriaApp: App {
 		Window("Alexandria", id: "main") {
 			ShellView()
 				.environment(\.catalog, catalog)
+				.databaseContext(.readOnly { catalog.reader })
 				.environment(viewState)
         }
 		.commands {

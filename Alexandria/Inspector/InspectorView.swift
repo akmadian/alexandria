@@ -8,20 +8,16 @@
 import SwiftUI
 
 struct InspectorView: View {
+	@Environment(CatalogViewState.self) private var viewState
 	
 	var body: some View {
-		// Asset Info
-		//   Display the Asset
-		//	 Location (volume and folder)
-		//   Asset Membership Tree
-		// Keywording Disclosure
-		//	 Suggested Keywords
-		//   Recent Keywords
-		// 	 Keywords Tree Browser
-		//	   Keywords Tree Search
-		//	   Keywords Tree
-		// Metadata Disclosure
-		
-		Text("Inspector")
+		switch viewState.cursor {
+		case .asset(let id):
+			AssetInspector(id: id)
+		case .file:
+			ContentUnavailableView("No file inspector yet", systemImage: "doc")
+		case nil:
+			ContentUnavailableView("Nothing Selected", systemImage: "info")
+		}
 	}
 }
