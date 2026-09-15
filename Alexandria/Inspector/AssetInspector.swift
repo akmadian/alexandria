@@ -52,13 +52,34 @@ struct AssetInspector: View {
 		if let asset, let associatedFiles {
 			// Placeholder body — the real layout (asset display, location,
 			// membership tree, keywording, metadata) is its own round.
+			//
+			
+			// ASSET NAME
+			// Preview
+			//	Thumb/ Histogram (Where applicable)
+			// Associated Files ("Represents")
+			//	File Name
+			//	Size
+			// General
+			//	Total Size
+			//	Volume
+			//	Folder
+			//  Judgements
+			//	Dimensions (Resolution, Aspect Ratio, Megapixel Count?)
+			//	In Collections
+			// Metadata
+			// Map
 			VStack(alignment: .leading, spacing: 8) {
-				Text("\(associatedFiles.count)")
-				Text(asset.kind)
+				VStack {
+					Text("Files Associated with \(associatedFiles[0].nameKey)")
+					ForEach(associatedFiles) { file in
+						Text(file.name)
+					}
+				}
 				// The inspector SHOWS the cursor asset, but every judgment
 				// targets the whole selection (ruled 2026-09-14); the
 				// cursor stands in only when nothing is selected.
-				StarRating(asset.rating) { rate(targets, $0) }
+				StarRating(asset.rating) { rate(viewState.judgmentTargets, $0) }
 				Picker("Flag", selection: flag(of: asset)) {
 					Label("None", systemImage: "flag.slash")
 						.tag(Asset.Flag?.none)
@@ -79,20 +100,7 @@ struct AssetInspector: View {
 	/// the verb. There is no local state to drift — the observation delivers
 	/// the committed value back.
 	private func flag(of asset: Asset) -> Binding<Asset.Flag?> {
-		Binding(get: { asset.flag }, set: { setFlag($0, on: targets) })
-	}
-
-	/// The assets a judgment lands on: the selected assets, or the cursor
-	/// asset when the selection is empty. File-lens members can't be judged
-	/// and are skipped.
-	private var targets: [Identifier<Asset>] {
-		let selected = viewState.selection.compactMap { subject -> Identifier<Asset>? in
-			if case .asset(let id) = subject { return id }
-			return nil
-		}
-		if !selected.isEmpty { return selected }
-		if case .asset(let id) = viewState.cursor { return [id] }
-		return []
+		Binding(get: { asset.flag }, set: { setFlag($0, on: viewState.judgmentTargets) })
 	}
 
 	// Both verbs return the prior values for undo; undo is a later chunk, so

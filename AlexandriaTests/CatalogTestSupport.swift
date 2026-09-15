@@ -7,8 +7,33 @@
 //
 
 import Foundation
+import Testing
 import GRDB
 @testable import Alexandria
+
+/// Thrown by `eventually` so a timed-out wait stops its test at the real
+/// failure instead of cascading into secondary ones.
+struct PollTimeout: Error {}
+
+/// Polls until `condition` holds. Hub deliveries are async main-actor hops
+/// away and catalog writes commit off the main actor, so assertions on either
+/// must wait rather than sample once. On timeout it records the label and
+/// THROWS.
+@MainActor
+func eventually(
+	_ label: String,
+	timeout: Duration = .seconds(2),
+	_ condition: () async throws -> Bool
+) async throws {
+	let clock = ContinuousClock()
+	let deadline = clock.now.advanced(by: timeout)
+	while clock.now < deadline {
+		if try await condition() { return }
+		try await Task.sleep(for: .milliseconds(10))
+	}
+	Issue.record("timed out waiting for: \(label)")
+	throw PollTimeout()
+}
 
 /// A file-less asset minted at a fixed instant, inserted through the raw
 /// writer. This is the ONE fence exception for behavioral tests (besides

@@ -189,6 +189,25 @@ final class CatalogViewState {
 		cursor = id
 	}
 
+	// MARK: Position — derived
+
+	/// The assets a judgment lands on: the selected assets, or the cursor
+	/// asset when nothing is selected (ruled 2026-09-14). File-lens members
+	/// are skipped — judgments attach to assets.
+	///
+	/// Derived from position, so it lives beside it: every door into a
+	/// judgment — the inspector's controls, the command runner's keys and
+	/// menu items — reads this one answer rather than re-deriving the rule.
+	var judgmentTargets: [Identifier<Asset>] {
+		let selected = selection.compactMap { subject -> Identifier<Asset>? in
+			if case .asset(let id) = subject { return id }
+			return nil
+		}
+		if !selected.isEmpty { return selected }
+		if case .asset(let id) = cursor { return [id] }
+		return []
+	}
+
 	// MARK: The observation
 
 	/// Cancels the current observation and asks the new question. A

@@ -43,7 +43,7 @@ struct GridRepresentable: NSViewRepresentable {
 			bottom: Theme.Grid.inset, right: Theme.Grid.inset
 		)
 
-		let collectionView = NSCollectionView()
+		let collectionView = GridCollectionView()
 		collectionView.collectionViewLayout = layout
 		collectionView.isSelectable = true
 		collectionView.allowsMultipleSelection = true
@@ -670,6 +670,29 @@ extension GridRepresentable.Coordinator {
 	private func isVisible(_ id: SubjectID) -> Bool {
 		guard let collectionView, let path = indexPath(of: id) else { return false }
 		return collectionView.indexPathsForVisibleItems().contains(path)
+	}
+}
+
+// MARK: - Collection view
+
+/// NSCollectionView runs every keystroke through the text key-binding
+/// machinery to get arrow navigation, so a printable character ends in an
+/// `insertText` it has no use for: it beeps and the event stops there. The
+/// window never sees it, and the window is where AppKit fires unmodified menu
+/// key equivalents for keys no view handled (measured 2026-09-14; there is no
+/// type-select switch on NSCollectionView to turn off). This restores the
+/// responder-chain contract every other view keeps: keys the collection view
+/// actually handles — the function-flagged ones (arrows, home/end, page
+/// up/down) — stay here; everything else goes up the chain and the menu gets
+/// its native turn. The only thing given up is type-select, which a grid of
+/// thumbnails with no visible text never had a use for.
+final class GridCollectionView: NSCollectionView {
+	override func keyDown(with event: NSEvent) {
+		if event.modifierFlags.contains(.function) {
+			super.keyDown(with: event)
+		} else {
+			nextResponder?.keyDown(with: event)
+		}
 	}
 }
 

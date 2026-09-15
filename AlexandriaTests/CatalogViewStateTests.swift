@@ -128,26 +128,9 @@ private struct CollectionFixture {
 @MainActor
 struct CatalogViewStateTests {
 
-	private struct PollTimeout: Error {}
-
-	/// Polls until the hub settles into `condition` — deliveries are async
-	/// main-actor hops away, so assertions on them must wait. On timeout it
-	/// records the label and THROWS, stopping the test at the real failure
-	/// instead of cascading into secondary ones.
-	private func eventually(
-		_ label: String,
-		timeout: Duration = .seconds(2),
-		_ condition: () -> Bool
-	) async throws {
-		let clock = ContinuousClock()
-		let deadline = clock.now.advanced(by: timeout)
-		while clock.now < deadline {
-			if condition() { return }
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		Issue.record("timed out waiting for: \(label)")
-		throw PollTimeout()
-	}
+	// The delivery-waiting helper (`eventually`) and its PollTimeout live in
+	// CatalogTestSupport — one concept, one implementation, shared with the
+	// command tests.
 
 	private var libraryQuestion: WorkingSetQuery {
 		WorkingSetQuery(lens: .assets, source: .library, arrangement: Arrangement())
@@ -689,6 +672,49 @@ struct CatalogViewStateTests {
 
 		hub.moveCursor(to: .asset(Identifier<Asset>(rawValue: .v7())))
 		#expect(hub.cursor == .asset(older))
+	}
+
+	/// The judgment-target rule (ruled 2026-09-14), the hub's one answer for
+	/// every door into a judgment: the selection when there is one, the
+	/// cursor standing in when there isn't, and file-lens members skipped
+	/// because judgments attach to assets.
+	@Test func judgmentTargetsFallBackToTheCursorAndSkipFiles() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/a.jpg"),
+			context.prepared("/Volumes/Test/Shoot/b.jpg"),
+		])
+		try await context.form()
+
+		let hub = CatalogViewState(catalog: context.catalog)
+		try await eventually("initial delivery") { hub.workingSet.count == 2 }
+
+		// Nothing selected: the cursor stands in, alone.
+		#expect(hub.selection.isEmpty)
+		#expect(hub.judgmentTargets == [hub.cursor].compactMap {
+			if case .asset(let id) = $0 { id } else { nil }
+		})
+		#expect(hub.judgmentTargets.count == 1)
+
+		// Selected: the whole selection, cursor or not.
+		hub.setSelection(Set(hub.workingSet))
+		#expect(Set(hub.judgmentTargets.map(SubjectID.asset)) == Set(hub.workingSet))
+
+		// The files lens answers with file subjects, which no judgment can
+		// land on — the cursor is a file too, so the fallback finds nothing.
+		hub.setLens(.files)
+		try await eventually("files answer") {
+			hub.workingSet.allSatisfy { if case .file = $0 { true } else { false } }
+				&& hub.workingSet.count == 2
+		}
+		hub.setSelection(Set(hub.workingSet))
+		#expect(hub.judgmentTargets.isEmpty)
+
+		// An empty working set has no cursor and therefore no targets.
+		hub.setLens(.assets)
+		hub.setSource(.import(Identifier<Import>(rawValue: .v7())))
+		try await eventually("empty answer") { hub.workingSet.isEmpty }
+		#expect(hub.judgmentTargets.isEmpty)
 	}
 
 	// MARK: Renderer posture

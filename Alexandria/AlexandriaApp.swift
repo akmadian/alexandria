@@ -23,12 +23,18 @@ struct AlexandriaApp: App {
 	// One hub per open catalog. "Exactly one" is a fact about this
 	// composition root, never about the design.
 	let viewState: CatalogViewState
+	// The command system: one table, one door (menu items carry every chord).
+	// The runner is deliberately NOT in the environment — views call verbs
+	// and intents directly; it exists for the menus.
+	let keymap = Keymap()
+	let runner: CommandRunner
 
 	init() {
 		Log.bootstrap()
 		catalog = try! Catalog.open(at: Self.devCatalogDir)
 		importService = ImportService(catalog: catalog)
 		viewState = CatalogViewState(catalog: catalog)
+		runner = CommandRunner(catalog: catalog, viewState: viewState)
 	}
 
     var body: some Scene {
@@ -63,6 +69,7 @@ struct AlexandriaApp: App {
 				}
 				.keyboardShortcut("I", modifiers: [.command, .shift])
 			}
+			AppCommands(runner: runner, keymap: keymap)
 		}
     }
 }

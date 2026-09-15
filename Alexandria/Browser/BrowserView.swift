@@ -127,6 +127,7 @@ struct BrowserView: View {
 					} label: {
 						Image(systemName: "plus")
 					}
+					.padding(.trailing, 10)
 					.buttonStyle(.plain)
 					.help("New Collection")
 				}
