@@ -70,6 +70,12 @@ nonisolated enum AssetFormation {
 		let destination: Destination
 		let members: [(file: Identifier<File>, rule: String)]
 		let absorbed: [Identifier<Asset>]
+		/// The minted asset's representative file, picked here. Nil on a join:
+		/// the surviving asset keeps its own — so a raw-then-rendition import
+		/// keeps the raw, but a rendition minted before its raw arrives is a
+		/// known gap (the raw joins and does not claim primacy). Revisit when
+		/// join learns to re-pick.
+		let representative: Identifier<File>?
 	}
 
 	struct Resolution: Sendable {
@@ -156,6 +162,7 @@ nonisolated enum AssetFormation {
 
 			let destination: Destination
 			var absorbed: [Identifier<Asset>] = []
+			var representative: Identifier<File>? = nil
 			if let survivor = anchors.first {
 				destination = .join(survivor)
 				absorbed = Array(anchors.dropFirst())
@@ -166,18 +173,17 @@ nonisolated enum AssetFormation {
 					])
 				}
 			} else {
-				// Kind from the lowest-id non-sidecar member — deterministic,
-				// and always present: a sidecar only ever clusters by a
-				// confirmed edge to a non-sidecar subject.
-				let founder = group.memberIds
-					.compactMap { byId[$0] }
-					.filter { !$0.isSidecar }
-					.min { sortKey($0) < sortKey($1) }
-				guard let founder else { continue }
+				// Kind and representative from the cluster's non-sidecar files —
+				// always present: a sidecar only ever clusters by a confirmed
+				// edge to a non-sidecar subject.
+				let subjects = group.memberIds.compactMap { byId[$0] }.filter { !$0.isSidecar }
+				guard let founder = subjects.min(by: { sortKey($0) < sortKey($1) }) else { continue }
 				destination = .mint(kind: founder.record.kind.rawValue)
+				representative = pickRepresentative(subjects)
 			}
 			resolution.clusters.append(Cluster(
-				destination: destination, members: members, absorbed: absorbed
+				destination: destination, members: members, absorbed: absorbed,
+				representative: representative
 			))
 		}
 
@@ -295,6 +301,24 @@ nonisolated enum AssetFormation {
 			return pair.sidecar.isFormed ? [] : [pair.sidecar]
 		}
 		return [edge.a, edge.b].filter { !$0.isFormed }
+	}
+
+	/// The representative file: the asset's primary manifestation — the file
+	/// the work is identified by, not the best preview surface. A raw capture
+	/// leads its rendition (the master; the grid thumbnails a raw cheaply from
+	/// its embedded preview), lowest id breaks ties. Caller passes the
+	/// cluster's non-sidecar files — sidecars never represent.
+	///
+	/// PRIMACY, not previewability: the raw flag is today's only signal
+	/// because grouping is homogeneous in kind. When a rule groups across
+	/// kinds (a Live Photo still + its movie), the leading tier becomes a
+	/// registry primacy facet, not this boolean.
+	private static func pickRepresentative(_ subjects: [FormationFile]) -> Identifier<File>? {
+		subjects.min { primacyRank($0) < primacyRank($1) }?.id
+	}
+
+	private static func primacyRank(_ file: FormationFile) -> (Int, String) {
+		(file.isRawCapture ? 0 : 1, sortKey(file))
 	}
 
 	private static func sortKey(_ file: FormationFile) -> String {

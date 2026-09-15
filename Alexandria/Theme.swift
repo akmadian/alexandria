@@ -34,4 +34,12 @@ nonisolated enum Theme {
 		/// as calm empty space, not a hole (grid.md invariant 3/4).
 		static let placeholder = NSColor.quaternaryLabelColor
 	}
+	
+	enum Icons {
+		static let flagged = "flag.fill"
+		static let unflagged = "flag"
+		static let rejected = "flag.slash"
+		static let zoomIn = "plus.magnifyingglass"
+		static let zoomOut = "minus.magnifyingglass"
+	}
 }

@@ -43,6 +43,16 @@ struct AssetFormationTests {
 		}
 	}
 
+	/// The representative file's name for the sole asset in the catalog.
+	private func representativeName(in context: ImportContext) async throws -> String? {
+		try await context.catalog.reader.read { database in
+			try String.fetchOne(database, sql: """
+				SELECT files.name FROM assets
+				JOIN files ON files.id = assets.representative_file_id
+				""")
+		}
+	}
+
 	@Test func rawAndRenditionFormOnePairSameFolder() async throws {
 		let context = try await ImportContext.make()
 		try await context.record([
@@ -59,6 +69,58 @@ struct AssetFormationTests {
 		#expect(raw.asset == jpeg.asset)
 		#expect(raw.rule == "raw_rendition_pair")
 		#expect(jpeg.rule == "raw_rendition_pair")
+	}
+
+	/// Representative picking (primacy): the raw is the asset's face, not the
+	/// rendition — the master the work is identified by, not the best preview.
+	@Test func representativeIsTheRawOverItsRendition() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/_DSF0796.RAF"),
+			context.prepared("/Volumes/Test/Shoot/_DSF0796.JPG"),
+		])
+		_ = try await context.form()
+		#expect(try await representativeName(in: context) == "_DSF0796.RAF")
+	}
+
+	/// A raw with no rendition represents itself.
+	@Test func representativeFallsToTheLoneRaw() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([context.prepared("/Volumes/Test/Shoot/lone.ORF")])
+		_ = try await context.form()
+		#expect(try await representativeName(in: context) == "lone.ORF")
+	}
+
+	/// A non-image single-file asset represents itself — primacy is not
+	/// image-only; the raw flag simply never fires here.
+	@Test func representativeOfAVideoIsTheVideo() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([context.prepared("/Volumes/Test/Shoot/holiday.mp4")])
+		_ = try await context.form()
+		#expect(try await representativeName(in: context) == "holiday.mp4")
+	}
+
+	/// Sidecars never represent: the raw is elected, not the .xmp.
+	@Test func representativeSkipsTheSidecar() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/_DSF0796.xmp"),
+			context.prepared("/Volumes/Test/Shoot/_DSF0796.RAF"),
+			context.prepared("/Volumes/Test/Shoot/_DSF0796.JPG"),
+		])
+		_ = try await context.form()
+		#expect(try await representativeName(in: context) == "_DSF0796.RAF")
+	}
+
+	/// The good half of the join gap: a raw mints first, its rendition joins
+	/// later — the asset keeps the raw as representative.
+	@Test func lateRenditionLeavesTheRawRepresenting() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([context.prepared("/Volumes/Test/Shoot/_DSF0796.RAF")])
+		_ = try await context.form()
+		try await context.record([context.prepared("/Volumes/Test/Shoot/_DSF0796.JPG")])
+		_ = try await context.form()
+		#expect(try await representativeName(in: context) == "_DSF0796.RAF")
 	}
 
 	@Test func rawJpegAndSidecarClusterIntoOneAsset() async throws {

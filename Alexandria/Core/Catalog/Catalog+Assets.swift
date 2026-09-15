@@ -8,11 +8,12 @@ import GRDB
 
 extension Catalog {
 	/// The file whose thumbnail stands for each asset, batched for a visible
-	/// window (grid round, 2026-09-12). `representative_file_id` when set;
-	/// until representative picking lands (formation TODO), it never is, so
-	/// the fallback carries the read: the asset's first file by id — stable,
-	/// arbitrary, and honest about being a stand-in. File-less assets are
-	/// absent from the result (the caller's placeholder case).
+	/// window (grid round, 2026-09-12). `representative_file_id` when set —
+	/// formation picks it at mint (AssetFormation.pickRepresentative). The
+	/// COALESCE fallback carries the residual nulls (a rendition minted before
+	/// its raw joined): the asset's first file by id — stable, arbitrary, and
+	/// honest about being a stand-in. File-less assets are absent from the
+	/// result (the caller's placeholder case).
 	func representativeFileIds(
 		for assetIds: [Identifier<Asset>]
 	) async throws -> [Identifier<Asset>: Identifier<File>] {
@@ -69,7 +70,7 @@ extension Catalog {
 						kind: kind,
 						rating: nil,
 						flag: nil,
-						representativeFileId: nil // TODO: Representative picking
+						representativeFileId: cluster.representative
 					)
 					try asset.insert(database)
 					assetId = asset.id
