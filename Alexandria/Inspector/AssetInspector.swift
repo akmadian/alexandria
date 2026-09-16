@@ -31,11 +31,11 @@ struct AssetInspector: View {
 	init(id: Identifier<Asset>) {
 		_asset = Query(constant: AssetRequest(id: id))
 		_associatedFiles = Query(constant: AssociatedFilesRequest(assetId: id))
-		_repFileLocation = Query(constant: RepresentativeFileLocationRequest(assetId: id))
+		_repFileLocation = Query(constant: RepresentativeFileLocationRequest(assetId: id, log: log))
 	}
 
 	var body: some View {
-		if let asset, let associatedFiles {
+		if let asset, let associatedFiles, let repFileLocation {
 			// Placeholder body — the real layout (asset display, location,
 			// membership tree, keywording, metadata) is its own round.
 			//
@@ -57,6 +57,7 @@ struct AssetInspector: View {
 			// Map
 			VStack(spacing: 8) {
 				Text(representativeFile?.fileStem ?? "No representative file")
+				Text(repFileLocation.fileUrl?.absoluteString ?? "No rep file url")
 				
 				DisclosureGroup("Information") {
 					List {
@@ -64,20 +65,17 @@ struct AssetInspector: View {
 						if let representativeFile {
 							LabeledContent("Size", value: formatBytesAsHumanReadable(representativeFile.sizeBytes))
 						}
-						LabeledContent("Location", value: repFileLocation.map {
-							"\($0.volume.name) / \($0.folder.name)"
-						} ?? "—")
+						LabeledContent("URL", value: repFileLocation.fileUrl?.absoluteString ?? "")
+						Picker("Flag", selection: flag(of: asset)) {
+							Label("None", systemImage: "flag.slash")
+								.tag(Asset.Flag?.none)
+							Label("Pick", systemImage: "flag.fill")
+								.tag(Optional(Asset.Flag.pick))
+							Label("Reject", systemImage: "xmark")
+								.tag(Optional(Asset.Flag.reject))
+						}
+						.pickerStyle(.segmented)
 					}
-
-					Picker("Flag", selection: flag(of: asset)) {
-						Label("None", systemImage: "flag.slash")
-							.tag(Asset.Flag?.none)
-						Label("Pick", systemImage: "flag.fill")
-							.tag(Optional(Asset.Flag.pick))
-						Label("Reject", systemImage: "xmark")
-							.tag(Optional(Asset.Flag.reject))
-					}
-					.pickerStyle(.segmented)
 				}
 				// The inspector SHOWS the cursor asset, but every judgment
 				// targets the whole selection (ruled 2026-09-14); the

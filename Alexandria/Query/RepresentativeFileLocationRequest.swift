@@ -5,11 +5,13 @@
 //  Created by ari on 9/16/26.
 //
 
+import Foundation
 import GRDB
 import GRDBQuery
 import Logging
 
 struct Location {
+	let fileUrl: URL?
 	let volume: Volume
 	let folder: Folder
 }
@@ -43,7 +45,11 @@ struct RepresentativeFileLocationRequest: ValueObservationQueryable {
 			guard let volume = try Volume.fetchOne(db, key: folder.volumeId) else {
 				log.error("location: volume missing", metadata: ["volume": "\(folder.volumeId)"]); return nil
 			}
-			return Location(volume: volume, folder: folder)
+			return Location(
+				fileUrl: try Catalog.fileURL(db, of: fileId),
+				volume: volume,
+				folder: folder
+			)
 		} catch {
 			// A decode/query throw would otherwise vanish into the Query's error state.
 			log.error("location fetch failed", metadata: ["asset": "\(assetId)", "error": "\(error)"])

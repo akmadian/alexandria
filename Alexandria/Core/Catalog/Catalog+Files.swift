@@ -231,4 +231,45 @@ extension Catalog {
 		}
 		return parentId
 	}
+
+	/// The file's current absolute URL on disk, or nil when its volume isn't
+	/// mounted. "Just put the paths together": the folder's reconstructed
+	/// volume-relative path, under the volume's live mount point, plus the file
+	/// name. Nothing here is stored — paths recompose through the folder tree
+	/// (so a relocation is a one-row edit) and the mount is resolved live. The
+	/// path is rebuilt by walking the folder's ancestors to its tracked root —
+	/// the ancestor twin of the subtree walks — where the root carries the
+	/// volume-relative root_path and each descendant contributes its on-disk
+	/// name.
+	///
+	/// Synchronous over a passed `db` and `nonisolated static` so an observation
+	/// can compose the URL from inside its own `fetch(_:)` (RepresentativeFile-
+	/// LocationRequest) without a second reader hop.
+	// TODO: the mount resolves once, on demand (currentMountURL). A volume
+	// mounted or ejected after this returns won't re-fire — wire mount-event
+	// observation when the UI needs live availability.
+	nonisolated static func fileURL(_ db: Database, of fileID: Identifier<File>) throws -> URL? {
+		guard let file = try File.fetchOne(db, key: fileID) else { return nil }
+		// The folder's ancestor chain, root first (highest depth). The extra
+		// `depth` column orders the walk and is ignored by Folder decoding.
+		let ancestors = try Folder.fetchAll(db, sql: """
+			WITH RECURSIVE ancestry AS (
+			    SELECT folders.*, 0 AS depth FROM folders WHERE id = ?
+			    UNION ALL
+			    SELECT folders.*, ancestry.depth + 1 FROM folders
+			    JOIN ancestry ON folders.id = ancestry.parent_id
+			)
+			SELECT * FROM ancestry ORDER BY depth DESC
+			""", arguments: [file.folderId])
+		// The root anchors the volume-relative path; descendants add names.
+		guard let root = ancestors.first, let rootPath = root.rootPath else { return nil }
+		let relativePath = ([rootPath] + ancestors.dropFirst().map(\.name)).joined(separator: "/")
+		guard let volume = try Volume.fetchOne(db, key: root.volumeId),
+		      let identity = volume.identity,
+		      let mount = currentMountURL(of: identity) else { return nil }
+		return relativePath
+			.split(separator: "/")
+			.reduce(mount) { $0.appending(path: String($1)) }
+			.appending(path: file.name)
+	}
 }

@@ -21,7 +21,14 @@ struct StageView: View {
 		case .grid:
 			GridView(imaging: imaging)
 		case .loupe:
-			Text("Loupe")
+			switch viewState.cursor {
+			case .asset(let id):
+				LoupeView(id: id)
+			case .file:
+				ContentUnavailableView("No file loupe yet", systemImage: "doc")
+			case nil:
+				ContentUnavailableView("Nothing Selected", systemImage: "info")
+			}
 		}
 	}
 }
