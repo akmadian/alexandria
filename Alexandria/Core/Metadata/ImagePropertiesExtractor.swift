@@ -35,6 +35,7 @@ nonisolated struct ImagePropertiesExtractor: MetadataExtracting {
 		if let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] {
 			metadata.lensModel = trimmedString(exif[kCGImagePropertyExifLensModel])
 			metadata.capturedAt = exifWallClockDate(trimmedString(exif[kCGImagePropertyExifDateTimeOriginal]))
+			metadata.captureOffset = trimmedString(exif[kCGImagePropertyExifOffsetTimeOriginal])
 			metadata.aperture = double(exif[kCGImagePropertyExifFNumber])
 			metadata.focalLength = double(exif[kCGImagePropertyExifFocalLength])
 			metadata.iso = integer(firstElement(exif[kCGImagePropertyExifISOSpeedRatings]))

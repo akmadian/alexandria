@@ -85,6 +85,7 @@ struct ImportContext {
 	func prepared(
 		_ path: String,
 		metadata: FileMetadata? = nil,
+		modifiedAt: Date = Date(timeIntervalSince1970: 1_700_000_000),
 		extractionFailed: Bool = false
 	) -> PreparedFile {
 		let url = URL(fileURLWithPath: path)
@@ -93,7 +94,7 @@ struct ImportContext {
 		let (stem, ext) = ImportRun.splitStem(nameKey)
 		return PreparedFile(
 			discovered: DiscoveredFile(
-				url: url, size: 1024, modifiedAt: Date(timeIntervalSince1970: 1_700_000_000),
+				url: url, size: 1024, modifiedAt: modifiedAt,
 				format: FileFormat.resolve(extension: url.pathExtension, contentType: nil)
 			),
 			name: name, nameKey: nameKey, fileStem: stem, fileExtension: ext,

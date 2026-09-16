@@ -29,6 +29,8 @@ nonisolated struct VideoPropertiesExtractor: MetadataExtracting {
 
 		if let creationDate = try await asset.load(.creationDate) {
 			metadata.capturedAt = try await creationDate.load(.dateValue)
+			// ponytail: no captureOffset for video — AVFoundation's creationDate
+			// is a bare instant here, and deriving the zone isn't a trivial read.
 		}
 		return metadata
 	}

@@ -53,6 +53,14 @@ nonisolated struct Arrangement: Hashable, Sendable {
 		/// (ms timestamp + random tail), so records minted in the same
 		/// millisecond order arbitrarily — but stably, since ids persist.
 		case added
+		/// Capture time (grid sorting round, 2026-09-15): the shutter moment
+		/// (EXIF DateTimeOriginal), read through `files.capture_sort`, which
+		/// COALESCEs to disk mtime, so a file with no capture evidence still
+		/// sorts by when it was last written and the key is never null. An
+		/// asset sorts by its representative file's key (Ari's ruling: the
+		/// representative is the sorted file). Consumes direction, unlike
+		/// manual.
+		case captured
 		/// The collection's authored order — the order_key walk (collections
 		/// round, 2026-09-12). Meaningful only over a collection source (the
 		/// hub's normalize rule keeps it off every other source, visibly),
@@ -117,20 +125,47 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 	func fetchIdentifiers(_ database: Database) throws -> [SubjectID] {
 		let direction = arrangement.direction == .ascending ? "ASC" : "DESC"
 		// Exhaustive so a new key can't silently keep sorting by id.
-		let column: String
+		// The files lens's ORDER BY. Exhaustive so a new key can't silently
+		// keep sorting by id.
+		let order: String
 		switch arrangement.sortKey {
-		case .added:
+		case .added, .manual:
 			// TEXT UUIDv7: lexicographic order is chronological, at ms
-			// granularity (see Arrangement.SortKey.added).
-			column = "id"
-		case .manual:
-			// Only the collection branch below compiles manual for real; the
-			// hub's normalize rule keeps it off every other source, and
-			// totality here deliberately mirrors .added rather than trapping
-			// on a state the type can't rule out.
-			column = "id"
+			// granularity (see Arrangement.SortKey.added). manual reaches the
+			// files lens only as the normalized fallback — its real walk is
+			// assets-only and returns earlier — so it mirrors .added.
+			order = "ORDER BY id \(direction)"
+		case .captured:
+			// capture_sort is COALESCE(captured, mtime): total on files (mtime
+			// is NOT NULL), so no null bucket here; id breaks capture ties.
+			order = "ORDER BY capture_sort \(direction), id \(direction)"
 		}
-		let order = "ORDER BY \(column) \(direction)"
+
+		// The asset lens orders by the SAME key, but read through each asset's
+		// representative file (Ari's ruling: the representative is the sorted
+		// file). Wraps a membership subquery (one asset_id column) in that order.
+		func orderedAssets(_ membership: String) -> String {
+			switch arrangement.sortKey {
+			case .added, .manual:
+				return "SELECT asset_id FROM (\(membership)) ORDER BY asset_id \(direction)"
+			case .captured:
+				// Reuses Asset.representativeFileID (the one election) to reach
+				// the representative's capture_sort; a representative-less asset
+				// (no file) has a NULL key and sorts last in BOTH directions.
+				// PERF: not index-served — the final sort is on capture_sort
+				// reached through a per-row computed election key, so it's a
+				// scan-and-sort over the membership. Fine at 40k as a
+				// per-observation cost; trigger: asset-lens capture sort
+				// measurably sluggish on a large library. Upgrade path: a stored
+				// per-asset representative-capture column maintained on formation
+				// and metadata writes.
+				return """
+					SELECT m.asset_id FROM (\(membership)) AS m \
+					LEFT JOIN files rep ON rep.id = \(Asset.representativeFileID(ofAssetID: "m.asset_id")) \
+					ORDER BY rep.capture_sort IS NULL, rep.capture_sort \(direction), m.asset_id \(direction)
+					"""
+			}
+		}
 
 		// The subtree walk (ratified: a folder source reaches everything
 		// beneath it): the folder plus every descendant, by parent_id.
@@ -159,27 +194,24 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 			var arguments: StatementArguments = []
 			switch source {
 			case .library:
-				sql = "SELECT id FROM assets \(order)"
+				sql = orderedAssets("SELECT id AS asset_id FROM assets")
 			case .folder(let folder):
-				sql = subtree + """
+				sql = subtree + orderedAssets("""
 					SELECT DISTINCT asset_id FROM files \
-					WHERE folder_id IN subtree AND asset_id IS NOT NULL \
-					ORDER BY asset_id \(direction)
-					"""
+					WHERE folder_id IN subtree AND asset_id IS NOT NULL
+					""")
 				arguments = [folder]
 			case .import(let run):
-				sql = """
+				sql = orderedAssets("""
 					SELECT DISTINCT asset_id FROM files \
-					WHERE import_id = ? AND asset_id IS NOT NULL \
-					ORDER BY asset_id \(direction)
-					"""
+					WHERE import_id = ? AND asset_id IS NOT NULL
+					""")
 				arguments = [run]
 			case .latestImport:
-				sql = """
+				sql = orderedAssets("""
 					SELECT DISTINCT asset_id FROM files \
-					WHERE import_id = \(latestImport) AND asset_id IS NOT NULL \
-					ORDER BY asset_id \(direction)
-					"""
+					WHERE import_id = \(latestImport) AND asset_id IS NOT NULL
+					""")
 			case .collection(let collection):
 				if arrangement.sortKey == .manual {
 					// The sectioned union order (ruling 5) — Swift-side,
@@ -193,9 +225,9 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 				// membership — never sectioned; sorting means sorting. The
 				// subtree rides Collection.subtreeCTE, the concept's one
 				// implementation (ruling 5's union; ghost-safe seed).
-				sql = Collection.subtreeCTE
-					+ " SELECT DISTINCT asset_id FROM collection_members"
-					+ " WHERE collection_id IN subtree ORDER BY asset_id \(direction)"
+				sql = Collection.subtreeCTE + " " + orderedAssets(
+					"SELECT DISTINCT asset_id FROM collection_members WHERE collection_id IN subtree"
+				)
 				arguments = [collection]
 			}
 			return try Identifier<Asset>

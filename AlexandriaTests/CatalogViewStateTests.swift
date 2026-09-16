@@ -278,6 +278,134 @@ struct CatalogViewStateTests {
 		}
 	}
 
+	// MARK: Capture-time sort (grid sorting round, 2026-09-15)
+
+	private func captured(_ iso: String) -> FileMetadata {
+		var metadata = FileMetadata()
+		metadata.capturedAt = ISO8601DateFormatter().date(from: iso)
+		return metadata
+	}
+
+	/// The files lens under .captured orders by capture_sort =
+	/// COALESCE(capturedAt, mtime): a file with no EXIF slots in by its mtime,
+	/// interleaved with the captured files rather than bucketed at an end.
+	/// Ascending, so the mtime-only file must land in the MIDDLE — the claim
+	/// the fallback exists to make.
+	@Test func capturedSortOnFilesFallsBackToMtimeInline() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/a.jpg", metadata: captured("2020-01-01T00:00:00Z")),
+			context.prepared("/Volumes/Test/Shoot/b.jpg", metadata: captured("2022-01-01T00:00:00Z")),
+			// No EXIF: capture_sort falls to this mtime (2021), so it must sort
+			// between a (2020) and b (2022), not first or last.
+			context.prepared(
+				"/Volumes/Test/Shoot/c.jpg",
+				modifiedAt: Date(timeIntervalSince1970: 1_609_459_200)
+			),
+		])
+
+		let query = WorkingSetQuery(
+			lens: .files, source: .library,
+			arrangement: Arrangement(sortKey: .captured, direction: .ascending)
+		)
+		let (ids, byName) = try await context.catalog.databaseWriter.read { db in
+			let ids = try query.fetchIdentifiers(db)
+			let byName = Dictionary(
+				uniqueKeysWithValues: try File.fetchAll(db).map { ($0.name, SubjectID.file($0.id)) }
+			)
+			return (ids, byName)
+		}
+		#expect(ids == ["a.jpg", "c.jpg", "b.jpg"].map { byName[$0]! })
+	}
+
+	/// The assets lens under .captured orders each asset by its REPRESENTATIVE
+	/// file's capture time (Ari's ruling), not by asset id. Falsifiable: the
+	/// earlier-capture asset is recorded second, so its id is later — added
+	/// order and capture order disagree, and capture must win.
+	@Test func capturedSortOnAssetsFollowsTheRepresentativeFile() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/late.jpg", metadata: captured("2023-01-01T00:00:00Z")),
+			context.prepared("/Volumes/Test/Shoot/early.jpg", metadata: captured("2019-01-01T00:00:00Z")),
+		])
+		try await context.form()
+
+		let query = WorkingSetQuery(
+			lens: .assets, source: .library,
+			arrangement: Arrangement(sortKey: .captured, direction: .ascending)
+		)
+		let (ids, assetByFileName) = try await context.catalog.databaseWriter.read {
+			db -> ([SubjectID], [String: SubjectID]) in
+			let ids = try query.fetchIdentifiers(db)
+			var map: [String: SubjectID] = [:]
+			for file in try File.fetchAll(db) where file.assetId != nil {
+				map[file.name] = .asset(file.assetId!)
+			}
+			return (ids, map)
+		}
+		#expect(ids == [assetByFileName["early.jpg"]!, assetByFileName["late.jpg"]!])
+	}
+
+	/// The representative election's OVERRIDE branch drives the sort, not the
+	/// first-file-by-id fallback. a.raf (raw) + a.jpg (rendition) pair into one
+	/// asset and formation stores the RAW as representative; the raw carries an
+	/// early capture and the jpeg none (so it can't refute the pair) with a much
+	/// later mtime. The raw's key winning proves the sort reads
+	/// assets.representative_file_id, not whichever file happens to be first by
+	/// id — a mis-correlation there would sort by the jpeg's 2023 mtime instead.
+	@Test func capturedSortOnAssetsReadsTheStoredRepresentative() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/a.raf", metadata: captured("2018-01-01T00:00:00Z")),
+			context.prepared("/Volumes/Test/Shoot/a.jpg"),   // no capture; default mtime ~2023
+			context.prepared("/Volumes/Test/Shoot/solo.jpg", metadata: captured("2021-01-01T00:00:00Z")),
+		])
+		try await context.form()
+
+		let query = WorkingSetQuery(
+			lens: .assets, source: .library,
+			arrangement: Arrangement(sortKey: .captured, direction: .ascending)
+		)
+		let (ids, assetByFileName) = try await context.catalog.databaseWriter.read {
+			db -> ([SubjectID], [String: SubjectID]) in
+			let ids = try query.fetchIdentifiers(db)
+			var map: [String: SubjectID] = [:]
+			for file in try File.fetchAll(db) where file.assetId != nil {
+				map[file.name] = .asset(file.assetId!)
+			}
+			return (ids, map)
+		}
+		// Two assets: the raw+jpeg pair (raw = 2018) sorts before solo (2021),
+		// not after it by the jpeg's 2023 mtime.
+		#expect(ids == [assetByFileName["a.raf"]!, assetByFileName["solo.jpg"]!])
+	}
+
+	/// A representative-less asset (no file → NULL capture key) sorts LAST in
+	/// BOTH directions — the `capture_sort IS NULL` leading term carries no
+	/// direction, so it never leads a descending sort.
+	@Test func capturedSortPutsRepresentativeLessAssetsLast() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/real.jpg", metadata: captured("2020-01-01T00:00:00Z")),
+		])
+		try await context.form()
+		let fileless = try await seedAsset(context.catalog, at: 5_000)
+		let real = try await context.catalog.databaseWriter.read {
+			db -> SubjectID in
+			.asset(try File.fetchAll(db).first { $0.assetId != nil }!.assetId!)
+		}
+
+		func ordered(_ direction: Arrangement.Direction) async throws -> [SubjectID] {
+			let query = WorkingSetQuery(
+				lens: .assets, source: .library,
+				arrangement: Arrangement(sortKey: .captured, direction: direction)
+			)
+			return try await context.catalog.databaseWriter.read { try query.fetchIdentifiers($0) }
+		}
+		#expect(try await ordered(.ascending) == [real, .asset(fileless)])
+		#expect(try await ordered(.descending) == [real, .asset(fileless)])
+	}
+
 	// MARK: The lens and the source, through the observation
 
 	@Test func aNewImportBecomesThePreviousImportLive() async throws {

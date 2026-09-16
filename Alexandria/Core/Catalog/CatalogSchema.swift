@@ -88,6 +88,20 @@ nonisolated enum CatalogSchema {
 	    content_hash   TEXT,              -- [obs] partial hash of the first 64KB
 	    missing        INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),  -- [obs] rescan verdict
 	    metadata       TEXT,              -- [obs] JSON, field-catalog keys; promotion mints generated columns
+	    -- [der] The capture-time sort key (grid sorting round, 2026-09-15): the
+	    -- first metadata field promoted per the blob's design (database.md) —
+	    -- EXIF capture time lifted out of the JSON, COALESCEd to disk mtime so
+	    -- the key is total (every file has an mtime; NOT NULL). VIRTUAL: no row
+	    -- storage, the value is materialized by its index — so json_extract runs
+	    -- at WRITE (index maintenance), and a non-JSON metadata blob would throw
+	    -- on INSERT. Safe while databaseJSON() is the only writer (valid JSON or
+	    -- NULL; '' and '{}' both parse); a future raw-blob metadata lane must keep
+	    -- that invariant. Cross-format fuzz: capturedAt encodes at second precision
+	    -- and modified_at at ms, so a captured/mtime pair inside the same second is
+	    -- byte-ordered ('.' 0x2E < 'Z' 0x5A), a sub-second wobble within capture
+	    -- sort's stated second granularity — the id tiebreak resolves only EXACT
+	    -- ties, not this cross-format case (see FileMetadata's encoder note).
+	    capture_sort   TEXT GENERATED ALWAYS AS (COALESCE(json_extract(metadata, '$.captured_at'), modified_at)) VIRTUAL,
 	    thumbnail_at   TEXT,              -- [der] NULL = pending; the missing artifact IS the queue
 	    -- [der] the rule that admitted this file to its asset — a historical
 	    -- fact, never "the rule that would match now". NULL = not yet formed
@@ -99,6 +113,12 @@ nonisolated enum CatalogSchema {
 	CREATE INDEX idx_files_asset  ON files(asset_id);
 	CREATE INDEX idx_files_stem   ON files(file_stem);  -- catalog-wide formation collision address
 	CREATE INDEX idx_files_import ON files(import_id);
+	-- The whole-library files lens rides this: ORDER BY capture_sort is
+	-- index-served there, not a scan-and-sort. A narrowed files source (WHERE
+	-- import_id = ? … ORDER BY capture_sort) is filter-then-sort, and the asset
+	-- lens sorts on a computed join key the index can't reach (grid sorting
+	-- round, 2026-09-15; see WorkingSetQuery's PERF note).
+	CREATE INDEX idx_files_capture_sort ON files(capture_sort);
 	-- The thumbnail worklist (thumbnails round, ratified 2026-09-11): pending
 	-- rows only, ordered — each drain pull is O(log n + batch) and the index
 	-- empties as stamps land. Errored files stay in it (thumbnail_at NULL);

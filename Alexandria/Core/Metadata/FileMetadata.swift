@@ -25,6 +25,14 @@ nonisolated struct FileMetadata: Codable, Equatable, Sendable {
 	// EXIF timestamps carry no timezone: parsed as wall-clock, UTC-labelled,
 	// so the capture time displays as the camera recorded it.
 	var capturedAt: Date?
+	// The capture-time zone offset ("-05:00") when the source carries one
+	// (EXIF OffsetTimeOriginal). Its own field, never folded into capturedAt:
+	// capturedAt stays pure wall-clock so the capture-time sort key is one
+	// scale across files that carry an offset and files that don't. nil = zone
+	// unknown, from any cause — the field answers "what's the zone", it does
+	// not mirror a tag. Display-only today; stored opportunistically because
+	// the offset is readable only at extraction.
+	var captureOffset: String?
 
 	var cameraMake: String?
 	var cameraModel: String?
