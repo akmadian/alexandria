@@ -58,7 +58,7 @@ nonisolated enum AssetFormation {
 
 	/// Where a cluster's files land.
 	enum Destination: Sendable {
-		case mint(kind: String)
+		case mint(kind: FileKind)
 		case join(Identifier<Asset>)
 	}
 
@@ -178,7 +178,7 @@ nonisolated enum AssetFormation {
 				// edge to a non-sidecar subject.
 				let subjects = group.memberIds.compactMap { byId[$0] }.filter { !$0.isSidecar }
 				guard let founder = subjects.min(by: { sortKey($0) < sortKey($1) }) else { continue }
-				destination = .mint(kind: founder.record.kind.rawValue)
+				destination = .mint(kind: founder.record.kind)
 				representative = pickRepresentative(subjects)
 			}
 			resolution.clusters.append(Cluster(

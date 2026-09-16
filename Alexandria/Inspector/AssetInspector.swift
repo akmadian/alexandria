@@ -12,67 +12,6 @@ import Logging
 
 private nonisolated let log = Logger(label: "inspector")
 
-struct Location {
-	let volume: Volume
-	let folder: Folder
-}
-
-/// Observes one asset by id. Feeds from the `\.databaseContext` environment
-/// (injected at the app root), so the view re-renders whenever that asset's
-/// record changes.
-struct AssetRequest: ValueObservationQueryable {
-	static var defaultValue: Asset? { nil }
-
-	var id: Identifier<Asset>
-
-	func fetch(_ db: Database) throws -> Asset? {
-		try Asset.fetchOne(db, key: id)
-	}
-}
-
-struct AssociatedFilesRequest: ValueObservationQueryable {
-	static var defaultValue: [File]? { nil }
-	
-	var assetId: Identifier<Asset>
-	
-	func fetch(_ db: Database) throws -> [File]? {
-		try File
-			.filter(Column("asset_id") == assetId)
-			.fetchAll(db)
-	}
-}
-
-struct RepresentativeFileLocationRequest: ValueObservationQueryable {
-	static var defaultValue: Location? { nil }
-	
-	var assetId: Identifier<Asset>
-	
-	func fetch(_ db: Database) throws -> Location? {
-		do {
-			guard let asset = try Asset.fetchOne(db, key: assetId) else {
-				log.warning("location: asset not found", metadata: ["asset": "\(assetId)"]); return nil
-			}
-			guard let fileId = asset.representativeFileId else {
-				log.warning("location: no representative file", metadata: ["asset": "\(assetId)"]); return nil
-			}
-			guard let file = try File.fetchOne(db, key: fileId) else {
-				log.error("location: file missing", metadata: ["file": "\(fileId)"]); return nil
-			}
-			guard let folder = try Folder.fetchOne(db, key: file.folderId) else {
-				log.error("location: folder missing", metadata: ["folder": "\(file.folderId)"]); return nil
-			}
-			guard let volume = try Volume.fetchOne(db, key: folder.volumeId) else {
-				log.error("location: volume missing", metadata: ["volume": "\(folder.volumeId)"]); return nil
-			}
-			return Location(volume: volume, folder: folder)
-		} catch {
-			// A decode/query throw would otherwise vanish into the Query's error state.
-			log.error("location fetch failed", metadata: ["asset": "\(assetId)", "error": "\(error)"])
-			throw error
-		}
-	}
-}
-
 struct AssetInspector: View {
 	@Environment(\.catalog) private var catalog
 	@Environment(CatalogViewState.self) private var viewState

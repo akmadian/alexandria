@@ -11,7 +11,7 @@ nonisolated struct Asset: Identifiable, CatalogRecord {
 	static let databaseTableName = "assets"
 	
 	let id: Identifier<Asset>
-	var kind: String                    // open set by design; v0 writes FileKind raw values
+	var kind: FileKind                  // typed on read; the openness lives in the TEXT column (stores the raw value), FileKind.other is the open tail
 	var rating: Int?
 	var flag: Flag?
 	var representativeFileId: Identifier<File>?

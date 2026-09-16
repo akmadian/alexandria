@@ -46,7 +46,7 @@ nonisolated func seedAsset(
 	_ catalog: Catalog, at seconds: TimeInterval
 ) async throws -> Identifier<Asset> {
 	let id = Identifier<Asset>(rawValue: .v7(at: Date(timeIntervalSince1970: seconds)))
-	let asset = Asset(id: id, kind: "image", rating: nil, flag: nil, representativeFileId: nil)
+	let asset = Asset(id: id, kind: .image, rating: nil, flag: nil, representativeFileId: nil)
 	try await catalog.databaseWriter.write { try asset.insert($0) }
 	return id
 }
