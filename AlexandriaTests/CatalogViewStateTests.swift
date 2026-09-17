@@ -864,4 +864,52 @@ struct CatalogViewStateTests {
 		hub.setGridColumns(7)
 		#expect(hub.gridColumns == 7)
 	}
+
+	// MARK: The filter posture (filter round, 2026-09-16)
+
+	private func ratingAtLeast(_ n: Int) -> FilterGroup {
+		FilterGroup(combine: .and, children: [
+			.token(FilterToken(field: .rating, op: .gte, value: .int(n))),
+		])
+	}
+
+	@Test func setFilterNarrowsTheAnswerAndClearRestores() async throws {
+		let catalog = try Catalog(DatabaseQueue())
+		let plain = try await seedAsset(catalog, at: 1_000)
+		let starred = try await seedAsset(catalog, at: 2_000)
+		_ = try await catalog.setRating([starred], to: 5)
+		let hub = CatalogViewState(catalog: catalog)
+		try await eventually("initial delivery") { hub.workingSet.count == 2 }
+
+		// The filter reaches the observation's question, not just the field.
+		hub.setFilter(ratingAtLeast(4))
+		try await eventually("filtered delivery") { hub.workingSet == [.asset(starred)] }
+		#expect(hub.filter == ratingAtLeast(4))
+
+		// nil clears, separately from source — the full answer returns.
+		hub.setFilter(nil)
+		try await eventually("cleared delivery") {
+			hub.workingSet == [.asset(starred), .asset(plain)]
+		}
+		#expect(hub.filter == nil)
+	}
+
+	@Test func emptyGroupsNormalizeToNilAtTheIntent() async throws {
+		let catalog = try Catalog(DatabaseQueue())
+		_ = try await seedAsset(catalog, at: 1_000)
+		let hub = CatalogViewState(catalog: catalog)
+		try await eventually("initial delivery") { hub.workingSet.count == 1 }
+
+		// An empty group IS "no filter": one representation (nil), so
+		// removing the last pill and "clear filter" converge.
+		hub.setFilter(FilterGroup(combine: .and, children: []))
+		#expect(hub.filter == nil)
+
+		// And from an active filter, an emptied group clears it fully.
+		hub.setFilter(ratingAtLeast(4))
+		try await eventually("filtered delivery") { hub.workingSet.isEmpty }
+		hub.setFilter(FilterGroup(combine: .or, children: []))
+		#expect(hub.filter == nil)
+		try await eventually("cleared delivery") { hub.workingSet.count == 1 }
+	}
 }

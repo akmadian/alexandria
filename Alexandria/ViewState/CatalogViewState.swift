@@ -43,6 +43,15 @@ final class CatalogViewState {
 	// memory — returning to a collection should restore the arrangement it
 	// was left in. Its own round; this stays single-valued until then.
 	private(set) var arrangement = Arrangement()
+	/// The filter's clause (filter round, 2026-09-16): held as its own
+	/// posture field beside source (scope ⊂ filter, ratified 2026-09-11 —
+	/// both compile to WHERE, but the browser authors source without
+	/// read-modify-writing the filter's tokens, and each clears alone).
+	/// Always normalized: never an empty group, so "no filter" has exactly
+	/// one representation (nil). DELIBERATELY UNSETTLED: whether the active
+	/// filter survives relaunch — unlike gridColumns' settled should-persist
+	/// note, the viewpoint-persistence round decides this one.
+	private(set) var filter: FilterGroup?
 	private(set) var viewMode: ViewMode = .grid
 	private(set) var selection: Set<SubjectID> = []
 	private(set) var cursor: SubjectID?
@@ -115,6 +124,32 @@ final class CatalogViewState {
 			logManualFellBack(intent: "setArrangement", kept: normalized.direction)
 		}
 		arrangement = normalized
+		restartObservation()
+	}
+
+	/// Replaces the filter, or clears it with nil. The posture rule is
+	/// FilterGroup.normalized() — empty groups prune, an empty root IS nil —
+	/// so removing the last pill and "clear filter" converge on the same
+	/// state and the compiler's identity-element backstop stays unreachable.
+	/// Validation is a debug assertion, not a refusal: the P0 UI builds
+	/// tokens from the vocabulary enums, so an invalid token here is a
+	/// programmer error — the loud, typed refusal guards the persistence
+	/// fence, where blobs arrive untrusted.
+	func setFilter(_ newFilter: FilterGroup?) {
+		let normalized = newFilter?.normalized()
+		assert((try? normalized?.validate()) != nil || normalized == nil,
+		       "setFilter received an invalid token; the vocabulary enums can't express this")
+		guard normalized != filter else { return }
+		filter = normalized
+		if let normalized {
+			// The wire form is the compact canonical rendering; the Swift
+			// dump is the fallback if encoding ever fails.
+			log.info("filter set", metadata: [
+				"filter": "\((try? normalized.serialized()) ?? String(describing: normalized))",
+			])
+		} else {
+			log.info("filter cleared")
+		}
 		restartObservation()
 	}
 
@@ -219,7 +254,7 @@ final class CatalogViewState {
 	/// rapidQuestionSwapsLandOnTheLastQuestion).
 	private func restartObservation() {
 		observation?.cancel()
-		let query = WorkingSetQuery(lens: lens, source: source, arrangement: arrangement)
+		let query = WorkingSetQuery(lens: lens, source: source, arrangement: arrangement, filter: filter)
 		log.debug("observation swap", metadata: ["query": "\(query)"])
 		observation = ValueObservation
 			.tracking { try query.fetchIdentifiers($0) }

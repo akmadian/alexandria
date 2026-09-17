@@ -45,7 +45,10 @@ Multiple roots are allowed. Membership is the user's work product
    and learnings.md already ratified "smart collections store the
    predicate, never the membership." Rejected: designing the predicate
    now (the filter round's job; a speculative column is a smuggled
-   field).
+   field). Seam settled 2026-09-16: the filter round minted the format —
+   a versioned JSON envelope via `FilterGroup.serialized()` (_design/
+   filter.md); the column lands as TEXT, decoded lazily per use so one
+   corrupt predicate disables one row, never the sidebar's fetch.
 
 3. **Manual order = fractional indexing, Figma as the reference
    implementation.** One TEXT `order_key` per membership row, base-62

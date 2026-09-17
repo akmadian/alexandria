@@ -118,36 +118,67 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 	var lens: Lens
 	var source: Source
 	var arrangement: Arrangement
+	/// The filter's clause (filter round, 2026-09-16): nil = no filter, and
+	/// every statement below is byte-identical to its unfiltered form
+	/// (pinned by test). The struct carries the TREE, never compiled state —
+	/// compilation happens per fetch, inside this call, so the query stays
+	/// Hashable and a compiled literal can never be cached stale.
+	var filter: FilterGroup? = nil
 
 	/// The working set: every id the question yields, in arrangement order.
 	/// Ids only — record content is fetched by consumers on demand, so this
 	/// stays cheap to re-run on every impactful commit.
+	///
+	/// Composition is GRDB SQL literals throughout (filter round): every
+	/// bound value rides WITH its placeholder, so a spliced clause can never
+	/// shift another clause's bindings — the hand-threaded String +
+	/// StatementArguments form made binding order positional bookkeeping,
+	/// correct only while every `?` happened to precede the filter's.
 	func fetchIdentifiers(_ database: Database) throws -> [SubjectID] {
 		let direction = arrangement.direction == .ascending ? "ASC" : "DESC"
-		// Exhaustive so a new key can't silently keep sorting by id.
 		// The files lens's ORDER BY. Exhaustive so a new key can't silently
 		// keep sorting by id.
-		let order: String
+		let order: SQL
 		switch arrangement.sortKey {
 		case .added, .manual:
 			// TEXT UUIDv7: lexicographic order is chronological, at ms
 			// granularity (see Arrangement.SortKey.added). manual reaches the
 			// files lens only as the normalized fallback — its real walk is
 			// assets-only and returns earlier — so it mirrors .added.
-			order = "ORDER BY id \(direction)"
+			order = "ORDER BY id \(sql: direction)"
 		case .captured:
 			// capture_sort is COALESCE(captured, mtime): total on files (mtime
 			// is NOT NULL), so no null bucket here; id breaks capture ties.
-			order = "ORDER BY capture_sort \(direction), id \(direction)"
+			order = "ORDER BY capture_sort \(sql: direction), id \(sql: direction)"
+		}
+
+		// The filter's splice for asset memberships: wraps the membership
+		// (one asset_id column) BEFORE ordering is applied — never around
+		// orderedAssets, where the ORDER BY would sink into a subquery whose
+		// order the outer statement doesn't contract to keep (adversarial
+		// pass, B1). fm aliases the membership so it can't shadow the
+		// election subqueries' rep_a/rep_f or the outer AS m.
+		// PERF: the predicate columns (rating/flag/kind) are unindexed, so a
+		// whole-library filter is a full column scan — fine at the 40k
+		// working target by reasoning, UNTESTED at the 1M ceiling; trigger:
+		// filtered library views measurably sluggish. Upgrade: index the
+		// judgment columns. Also: on .library the membership IS the assets
+		// table, so this wraps a whole-table pass in a PK self-join —
+		// accepted for the one uniform seam over every source (the planner
+		// flattens it); upgrade if it ever measures: let .library splice
+		// the predicate directly.
+		func filtered(_ membership: SQL) -> SQL {
+			guard let filter else { return membership }
+			return "SELECT fm.asset_id FROM (\(membership)) fm JOIN assets ON assets.id = fm.asset_id WHERE \(filter.sqlPredicate())"
 		}
 
 		// The asset lens orders by the SAME key, but read through each asset's
 		// representative file (Ari's ruling: the representative is the sorted
 		// file). Wraps a membership subquery (one asset_id column) in that order.
-		func orderedAssets(_ membership: String) -> String {
+		func orderedAssets(_ membership: SQL) -> SQL {
 			switch arrangement.sortKey {
 			case .added, .manual:
-				return "SELECT asset_id FROM (\(membership)) ORDER BY asset_id \(direction)"
+				return "SELECT asset_id FROM (\(filtered(membership))) ORDER BY asset_id \(sql: direction)"
 			case .captured:
 				// Reuses Asset.representativeFileID (the one election) to reach
 				// the representative's capture_sort; a representative-less asset
@@ -160,9 +191,9 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 				// per-asset representative-capture column maintained on formation
 				// and metadata writes.
 				return """
-					SELECT m.asset_id FROM (\(membership)) AS m \
-					LEFT JOIN files rep ON rep.id = \(Asset.representativeFileID(ofAssetID: "m.asset_id")) \
-					ORDER BY rep.capture_sort IS NULL, rep.capture_sort \(direction), m.asset_id \(direction)
+					SELECT m.asset_id FROM (\(filtered(membership))) AS m \
+					LEFT JOIN files rep ON rep.id = \(sql: Asset.representativeFileID(ofAssetID: "m.asset_id")) \
+					ORDER BY rep.capture_sort IS NULL, rep.capture_sort \(sql: direction), m.asset_id \(sql: direction)
 					"""
 			}
 		}
@@ -175,8 +206,10 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 		// (Collection.subtreeCTE is the collections twin): a ghost id
 		// walks nothing, never a phantom set holding itself. The trailing
 		// space is the separator for concatenation.
-		let subtree = "WITH RECURSIVE subtree(id) AS (SELECT id FROM folders WHERE id = ? UNION "
-			+ "SELECT folders.id FROM folders JOIN subtree ON folders.parent_id = subtree.id) "
+		func subtree(_ folder: Identifier<Folder>) -> SQL {
+			"WITH RECURSIVE subtree(id) AS (SELECT id FROM folders WHERE id = \(folder) UNION "
+				+ "SELECT folders.id FROM folders JOIN subtree ON folders.parent_id = subtree.id) "
+		}
 		// "Latest" is by started_at (ISO text: lexicographic order is
 		// chronological), id as the same-millisecond tiebreak. Outcome is
 		// deliberately ignored: a still-running import IS the previous
@@ -190,27 +223,24 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 			// cheaper on a narrowed source at 40k assets (round review,
 			// 2026-09-11). `asset_id IS NOT NULL` is the formation-pending
 			// exclusion the EXISTS form got implicitly.
-			let sql: String
-			var arguments: StatementArguments = []
+			let sql: SQL
 			switch source {
 			case .library:
 				sql = orderedAssets("SELECT id AS asset_id FROM assets")
 			case .folder(let folder):
-				sql = subtree + orderedAssets("""
+				sql = subtree(folder) + orderedAssets("""
 					SELECT DISTINCT asset_id FROM files \
 					WHERE folder_id IN subtree AND asset_id IS NOT NULL
 					""")
-				arguments = [folder]
 			case .import(let run):
 				sql = orderedAssets("""
 					SELECT DISTINCT asset_id FROM files \
-					WHERE import_id = ? AND asset_id IS NOT NULL
+					WHERE import_id = \(run) AND asset_id IS NOT NULL
 					""")
-				arguments = [run]
 			case .latestImport:
 				sql = orderedAssets("""
 					SELECT DISTINCT asset_id FROM files \
-					WHERE import_id = \(latestImport) AND asset_id IS NOT NULL
+					WHERE import_id = \(sql: latestImport) AND asset_id IS NOT NULL
 					""")
 			case .collection(let collection):
 				if arrangement.sortKey == .manual {
@@ -218,36 +248,69 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 					// because the Finder comparator can't be computed in
 					// SQL. Direction is deliberately not consulted:
 					// authored order IS the order (ruled 2026-09-14).
-					return try Self.sectionedUnionOrder(of: collection, in: database)
+					// The filter intersects (filter round): the clause runs
+					// once as its own statement and the walk drops
+					// non-members — authored order preserved for what
+					// survives, and the filter means the same thing it
+					// means everywhere else.
+					// PERF: the match set is unscoped — filtering a small
+					// manual collection still fetches every matching id in
+					// the catalog. Fine at 40k; trigger: filtered manual
+					// views sluggish on large catalogs; upgrade: constrain
+					// with AND id IN (the subtree's membership).
+					var matching: Set<Identifier<Asset>>? = nil
+					if let filter {
+						let (matchSQL, matchArguments) = try SQL(
+							"SELECT id FROM assets WHERE \(filter.sqlPredicate())"
+						).build(database)
+						matching = try Identifier<Asset>.fetchSet(
+							database, sql: matchSQL, arguments: matchArguments
+						)
+					}
+					return try Self.sectionedUnionOrder(of: collection, in: database, matching: matching)
 						.map(SubjectID.asset)
 				}
 				// A regular sort key is one flat order over the union's
 				// membership — never sectioned; sorting means sorting. The
 				// subtree rides Collection.subtreeCTE, the concept's one
 				// implementation (ruling 5's union; ghost-safe seed).
-				sql = Collection.subtreeCTE + " " + orderedAssets(
+				sql = SQL(sql: Collection.subtreeCTE, arguments: [collection]) + " " + orderedAssets(
 					"SELECT DISTINCT asset_id FROM collection_members WHERE collection_id IN subtree"
 				)
-				arguments = [collection]
 			}
+			let (statement, arguments) = try sql.build(database)
 			return try Identifier<Asset>
-				.fetchAll(database, sql: sql, arguments: arguments)
+				.fetchAll(database, sql: statement, arguments: arguments)
 				.map(SubjectID.asset)
 
 		case .files:
-			let sql: String
-			var arguments: StatementArguments = []
+			// The filter under the files lens (ruled): a file matches if its
+			// ASSET matches — asset-unit tokens cross through the relation.
+			// Formation-pending files (asset_id NULL) fail the IN and drop
+			// out of any filtered files view: intentional, test-pinned. NOTE
+			// on the observed region: this subquery adds the whole `assets`
+			// table to a files-lens observation's region, so judgment writes
+			// re-run the fetch while a filtered files view is open —
+			// required (a rating edit can change membership), and
+			// removeDuplicates stops the repaint, not the work.
+			let assetMatch: SQL? = filter.map {
+				"files.asset_id IN (SELECT id FROM assets WHERE \($0.sqlPredicate()))"
+			}
+			let andAssetMatch: SQL = assetMatch.map { " AND \($0)" } ?? ""
+			let sql: SQL
 			switch source {
 			case .library:
-				sql = "SELECT id FROM files \(order)"
+				if let assetMatch {
+					sql = "SELECT id FROM files WHERE \(assetMatch) \(order)"
+				} else {
+					sql = "SELECT id FROM files \(order)"
+				}
 			case .folder(let folder):
-				sql = subtree + "SELECT id FROM files WHERE folder_id IN subtree \(order)"
-				arguments = [folder]
+				sql = subtree(folder) + "SELECT id FROM files WHERE folder_id IN subtree\(andAssetMatch) \(order)"
 			case .import(let run):
-				sql = "SELECT id FROM files WHERE import_id = ? \(order)"
-				arguments = [run]
+				sql = "SELECT id FROM files WHERE import_id = \(run)\(andAssetMatch) \(order)"
 			case .latestImport:
-				sql = "SELECT id FROM files WHERE import_id = \(latestImport) \(order)"
+				sql = "SELECT id FROM files WHERE import_id = \(sql: latestImport)\(andAssetMatch) \(order)"
 			case .collection:
 				// Deliberately unbuilt (ruled 2026-09-14): what the files
 				// lens over a collection MEANS — which files, in what order
@@ -255,8 +318,9 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 				// unsettled marker). Empty, never a guess.
 				return []
 			}
+			let (statement, arguments) = try sql.build(database)
 			return try Identifier<File>
-				.fetchAll(database, sql: sql, arguments: arguments)
+				.fetchAll(database, sql: statement, arguments: arguments)
 				.map(SubjectID.file)
 		}
 	}
@@ -279,8 +343,16 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 	/// dictionaries from scratch. The named answer is region narrowing plus
 	/// incremental assembly; trigger: bulk add-to-collection measurably
 	/// sluggish while a manual collection view is open.
+	/// `matching` is the filter's verdict (nil = no filter): the walk keeps
+	/// authored order and drops non-members. The filter check precedes the
+	/// seen-insert; with per-ASSET matching the two orders are
+	/// indistinguishable (an excluded asset is excluded at every
+	/// appearance), but this is the shape a per-appearance predicate would
+	/// need, so it's pinned here rather than rediscovered (round review,
+	/// finding 11).
 	private static func sectionedUnionOrder(
-		of root: Identifier<Collection>, in database: Database
+		of root: Identifier<Collection>, in database: Database,
+		matching: Set<Identifier<Asset>>? = nil
 	) throws -> [Identifier<Asset>] {
 		let subtree = try Collection.fetchAll(
 			database,
@@ -325,7 +397,9 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 			// A parent cycle can't be written (the move verb refuses), but
 			// the walk terminates on one anyway — the CTE's own defense.
 			guard visitedCollections.insert(id).inserted else { return }
-			for asset in membersOf[id] ?? [] where seenAssets.insert(asset).inserted {
+			// Filter before seen-insert — see the doc comment above.
+			for asset in membersOf[id] ?? []
+			where (matching?.contains(asset) ?? true) && seenAssets.insert(asset).inserted {
 				ordered.append(asset)
 			}
 			for child in childrenOf[id] ?? [] {
