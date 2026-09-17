@@ -43,6 +43,10 @@ struct ShellView: View {
 		ToolbarItemGroup(placement: .automatic) {
 			Button("Zoom Out", systemImage: "minus.magnifyingglass") {viewState.setGridColumns(viewState.gridColumns + 1)}
 			Button("Zoom In", systemImage: "plus.magnifyingglass") {viewState.setGridColumns(viewState.gridColumns - 1)}
+			Toggle(isOn: filterBarPresented) {
+				Label("Filters", systemImage: "line.3.horizontal.decrease")
+			}
+			.toggleStyle(.button)
 			Picker("View", selection: stageViewModeSelection) {
 				Label("Grid", systemImage: "square.grid.2x2").tag(ViewMode.grid)
 				Label("Loupe", systemImage: "loupe").tag(ViewMode.loupe)
@@ -62,6 +66,13 @@ struct ShellView: View {
 		Binding (
 			get: { viewState.viewMode },
 			set: { viewState.setViewMode($0)}
+		)
+	}
+	
+	private var filterBarPresented: Binding<Bool> {
+		Binding (
+			get: { viewState.filterBarPresented },
+			set: { viewState.setFilterBarPresented($0) }
 		)
 	}
 }

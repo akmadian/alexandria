@@ -55,6 +55,8 @@ final class CatalogViewState {
 	private(set) var viewMode: ViewMode = .grid
 	private(set) var selection: Set<SubjectID> = []
 	private(set) var cursor: SubjectID?
+	
+	private(set) var filterBarPresented = false
 
 	/// Grid density as target columns (ruled 2026-09-12): UI state that
 	/// should survive between launches lives HERE — the hub is the surface
@@ -111,6 +113,10 @@ final class CatalogViewState {
 			arrangement = normalized
 		}
 		restartObservation()
+	}
+	
+	func setFilterBarPresented(_ newValue: Bool) {
+		filterBarPresented = newValue
 	}
 
 	/// The posture rule itself is Arrangement.normalized(for:) — pure, and

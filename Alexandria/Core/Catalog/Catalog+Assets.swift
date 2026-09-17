@@ -96,4 +96,13 @@ extension Catalog {
 			return skippedMembers
 		}
 	}
+	
+	// TODO: Make undoable
+	func setRepresentativeFile(_ forAssetId: Identifier<Asset>, _ toId: Identifier<File> ) async throws -> Void {
+		try await databaseWriter.write { database in
+			try Asset
+				.filter(Asset.Columns.id == forAssetId)
+				.updateAll(database, Asset.Columns.representativeFileId.set(to: toId))
+		}
+	}
 }

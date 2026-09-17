@@ -24,6 +24,11 @@ nonisolated struct Asset: Identifiable, CatalogRecord {
 		case id, kind, rating, flag
 		case representativeFileId = "representative_file_id"
 	}
+	
+	enum Columns {
+		static let id = Column(CodingKeys.id)
+		static let representativeFileId = Column(CodingKeys.representativeFileId)
+	}
 }
 
 // The flag is a stored column, so it speaks the database's language directly

@@ -19,7 +19,7 @@ struct AssetInspector: View {
 	@Query<AssetRequest> private var asset: Asset?
 	@Query<AssociatedFilesRequest> private var associatedFiles: [File]?
 	@Query<RepresentativeFileLocationRequest> private var repFileLocation: Location?
-	
+
 	/// Whatever the asset elected as its representative — no view-side
 	/// stand-in. Nil until formation picks one (or for a file-less asset);
 	/// the body shows that state honestly rather than reinventing the choice.
@@ -34,8 +34,9 @@ struct AssetInspector: View {
 		_repFileLocation = Query(constant: RepresentativeFileLocationRequest(assetId: id, log: log))
 	}
 
+	// TODO: Make inspector show data for multiple select (inc mixed value display)
 	var body: some View {
-		if let asset, let associatedFiles, let repFileLocation {
+		if let asset, let associatedFiles, let representativeFile, let repFileLocation {
 			// Placeholder body — the real layout (asset display, location,
 			// membership tree, keywording, metadata) is its own round.
 			//
@@ -55,37 +56,71 @@ struct AssetInspector: View {
 			//	In Collections
 			// Metadata
 			// Map
-			VStack(spacing: 8) {
-				Text(representativeFile?.fileStem ?? "No representative file")
-				Text(repFileLocation.fileUrl?.absoluteString ?? "No rep file url")
-				
-				DisclosureGroup("Information") {
-					List {
-						LabeledContent("Rating") { StarRating(asset.rating) { rate(viewState.judgmentTargets, $0) } }
-						if let representativeFile {
-							LabeledContent("Size", value: formatBytesAsHumanReadable(representativeFile.sizeBytes))
+			
+			// The inspector SHOWS the cursor asset, but every judgment
+			// targets the whole selection (ruled 2026-09-14); the
+			// cursor stands in only when nothing is selected.
+			List {
+				VStack(spacing: 10) {
+					LabeledContent("Rating") { StarRating(asset.rating) { rate(viewState.judgmentTargets, $0) } }
+					LabeledContent("Size", value: formatBytesAsHumanReadable(representativeFile.sizeBytes))
+					LabeledContent("Location", value: "\(repFileLocation.volume.name) > \(repFileLocation.folder.name)")
+				}
+
+				Section("Associated Files") {
+					VStack(spacing: 8) {
+						ForEach(associatedFiles) { file in
+							HStack {
+								Text(file.name)
+									.padding(0)
+									.padding(.leading, 2)
+									.font(.system(size: 11))
+								Spacer()
+								if (file.id == asset.representativeFileId) {
+									Button("\(file.name) is the Asset's Representative", systemImage: "circle.fill") {
+										do {} // Intentional, noop
+									}
+									.labelStyle(.iconOnly)
+									.buttonStyle(.borderless) // TODO: Diagnose no hover state
+									.help("\(file.name) is the Asset's Representative")
+								} else {
+									Button("Change Asset Representative To \(file.name)", systemImage: "circle.dotted") {
+										do {} // TODO: Logic
+									}
+									.labelStyle(.iconOnly) // TODO: Logic
+									.buttonStyle(.borderless) // TODO: Diagnose no hover state
+									.help("Change Asset Representative To \(file.name)")
+									
+								}
+								Button("Reveal in Finder", systemImage: "folder") {
+									do {} // TODO: Logic
+								}
+								.labelStyle(.iconOnly)
+								.buttonStyle(.borderless) // TODO: Diagnose no hover state
+								.help("Reveal in Finder")
+							}
 						}
-						LabeledContent("URL", value: repFileLocation.fileUrl?.absoluteString ?? "")
-						Picker("Flag", selection: flag(of: asset)) {
-							Label("None", systemImage: "flag.slash")
-								.tag(Asset.Flag?.none)
-							Label("Pick", systemImage: "flag.fill")
-								.tag(Optional(Asset.Flag.pick))
-							Label("Reject", systemImage: "xmark")
-								.tag(Optional(Asset.Flag.reject))
-						}
-						.pickerStyle(.segmented)
 					}
 				}
-				// The inspector SHOWS the cursor asset, but every judgment
-				// targets the whole selection (ruled 2026-09-14); the
-				// cursor stands in only when nothing is selected.
 				
-				DisclosureGroup("Associated Files") {
-					ForEach(associatedFiles) { file in Text(file.name) }
+				Section("Metadata") {
+					if let metadataJSON = representativeFile.metadata,
+					   let metadata = FileMetadata(databaseJSON: metadataJSON) {
+						VStack(spacing: 8) {
+							ForEach(metadataFields(from: metadata), id: \.key) { field in
+								LabeledContent {
+									Text(field.value)
+										.font(.system(size: 10))
+								} label: {
+									Text(field.key)
+										.foregroundStyle(.secondary)
+										.font(.system(size: 10))
+								}
+							}
+						}
+					}
 				}
-			}
-			.padding()
+			}.listStyle(.sidebar)
 		} else {
 			ProgressView()
 		}
@@ -134,5 +169,24 @@ struct AssetInspector: View {
 		formatter.countStyle = .file
 		formatter.allowedUnits = .useAll
 		return formatter.string(fromByteCount: Int64(bytes))
+	}
+
+	/// Reflects over a `FileMetadata` value and returns display pairs for every
+	/// non-nil field, in declaration order. The key is the camelCase property
+	/// name split into words; the value is the default string representation.
+	/// New fields on `FileMetadata` appear here automatically.
+	private func metadataFields(from metadata: FileMetadata) -> [(key: String, value: String)] {
+		Mirror(reflecting: metadata).children.compactMap { child in
+			guard let label = child.label else { return nil }
+			// child.value is typed as Any; unwrap Optional regardless of T.
+			let valueMirror = Mirror(reflecting: child.value)
+			guard valueMirror.displayStyle == .optional,
+				  let wrapped = valueMirror.children.first?.value else { return nil }
+			let key = label
+				.replacingOccurrences(of: "([A-Z])", with: " $1", options: .regularExpression)
+				.trimmingCharacters(in: .whitespaces)
+				.capitalized
+			return (key: key, value: "\(wrapped)")
+		}
 	}
 }

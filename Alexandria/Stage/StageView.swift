@@ -17,6 +17,18 @@ struct StageView: View {
 	@State private var imaging = StageImaging()
 
 	var body: some View {
+		VStack(spacing: 0) {
+			// Always visible for now — collapse/toolbar-toggle semantics are
+			// the filter-bar round's open ruling (R2); see FilterBar's header.
+			if (viewState.filterBarPresented) {
+				FilterBar()
+				Divider()
+			}
+			stage
+		}
+	}
+
+	@ViewBuilder private var stage: some View {
 		switch viewState.viewMode {
 		case .grid:
 			GridView(imaging: imaging)
