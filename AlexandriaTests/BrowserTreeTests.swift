@@ -50,6 +50,11 @@ struct BrowserTreeTests {
 
 		let zeta = tree.volumes[1]
 		#expect(zeta.roots.map(\.name) == ["Alpha"])
+
+		// The header's inputs ride the node (volume monitoring, chunk two):
+		// identity and kind survive assembly.
+		#expect(zeta.identity == .filesystemUUID("ZETA-FIXTURE"))
+		#expect(zeta.kind == .external)
 	}
 
 	@Test func outlineChildrenSpellsLeavesAsNil() async throws {

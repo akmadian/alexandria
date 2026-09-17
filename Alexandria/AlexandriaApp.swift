@@ -28,9 +28,13 @@ struct AlexandriaApp: App {
 	// and intents directly; it exists for the menus.
 	let keymap = Keymap()
 	let runner: CommandRunner
+	// Keeps MountTable event-fresh for the app's lifetime; injected into the
+	// environment for the browser's volume headers.
+	let volumeMonitor: VolumeMonitor
 
 	init() {
 		Log.bootstrap()
+		volumeMonitor = VolumeMonitor()
 		catalog = try! Catalog.open(at: Self.devCatalogDir)
 		importService = ImportService(catalog: catalog)
 		viewState = CatalogViewState(catalog: catalog)
@@ -43,6 +47,7 @@ struct AlexandriaApp: App {
 				.environment(\.catalog, catalog)
 				.databaseContext(.readOnly { catalog.reader })
 				.environment(viewState)
+				.environment(volumeMonitor)
         }
 		.commands {
 			CommandGroup(after: .newItem) {

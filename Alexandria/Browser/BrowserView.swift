@@ -15,11 +15,15 @@
 //  library (ruling 14, via the hub). Drag-and-drop (add, re-parent) is
 //  deliberately absent: its own round, by ruling (2026-09-14).
 //
+//  Volume rows (volume monitoring round, chunk two): the disclosure label
+//  is VolumeHeader, fed an availability the view derives here from the
+//  node's identity and the environment's VolumeMonitor — the header stays
+//  monitor-blind and previewable.
+//
 //  Deliberately absent, per the rounds' markers: per-node counts
-//  (lens-coupled semantics unsettled), offline gray/badge (waits on a
-//  volume-presence mechanism), expansion persistence (viewpoint round),
-//  import-history browsing, sidebar filter over collections (the field is
-//  the FOLDER filter by prompt; widening it is a future call).
+//  (lens-coupled semantics unsettled), expansion persistence (viewpoint
+//  round), import-history browsing, sidebar filter over collections (the
+//  field is the FOLDER filter by prompt; widening it is a future call).
 //
 
 import AppKit
@@ -66,6 +70,7 @@ final class BrowserModel {
 struct BrowserView: View {
 	@Environment(\.catalog) private var catalog
 	@Environment(CatalogViewState.self) private var viewState
+	@Environment(VolumeMonitor.self) private var volumeMonitor
 
 	@State private var model = BrowserModel()
 	@State private var folderFilter = ""
@@ -110,7 +115,11 @@ struct BrowserView: View {
 							folderRows(root)
 						}
 					} label: {
-						Label(volume.name, systemImage: "externaldrive")
+						VolumeHeader(
+							name: volume.name,
+							kind: volume.kind,
+							availability: availability(of: volume)
+						)
 					}
 				}
 			}
@@ -158,6 +167,15 @@ struct BrowserView: View {
 
 	private var filteredTree: BrowserTree {
 		model.tree.filtered(by: folderFilter)
+	}
+
+	/// The header's availability, derived here so the header stays dumb:
+	/// no identity can never match (unknown, not offline); otherwise ask
+	/// the monitor. Reading the monitor during render registers the
+	/// observation, so rows re-render on mount flips.
+	private func availability(of volume: BrowserTree.VolumeNode) -> VolumeAvailability {
+		guard let identity = volume.identity else { return .unknown }
+		return volumeMonitor.mountURL(of: identity) != nil ? .mounted : .unmounted
 	}
 
 	private var filterActive: Bool {
@@ -346,4 +364,5 @@ struct BrowserView: View {
 	return BrowserView()
 		.environment(\.catalog, catalog)
 		.environment(CatalogViewState(catalog: catalog))
+		.environment(VolumeMonitor())
 }

@@ -252,9 +252,6 @@ extension Catalog {
 	/// Synchronous over a passed `db` and `nonisolated static` so an observation
 	/// can compose the URL from inside its own `fetch(_:)` (RepresentativeFile-
 	/// LocationRequest) without a second reader hop.
-	// TODO: the mount resolves once, on demand (currentMountURL). A volume
-	// mounted or ejected after this returns won't re-fire — wire mount-event
-	// observation when the UI needs live availability.
 	nonisolated static func fileURL(_ db: Database, of fileID: Identifier<File>) throws -> URL? {
 		guard let file = try File.fetchOne(db, key: fileID) else { return nil }
 		// The folder's ancestor chain, root first (highest depth). The extra

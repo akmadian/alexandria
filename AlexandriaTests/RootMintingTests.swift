@@ -18,7 +18,7 @@ struct RootMintingTests {
 
 	private func makeObserved(identity: String? = "0FA1-MINT-TEST") -> ObservedVolume {
 		ObservedVolume(
-			identity: VolumeIdentity(uuid: identity),
+			identity: VolumeIdentity(uuid: identity, remountURL: nil),
 			name: "Scratch SSD",
 			kind: .external,
 			volumeRootURL: URL(fileURLWithPath: "/Volumes/Scratch")

@@ -18,6 +18,10 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 	struct VolumeNode: Identifiable, Equatable, Sendable {
 		let id: Identifier<Volume>
 		let name: String
+		/// For the header's availability lookup against VolumeMonitor;
+		/// nil = unidentified, which the header renders as "unknown".
+		let identity: VolumeIdentity?
+		let kind: VolumeKind
 		let roots: [FolderNode]
 	}
 
@@ -91,6 +95,8 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 				VolumeNode(
 					id: volume.id,
 					name: volume.name,
+					identity: volume.identity,
+					kind: volume.kind,
 					roots: ordered(rootsOf[volume.id] ?? []).map(node)
 				)
 			}
@@ -168,7 +174,10 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 			let roots = volume.roots.compactMap(surviving)
 			return roots.isEmpty
 				? nil
-				: VolumeNode(id: volume.id, name: volume.name, roots: roots)
+				: VolumeNode(
+					id: volume.id, name: volume.name,
+					identity: volume.identity, kind: volume.kind, roots: roots
+				)
 		}
 		// The filter is the FOLDER filter (browser round: its prompt says
 		// so); collections pass through untouched. Widening it is a future

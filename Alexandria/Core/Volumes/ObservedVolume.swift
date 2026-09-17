@@ -33,14 +33,17 @@ nonisolated extension ObservedVolume {
 	/// One probe, one snapshot: constructing the observation is observing.
 	init(containing url: URL) throws {
 		let values = try url.resourceValues(forKeys: [
-			.volumeUUIDStringKey, .volumeNameKey, .volumeIsLocalKey,
-			.volumeIsInternalKey, .volumeURLKey,
+			.volumeUUIDStringKey, .volumeURLForRemountingKey, .volumeNameKey,
+			.volumeIsLocalKey, .volumeIsInternalKey, .volumeURLKey,
 		])
 		guard let volumeRootURL = values.volume else {
 			throw VolumeObservationError.noContainingVolume(url)
 		}
 		self.volumeRootURL = volumeRootURL
-		identity = VolumeIdentity(uuid: values.volumeUUIDString)
+		identity = VolumeIdentity(
+			uuid: values.volumeUUIDString,
+			remountURL: values.volumeURLForRemounting
+		)
 		name = values.volumeName ?? volumeRootURL.lastPathComponent
 		let isLocal = values.volumeIsLocal ?? true
 		let isInternal = values.volumeIsInternal ?? false
