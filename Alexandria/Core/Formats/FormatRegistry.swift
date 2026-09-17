@@ -117,15 +117,18 @@ nonisolated extension FileFormat {
 	/// Conformance-reached entries: recognizably image/video/audio, no row.
 	static let genericImage = FileFormat(
 		extensions: [], contentType: .image, kind: .image,
-		metadataExtractor: ImagePropertiesExtractor(),
+		metadataExtractor: imageProperties,
 		thumbnailer: generateRasterThumbnail
 	)
 	static let genericVideo = FileFormat(
 		extensions: [], contentType: .movie, kind: .video,
-		metadataExtractor: VideoPropertiesExtractor(),
+		metadataExtractor: avProperties,
 		thumbnailer: generateVideoThumbnail
 	)
-	static let genericAudio = FileFormat(extensions: [], contentType: .audio, kind: .audio)
+	static let genericAudio = FileFormat(
+		extensions: [], contentType: .audio, kind: .audio,
+		metadataExtractor: avProperties
+	)
 	/// The universal floor.
 	static let unrecognized = FileFormat(extensions: [], contentType: nil, kind: .other)
 
@@ -141,7 +144,7 @@ nonisolated extension FileFormat {
 
 nonisolated extension FileFormat {
 	private static let imageProperties: any MetadataExtracting = ImagePropertiesExtractor()
-	private static let videoProperties: any MetadataExtracting = VideoPropertiesExtractor()
+	private static let avProperties: any MetadataExtracting = AVPropertiesExtractor()
 
 	static let all: [FileFormat] = [
 		// images
@@ -164,17 +167,18 @@ nonisolated extension FileFormat {
 		FileFormat(extensions: ["raf"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
 		FileFormat(extensions: ["rw2"], contentType: nil, kind: .image, isRawCapture: true, metadataExtractor: imageProperties, thumbnailer: generateRawThumbnail),
 		// video
-		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
-		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
-		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
-		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
-		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video, metadataExtractor: videoProperties, thumbnailer: generateVideoThumbnail),
-		// audio
-		FileFormat(extensions: ["mp3"], contentType: .mp3, kind: .audio),
-		FileFormat(extensions: ["wav"], contentType: .wav, kind: .audio),
-		FileFormat(extensions: ["flac"], contentType: nil, kind: .audio),
-		FileFormat(extensions: ["aac"], contentType: nil, kind: .audio),
-		FileFormat(extensions: ["m4a"], contentType: .mpeg4Audio, kind: .audio),
+		FileFormat(extensions: ["mov"], contentType: .quickTimeMovie, kind: .video, metadataExtractor: avProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["mp4"], contentType: .mpeg4Movie, kind: .video, metadataExtractor: avProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["m4v"], contentType: nil, kind: .video, metadataExtractor: avProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["avi"], contentType: .avi, kind: .video, metadataExtractor: avProperties, thumbnailer: generateVideoThumbnail),
+		FileFormat(extensions: ["mkv"], contentType: nil, kind: .video, metadataExtractor: avProperties, thumbnailer: generateVideoThumbnail),
+		// audio — the same AVFoundation extractor as video: one AVURLAsset
+		// lane, facets fill by track evidence (metadata round, 2026-09-17)
+		FileFormat(extensions: ["mp3"], contentType: .mp3, kind: .audio, metadataExtractor: avProperties),
+		FileFormat(extensions: ["wav"], contentType: .wav, kind: .audio, metadataExtractor: avProperties),
+		FileFormat(extensions: ["flac"], contentType: nil, kind: .audio, metadataExtractor: avProperties),
+		FileFormat(extensions: ["aac"], contentType: nil, kind: .audio, metadataExtractor: avProperties),
+		FileFormat(extensions: ["m4a"], contentType: .mpeg4Audio, kind: .audio, metadataExtractor: avProperties),
 		// vector
 		FileFormat(extensions: ["svg"], contentType: .svg, kind: .vector, thumbnailer: generateQuickLookThumbnail),
 		FileFormat(extensions: ["ai"], contentType: nil, kind: .vector, thumbnailer: generateQuickLookThumbnail),

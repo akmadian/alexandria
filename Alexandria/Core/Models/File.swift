@@ -27,9 +27,10 @@ nonisolated struct File: Identifiable, CatalogRecord {
 	var contentHash: String?
 	var missing: Bool
 	var metadata: String?               // FileMetadata.databaseJSON(); NULL = none
+	var metadataVersion: Int            // facet-roster version the blob was written under; 0 = none
 	var thumbnailAt: Date?
 	var formationRule: String?
-	
+
 	enum CodingKeys: String, CodingKey {
 		case id
 		case folderId = "folder_id"
@@ -45,6 +46,7 @@ nonisolated struct File: Identifiable, CatalogRecord {
 		case contentHash = "content_hash"
 		case missing
 		case metadata
+		case metadataVersion = "metadata_version"
 		case thumbnailAt = "thumbnail_at"
 		case formationRule = "formation_rule"
 	}

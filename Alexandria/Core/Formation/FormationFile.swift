@@ -25,14 +25,15 @@ nonisolated extension FormationFile {
 		FileFormat.resolve(extension: record.fileExtension, contentType: nil).isRawCapture
 	}
 
-	var capturedAt: Date? { metadata?.capturedAt }
+	var capturedAt: Date? { metadata?.capture?.capturedAt }
 
 	/// Camera identity as normalized make+model; nil when the file carries
-	/// neither. Serial number joins this when the extractor learns it.
+	/// neither. The extractor now learns serial numbers too — whether serial
+	/// joins this identity is a formation-round ruling, not taken here.
 	var cameraIdentity: String? {
-		guard let metadata else { return nil }
-		let make = metadata.cameraMake?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
-		let model = metadata.cameraModel?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+		guard let capture = metadata?.capture else { return nil }
+		let make = capture.make?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+		let model = capture.model?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
 		if make.isEmpty && model.isEmpty { return nil }
 		return make + "|" + model
 	}

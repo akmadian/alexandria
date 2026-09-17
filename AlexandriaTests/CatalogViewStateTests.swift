@@ -281,9 +281,9 @@ struct CatalogViewStateTests {
 	// MARK: Capture-time sort (grid sorting round, 2026-09-15)
 
 	private func captured(_ iso: String) -> FileMetadata {
-		var metadata = FileMetadata()
-		metadata.capturedAt = ISO8601DateFormatter().date(from: iso)
-		return metadata
+		var capture = CaptureFacet()
+		capture.capturedAt = ISO8601DateFormatter().date(from: iso)
+		return FileMetadata(capture: capture)
 	}
 
 	/// The files lens under .captured orders by capture_sort =

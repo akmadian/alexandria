@@ -87,21 +87,28 @@ nonisolated enum CatalogSchema {
 	    modified_at    TEXT NOT NULL,     -- [obs] disk mtime; ±2s tolerance applies at compare, never at storage
 	    content_hash   TEXT,              -- [obs] partial hash of the first 64KB
 	    missing        INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),  -- [obs] rescan verdict
-	    metadata       TEXT,              -- [obs] JSON, field-catalog keys; promotion mints generated columns
+	    metadata       TEXT,              -- [obs] sectioned facet JSON (FileMetadata); promotion mints generated columns
+	    -- [der] The facet-roster version the metadata blob was written under
+	    -- (metadata round, 2026-09-17): the re-extraction worklist key — a
+	    -- roster bump queries `metadata_version < ?` for files needing a
+	    -- re-read, the thumbnail_at idiom for a marker the blob itself can't
+	    -- carry (an old blob and an evidence-less new one are byte-alike).
+	    -- 0 = no extraction attempted or pre-facet writer.
+	    metadata_version INTEGER NOT NULL DEFAULT 0,
 	    -- [der] The capture-time sort key (grid sorting round, 2026-09-15): the
 	    -- first metadata field promoted per the blob's design (database.md) —
-	    -- EXIF capture time lifted out of the JSON, COALESCEd to disk mtime so
-	    -- the key is total (every file has an mtime; NOT NULL). VIRTUAL: no row
-	    -- storage, the value is materialized by its index — so json_extract runs
-	    -- at WRITE (index maintenance), and a non-JSON metadata blob would throw
-	    -- on INSERT. Safe while databaseJSON() is the only writer (valid JSON or
-	    -- NULL; '' and '{}' both parse); a future raw-blob metadata lane must keep
-	    -- that invariant. Cross-format fuzz: capturedAt encodes at second precision
-	    -- and modified_at at ms, so a captured/mtime pair inside the same second is
-	    -- byte-ordered ('.' 0x2E < 'Z' 0x5A), a sub-second wobble within capture
-	    -- sort's stated second granularity — the id tiebreak resolves only EXACT
-	    -- ties, not this cross-format case (see FileMetadata's encoder note).
-	    capture_sort   TEXT GENERATED ALWAYS AS (COALESCE(json_extract(metadata, '$.captured_at'), modified_at)) VIRTUAL,
+	    -- capture time lifted out of the JSON at its facet path (metadata
+	    -- round, 2026-09-17), COALESCEd to disk mtime so the key is total
+	    -- (every file has an mtime; NOT NULL). VIRTUAL: no row storage, the
+	    -- value is materialized by its index — so json_extract runs at WRITE
+	    -- (index maintenance), and a non-JSON metadata blob would throw on
+	    -- INSERT. Safe while databaseJSON() is the only writer: the column
+	    -- must hold valid JSON or NULL — nothing else parses ('' is malformed
+	    -- JSON and would fail the INSERT); a future raw-blob metadata lane
+	    -- must keep that invariant. Blob dates share catalogDateFormatter's ms ISO
+	    -- 8601 with the columns, so captured and mtime values sort on one
+	    -- scale with no cross-format fuzz.
+	    capture_sort   TEXT GENERATED ALWAYS AS (COALESCE(json_extract(metadata, '$.capture.captured_at'), modified_at)) VIRTUAL,
 	    thumbnail_at   TEXT,              -- [der] NULL = pending; the missing artifact IS the queue
 	    -- [der] the rule that admitted this file to its asset — a historical
 	    -- fact, never "the rule that would match now". NULL = not yet formed

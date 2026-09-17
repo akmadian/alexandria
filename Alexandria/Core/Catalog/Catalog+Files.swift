@@ -174,6 +174,13 @@ extension Catalog {
 					sizeBytes: file.discovered.size, modifiedAt: file.discovered.modifiedAt,
 					contentHash: file.contentHash, missing: false,
 					metadata: try file.metadata?.databaseJSON(),
+					// The worklist stamp records that this roster LOOKED, not
+					// that it found anything — an evidence-less read stamps the
+					// version (the blob's NULL carries the yield), so a roster
+					// bump's worklist doesn't re-read bare files forever.
+					// 0 = never attempted (no extractor wired, or it failed).
+					metadataVersion: file.discovered.format.metadataExtractor != nil && !file.extractionFailed
+						? FileMetadata.currentVersion : 0,
 					thumbnailAt: nil, formationRule: nil
 				)
 				try record.insert(database)

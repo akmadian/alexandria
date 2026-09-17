@@ -18,11 +18,11 @@ struct AssetFormationTests {
 		at seconds: TimeInterval? = nil,
 		camera: (make: String, model: String)? = nil
 	) -> FileMetadata {
-		var metadata = FileMetadata()
-		metadata.capturedAt = seconds.map(Date.init(timeIntervalSince1970:))
-		metadata.cameraMake = camera?.make
-		metadata.cameraModel = camera?.model
-		return metadata
+		var capture = CaptureFacet()
+		capture.capturedAt = seconds.map(Date.init(timeIntervalSince1970:))
+		capture.make = camera?.make
+		capture.model = camera?.model
+		return FileMetadata(capture: capture).normalized()
 	}
 
 	private func assetAndRule(of name: String, in context: ImportContext) async throws -> (asset: String?, rule: String?) {
@@ -485,11 +485,12 @@ struct AssetFormationTests {
 	}
 
 	@Test func metadataColumnRoundTripsForTheGuards() throws {
-		var metadata = FileMetadata()
-		metadata.capturedAt = Date(timeIntervalSince1970: 1_700_000_000)
-		metadata.cameraMake = "FUJIFILM"
-		metadata.cameraModel = "X-T5"
-		metadata.iso = 400
+		var capture = CaptureFacet()
+		capture.capturedAt = Date(timeIntervalSince1970: 1_700_000_000)
+		capture.make = "FUJIFILM"
+		capture.model = "X-T5"
+		capture.iso = 400
+		let metadata = FileMetadata(capture: capture)
 		let json = try metadata.databaseJSON()
 		let decoded = try #require(FileMetadata(databaseJSON: json))
 		#expect(decoded == metadata)
