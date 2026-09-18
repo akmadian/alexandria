@@ -694,7 +694,10 @@ struct CatalogViewStateTests {
 		try await catalog.addMembers([a], to: picks.id)
 
 		let hub = CatalogViewState(catalog: catalog)
-		#expect(hub.arrangement == Arrangement(sortKey: .added, direction: .descending))
+		// The dev default is .captured (Ari, 2026-09-18); manual's OFF-
+		// collection fallback below stays .added — that's the ratified
+		// posture rule, not the default.
+		#expect(hub.arrangement == Arrangement(sortKey: .captured, direction: .descending))
 
 		hub.setSource(.collection(picks.id))
 		hub.setArrangement(Arrangement(sortKey: .manual, direction: .descending))

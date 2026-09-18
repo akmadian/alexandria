@@ -48,7 +48,7 @@ nonisolated enum Source: Hashable, Sendable {
 /// changes membership. One key today — the sort vocabulary grows in its
 /// own round; grouping (sections) is deliberately unsettled.
 nonisolated struct Arrangement: Hashable, Sendable {
-	enum SortKey: Sendable {
+	enum SortKey: String, Sendable, CaseIterable, Identifiable {
 		/// Catalog-entry order at millisecond granularity: ids are UUIDv7
 		/// (ms timestamp + random tail), so records minted in the same
 		/// millisecond order arbitrarily — but stably, since ids persist.
@@ -67,6 +67,8 @@ nonisolated struct Arrangement: Hashable, Sendable {
 		/// and it consumes NO direction: authored order has no reverse
 		/// (ruled 2026-09-14; LrC's stance too).
 		case manual
+		
+		var id: Self { self }
 	}
 
 	enum Direction: Sendable {
@@ -74,7 +76,7 @@ nonisolated struct Arrangement: Hashable, Sendable {
 		case descending
 	}
 
-	var sortKey: SortKey = .added
+	var sortKey: SortKey = .captured
 	/// Dev default: newest first.
 	var direction: Direction = .descending
 
@@ -99,6 +101,12 @@ nonisolated struct Arrangement: Hashable, Sendable {
 		if case .collection = source { return self }
 		var fallback = self
 		fallback.sortKey = .added
+		return fallback
+	}
+	
+	func setSortKey(to key: SortKey) -> Arrangement {
+		var fallback = self
+		fallback.sortKey = key
 		return fallback
 	}
 }

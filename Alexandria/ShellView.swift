@@ -41,16 +41,50 @@ struct ShellView: View {
 		ToolbarSpacer(.flexible)
 		
 		ToolbarItemGroup(placement: .automatic) {
-			Button("Zoom Out", systemImage: "minus.magnifyingglass") {viewState.setGridColumns(viewState.gridColumns + 1)}
-			Button("Zoom In", systemImage: "plus.magnifyingglass") {viewState.setGridColumns(viewState.gridColumns - 1)}
-			Toggle(isOn: filterBarPresented) {
-				Label("Filters", systemImage: "line.3.horizontal.decrease")
-			}
-			.toggleStyle(.button)
 			Picker("View", selection: stageViewModeSelection) {
 				Label("Grid", systemImage: "square.grid.2x2").tag(ViewMode.grid)
 				Label("Loupe", systemImage: "loupe").tag(ViewMode.loupe)
 			}.pickerStyle(.segmented)
+			
+			ControlGroup {
+				Toggle(isOn: filterBarPresented) {
+					Label("Filters", systemImage: "line.3.horizontal.decrease")
+				}
+				.toggleStyle(.button)
+				Menu {
+					Button("Zoom In", systemImage: "plus.magnifyingglass") {
+						viewState.setGridColumns(viewState.gridColumns - 1)
+					}.keyboardShortcut("+", modifiers: .command)
+					Button("Zoom Out", systemImage: "minus.magnifyingglass") {
+						viewState.setGridColumns(viewState.gridColumns + 1)
+					}.keyboardShortcut("-", modifiers: .command)
+					
+					Divider()
+					
+					Button(
+						"Reverse Sort Direction",
+						systemImage: viewState.arrangement.direction == .ascending ? "arrow.up" : "arrow.down",
+						action: {
+							viewState.setArrangement(viewState.arrangement.reversed)
+						}
+					)
+					Menu("Sort By") {
+						ForEach(Arrangement.SortKey.allCases) { key in
+							Button {
+								viewState.setArrangement(viewState.arrangement.setSortKey(to: key))
+							} label: {
+								if (viewState.arrangement.sortKey == key) {
+									Label(key.rawValue.capitalized, systemImage: "checkmark")
+								} else {
+									Text(key.rawValue.capitalized)
+								}
+							}
+						}
+					}
+				} label: {
+					Image(systemName: "ellipsis")
+				}.menuIndicator(.hidden)
+			}
 		}
 	}
 	
