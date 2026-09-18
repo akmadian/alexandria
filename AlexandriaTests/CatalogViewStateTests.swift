@@ -486,6 +486,30 @@ struct CatalogViewStateTests {
 		}
 	}
 
+	/// The window title's contract: id-carrying sources show the caller's
+	/// name, static sources name themselves, and a titleless id source
+	/// falls back to its noun rather than keeping the old title.
+	@Test func sourceTitleFollowsTheIntent() async throws {
+		let context = try await ImportContext.make()
+		let hub = CatalogViewState(catalog: context.catalog)
+		#expect(hub.sourceTitle == "All Assets")
+
+		hub.setSource(.folder(.mint()), titled: "Shoot")
+		#expect(hub.sourceTitle == "Shoot")
+
+		hub.setSource(.collection(.mint()))
+		#expect(hub.sourceTitle == "Collection")
+
+		hub.setSource(.latestImport)
+		#expect(hub.sourceTitle == "Previous Import")
+
+		hub.setSource(.import(.mint()))
+		#expect(hub.sourceTitle == "Import")
+
+		hub.setSource(.library)
+		#expect(hub.sourceTitle == "All Assets")
+	}
+
 	@Test func rapidQuestionSwapsLandOnTheLastQuestion() async throws {
 		let fixture = try await TwoFolderFixture.make()
 		let hub = CatalogViewState(catalog: fixture.context.catalog)
@@ -740,7 +764,7 @@ struct CatalogViewStateTests {
 		let unrelated = try await catalog.createCollection(named: "Picks")
 
 		let hub = CatalogViewState(catalog: catalog)
-		hub.setSource(.collection(child.id))
+		hub.setSource(.collection(child.id), titled: child.name)
 		try await eventually("collection answer") {
 			hub.answeredQuery == WorkingSetQuery(
 				lens: .assets, source: .collection(child.id), arrangement: Arrangement()
@@ -752,10 +776,13 @@ struct CatalogViewStateTests {
 		hub.collectionsWereDeleted(deletedUnrelated)
 		#expect(hub.source == .collection(child.id))
 
-		// Deleting the PARENT takes the viewed child with it: retarget.
+		// Deleting the PARENT takes the viewed child with it: retarget —
+		// and the window title follows the fallback (the one non-click
+		// path that retitles).
 		let deleted = try await catalog.deleteCollection(trips.id)
 		hub.collectionsWereDeleted(deleted)
 		#expect(hub.source == .library)
+		#expect(hub.sourceTitle == "All Assets")
 		try await eventually("library answer") {
 			hub.answeredQuery == WorkingSetQuery(
 				lens: .assets, source: .library, arrangement: Arrangement()

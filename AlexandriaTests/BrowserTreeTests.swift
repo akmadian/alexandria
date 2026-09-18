@@ -57,6 +57,18 @@ struct BrowserTreeTests {
 		#expect(zeta.kind == .external)
 	}
 
+	/// The title lookup over folders: nested nodes resolve by name, static
+	/// sources answer nil (they name themselves), and a miss is nil. The
+	/// collection side of the walk pins in the collections-assembly test,
+	/// which already builds a nested collection tree.
+	@Test func nameOfSourceWalksTheWholeTree() async throws {
+		let tree = try await makeFixtureTree()
+		let sub = tree.volumes[0].roots[0].children[0]
+		#expect(tree.name(of: .folder(sub.id)) == "Sub")
+		#expect(tree.name(of: .library) == nil)
+		#expect(tree.name(of: .folder(.mint())) == nil)
+	}
+
 	@Test func outlineChildrenSpellsLeavesAsNil() async throws {
 		let tree = try await makeFixtureTree()
 		let shoot = tree.volumes[0].roots[0]
@@ -107,6 +119,11 @@ struct BrowserTreeTests {
 		let tripsNode = tree.collections[1]
 		#expect(tripsNode.children.map(\.name) == ["Shoot 9", "Shoot 10"])
 		#expect(tripsNode.children[1].children.map(\.name) == ["Grand"])
+
+		// The title lookup's collection side rides the same nested tree.
+		let grand = tripsNode.children[1].children[0]
+		#expect(tree.name(of: .collection(grand.id)) == "Grand")
+		#expect(tree.name(of: .collection(.mint())) == nil)
 
 		// The folder filter leaves collections untouched (it's the FOLDER
 		// filter by prompt; widening it is a future call, not a drift).

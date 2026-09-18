@@ -10,7 +10,7 @@ import SwiftUI
 struct ShellView: View {
 	@Environment(CatalogViewState.self) private var viewState
 	@State private var inspectorPresented = true
-	
+
 	var body: some View {
 		NavigationSplitView {
 			BrowserView()
@@ -20,7 +20,7 @@ struct ShellView: View {
 					max: Theme.Pane.browserMaximumWidth)
 		} detail: {
 			StageView()
-				.toolbar(removing: .title)
+				.navigationTitle(viewState.sourceTitle)
 				.toolbar { stageToolbar }
 		}
 		.inspector(isPresented: $inspectorPresented) {
@@ -34,10 +34,6 @@ struct ShellView: View {
 	}
 	
 	@ToolbarContentBuilder private var stageToolbar: some ToolbarContent {
-		ToolbarItem(placement: .navigation) {
-			Text("Alexandria")
-		}.sharedBackgroundVisibility(.hidden)
-
 		ToolbarSpacer(.flexible)
 		
 		ToolbarItemGroup(placement: .automatic) {

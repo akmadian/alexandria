@@ -26,7 +26,7 @@ nonisolated enum Theme {
 	/// the hub's intent.)
 	enum Grid {
 		static let spacing: CGFloat = 2
-		static let inset: CGFloat = 0
+		static let inset: CGFloat = 2
 		static let minimumCellSide: CGFloat = 40
 		// The four-state ring (cell round, 2026-09-18): cursor outranks plain
 		// selection. Values are Ari's to dial; hover is deferred with the

@@ -48,6 +48,30 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 
 	static let empty = BrowserTree(volumes: [], collections: [])
 
+	/// Names an id-carrying source for the hub's title intent (the click
+	/// site hands the name over; the hub reads no catalog content). Linear
+	/// walk over a sidebar-sized tree at click frequency.
+	func name(of source: Source) -> String? {
+		switch source {
+		case .folder(let id):
+			found(id, in: volumes.flatMap(\.roots), children: \.children)?.name
+		case .collection(let id):
+			found(id, in: collections, children: \.children)?.name
+		case .library, .latestImport, .import:
+			nil
+		}
+	}
+
+	private func found<Node: Identifiable>(
+		_ id: Node.ID, in nodes: [Node], children: (Node) -> [Node]
+	) -> Node? {
+		for node in nodes {
+			if node.id == id { return node }
+			if let hit = found(id, in: children(node), children: children) { return hit }
+		}
+		return nil
+	}
+
 	/// Fetches and assembles the whole tree. Ordering is Finder-style
 	/// (ruled 2026-09-11): FinderOrder — localizedStandardCompare on the
 	/// display name, id as a total-order tiebreak.

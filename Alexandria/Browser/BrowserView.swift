@@ -3,7 +3,10 @@
 //  Alexandria
 //
 //  The sources sidebar (browser round, 2026-09-11): an intent-writer to
-//  the hub and a reader of one field. Clicking a row calls setSource; the
+//  the hub and a reader of one field. It also NAMES the source it sets —
+//  the click site holds the display name (its tree), which is what lets
+//  the hub stay catalog-blind while titling the window. Clicking a row
+//  calls setSource; the
 //  highlight derives from hub.source — Source itself is the List selection
 //  value, so the sidebar owns no selection state and no second vocabulary
 //  for it (round review, finding 4). Tree content is the browser's private
@@ -103,9 +106,9 @@ struct BrowserView: View {
 	var body: some View {
 		List(selection: selection) {
 			Section("Sources") {
-				Label("All Assets", systemImage: "photo.on.rectangle")
+				Label(Source.library.displayName(), systemImage: "photo.on.rectangle")
 					.tag(Source.library)
-				Label("Previous Import", systemImage: "clock.arrow.circlepath")
+				Label(Source.latestImport.displayName(), systemImage: "clock.arrow.circlepath")
 					.tag(Source.latestImport)
 			}
 			Section("Folders") {
@@ -329,7 +332,7 @@ struct BrowserView: View {
 			get: { viewState.source },
 			set: { source in
 				if let source {
-					viewState.setSource(source)
+					viewState.setSource(source, titled: model.tree.name(of: source))
 				}
 			}
 		)

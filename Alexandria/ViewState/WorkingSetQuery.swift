@@ -42,6 +42,20 @@ nonisolated enum Source: Hashable, Sendable {
 	/// 2026-09-12) — the collection's own members AND everything beneath
 	/// its child collections, the folder subtree stance again.
 	case collection(Identifier<Collection>)
+
+	/// The one spelling of a source's display name — the sidebar rows and
+	/// the window title both read it. Static sources name themselves;
+	/// id-carrying sources show the caller's name (their records hold it),
+	/// falling back to their noun.
+	func displayName(given title: String? = nil) -> String {
+		switch self {
+		case .library: "All Assets"
+		case .latestImport: "Previous Import"
+		case .import: title ?? "Import"
+		case .folder: title ?? "Folder"
+		case .collection: title ?? "Collection"
+		}
+	}
 }
 
 /// The ORDER BY: sort key + direction. Orders the working set, never

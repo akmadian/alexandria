@@ -39,6 +39,11 @@ final class CatalogViewState {
 
 	private(set) var lens: Lens = .assets
 	private(set) var source: Source = .library
+	/// The source's display name — the window title. Id-carrying sources are
+	/// named by the intent's caller (the click site holds the name; the hub
+	/// reads no catalog content), so a rename-while-viewing goes stale until
+	/// the next source change. Accepted; revisit if it grates.
+	private(set) var sourceTitle = Source.library.displayName()
 	// TODO: (collections round, 2026-09-12, ratified) per-source arrangement
 	// memory — returning to a collection should restore the arrangement it
 	// was left in. Its own round; this stays single-valued until then.
@@ -102,9 +107,22 @@ final class CatalogViewState {
 		restartObservation()
 	}
 
-	func setSource(_ newSource: Source) {
+	func setSource(_ newSource: Source, titled title: String? = nil) {
 		guard newSource != source else { return }
 		source = newSource
+		sourceTitle = newSource.displayName(given: title)
+		// An untitled id-carrying source is a symptom worth hearing: the
+		// click site's tree lacked a node it just rendered.
+		if title == nil {
+			switch newSource {
+			case .folder, .collection, .import:
+				log.info("source arrived untitled; its noun stands in", metadata: [
+					"source": "\(newSource)",
+				])
+			case .library, .latestImport:
+				break
+			}
+		}
 		// normalized(for:) only ever changes the sort key, so any
 		// difference here IS the manual fallback.
 		let normalized = arrangement.normalized(for: newSource)
