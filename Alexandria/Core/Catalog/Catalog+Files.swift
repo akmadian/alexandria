@@ -12,6 +12,15 @@ nonisolated struct BatchOutcome: Sendable {
 	var recorded = 0
 	var skipped = 0
 	var failed = 0
+	/// Files this batch that need no further thumbnail work from THIS import
+	/// — ready on arrival. Counted here, in the same transaction that knows
+	/// each row's truth, because assembling it from overlapping in-memory
+	/// counters double-counts on a resume (review finding, 2026-09-18): a
+	/// skipped row with thumbnail_at NULL re-enters the drain and would be
+	/// counted twice. The drain's own settlements (generated + residue) are
+	/// the pipeline's to add; the two populations are disjoint by the
+	/// worklist predicate.
+	var settled = 0
 }
 
 /// One thumbnail worklist entry: the file plus its directory path relative
@@ -170,12 +179,27 @@ extension Catalog {
 				)
 				
 				// Skip-existing (ruling B): already cataloged = not an error.
-				let exists = try File
+				if let existing = try File
 					.filter(File.Columns.folderId == folderId)
 					.filter(File.Columns.nameKey == file.nameKey)
-					.fetchOne(database) != nil
-				if exists {
+					.fetchOne(database) {
 					outcome.skipped += 1
+					// Settled unless the drain will still visit it — the
+					// exact worklist predicate (thumbnailPending is the
+					// master): this import's row, unstamped, present,
+					// thumbnailable kind, no residue. An overlap import's
+					// row (different import_id) is settled here whatever
+					// its state — it's not this run's work.
+					let pendingResidue = try Bool.fetchOne(database, sql: """
+						SELECT EXISTS(SELECT 1 FROM file_errors
+							WHERE file_id = ? AND task = 'thumbnail')
+						""", arguments: [existing.id]) ?? false
+					let drainWillVisit = existing.importId == importId
+						&& existing.thumbnailAt == nil
+						&& !existing.missing
+						&& FileFormat.thumbnailingKinds.contains(existing.kind)
+						&& !pendingResidue
+					if !drainWillVisit { outcome.settled += 1 }
 					continue
 				}
 				
@@ -212,6 +236,12 @@ extension Catalog {
 					outcome.failed += 1
 				}
 				outcome.recorded += 1
+				// A kind the registry never thumbnails (sidecar, audio,
+				// unrecognized…) never enters the worklist: ready on
+				// arrival, or the ring could never fill on a RAW+XMP shoot.
+				if !FileFormat.thumbnailingKinds.contains(record.kind) {
+					outcome.settled += 1
+				}
 			}
 			return outcome
 		}

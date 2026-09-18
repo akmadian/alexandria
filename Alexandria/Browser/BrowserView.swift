@@ -74,6 +74,7 @@ struct BrowserView: View {
 	@Environment(\.catalog) private var catalog
 	@Environment(CatalogViewState.self) private var viewState
 	@Environment(VolumeMonitor.self) private var volumeMonitor
+	@Environment(ImportService.self) private var importService
 
 	@State private var model = BrowserModel()
 	@State private var folderFilter = ""
@@ -191,7 +192,7 @@ struct BrowserView: View {
 	/// forced open and the match is actually revealed (round review,
 	/// finding 1).
 	private func folderRows(_ node: BrowserTree.FolderNode) -> AnyView {
-		let row = Label(node.name, systemImage: "folder").tag(Source.folder(node.id))
+		let row = folderItem(node).tag(Source.folder(node.id))
 		guard !node.children.isEmpty else { return AnyView(row) }
 		return AnyView(DisclosureGroup(
 			isExpanded: filterActive
@@ -204,6 +205,24 @@ struct BrowserView: View {
 		} label: {
 			row
 		})
+	}
+
+	/// The row content by import-status precedence (import status round,
+	/// 2026-09-18): a registry run (live or lingering) outranks the tree's
+	/// durable unfinished flag — an import being finished must never flash
+	/// the resume alert — and the flag outranks nothing. Counter ticks stay
+	/// inside ImportStatusSlot; this body reads only the runs dictionary
+	/// (changes at start/dismiss) and the tree.
+	@ViewBuilder private func folderItem(_ node: BrowserTree.FolderNode) -> some View {
+		if let run = importService.runs[node.id] {
+			ImportStatusSlot(name: node.name, run: run,
+				onDismiss: { importService.dismiss(folder: node.id) })
+		} else {
+			FolderItem(name: node.name, status: ImportStatus.current(
+				run: nil,
+				unfinished: model.tree.unfinishedImports.contains(node.id)
+			))
+		}
 	}
 
 	// MARK: Collections — rows, verbs, drops (collections round, chunk 4)

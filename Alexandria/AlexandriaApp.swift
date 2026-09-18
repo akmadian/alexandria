@@ -48,6 +48,7 @@ struct AlexandriaApp: App {
 				.databaseContext(.readOnly { catalog.reader })
 				.environment(viewState)
 				.environment(volumeMonitor)
+				.environment(importService)
         }
 		.commands {
 			CommandGroup(after: .newItem) {
@@ -63,6 +64,15 @@ struct AlexandriaApp: App {
 						Task {
 							do {
 								try await importService.startImport(of: url)
+							} catch ImportError.importAlreadyRunning {
+								// The refusal must reach the user — a menu
+								// click that silently does nothing is the
+								// silent-failure sin in miniature.
+								let alert = NSAlert()
+								alert.alertStyle = .informational
+								alert.messageText = "An import is already running"
+								alert.informativeText = "Wait for it to finish before starting another."
+								alert.runModal()
 							} catch {
 								Logger(label: "app").error("Import failed to start", metadata: [
 									"source": "\(url.path())",

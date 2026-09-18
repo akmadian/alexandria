@@ -117,3 +117,71 @@ struct RecordFileBatchTests {
 		#expect(ImportRun.splitStem("trailing.") == ("trailing", ""))
 	}
 }
+
+/// BatchOutcome.settled (import status round, review fixes 2026-09-18):
+/// files needing no further thumbnail work from this import, classified in
+/// the recording transaction by the worklist predicate (thumbnailPending is
+/// the master). This is the ring's batch-side numerator; the drain adds the
+/// rest, and the two populations must be disjoint.
+struct RecordFileBatchSettledTests {
+
+	@Test func unthumbnailableKindsSettleOnArrival() async throws {
+		let context = try await ImportContext.make()
+		let outcome = try await context.record([
+			context.prepared("/Volumes/Test/Shoot/a.jpg"),    // image: drain's job
+			context.prepared("/Volumes/Test/Shoot/a.xmp"),    // sidecar: never thumbnails
+		])
+		#expect(outcome.recorded == 2)
+		#expect(outcome.settled == 1)
+	}
+
+	/// The resume shape: rows from THIS import re-walked. A stamped row is
+	/// settled at batch time; an unstamped eligible row is the drain's and
+	/// must NOT settle here — counting it twice was the review's ring bug.
+	@Test func resumedSkipsSettleOnlyWhenTheDrainWontRevisit() async throws {
+		let context = try await ImportContext.make()
+		let batch = [
+			context.prepared("/Volumes/Test/Shoot/stamped.jpg"),
+			context.prepared("/Volumes/Test/Shoot/pending.jpg"),
+			context.prepared("/Volumes/Test/Shoot/residue.jpg"),
+		]
+		_ = try await context.record(batch)
+		try await context.catalog.databaseWriter.write { database in
+			try database.execute(sql: """
+				UPDATE files SET thumbnail_at = '2026-09-18T00:00:00.000Z'
+				WHERE name_key = 'stamped.jpg'
+				""")
+			try database.execute(sql: """
+				INSERT INTO file_errors (file_id, task, reason_code, message)
+				SELECT id, 'thumbnail', 'decode_failed', 'x' FROM files
+				WHERE name_key = 'residue.jpg'
+				""")
+		}
+
+		let resumed = try await context.record(batch)
+		#expect(resumed.skipped == 3)
+		// stamped (thumbnail_at set) + residue (one attempt per file per
+		// import) settle; pending.jpg is still the drain's.
+		#expect(resumed.settled == 2)
+	}
+
+	/// The overlap shape: rows from a DIFFERENT import. Not this run's
+	/// worklist whatever their state — settled on skip, both of them.
+	@Test func overlapSkipsAlwaysSettle() async throws {
+		let context = try await ImportContext.make()
+		let batch = [
+			context.prepared("/Volumes/Test/Shoot/stamped.jpg"),
+			context.prepared("/Volumes/Test/Shoot/pending.jpg"),
+		]
+		_ = try await context.record(batch)
+
+		let second = Identifier<Import>.mint()
+		try await context.catalog.recordImportStarted(id: second, folderId: context.rootFolderId)
+		let overlap = try await context.catalog.recordNewFileBatch(
+			batch, importId: second,
+			rootFolderId: context.rootFolderId, rootUrl: context.rootURL
+		)
+		#expect(overlap.skipped == 2)
+		#expect(overlap.settled == 2)
+	}
+}

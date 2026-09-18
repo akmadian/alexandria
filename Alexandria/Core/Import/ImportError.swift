@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum ImportError: Error {
+enum ImportError: Error, Equatable {
 	case sourceUnreadable
 	/// A folder row's parent vanished mid-chain-mint: catalog corruption, not
 	/// a disk condition.
@@ -15,6 +15,9 @@ enum ImportError: Error {
 	/// Imports need the thumbnail store (ruled 2026-09-11), and the store
 	/// needs a catalog directory — an in-memory catalog cannot run imports.
 	case catalogHasNoDirectory
+	/// Runs are serialized (ruled 2026-09-18): one executing import at a
+	/// time. The refusal must reach the user — silence is the sin.
+	case importAlreadyRunning
 }
 
 /// One pre-identity walk casualty: a path the walk saw but couldn't read, so

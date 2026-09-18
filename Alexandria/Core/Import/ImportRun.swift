@@ -29,7 +29,30 @@ final class ImportRun {
 	private(set) var skippedFiles = 0
 	private(set) var thumbnailedFiles = 0
 	private(set) var thumbnailFailures = 0
+	private(set) var walkFailures = 0
+	/// Files needing no further work from this run — the ring's numerator.
+	/// Fed from two disjoint populations: batch-time settlements (the
+	/// transaction's BatchOutcome.settled) and drain settlements (generated
+	/// + residue). Full ⇔ complete is the display invariant this carries.
+	private(set) var settledFiles = 0
+	@ObservationIgnored private var lastProgressLogSettled = 0
+	/// The display-facing lifecycle: counters say how much, phase says what
+	/// kind of progress the numbers describe (indeterminate vs counted).
+	private(set) var phase: Phase = .walking
 	private var task: Task<Void, Error>?
+
+	nonisolated enum Phase: Equatable, Sendable {
+		case walking
+		/// Batch loop + formation + thumbnail drain — per-file counted. The
+		/// drain stays here on purpose: on a slow volume it's the long tail,
+		/// and it's counted work, not an indeterminate wait.
+		case importing
+		/// The post-drain tail (ending stamp) — batch-granular, brief.
+		case finishing
+		case done(ImportOutcome)
+	}
+
+	var isFinished: Bool { if case .done = phase { true } else { false } }
 
 	/// Batch = width: the worklist pull size IS the parallelism — every task
 	/// in a drained batch runs concurrently, batches run serially. One
@@ -100,6 +123,8 @@ final class ImportRun {
 			do {
 				let (discovered, failures) = try await self.walk(dirSource: self.folderUrl)
 				self.totalFiles = discovered.count
+				self.walkFailures = failures.count
+				self.phase = .importing
 				self.log.info("Walk complete", metadata: [
 					"folder": "\(self.folderUrl.lastPathComponent)",
 					"files": "\(self.totalFiles)",
@@ -122,6 +147,8 @@ final class ImportRun {
 					)
 					self.completedFiles += outcome.recorded
 					self.skippedFiles += outcome.skipped
+					self.settledFiles += outcome.settled
+					self.logProgressThrottled()
 					nudge.yield(())  // recorded rows ARE the thumbnail jobs; wake the worker
 
 					// Per-batch formation pass: assets trickle in behind the
@@ -178,7 +205,13 @@ final class ImportRun {
 					throw error
 				}
 
+				self.phase = .finishing
+				self.log.info("Thumbnail drain complete; finishing", metadata: [
+					"settled": "\(self.settledFiles)",
+					"total": "\(self.totalFiles)",
+				])
 				try await self.catalog.recordImportFinished(id: self.id, outcome: .completed)
+				self.phase = .done(.completed)
 				self.log.info("Import completed", metadata: [
 					"files": "\(self.totalFiles)",
 					"recorded": "\(self.completedFiles)",
@@ -195,9 +228,11 @@ final class ImportRun {
 					"thumbnailed": "\(self.thumbnailedFiles)",
 				])
 				await self.recordEndingUncancelled(outcome: .canceled)
+				self.phase = .done(.canceled)
 			} catch {
 				self.log.error("Import failed", metadata: ["error": "\(error)"])
 				try? await self.catalog.recordImportFinished(id: self.id, outcome: .failed)
+				self.phase = .done(.failed)
 				throw error
 			}
 		}
@@ -311,11 +346,10 @@ final class ImportRun {
 		}
 
 		try await self.catalog.recordThumbnails(generated: generated, failures: failures)
+		// No per-batch line (review, 2026-09-18): ~5,000 identical debug
+		// lines said nothing; the throttled info line in noteThumbnailProgress
+		// carries cumulative position, and failures still warn below.
 		await self.noteThumbnailProgress(generated: generated.count, failed: failures.count)
-		self.log.debug("Thumbnail batch recorded", metadata: [
-			"generated": "\(generated.count)",
-			"failed": "\(failures.count)",
-		])
 		// One warning per failure, named: "which file ate 30 seconds" must be
 		// answerable from the log, not only from file_errors via SQL.
 		let namesById = Dictionary(uniqueKeysWithValues: pending.map { ($0.file.id, $0.file.name) })
@@ -332,6 +366,25 @@ final class ImportRun {
 	private func noteThumbnailProgress(generated: Int, failed: Int) {
 		thumbnailedFiles += generated
 		thumbnailFailures += failed
+		// Residue settles a file too: one attempt per file per import, so a
+		// failure is this run's last word on it — full ⇔ complete holds.
+		settledFiles += generated + failed
+		logProgressThrottled()
+	}
+
+	/// One info-level position line per ~500 settled files, so a 40k run's
+	/// log answers "where was it when it wedged" without a wall of per-batch
+	/// lines (review finding, 2026-09-18).
+	private func logProgressThrottled() {
+		guard settledFiles - lastProgressLogSettled >= 500 else { return }
+		lastProgressLogSettled = settledFiles
+		log.info("Import progress", metadata: [
+			"settled": "\(settledFiles)",
+			"cataloged": "\(completedFiles + skippedFiles)",
+			"total": "\(totalFiles)",
+			"skipped": "\(skippedFiles)",
+			"thumbnailFailures": "\(thumbnailFailures)",
+		])
 	}
 
 	@concurrent

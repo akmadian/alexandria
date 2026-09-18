@@ -45,8 +45,15 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 	/// everything else in the sidebar — and by construction the SAME
 	/// sequence the union walk sections by (one comparator, ruling 5).
 	var collections: [CollectionNode]
+	/// Root folders whose LATEST import is unfinished — the resume badge's
+	/// durable truth (it must survive relaunch, so it can't live in the
+	/// service's session registry). Mirrors Catalog.unfinishedImport's
+	/// predicate exactly (latest by started_at desc, id desc; outcome ≠
+	/// completed); that method is the master, this is its set-valued twin
+	/// for the tree observation.
+	var unfinishedImports: Set<Identifier<Folder>>
 
-	static let empty = BrowserTree(volumes: [], collections: [])
+	static let empty = BrowserTree(volumes: [], collections: [], unfinishedImports: [])
 
 	/// Names an id-carrying source for the hub's title intent (the click
 	/// site hands the name over; the hub reads no catalog content). Linear
@@ -172,7 +179,23 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 			])
 		}
 
-		return BrowserTree(volumes: volumeNodes, collections: collectionNodes)
+		// Latest-per-folder unfinished imports (comment above names the
+		// master predicate). One window pass; imports is bracket-sized.
+		let unfinished = try Identifier<Folder>.fetchSet(database, sql: """
+			SELECT folder_id FROM (
+				SELECT folder_id, outcome,
+					ROW_NUMBER() OVER (PARTITION BY folder_id
+						ORDER BY started_at DESC, id DESC) AS rn
+				FROM imports
+			) WHERE rn = 1 AND (outcome IS NULL OR outcome <> 'completed')
+			  AND folder_id IS NOT NULL
+			""")
+
+		return BrowserTree(
+			volumes: volumeNodes,
+			collections: collectionNodes,
+			unfinishedImports: unfinished
+		)
 	}
 
 	/// The filter field's behavior: a folder matching on its OWN name keeps
@@ -205,7 +228,11 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 		}
 		// The filter is the FOLDER filter (browser round: its prompt says
 		// so); collections pass through untouched. Widening it is a future
-		// call, not a silent behavior change.
-		return BrowserTree(volumes: volumes, collections: collections)
+		// call, not a silent behavior change. The unfinished set rides
+		// along whole — a badge belongs to its folder, filtered or not.
+		return BrowserTree(
+			volumes: volumes, collections: collections,
+			unfinishedImports: unfinishedImports
+		)
 	}
 }

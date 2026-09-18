@@ -130,3 +130,121 @@ struct BrowserTreeTests {
 		#expect(tree.filtered(by: "nope").collections == tree.collections)
 	}
 }
+
+/// The resume badge's durable truth (import status round, 2026-09-18):
+/// unfinishedImports mirrors Catalog.unfinishedImport's latest-per-folder
+/// predicate as a set for the tree observation.
+struct BrowserTreeUnfinishedImportTests {
+
+	@Test func interruptedImportFlagsItsRootFolder() async throws {
+		// ImportContext opens a bracket and never finishes it: interrupted.
+		let context = try await ImportContext.make()
+		let tree = try await context.catalog.databaseWriter.read { try BrowserTree.fetch($0) }
+		#expect(tree.unfinishedImports == [context.rootFolderId])
+	}
+
+	@Test func completedImportClearsTheFlag() async throws {
+		let context = try await ImportContext.make()
+		try await context.catalog.recordImportFinished(id: context.importId, outcome: .completed)
+		let tree = try await context.catalog.databaseWriter.read { try BrowserTree.fetch($0) }
+		#expect(tree.unfinishedImports.isEmpty)
+	}
+
+	/// Only the LATEST import decides — a failed history behind a completed
+	/// latest is not a badge. Explicit timestamps keep the ordering out of
+	/// same-millisecond tie-break territory.
+	@Test func latestImportDecidesNotHistory() async throws {
+		let context = try await ImportContext.make()
+		try await context.catalog.recordImportFinished(id: context.importId, outcome: .failed)
+		try await context.catalog.databaseWriter.write { database in
+			try Import(
+				id: .mint(),
+				folderId: context.rootFolderId,
+				startedAt: Date().addingTimeInterval(60),
+				finishedAt: Date().addingTimeInterval(120),
+				outcome: .completed
+			).insert(database)
+		}
+		let tree = try await context.catalog.databaseWriter.read { try BrowserTree.fetch($0) }
+		#expect(tree.unfinishedImports.isEmpty)
+	}
+
+	@Test func flagsAreIndependentPerFolder() async throws {
+		let context = try await ImportContext.make()
+		try await context.catalog.recordImportFinished(id: context.importId, outcome: .completed)
+		// A second root on the same volume with its own interrupted import.
+		let volumeId = try await context.catalog.reader.read { database in
+			try Identifier<Volume>.fetchOne(database, sql: "SELECT id FROM volumes")
+		}
+		let other = try await context.catalog.findOrCreateRootFolder(
+			named: "Other", on: volumeId!, rootPath: "Other"
+		)
+		try await context.catalog.recordImportStarted(id: .mint(), folderId: other)
+		let tree = try await context.catalog.databaseWriter.read { try BrowserTree.fetch($0) }
+		#expect(tree.unfinishedImports == [other])
+	}
+}
+
+/// The master-equivalence pin (one concept, one implementation): the tree's
+/// SQL copy must classify every folder exactly as Catalog.unfinishedImport
+/// does, across the full outcome vocabulary and multi-generation history.
+/// If either predicate is edited alone, this breaks.
+struct BrowserTreeUnfinishedMasterEquivalenceTests {
+
+	@Test func setMatchesTheMasterPredicateFolderByFolder() async throws {
+		let context = try await ImportContext.make()
+		let catalog = context.catalog
+		let volumeId = try await catalog.reader.read { database in
+			try Identifier<Volume>.fetchOne(database, sql: "SELECT id FROM volumes")
+		}!
+
+		// One folder per history shape. ImportContext's own root already
+		// carries an interrupted (NULL) bracket.
+		func root(_ name: String) async throws -> Identifier<Folder> {
+			try await catalog.findOrCreateRootFolder(named: name, on: volumeId, rootPath: name)
+		}
+		func imported(
+			_ folder: Identifier<Folder>, at seconds: TimeInterval, outcome: ImportOutcome?
+		) async throws {
+			try await catalog.databaseWriter.write { database in
+				try Import(
+					id: .mint(), folderId: folder,
+					startedAt: Date(timeIntervalSinceReferenceDate: seconds),
+					finishedAt: outcome == nil ? nil : Date(timeIntervalSinceReferenceDate: seconds + 1),
+					outcome: outcome
+				).insert(database)
+			}
+		}
+
+		let canceled = try await root("Canceled")
+		try await imported(canceled, at: 100, outcome: .canceled)
+		let failed = try await root("Failed")
+		try await imported(failed, at: 100, outcome: .failed)
+		let completedOnly = try await root("CompletedOnly")
+		try await imported(completedOnly, at: 100, outcome: .completed)
+		let failedHistory = try await root("FailedHistory")  // failed then completed
+		try await imported(failedHistory, at: 100, outcome: .failed)
+		try await imported(failedHistory, at: 200, outcome: .completed)
+		let regressed = try await root("Regressed")  // completed then interrupted
+		try await imported(regressed, at: 100, outcome: .completed)
+		try await imported(regressed, at: 200, outcome: nil)
+		let untouched = try await root("Untouched")  // no imports at all
+
+		let folders = [
+			context.rootFolderId, canceled, failed, completedOnly,
+			failedHistory, regressed, untouched,
+		]
+		var master: Set<Identifier<Folder>> = []
+		for folder in folders {
+			if try await catalog.unfinishedImport(inFolder: folder) != nil {
+				master.insert(folder)
+			}
+		}
+
+		let tree = try await catalog.databaseWriter.read { try BrowserTree.fetch($0) }
+		#expect(tree.unfinishedImports == master)
+		// And the master itself behaves as documented, so equivalence isn't
+		// two copies of the same mistake.
+		#expect(master == [context.rootFolderId, canceled, failed, regressed])
+	}
+}

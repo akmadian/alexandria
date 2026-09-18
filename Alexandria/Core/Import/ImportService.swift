@@ -14,17 +14,54 @@ import Logging
 /// fresh mint (resume ruling, 2026-09-11: restarting the same source picks
 /// the unfinished task back up under its original id, and every import-scoped
 /// worklist — formation and thumbnails — completes with it).
-@MainActor
+@MainActor @Observable
 final class ImportService {
-	private let catalog: Catalog
-	private let log = Logger(label: "ImportService")
+	@ObservationIgnored private let catalog: Catalog
+	@ObservationIgnored private let log = Logger(label: "ImportService")
+
+	/// Runs with something left to show: executing, or finished and
+	/// lingering until dismissed. Keyed by the run's root folder — the
+	/// browser row's lookup key. Session-scoped on purpose: relaunch clears
+	/// lingering chrome; the imports table is the durable unfinished signal.
+	private(set) var runs: [Identifier<Folder>: ImportRun] = [:]
+	/// The in-flight reservation: startImport suspends four times between
+	/// its guard and its registry write, and MainActor reentrancy would let
+	/// two rapid invocations both pass an empty-registry guard (review
+	/// finding, 2026-09-18). Flipped synchronously before the first await,
+	/// cleared on every exit.
+	@ObservationIgnored private var startInFlight = false
 
 	init(catalog: Catalog) {
 		self.catalog = catalog
 	}
 
+	/// The lingering check/alert's dismiss — removal IS the state change.
+	/// A folder whose latest import is still unfinished then degrades to
+	/// the tree-fed resume badge; nothing strands.
+	func dismiss(folder id: Identifier<Folder>) {
+		if let run = runs.removeValue(forKey: id) {
+			log.debug("Import chrome dismissed", metadata: [
+				"importId": "\(run.id.rawValue)",
+			])
+		}
+	}
+
 	@discardableResult
 	func startImport(of folderUrl: URL) async throws -> ImportRun {
+		// Serialized (ruled 2026-09-18): one executing run at a time —
+		// lingering finished runs don't block. Guard and reservation are one
+		// synchronous step; no await sits between them.
+		// TODO: when concurrency lands, a second import against the same
+		// network share warns ("running a second may make both slower")
+		// instead of refusing outright.
+		guard !startInFlight, !runs.values.contains(where: { !$0.isFinished }) else {
+			log.info("Import refused: one already running", metadata: [
+				"source": "\(folderUrl.path())",
+			])
+			throw ImportError.importAlreadyRunning
+		}
+		startInFlight = true
+		defer { startInFlight = false }
 		// The store is REQUIRED (ruled 2026-09-11): the grid is the product,
 		// and a run that could skip thumbnails would ship a wall of shimmer.
 		// A directoryless (in-memory) catalog therefore cannot run imports.
@@ -55,6 +92,10 @@ final class ImportService {
 			store: store,
 			resuming: unfinished != nil
 		)
+		// Registered BEFORE start(): the registry entry must mask the DB's
+		// unfinished flag from the first frame, or a resume flashes the
+		// alert badge. Replaces this folder's lingering finished run, if any.
+		runs[rootFolderId] = run
 		run.start()
 		return run
 	}
