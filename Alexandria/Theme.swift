@@ -21,14 +21,19 @@ nonisolated enum Theme {
 		static let inspectorMaximumWidth: CGFloat = 420
 	}
 
-	/// Grid metrics, deliberately minimal this round: spacing and clamps
-	/// only. Cell styling belongs to the cell design round. (Column bounds
-	/// are behavior, not styling — they live with the hub's intent.)
+	/// Grid metrics and the cell round's styling tokens — all of them Ari's
+	/// to dial. (Column bounds are behavior, not styling — they live with
+	/// the hub's intent.)
 	enum Grid {
-		static let spacing: CGFloat = 8
-		static let inset: CGFloat = 12
+		static let spacing: CGFloat = 2
+		static let inset: CGFloat = 0
 		static let minimumCellSide: CGFloat = 40
-		static let selectionRingWidth: CGFloat = 3
+		// The four-state ring (cell round, 2026-09-18): cursor outranks plain
+		// selection. Values are Ari's to dial; hover is deferred with the
+		// state that would drive it.
+		static let cursorRingWidth: CGFloat = 3
+		static let selectedRingWidth: CGFloat = 3
+		static let selectedRingOpacity: Double = 0.45
 		/// The quiet ground a cell shows before (and beneath) its pixels, so
 		/// geometry is fixed from first paint and a missing thumbnail reads
 		/// as calm empty space, not a hole (grid.md invariant 3/4).

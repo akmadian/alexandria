@@ -40,6 +40,22 @@ extension Catalog {
 		}
 	}
 
+	/// File records by id, batched for a visible window (cell round,
+	/// 2026-09-18): file subjects in the grid render name and metadata
+	/// straight off the canonical record, same as the inspector. An id with
+	/// no row simply yields no entry — deliberately no negative caching, so
+	/// a caller's miss stays re-askable. No result order is promised.
+	func files(ids: [Identifier<File>]) async throws -> [File] {
+		guard !ids.isEmpty else { return [] }
+		return try await reader.read { database in
+			try File.fetchAll(
+				database,
+				sql: "SELECT * FROM files WHERE id IN (\(databaseQuestionMarks(count: ids.count)))",
+				arguments: StatementArguments(ids)
+			)
+		}
+	}
+
 	/// The thumbnail worklist (thumbnails.md): pending = `thumbnail_at IS
 	/// NULL`, minus missing files, minus kinds the registry never thumbnails,
 	/// minus files with residue — one attempt per file per import, the

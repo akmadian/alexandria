@@ -42,7 +42,7 @@ extension Asset {
 	/// `m.asset_id`, …): the stored override (formation's pick at mint), else
 	/// the asset's first file by id — a stable, arbitrary stand-in that carries
 	/// the residual nulls (a rendition minted before its raw joined). The sort
-	/// join's form of the election; `Catalog.representativeFileIds` is the
+	/// join's form of the election; `Catalog.representativeRecords` is the
 	/// batched-read master and this COALESCE shape must preserve its semantics
 	/// exactly. `assetID` is always a query-authored column reference, never
 	/// external input.

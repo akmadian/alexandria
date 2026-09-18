@@ -10,9 +10,10 @@
 //  hub, and the hub's state mirrors back guarded by inequality — so an echo
 //  dies in one bounce.
 //
-//  Image loading is deliberately absent: cells render the placeholder
-//  ground only. The loading engine is prescribed by
-//  _design/technical/grid.md and lands in its own build.
+//  The loading engine prescribed by _design/technical/grid.md lives here:
+//  batched resolution (ids → records, cell round 2026-09-18), per-cell
+//  decode requests, prefetch, the stamp and judgment watches, and the
+//  paint routine with its recycling guard.
 //
 
 import AppKit
@@ -119,14 +120,32 @@ struct GridRepresentable: NSViewRepresentable {
 		private var thumbnailStore: ThumbnailStore?
 		private var configured = false
 
-		/// The id→representative-file table: a per-session resolution cache,
-		/// filled lazily in visible/prefetch batches (never eagerly over the
-		/// whole working set — at the 1M scale target that read would be the
-		/// hitch we're avoiding). File-less assets never land here, so they
-		/// resolve to the placeholder ground.
+		/// The id→records table (asset + representative file; widened from
+		/// bare file ids at the cell round, 2026-09-18 — cells render
+		/// judgments and file fields off the canonical records): a
+		/// per-session resolution cache, filled lazily in visible/prefetch
+		/// batches (never eagerly over the whole working set — at the 1M
+		/// scale target that read would be the hitch we're avoiding). A
+		/// file-less asset resolves with a nil file, so it keeps the
+		/// placeholder ground while its judgments still show.
 		/// PERF: unbounded for the session; if a full 1M scroll makes it heavy,
 		/// an LRU keyed on visited ids is the named upgrade.
-		private var fileOf: [SubjectID: Identifier<File>] = [:]
+		private var recordsOf: [SubjectID: (asset: Asset?, file: File?)] = [:]
+
+		/// Bumped by every invalidation of the table (the judgment refresh);
+		/// a resolve that began under an older generation discards its batch
+		/// so stale records can't land over a forced re-read's fresher ones.
+		private var recordsGeneration = 0
+
+		/// The imaging path's view of the table: pixels want only the elected
+		/// file's id. A file subject IS its file, so pixels never wait on the
+		/// record read — the record rides later, for decoration alone.
+		private func representativeFileId(of id: SubjectID) -> Identifier<File>? {
+			switch id {
+			case .file(let file): file
+			case .asset: recordsOf[id]?.file?.id
+			}
+		}
 
 		/// The decode size currently on screen for a live cell, so an instant
 		/// paint from cache is never overwritten by nothing and a late arrival
@@ -150,6 +169,7 @@ struct GridRepresentable: NSViewRepresentable {
 		private var currentBucket: DecodeBucket?
 
 		private var stampObservation: AnyDatabaseCancellable?
+		private var judgmentObservation: AnyDatabaseCancellable?
 
 		func attach(_ collectionView: NSCollectionView) {
 			self.collectionView = collectionView
@@ -165,6 +185,7 @@ struct GridRepresentable: NSViewRepresentable {
 			self.imaging = imaging
 			self.thumbnailStore = catalog.directory.map { ThumbnailStore(catalogDirectory: $0) }
 			startStampObservation()
+			startJudgmentObservation()
 		}
 
 		/// Cancel everything this coordinator owns. Nuke `ImageTask`s do NOT
@@ -179,6 +200,8 @@ struct GridRepresentable: NSViewRepresentable {
 			imaging?.prefetcher.stopPrefetching()
 			stampObservation?.cancel()
 			stampObservation = nil
+			judgmentObservation?.cancel()
+			judgmentObservation = nil
 		}
 
 		// MARK: Translation
@@ -234,13 +257,18 @@ struct GridRepresentable: NSViewRepresentable {
 			if let ops = GridDiff.compute(from: ids, to: new) {
 				reindex(new)
 				if !ops.isEmpty {
-					collectionView.performBatchUpdates {
+					collectionView.performBatchUpdates({
 						collectionView.deleteItems(at: ops.deletes)
 						collectionView.insertItems(at: ops.inserts)
 						for move in ops.moves {
 							collectionView.moveItem(at: move.from, to: move.to)
 						}
-					}
+					}, completionHandler: { [weak self] _ in
+						// The settled moment: inserts/deletes/moves shift
+						// later cells' positions WITHOUT reconfiguring them,
+						// and only here are the visible paths post-animation.
+						self?.refreshVisiblePositions()
+					})
 				}
 			} else {
 				mode = "reload, past budget"
@@ -316,8 +344,32 @@ struct GridRepresentable: NSViewRepresentable {
 					collectionView.scrollToItems(at: [path], scrollPosition: .nearestHorizontalEdge)
 				}
 			}
+			// Cursor ring on live cells: retire the old holder, crown the new.
+			// Cells not on screen catch up at configure time from
+			// `lastMirroredCursor`, so this only touches the two movers.
+			if cursor != lastMirroredCursor {
+				for id in [lastMirroredCursor, cursor] {
+					// representedID check: around a lazy reloadData the table
+					// and the mounted items briefly disagree — never crown a
+					// stale-mounted cell.
+					guard let id, let path = indexPath(of: id),
+						let item = collectionView.item(at: path) as? GridItem,
+						item.representedID == id else { continue }
+					item.isCursor = id == cursor
+				}
+			}
 			lastMirroredCursor = cursor
 			needsCursorReveal = false
+		}
+
+		private func refreshVisiblePositions() {
+			guard let collectionView else { return }
+			for path in collectionView.indexPathsForVisibleItems() {
+				guard let id = id(at: path),
+					let item = collectionView.item(at: path) as? GridItem,
+					item.representedID == id else { continue }
+				item.display(position: path.item)
+			}
 		}
 
 		// MARK: Layout
@@ -358,6 +410,14 @@ extension GridRepresentable.Coordinator: NSCollectionViewDataSource {
 		guard let gridItem = item as? GridItem, let id = id(at: indexPath) else { return item }
 		gridItem.onDoubleClick = { [weak self] in self?.callbacks.activate() }
 		gridItem.represent(id)
+		// A fresh or recycled cell learns cursor identity here; a cursor MOVE
+		// between live cells is the mirror's job.
+		gridItem.isCursor = id == lastMirroredCursor
+		// Decoration data: position from the table, records from the cache
+		// (nil until resolution lands — the resolve push catches the cell up).
+		gridItem.display(position: indexPath.item)
+		let records = recordsOf[id]
+		gridItem.display(asset: records?.asset, file: records?.file)
 		// A recycled slot must not show its previous id's pixels. Paint from
 		// cache immediately if we have anything (so a reload/scope-change of
 		// already-seen content never blanks), otherwise the quiet ground.
@@ -443,14 +503,19 @@ extension GridRepresentable.Coordinator {
 	/// then re-checks the cell is still on screen before spending a decode.
 	func requestContent(for id: SubjectID) {
 		guard imaging != nil, thumbnailStore != nil else { return }
-		if let file = fileOf[id] {
+		if let file = representativeFileId(of: id) {
 			startContent(id: id, file: file)
+			// Pixels didn't wait on the record (file subjects answer from
+			// their own id) — decoration still wants it if it's missing.
+			if recordsOf[id] == nil {
+				Task { [weak self] in await self?.resolve([id]) }
+			}
 			return
 		}
 		Task { [weak self] in
 			guard let self else { return }
 			await self.resolve([id])
-			guard let file = self.fileOf[id], self.isVisible(id) else { return }
+			guard let file = self.representativeFileId(of: id), self.isVisible(id) else { return }
 			self.startContent(id: id, file: file)
 		}
 	}
@@ -497,7 +562,7 @@ extension GridRepresentable.Coordinator {
 	/// Used at cell configure so a recycled slot never shows its previous id's
 	/// pixels and a reload of already-seen content never blanks.
 	func paintFromCacheOrPlaceholder(_ id: SubjectID, into item: GridItem) {
-		guard let imaging, let thumbnailStore, let file = fileOf[id] else {
+		guard let imaging, let thumbnailStore, let file = representativeFileId(of: id) else {
 			shownBucket[id] = nil
 			item.showPlaceholder()
 			return
@@ -539,26 +604,81 @@ extension GridRepresentable.Coordinator {
 		imaging?.prefetcher.stopPrefetching()
 	}
 
-	// MARK: Resolution — SubjectID → representative file, batched
+	// MARK: Resolution — SubjectID → records, batched
 
-	private func resolve(_ ids: [SubjectID]) async {
+	/// Batched records read. `force` re-reads entries already cached (the
+	/// judgment refresh); otherwise cached entries are skipped — with one
+	/// deliberate exception: an asset's nil-file election is SOFT, re-asked
+	/// every time, so a file that joins the asset after its first resolution
+	/// can still elect (a hard negative here was the review-caught heal
+	/// regression: nothing would ever re-ask, and the subject stayed on the
+	/// placeholder for the session).
+	///
+	/// Writes are generation-guarded: an invalidation bumps the generation,
+	/// and a read that began before it discards its batch instead of
+	/// republishing pre-invalidation records over fresher ones. A discarded
+	/// batch retries once against the current generation so the asking cell
+	/// still gets an answer.
+	private func resolve(_ ids: [SubjectID], force: Bool = false, isRetry: Bool = false) async {
+		var fileIds: [Identifier<File>] = []
 		var assetIds: [Identifier<Asset>] = []
-		for id in ids where fileOf[id] == nil {
+		for id in ids {
 			switch id {
-			case .file(let file): fileOf[id] = file
-			case .asset(let asset): assetIds.append(asset)
+			case .file(let file):
+				if force || recordsOf[id] == nil { fileIds.append(file) }
+			case .asset(let asset):
+				if force || recordsOf[id] == nil || recordsOf[id]?.file == nil {
+					assetIds.append(asset)
+				}
 			}
 		}
-		guard !assetIds.isEmpty, let catalog else { return }
+		guard !fileIds.isEmpty || !assetIds.isEmpty, let catalog else { return }
+		let generation = recordsGeneration
 		let signpost = Signposts.grid.beginInterval("resolve batch")
 		defer { Signposts.grid.endInterval("resolve batch", signpost) }
 		do {
-			let map = try await catalog.representativeFileIds(for: assetIds)
-			for (asset, file) in map { fileOf[.asset(asset)] = file }
-			// Assets absent from the map are file-less — they stay unresolved
-			// and keep the placeholder ground (invariant 4).
+			var fresh: [SubjectID: (asset: Asset?, file: File?)] = [:]
+			if !assetIds.isEmpty {
+				for (assetId, records) in try await catalog.representativeRecords(for: assetIds) {
+					fresh[.asset(assetId)] = (records.asset, records.file)
+				}
+			}
+			if !fileIds.isEmpty {
+				for file in try await catalog.files(ids: fileIds) {
+					fresh[.file(file.id)] = (nil, file)
+				}
+			}
+			guard generation == recordsGeneration else {
+				if !isRetry { await resolve(ids, force: force, isRetry: true) }
+				return
+			}
+			// Assign over standing entries, never through a cleared hole:
+			// the pixel path keys off the elected file id and must always
+			// find the last known one.
+			for (id, records) in fresh { recordsOf[id] = records }
 		} catch {
-			log.error("representative resolution failed", metadata: ["error": "\(error)"])
+			log.error("record resolution failed", metadata: [
+				"error": "\(error)",
+				"assets": "\(assetIds.count)",
+				"files": "\(fileIds.count)",
+			])
+		}
+		// Cells configured before their records landed catch up here;
+		// item(at:) is nil for unmaterialized slots, so this only touches
+		// live cells.
+		pushRecords(ids)
+	}
+
+	/// Freshly resolved records onto whatever live cells display them. The
+	/// representedID check keeps the guarantee local: the id↔position table
+	/// and the mounted item can briefly disagree around a lazy reloadData.
+	private func pushRecords(_ ids: [SubjectID]) {
+		guard let collectionView else { return }
+		for id in ids {
+			guard let records = recordsOf[id], let path = indexPath(of: id),
+				let item = collectionView.item(at: path) as? GridItem,
+				item.representedID == id else { continue }
+			item.display(asset: records.asset, file: records.file)
 		}
 	}
 
@@ -582,7 +702,7 @@ extension GridRepresentable.Coordinator {
 		guard let imaging, let thumbnailStore else { return nil }
 		let bucket = currentBucketValue()
 		let requests = ids.compactMap { id -> ImageRequest? in
-			guard let file = fileOf[id] else { return nil }
+			guard let file = representativeFileId(of: id) else { return nil }
 			return imaging.request(
 				file: file, fileURL: thumbnailStore.url(for: file),
 				bucket: bucket, urgency: .preheat
@@ -632,8 +752,16 @@ extension GridRepresentable.Coordinator {
 	private func heal() {
 		guard let collectionView, let thumbnailStore else { return }
 		var offered = 0
+		var electionless: [SubjectID] = []
 		for path in collectionView.indexPathsForVisibleItems() {
-			guard let id = id(at: path), let file = fileOf[id] else { continue }
+			guard let id = id(at: path) else { continue }
+			guard let file = representativeFileId(of: id) else {
+				// A nil election is soft — the stamp that woke us may belong
+				// to a file that has JOINED this asset since it resolved.
+				// Re-ask, then run the normal display request for winners.
+				if case .asset = id, recordsOf[id] != nil { electionless.append(id) }
+				continue
+			}
 			let exists = FileManager.default.fileExists(atPath: thumbnailStore.url(for: file).path)
 			guard GridImaging.shouldOfferHeal(
 				placeholder: shownBucket[id] == nil,
@@ -645,8 +773,57 @@ extension GridRepresentable.Coordinator {
 			requestContent(for: id)
 			offered += 1
 		}
+		if !electionless.isEmpty {
+			Task { [weak self] in
+				guard let self else { return }
+				await self.resolve(electionless)
+				for id in electionless
+				where self.isVisible(id) && self.representativeFileId(of: id) != nil {
+					self.requestContent(for: id)
+				}
+			}
+		}
 		if offered > 0 {
 			log.debug("healed visible placeholders", metadata: ["count": "\(offered)"])
+		}
+	}
+
+	// MARK: Records watch — judgments stay live on visible cells
+
+	/// One valueless event per commit that touches the assets table (a
+	/// rating or flag set from the loupe or inspector, formation during an
+	/// import). The refresh re-asks the bounded visible question itself —
+	/// same shape as the stamp watch.
+	/// PERF: fires per asset-table commit, including import formation; the
+	/// work is one batched read over visible ids. If an import measures as
+	/// churn, narrowing the tracked region to the judgment columns is the
+	/// named upgrade.
+	private func startJudgmentObservation() {
+		guard let catalog else { return }
+		judgmentObservation = DatabaseRegionObservation(tracking: Asset.all())
+			.start(in: catalog.databaseWriter) { [weak self] error in
+				self?.log.error("judgment observation stopped", metadata: ["error": "\(error)"])
+			} onChange: { [weak self] _ in
+				Task { @MainActor in self?.refreshVisibleRecords() }
+			}
+	}
+
+	/// Force-re-resolve the visible asset subjects' records, so a judgment
+	/// made anywhere repaints the cells showing it. File subjects carry no
+	/// judgments and keep their cached record. Entries are never cleared:
+	/// the standing records stay whole for the pixel path (a clear here
+	/// blanked reconfiguring cells mid-refresh), and the generation bump
+	/// makes any in-flight resolve drop its now-stale batch instead.
+	private func refreshVisibleRecords() {
+		guard let collectionView else { return }
+		let assetSubjects = collectionView.indexPathsForVisibleItems()
+			.compactMap { id(at: $0) }
+			.filter { if case .asset = $0 { true } else { false } }
+		guard !assetSubjects.isEmpty else { return }
+		recordsGeneration += 1
+		log.debug("judgment refresh", metadata: ["count": "\(assetSubjects.count)"])
+		Task { [weak self] in
+			await self?.resolve(assetSubjects, force: true)
 		}
 	}
 

@@ -7,37 +7,60 @@ import Foundation
 import GRDB
 
 extension Catalog {
-	/// The file whose thumbnail stands for each asset, batched for a visible
-	/// window (grid round, 2026-09-12). `representative_file_id` when set —
-	/// formation picks it at mint (AssetFormation.pickRepresentative). The
-	/// COALESCE fallback carries the residual nulls (a rendition minted before
-	/// its raw joined): the asset's first file by id — stable, arbitrary, and
-	/// honest about being a stand-in. File-less assets are absent from the
-	/// result (the caller's placeholder case).
-	func representativeFileIds(
+	/// The asset and its representative file, as records, batched for a
+	/// visible window (grid round 2026-09-12; widened from ids to records at
+	/// the cell round 2026-09-18 — cells render judgments and file fields
+	/// straight off the canonical records, same as the inspector). Election
+	/// semantics unchanged: `representative_file_id` when set — formation
+	/// picks it at mint (AssetFormation.pickRepresentative) — with the
+	/// COALESCE fallback carrying the residual nulls (a rendition minted
+	/// before its raw joined): the asset's first file by id, stable,
+	/// arbitrary, and honest about being a stand-in. File-less assets carry
+	/// a nil file (the caller's placeholder case); their asset record still
+	/// rides, so judgments show without pixels.
+	func representativeRecords(
 		for assetIds: [Identifier<Asset>]
-	) async throws -> [Identifier<Asset>: Identifier<File>] {
+	) async throws -> [Identifier<Asset>: (asset: Asset, file: File?)] {
 		guard !assetIds.isEmpty else { return [:] }
 		return try await reader.read { database in
+			// The election rides the record query as one extra column (the
+			// row-with-extra-column shape fileURL's `depth` established);
+			// the record decode ignores it.
 			let rows = try Row.fetchAll(
 				database,
 				sql: """
-				SELECT assets.id AS asset_id,
+				SELECT assets.*,
 				       COALESCE(
 				           assets.representative_file_id,
 				           (SELECT files.id FROM files
 				            WHERE files.asset_id = assets.id
 				            ORDER BY files.id LIMIT 1)
-				       ) AS file_id
+				       ) AS elected_file_id
 				FROM assets
 				WHERE assets.id IN (\(databaseQuestionMarks(count: assetIds.count)))
 				""",
 				arguments: StatementArguments(assetIds)
 			)
-			var result: [Identifier<Asset>: Identifier<File>] = [:]
+			var assets: [Asset] = []
+			var fileIdOf: [Identifier<Asset>: Identifier<File>] = [:]
 			for row in rows {
-				guard let fileId: Identifier<File> = row["file_id"] else { continue }
-				result[row["asset_id"]] = fileId
+				let asset = try Asset(row: row)
+				assets.append(asset)
+				if let fileId: Identifier<File> = row["elected_file_id"] {
+					fileIdOf[asset.id] = fileId
+				}
+			}
+			let files = fileIdOf.isEmpty
+				? []
+				: try File.fetchAll(
+					database,
+					sql: "SELECT * FROM files WHERE id IN (\(databaseQuestionMarks(count: fileIdOf.count)))",
+					arguments: StatementArguments(Array(fileIdOf.values))
+				)
+			let fileById = Dictionary(uniqueKeysWithValues: files.map { ($0.id, $0) })
+			var result: [Identifier<Asset>: (asset: Asset, file: File?)] = [:]
+			for asset in assets {
+				result[asset.id] = (asset, fileIdOf[asset.id].flatMap { fileById[$0] })
 			}
 			return result
 		}
