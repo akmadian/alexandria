@@ -26,6 +26,7 @@ struct StageView: View {
 			}
 			stage
 		}
+		.safeAreaInset(edge: .bottom, spacing: 0) { StatusBar() }
 	}
 
 	@ViewBuilder private var stage: some View {
