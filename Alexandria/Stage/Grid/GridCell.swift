@@ -81,25 +81,43 @@ nonisolated enum CellProminence {
 	/// fixed (records via the coordinator, position via the id↔position
 	/// table).
 	@ViewBuilder private var decoration: some View {
-		HStack(spacing: 4) {
-			if let position = state.position {
-				Text("\(position + 1)")
-					.foregroundStyle(.secondary)
+		VStack() {
+			HStack() {
+				if let position = state.position {
+					Text("\(position + 1)")
+						.foregroundStyle(.secondary)
+				}
+				Spacer()
+				switch (state.asset?.kind) {
+				case .image: Image(systemName: "photo")
+				case .video: Image(systemName: "video")
+				case .audio: Image(systemName: "waveform")
+				case .document: Image(systemName: "document")
+				case .vector: Image(systemName: "squareshape.controlhandles.on.squareshape.controlhandles")
+				case .project: Image(systemName: "rectangle.stack")
+				case .other: Image(systemName: "document")
+				case .sidecar: Image(systemName: "info")
+				case .none: Image(systemName: "questionmark")
+				}
 			}
-			if let name = state.file?.name {
-				Text(name)
-					.truncationMode(.middle)
+			Spacer()
+			HStack(spacing: 4) {
+				if let name = state.file?.fileStem {
+					Text(name)
+						.truncationMode(.middle)
+				}
+				Spacer(minLength: 0)
+				if let rating = state.asset?.rating, rating > 0 {
+					Text(String(repeating: "★", count: rating))
+				}
 			}
-			Spacer(minLength: 0)
-			if let rating = state.asset?.rating, rating > 0 {
-				Text(String(repeating: "★", count: rating))
-			}
+			.font(.caption2)
+			.lineLimit(1)
+			.padding(.horizontal, 4)
+			.padding(.vertical, 2)
+			.background(.ultraThinMaterial)
 		}
-		.font(.caption2)
-		.lineLimit(1)
-		.padding(.horizontal, 4)
-		.padding(.vertical, 2)
-		.background(.ultraThinMaterial)
+		.padding(2)
 	}
 
 	/// The four-state's entire styling, in one spot.
@@ -131,3 +149,88 @@ private struct ThumbnailSlot: NSViewRepresentable {
 	func makeNSView(context: Context) -> ThumbnailLeafView { view }
 	func updateNSView(_ nsView: ThumbnailLeafView, context: Context) {}
 }
+
+// MARK: - Preview
+
+@MainActor
+private struct GridCellPreview: View {
+	private struct PreviewCell {
+		let state: CellState
+		let thumbnail: ThumbnailLeafView
+	}
+
+	private let cells: [PreviewCell]
+
+	init() {
+		func make(
+			name: String, ext: String,
+			kind: FileKind = .image,
+			pos: Int,
+			rating: Int? = nil,
+			flag: Asset.Flag? = nil,
+			prominence: CellProminence = .idle
+		) -> PreviewCell {
+			let state = CellState()
+			let fileId = Identifier<File>(rawValue: UUID())
+			let assetId = Identifier<Asset>(rawValue: UUID())
+			state.file = File(
+				id: fileId,
+				folderId: Identifier(rawValue: UUID()),
+				assetId: assetId,
+				importId: Identifier(rawValue: UUID()),
+				name: name,
+				nameKey: name.lowercased(),
+				fileStem: String(name.dropLast(ext.count + 1)),
+				fileExtension: ext,
+				kind: kind,
+				sizeBytes: 24_385_024,
+				modifiedAt: Date(timeIntervalSinceReferenceDate: 0),
+				contentHash: nil,
+				missing: false,
+				metadata: nil,
+				metadataVersion: 0,
+				thumbnailAt: nil,
+				formationRule: nil
+			)
+			state.asset = Asset(
+				id: assetId,
+				kind: kind,
+				rating: rating,
+				flag: flag,
+				representativeFileId: fileId
+			)
+			state.position = pos
+			state.prominence = prominence
+			return PreviewCell(state: state, thumbnail: ThumbnailLeafView())
+		}
+
+		cells = [
+			make(name: "DSC_0482.NEF", ext: "NEF", pos: 0, rating: 5, flag: .pick, prominence: .cursor),
+			make(name: "DSC_0483.NEF", ext: "NEF", pos: 1, rating: 3, prominence: .selected),
+			make(name: "A_Very_Long_Filename_That_Truncates_In_The_Bar.TIFF", ext: "TIFF", pos: 2),
+			make(name: "Interview_Raw_Cut.MOV", ext: "MOV", kind: .video, pos: 3, rating: 2),
+			make(name: "Ambient_Session.WAV", ext: "WAV", kind: .audio, pos: 4),
+			make(name: "Shoot_Notes.PDF", ext: "PDF", kind: .document, pos: 5, flag: .reject),
+		]
+	}
+
+	var body: some View {
+		let side: CGFloat = 160
+		LazyVGrid(
+			columns: Array(repeating: SwiftUI.GridItem(.fixed(side), spacing: 2), count: 3),
+			spacing: 2
+		) {
+			ForEach(cells.indices, id: \.self) { i in
+				GridCell(state: cells[i].state, thumbnail: cells[i].thumbnail)
+					.frame(width: side, height: side)
+			}
+		}
+		.padding(2)
+		.background(Color(nsColor: .windowBackgroundColor))
+	}
+}
+
+#Preview("Grid Cells") {
+	GridCellPreview()
+}
+
