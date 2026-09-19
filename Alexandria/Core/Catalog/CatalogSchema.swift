@@ -140,23 +140,30 @@ nonisolated enum CatalogSchema {
 	-- (the LrC/Photos container wall is documented user pain). Names are
 	-- free-form and may duplicate, siblings included — identity is the id,
 	-- and nothing looks a collection up by name; emptiness is rejected at
-	-- the verb, not here. A future smart collection is a predicate column
-	-- on this table (filter round), never a second kind of thing.
+	-- the verb, not here. A smart collection is a predicate on this same
+	-- table (smart-collection round, 2026-09-18), never a second kind of
+	-- thing.
 	CREATE TABLE collections (
 	    id        TEXT PRIMARY KEY,
 	    -- NULL = a root (multiple roots allowed). RESTRICT: deleting a
 	    -- subtree is a designed verb walking bottom-up, never a cascade.
 	    parent_id TEXT REFERENCES collections(id) ON DELETE RESTRICT,
-	    name      TEXT NOT NULL  -- [jdg] authored, as typed; never an identity
+	    name      TEXT NOT NULL,  -- [jdg] authored, as typed; never an identity
+	    -- [jdg] NULL = manual. Non-NULL = a smart collection: the versioned
+	    -- filter envelope (FilterGroup.serialized()), decoded lazily per use
+	    -- so one corrupt predicate disables one collection, never a fetch
+	    -- that merely lists rows (sidebar, tree assembly stay row-blind).
+	    predicate TEXT
 	);
 
 	-- The subtree walk's join key (the folder tree gets this via its child
 	-- identity index; collections have no such index, so it's explicit).
 	CREATE INDEX idx_collections_parent ON collections(parent_id);
 
-	-- Manual membership ONLY, by ruling: a future smart collection computes
+	-- Manual membership ONLY, by ruling: a smart collection computes
 	-- membership from its predicate and never writes here, and takes no
-	-- manual adds. The composite key makes duplicate membership structurally
+	-- manual adds (the verbs refuse). The composite key makes duplicate
+	-- membership structurally
 	-- impossible (bulk add is INSERT OR IGNORE, idempotent). CASCADE both
 	-- ways: a membership is meaningless without either parent.
 	CREATE TABLE collection_members (

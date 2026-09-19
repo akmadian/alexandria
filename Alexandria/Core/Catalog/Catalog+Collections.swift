@@ -48,6 +48,11 @@ nonisolated enum CollectionError: Error, Equatable {
 	/// or a programming error, and a partial rewrite would half-scramble a
 	/// judgment-class ordering.
 	case orderedSetMismatch
+	/// Membership-verb refusal: the target is a smart collection, whose
+	/// membership is computed from its predicate — it takes no manual adds,
+	/// removes, or ordering, by ruling (smart-collection round, 2026-09-18).
+	/// The UI keeps smart targets dark; this fence is the authority.
+	case membershipIsComputed
 }
 
 extension Collection {
@@ -72,15 +77,32 @@ extension Catalog {
 
 	/// Mints a collection. The name is stored as typed (names are free-form
 	/// and may duplicate, by ruling — identity is the id); only emptiness
-	/// is refused.
+	/// is refused. A non-nil `predicate` mints a SMART collection: the verb
+	/// takes the tree, not a string, so serialization has one fence — an
+	/// empty-normalizing or invalid predicate is refused here and a
+	/// hand-encoded blob can never enter through the front door.
 	@discardableResult
 	func createCollection(
-		named name: String, under parentId: Identifier<Collection>? = nil
+		named name: String, under parentId: Identifier<Collection>? = nil,
+		predicate: FilterGroup? = nil
 	) async throws -> Collection {
 		guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
 			throw CollectionError.emptyName
 		}
-		let collection = Collection(id: .mint(), parentId: parentId, name: name)
+		var serialized: String?
+		if let predicate {
+			// The same posture setFilter enforces: normalized, validated —
+			// an empty root is nil everywhere, so a stored empty is refused
+			// as the corruption it would later read as.
+			guard let normalized = predicate.normalized() else {
+				throw FilterError.emptyFilter
+			}
+			try normalized.validate()
+			serialized = try normalized.serialized()
+		}
+		let collection = Collection(
+			id: .mint(), parentId: parentId, name: name, predicate: serialized
+		)
 		try await databaseWriter.write { try collection.insert($0) }
 		return collection
 	}
@@ -194,6 +216,36 @@ extension Catalog {
 
 	// MARK: - The collection_members table
 
+	/// The one spelling of "smart = predicate non-NULL" at the SQL level.
+	/// `String.fetchOne` reads nil for both "no row" and "NULL predicate" —
+	/// intentional: a ghost id is not smart, and each verb keeps its own
+	/// ghost behavior (a no-op read, or the membership FK's refusal).
+	private nonisolated static func isSmart(
+		_ id: Identifier<Collection>, in database: Database
+	) throws -> Bool {
+		try String.fetchOne(
+			database,
+			sql: "SELECT predicate FROM collections WHERE id = ?",
+			arguments: [id]
+		) != nil
+	}
+
+	/// The smart fence, checked inside every membership verb's transaction:
+	/// a smart collection's membership is computed, never written.
+	private nonisolated static func requireManual(
+		_ id: Identifier<Collection>, in database: Database
+	) throws {
+		guard try !isSmart(id, in: database) else {
+			throw CollectionError.membershipIsComputed
+		}
+	}
+
+	/// Whether this collection is smart (predicate non-NULL). The drag
+	/// round's hover snapshot reads it; the fence above stays the authority.
+	func collectionIsSmart(_ id: Identifier<Collection>) async throws -> Bool {
+		try await reader.read { try Self.isSmart(id, in: $0) }
+	}
+
 	/// Adds assets to a collection, in the given order, at the end of its
 	/// manual order — so "order added" IS the manual order until the first
 	/// drag. Idempotent by the composite key: assets already members are
@@ -205,6 +257,7 @@ extension Catalog {
 	) async throws -> Int {
 		guard !assetIds.isEmpty else { return 0 }
 		return try await databaseWriter.write { database in
+			try Self.requireManual(collectionId, in: database)
 			// MAX on TEXT is the BINARY-collation tail — the same order the
 			// keys are minted in.
 			var tail = try String.fetchOne(
@@ -245,7 +298,8 @@ extension Catalog {
 	) async throws -> Int {
 		guard !assetIds.isEmpty else { return 0 }
 		return try await databaseWriter.write { database in
-			try CollectionMember
+			try Self.requireManual(collectionId, in: database)
+			return try CollectionMember
 				.filter(CollectionMember.Columns.collectionId == collectionId)
 				.filter(assetIds.contains(CollectionMember.Columns.assetId))
 				.deleteAll(database)
@@ -269,6 +323,7 @@ extension Catalog {
 			throw CollectionError.anchorAmongMoved
 		}
 		return try await databaseWriter.write { database in
+			try Self.requireManual(collectionId, in: database)
 			let upper: String?
 			if let anchor {
 				guard let anchorKey = try String.fetchOne(
@@ -339,6 +394,11 @@ extension Catalog {
 
 	/// The reverse verb: every collection holding this asset, ordered by
 	/// id for determinism. Rides idx_collection_members_asset.
+	/// Membership rows only, so smart collections never appear — "holds"
+	/// here means MANUAL holdings, which is what its one consumer (the drag
+	/// badge math) wants. A future "in collections" surface that should
+	/// include smart holdings needs its own answer (evaluate each stored
+	/// predicate against the one asset), not a widening of this read.
 	func collections(
 		containing assetId: Identifier<Asset>
 	) async throws -> [Identifier<Collection>] {
@@ -397,12 +457,22 @@ extension Catalog {
 	/// Whether anything nested below this collection contributes members —
 	/// the display-faithful union gate (ruled: no reorder in a union view).
 	/// A childless or member-less subtree answers false and reorder is live.
+	/// A smart DESCENDANT counts as contributing without evaluating its
+	/// predicate (smart-collection round): its computed members are on
+	/// screen, so adopting the on-screen order would feed setManualOrder
+	/// non-members — conservative on purpose, a zero-match predicate still
+	/// gates.
 	func descendantsContributeMembers(
 		of id: Identifier<Collection>
 	) async throws -> Bool {
 		try await reader.read { database in
 			let descendants = try Self.subtreeIds(of: id, in: database).subtracting([id])
 			guard !descendants.isEmpty else { return false }
+			let smartDescendants = try Collection
+				.filter(descendants.contains(Collection.Columns.id))
+				.filter(Collection.Columns.predicate != nil)
+				.fetchCount(database)
+			if smartDescendants > 0 { return true }
 			return try CollectionMember
 				.filter(descendants.contains(CollectionMember.Columns.collectionId))
 				.fetchCount(database) > 0
@@ -420,6 +490,7 @@ extension Catalog {
 		_ ordered: [Identifier<Asset>], in collectionId: Identifier<Collection>
 	) async throws {
 		try await databaseWriter.write { database in
+			try Self.requireManual(collectionId, in: database)
 			let members = try Set(Identifier<Asset>.fetchAll(
 				database,
 				sql: "SELECT asset_id FROM collection_members WHERE collection_id = ?",

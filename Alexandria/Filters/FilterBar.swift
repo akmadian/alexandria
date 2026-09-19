@@ -24,9 +24,13 @@
 //    unreachable until something else can author trees.
 //
 
+import Logging
 import SwiftUI
 
+private nonisolated let log = Logger(label: "filters")
+
 struct FilterBar: View {
+	@Environment(\.catalog) private var catalog
 	@Environment(CatalogViewState.self) private var viewState
 
 	/// One pill on screen: display identity + the value it shows.
@@ -41,6 +45,10 @@ struct FilterBar: View {
 	@State private var lastCommitted: FilterGroup?
 	/// The pill whose editor opens on first appearance (the just-added one).
 	@State private var newbornID: Pill.ID?
+	/// The save-as-smart-collection name prompt (ruled 2026-09-18: a
+	/// filter-bar button, the sidebar's naming-alert pattern).
+	@State private var savePresented = false
+	@State private var draftName = ""
 
 	var body: some View {
 		HStack(spacing: 6) {
@@ -59,6 +67,16 @@ struct FilterBar: View {
 					.font(.callout)
 					.foregroundStyle(.secondary)
 			}
+			// Always rendered, disabled without a filter (ruled: visible so
+			// the affordance is discoverable, never active on nothing).
+			Button("Save as Smart Collection") {
+				draftName = ""
+				savePresented = true
+			}
+			.buttonStyle(.plain)
+			.font(.callout)
+			.foregroundStyle(.secondary)
+			.disabled(pills.isEmpty)
 			Spacer()
 		}
 		.padding(.horizontal, 10)
@@ -67,6 +85,38 @@ struct FilterBar: View {
 		.onChange(of: viewState.filter) { _, changed in
 			guard changed != lastCommitted else { return }
 			rebuild(from: changed)
+		}
+		.alert("New Smart Collection", isPresented: $savePresented) {
+			TextField("Name", text: $draftName)
+			Button("Create") { saveSmartCollection() }
+			Button("Cancel", role: .cancel) {}
+		}
+	}
+
+	/// Captures the hub's canonical filter (the ledger's committed value,
+	/// never the pills mid-edit) into a new top-level smart collection.
+	/// The predicate ONLY, by ruling (2026-09-18): the current source is
+	/// scope, not filter — a smart collection matches library-wide.
+	private func saveSmartCollection() {
+		guard let filter = viewState.filter else { return }
+		let catalog = catalog
+		let name = draftName
+		// Ruled 2026-09-18: no jump — the view stays where it is. If that
+		// ruling changes, wire the retarget here: setSource(.collection(id))
+		// with the new id, and decide then whether the live filter clears.
+		Task {
+			do {
+				let collection = try await catalog.createCollection(named: name, predicate: filter)
+				log.info("smart collection saved", metadata: [
+					"collection": "\(collection.id.rawValue.uuidString)",
+				])
+			} catch CollectionError.emptyName {
+				// The verb's floor; the prompt simply closes having minted
+				// nothing (the sidebar naming flow's stance).
+				log.info("smart collection name rejected: empty")
+			} catch {
+				log.error("smart collection save failed", metadata: ["error": "\(error)"])
+			}
 		}
 	}
 

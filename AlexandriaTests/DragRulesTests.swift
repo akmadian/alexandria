@@ -58,19 +58,19 @@ struct DragRulesTests {
 		let target = collection()
 		let dragged = [asset(), asset(), asset()]
 		let context = DragContext(payload: .assets(dragged), alreadyHeld: [target: 1])
-		#expect(DragRules.verdict(over: .collectionRow(target), context: context) == .add(new: 2))
+		#expect(DragRules.verdict(over: .collectionRow(target, smart: false), context: context) == .add(new: 2))
 	}
 
 	@Test func assetsStayOptimisticWhileTheMembershipSnapshotIsInFlight() {
 		let context = DragContext(payload: .assets([asset()]), alreadyHeld: nil)
-		#expect(DragRules.verdict(over: .collectionRow(collection()), context: context) == .add(new: nil))
+		#expect(DragRules.verdict(over: .collectionRow(collection(), smart: false), context: context) == .add(new: nil))
 	}
 
 	@Test func aDropThatWouldAddNothingStaysDark() {
 		let target = collection()
 		let dragged = [asset(), asset()]
 		let context = DragContext(payload: .assets(dragged), alreadyHeld: [target: 2])
-		#expect(DragRules.verdict(over: .collectionRow(target), context: context) == nil)
+		#expect(DragRules.verdict(over: .collectionRow(target, smart: false), context: context) == nil)
 	}
 
 	@Test func assetsNeverTargetTheHeader() {
@@ -78,16 +78,41 @@ struct DragRulesTests {
 		#expect(DragRules.verdict(over: .collectionsHeader, context: context) == nil)
 	}
 
+	/// Smart takes no manual adds (smart-collection round, 2026-09-18):
+	/// dark, and dark even in the optimistic pre-snapshot window — the
+	/// smartness rides the target, not the async context.
+	@Test func aSmartCollectionRowStaysDarkForAssets() {
+		let target = collection()
+		let pending = DragContext(payload: .assets([asset()]), alreadyHeld: nil)
+		#expect(DragRules.verdict(over: .collectionRow(target, smart: true), context: pending) == nil)
+		let landed = DragContext(payload: .assets([asset()]), alreadyHeld: [:])
+		#expect(DragRules.verdict(over: .collectionRow(target, smart: true), context: landed) == nil)
+	}
+
+	/// Re-parenting UNDER a smart collection stays legal — children are
+	/// tree structure, not membership (ruled 2026-09-18).
+	@Test func aCollectionStillReparentsOntoASmartRow() {
+		let dragged = collection()
+		let target = collection()
+		let context = DragContext(
+			payload: .collection(dragged), parentOfDraggedCollection: nil,
+			draggedSubtree: [dragged]
+		)
+		#expect(DragRules.verdict(over: .collectionRow(target, smart: true), context: context)
+			== .reparent(under: target))
+	}
+
 	// MARK: - Assets × grid gap (the ruled reorder gates)
 
 	private func gapVerdict(
-		manual: Bool, filter: Bool, union: Bool?
+		manual: Bool, filter: Bool, union: Bool?, smart: Bool? = false
 	) -> DropVerdict? {
 		let context = DragContext(
 			payload: .assets([asset()]),
 			reorderFacts: .init(
 				viewedCollection: collection(), isManual: manual,
-				filterActive: filter, unionContributes: union
+				filterActive: filter, unionContributes: union,
+				sourceIsSmart: smart
 			)
 		)
 		return DragRules.verdict(over: .gridGap, context: context)
@@ -136,6 +161,45 @@ struct DragRulesTests {
 		#expect(gapVerdict(manual: false, filter: false, union: nil) == nil)
 	}
 
+	/// A smart source refuses reorder whole — no manual order exists to
+	/// write, on either path — and a pending smartness snapshot keeps the
+	/// gap dark, the union snapshot's own stance.
+	@Test func aSmartSourceRefusesReorderVisibly() {
+		guard case .refused(let message)? = gapVerdict(
+			manual: false, filter: false, union: false, smart: true
+		) else {
+			Issue.record("smart-source reorder must refuse with a visible message")
+			return
+		}
+		#expect(!message.isEmpty)
+		guard case .refused? = gapVerdict(manual: true, filter: false, union: false, smart: true) else {
+			Issue.record("manual over a smart source must refuse too")
+			return
+		}
+		#expect(gapVerdict(manual: true, filter: false, union: false, smart: nil) == nil)
+	}
+
+	/// Review finding 2: KNOWN smart names the real reason even with a
+	/// filter active (never "clear the filter" followed by a second
+	/// refusal) — while the filter refusal stays instant during the
+	/// pending-smartness window for ordinary filtered collections.
+	@Test func knownSmartOutranksTheFilterRefusal() {
+		guard case .refused(let message)? = gapVerdict(
+			manual: false, filter: true, union: false, smart: true
+		) else {
+			Issue.record("a filtered smart source must refuse as smart")
+			return
+		}
+		#expect(message.contains("smart collection"))
+		guard case .refused(let pending)? = gapVerdict(
+			manual: false, filter: true, union: nil, smart: nil
+		) else {
+			Issue.record("a filtered view must keep its instant refusal while smartness is pending")
+			return
+		}
+		#expect(pending.contains("filter"))
+	}
+
 	// MARK: - Collection × rows (re-parent and its dark refusals)
 
 	@Test func aCollectionReparentsOntoAnUnrelatedRow() {
@@ -145,7 +209,7 @@ struct DragRulesTests {
 			payload: .collection(dragged), parentOfDraggedCollection: nil,
 			draggedSubtree: [dragged]
 		)
-		#expect(DragRules.verdict(over: .collectionRow(target), context: context)
+		#expect(DragRules.verdict(over: .collectionRow(target, smart: false), context: context)
 			== .reparent(under: target))
 	}
 
@@ -155,8 +219,8 @@ struct DragRulesTests {
 		let context = DragContext(
 			payload: .collection(dragged), draggedSubtree: [dragged, child]
 		)
-		#expect(DragRules.verdict(over: .collectionRow(dragged), context: context) == nil)
-		#expect(DragRules.verdict(over: .collectionRow(child), context: context) == nil)
+		#expect(DragRules.verdict(over: .collectionRow(dragged, smart: false), context: context) == nil)
+		#expect(DragRules.verdict(over: .collectionRow(child, smart: false), context: context) == nil)
 	}
 
 	@Test func theCurrentParentStaysDark() {
@@ -166,7 +230,7 @@ struct DragRulesTests {
 			payload: .collection(dragged), parentOfDraggedCollection: parent,
 			draggedSubtree: [dragged]
 		)
-		#expect(DragRules.verdict(over: .collectionRow(parent), context: context) == nil)
+		#expect(DragRules.verdict(over: .collectionRow(parent, smart: false), context: context) == nil)
 	}
 
 	@Test func theHeaderMovesANestedCollectionToRootAndIgnoresRoots() {

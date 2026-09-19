@@ -37,6 +37,10 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 	struct CollectionNode: Identifiable, Equatable, Sendable {
 		let id: Identifier<Collection>
 		let name: String
+		/// Predicate presence only — the tree never DECODES a predicate
+		/// (row-blind by ruling: a corrupt one can't hurt the sidebar).
+		/// Drives the row icon and the drag shims' smart refusal.
+		let isSmart: Bool
 		let children: [CollectionNode]
 	}
 
@@ -166,6 +170,7 @@ nonisolated struct BrowserTree: Equatable, Sendable {
 			return CollectionNode(
 				id: collection.id,
 				name: collection.name,
+				isSmart: collection.isSmart,
 				children: orderedCollections(collectionChildren[collection.id] ?? []).map(collectionNode)
 			)
 		}

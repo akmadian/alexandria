@@ -85,6 +85,13 @@ final class CatalogViewState {
 	/// superseded one still standing while the swap settles.
 	private(set) var answeredQuery: WorkingSetQuery?
 
+	/// True when the viewed source is a smart collection whose stored
+	/// predicate failed decode (smart-collection round, 2026-09-18): the
+	/// stage shows the ruled notice instead of a silently empty grid.
+	/// Rides the same delivery as the working set, so it can never explain
+	/// an answer other than the one standing.
+	private(set) var predicateUnreadable = false
+
 	// MARK: Internals
 
 	@ObservationIgnored private let catalog: Catalog
@@ -281,7 +288,7 @@ final class CatalogViewState {
 		let query = WorkingSetQuery(lens: lens, source: source, arrangement: arrangement, filter: filter)
 		log.debug("observation swap", metadata: ["query": "\(query)"])
 		observation = ValueObservation
-			.tracking { try query.fetchIdentifiers($0) }
+			.tracking { try query.fetchAnswer($0) }
 			.removeDuplicates()
 			.start(in: catalog.reader) { [weak self] error in
 				// A failed observation never notifies again: the standing
@@ -290,8 +297,8 @@ final class CatalogViewState {
 					"query": "\(query)",
 					"error": "\(error)",
 				])
-			} onChange: { [weak self] ids in
-				self?.deliver(ids, answering: query)
+			} onChange: { [weak self] answer in
+				self?.deliver(answer, answering: query)
 			}
 	}
 
@@ -301,11 +308,20 @@ final class CatalogViewState {
 	/// to first (the ratified survival policies arrive with the interaction
 	/// rounds and slot in here). Position writes are guarded so an
 	/// unchanged selection or cursor fires no mutation.
-	private func deliver(_ ids: [SubjectID], answering query: WorkingSetQuery) {
+	private func deliver(_ answer: WorkingSetQuery.Answer, answering query: WorkingSetQuery) {
+		let ids = answer.ids
 		log.trace("working set delivered", metadata: ["count": "\(ids.count)"])
 		workingSet = ids
 		members = Set(ids)
 		answeredQuery = query
+		if predicateUnreadable != answer.predicateUnreadable {
+			predicateUnreadable = answer.predicateUnreadable
+			if answer.predicateUnreadable {
+				log.error("smart-collection predicate unreadable", metadata: [
+					"source": "\(query.source)",
+				])
+			}
+		}
 		let reconciled = selection.intersection(members)
 		if reconciled != selection {
 			selection = reconciled

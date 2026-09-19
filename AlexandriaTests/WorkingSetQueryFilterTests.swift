@@ -75,10 +75,23 @@ struct WorkingSetQueryFilterTests {
 			+ "SELECT asset_id FROM (SELECT DISTINCT asset_id FROM files "
 			+ "WHERE folder_id IN subtree AND asset_id IS NOT NULL) ORDER BY asset_id DESC")
 
-		#expect(try await first(query(.assets, .collection(collection)))
-			== Collection.subtreeCTE + " "
-			+ "SELECT asset_id FROM (SELECT DISTINCT asset_id FROM collection_members "
-			+ "WHERE collection_id IN subtree) ORDER BY asset_id DESC")
+		// The smart round (2026-09-18) added a probe read BEFORE the
+		// membership statement — the subtree's smart rows, id + predicate
+		// only. The MEMBERSHIP statement itself must stay byte-identical to
+		// the collections round's text whenever the subtree holds no smart
+		// rows; both statements are pinned exactly.
+		let collectionStatements = try await statements(
+			of: query(.assets, .collection(collection)), in: catalog
+		)
+		#expect(collectionStatements == [
+			Collection.subtreeCTE
+				+ " SELECT collections.id, collections.predicate FROM collections "
+				+ "JOIN subtree ON collections.id = subtree.id "
+				+ "WHERE collections.predicate IS NOT NULL ORDER BY collections.id",
+			Collection.subtreeCTE + " "
+				+ "SELECT asset_id FROM (SELECT DISTINCT asset_id FROM collection_members "
+				+ "WHERE collection_id IN subtree) ORDER BY asset_id DESC",
+		])
 
 		// The captured shape, composed from the same election constant the
 		// query composes from — the one implementation, compared exactly.

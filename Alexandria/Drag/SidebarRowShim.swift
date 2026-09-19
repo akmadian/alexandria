@@ -96,6 +96,9 @@ final class SidebarRowShimView: NSView, NSDraggingSource {
 		var collection: Identifier<Collection>
 		var parent: Identifier<Collection>?
 		var title: String
+		/// From the tree's row (predicate presence, never decoded): rides
+		/// the DropTarget so a smart row is dark from the first hover.
+		var isSmart: Bool
 		/// Whether hover-hold should spring the row's disclosure open
 		/// (rows with children only).
 		var canSpring: Bool
@@ -122,7 +125,10 @@ final class SidebarRowShimView: NSView, NSDraggingSource {
 
 	private var verdict: DropVerdict? {
 		guard let context = DragContext.current else { return nil }
-		return DragRules.verdict(over: .collectionRow(configuration.collection), context: context)
+		return DragRules.verdict(
+			over: .collectionRow(configuration.collection, smart: configuration.isSmart),
+			context: context
+		)
 	}
 
 	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -175,7 +181,8 @@ final class SidebarRowShimView: NSView, NSDraggingSource {
 		guard let catalog = configuration.catalog,
 			let payload = DragPayload.read(sender), let verdict else { return false }
 		return DragVerbs.perform(
-			payload, verdict: verdict, over: .collectionRow(configuration.collection),
+			payload, verdict: verdict,
+			over: .collectionRow(configuration.collection, smart: configuration.isSmart),
 			catalog: catalog
 		)
 	}

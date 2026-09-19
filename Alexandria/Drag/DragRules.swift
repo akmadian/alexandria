@@ -30,7 +30,11 @@ private nonisolated let dragLog = Logger(label: "drag")
 /// Where a drag is hovering, in the design's vocabulary. Adapters translate
 /// their geometry into these; the table never learns what a row is made of.
 enum DropTarget: Equatable {
-	case collectionRow(Identifier<Collection>)
+	/// `smart` rides the target because the row's builder knows it
+	/// synchronously (the tree carries it) and a smart row must be dark
+	/// from the drag's FIRST hover — the async membership snapshot's
+	/// optimistic window must never light one up.
+	case collectionRow(Identifier<Collection>, smart: Bool)
 	/// The "Collections" section header — the move-to-root target.
 	case collectionsHeader
 	/// The gap between two grid cells (reorder's only grid meaning; there
@@ -91,6 +95,12 @@ final class DragContext {
 		/// Whether any DISPLAYED member comes from a nested collection
 		/// (display-faithful union gate, ruled). nil until the read lands.
 		var unionContributes: Bool?
+		/// Whether the viewed collection is SMART — reorder refuses whole
+		/// (no manual order exists to write, and adopt would hit the verb's
+		/// fence). nil until the read lands; the query's Source carries only
+		/// the id, so smartness arrives with the snapshot like the union
+		/// fact.
+		var sourceIsSmart: Bool?
 	}
 	private(set) var reorderFacts: ReorderFacts?
 
@@ -150,11 +160,15 @@ final class DragContext {
 			}
 			if let facts = context.reorderFacts {
 				do {
+					let smart = try await catalog.collectionIsSmart(facts.viewedCollection)
 					let union = try await catalog.descendantsContributeMembers(of: facts.viewedCollection)
 					guard Self.current === context else { return }
+					context.reorderFacts?.sourceIsSmart = smart
 					context.reorderFacts?.unionContributes = union
 				} catch {
-					dragLog.error("union snapshot failed", metadata: ["error": "\(error)"])
+					dragLog.error("reorder-facts snapshot failed (smart/union stay unknown; gap stays dark)", metadata: [
+						"error": "\(error)",
+					])
 				}
 			}
 		}
@@ -203,9 +217,19 @@ final class DragContext {
 	/// dark — the grid simply isn't a target.
 	fileprivate var reorderVerdict: DropVerdict? {
 		guard let facts = reorderFacts else { return nil }
+		// KNOWN smart refuses first — it is the real reason regardless of
+		// filter state (review finding 2: refusing on the filter first told
+		// the user to clear it, only to be refused again). The filter check
+		// stays ahead of the PENDING smart window so an ordinary filtered
+		// collection keeps its instant, snapshot-free refusal.
+		if facts.sourceIsSmart == true {
+			return .refused(message: "Can't reorder a smart collection")
+		}
 		if !facts.isManual, facts.filterActive {
 			return .refused(message: "Can't reorder while a filter is active")
 		}
+		// Pending smartness keeps the gap dark, the union snapshot's stance.
+		if facts.sourceIsSmart == nil { return nil }
 		switch facts.unionContributes {
 		case .some(true):
 			return .refused(message: "Can't reorder a view that includes nested collections")
@@ -295,7 +319,11 @@ enum DragRules {
 	static func verdict(over target: DropTarget, context: DragContext) -> DropVerdict? {
 		switch (context.payload, target) {
 
-		case (.assets(let ids), .collectionRow(let collection)):
+		case (.assets(let ids), .collectionRow(let collection, let smart)):
+			// Smart takes no manual adds, by ruling (smart-collection
+			// round): dark, the same rank as the zero-add refusal. The
+			// verb's fence stays the authority.
+			guard !smart else { return nil }
 			guard let held = context.alreadyHeld else { return .add(new: nil) }
 			let new = ids.count - (held[collection] ?? 0)
 			// Zero new adds = the ruled dark refusal, never a landing no-op.
@@ -307,10 +335,12 @@ enum DragRules {
 		case (.assets, .collectionsHeader):
 			return nil
 
-		case (.collection, .collectionRow(let target)):
+		case (.collection, .collectionRow(let target, _)):
 			// Own subtree (cycle, self included) and the current parent
 			// (no-op) stay dark; the verb's transaction re-checks the cycle
-			// authoritatively.
+			// authoritatively. Smartness is no bar here: re-parenting UNDER
+			// a smart collection is tree surgery, and children stay legal
+			// on every kind (ruled 2026-09-18).
 			guard !context.draggedSubtree.contains(target),
 				target != context.parentOfDraggedCollection
 			else { return nil }
@@ -376,7 +406,7 @@ enum DragVerbs {
 	) -> Bool {
 		switch (payload, verdict, target) {
 
-		case (.assets(let ids), .add, .collectionRow(let collection)):
+		case (.assets(let ids), .add, .collectionRow(let collection, _)):
 			Task {
 				do {
 					let added = try await catalog.addMembers(ids, to: collection)

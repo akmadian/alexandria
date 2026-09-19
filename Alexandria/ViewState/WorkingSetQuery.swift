@@ -10,6 +10,9 @@
 
 import Foundation
 import GRDB
+import Logging
+
+private nonisolated let log = Logger(label: "viewstate")
 
 /// The unit the working set ranges over — the FROM clause. A source or
 /// filter clause narrows membership; the lens decides what a member IS.
@@ -147,6 +150,27 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 	/// Hashable and a compiled literal can never be cached stale.
 	var filter: FilterGroup? = nil
 
+	/// What one fetch delivers: the working set plus the one health fact a
+	/// renderer needs beside it (smart-collection round, 2026-09-18). Riding
+	/// the same delivery keeps the one-observation discipline — the notice
+	/// can never disagree with the ids it explains.
+	struct Answer: Hashable, Sendable {
+		var ids: [SubjectID] = []
+		/// True when the VIEWED source is a smart collection whose stored
+		/// predicate failed decode (corruption, or a newer vocabulary
+		/// generation) — the grid shows the ruled notice instead of a
+		/// silently empty answer. A corrupt smart DESCENDANT never sets
+		/// this: one corrupt predicate disables one row's contribution.
+		var predicateUnreadable = false
+	}
+
+	/// The ids alone — a test convenience: production reads go through
+	/// fetchAnswer (the hub's observation), but ~15 existing test call
+	/// sites pin statements and orderings through this shape.
+	func fetchIdentifiers(_ database: Database) throws -> [SubjectID] {
+		try fetchAnswer(database).ids
+	}
+
 	/// The working set: every id the question yields, in arrangement order.
 	/// Ids only — record content is fetched by consumers on demand, so this
 	/// stays cheap to re-run on every impactful commit.
@@ -156,7 +180,7 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 	/// shift another clause's bindings — the hand-threaded String +
 	/// StatementArguments form made binding order positional bookkeeping,
 	/// correct only while every `?` happened to precede the filter's.
-	func fetchIdentifiers(_ database: Database) throws -> [SubjectID] {
+	func fetchAnswer(_ database: Database) throws -> Answer {
 		let direction = arrangement.direction == .ascending ? "ASC" : "DESC"
 		// The files lens's ORDER BY. Exhaustive so a new key can't silently
 		// keep sorting by id.
@@ -265,6 +289,54 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 					WHERE import_id = \(sql: latestImport) AND asset_id IS NOT NULL
 					""")
 			case .collection(let collection):
+				// The subtree's SMART rows (smart-collection round,
+				// 2026-09-18), probed first and Swift-side because decode
+				// can't happen in SQL. id + predicate only, so a rename
+				// never re-delivers this working set; ORDER BY id so the
+				// composed statement text is deterministic. Decoded lazily,
+				// per row: a corrupt predicate disables that one
+				// collection's contribution — and only when it is the
+				// VIEWED root does it surface as the unreadable notice.
+				var unreadable = false
+				var decoded: [(id: Identifier<Collection>, group: FilterGroup)] = []
+				let smartRows = try Row.fetchAll(
+					database,
+					sql: Collection.subtreeCTE + """
+						 SELECT collections.id, collections.predicate FROM collections \
+						JOIN subtree ON collections.id = subtree.id \
+						WHERE collections.predicate IS NOT NULL ORDER BY collections.id
+						""",
+					arguments: [collection]
+				)
+				for row in smartRows {
+					let id: Identifier<Collection> = row["id"]
+					do {
+						decoded.append((id, try FilterGroup(serialized: row["predicate"])))
+					} catch {
+						if id == collection {
+							unreadable = true
+						} else {
+							// A descendant's rot must not be silent: "my
+							// parent collection is missing photos" needs a
+							// trace, and FilterError names the diagnosis
+							// (version skew vs corruption). The viewed
+							// root's case is the hub's log, on delivery.
+							log.error("smart predicate unreadable; row's contribution disabled", metadata: [
+								"collection": "\(id.rawValue.uuidString)",
+								"error": "\(error)",
+							])
+						}
+					}
+				}
+				if unreadable {
+					// Ruled (2026-09-18, review finding 1): an unreadable
+					// VIEWED predicate answers EMPTY — never a partial set
+					// behind the notice, where the status bar would count
+					// and the cursor would land on assets the grid never
+					// draws. Descendants' members are suppressed WITH it;
+					// the notice explains the whole answer.
+					return Answer(ids: [], predicateUnreadable: true)
+				}
 				if arrangement.sortKey == .manual {
 					// The sectioned union order (ruling 5) — Swift-side,
 					// because the Finder comparator can't be computed in
@@ -289,21 +361,62 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 							database, sql: matchSQL, arguments: matchArguments
 						)
 					}
-					return try Self.sectionedUnionOrder(of: collection, in: database, matching: matching)
-						.map(SubjectID.asset)
+					// A smart node's block: its computed members, in added
+					// order — no authored keys exist, and a predicate
+					// carries no sequence. Includes a smart ROOT under
+					// manual: offerable but acting as added within its
+					// block (normalized(for:) is pure over Source and
+					// can't see smartness).
+					// TODO: (arrangement-picker round) hide/disable manual
+					// for smart sources once posture can know smartness.
+					// PERF: one unscoped full scan of assets PER smart node
+					// (plus the matching scan above), re-run on every
+					// judgment write while the view is open. Fine at 40k;
+					// trigger: manual views over smart-heavy subtrees
+					// measurably sluggish. Upgrade: evaluate all smart
+					// nodes in one pass over assets, or constrain each with
+					// AND id IN (the subtree's membership).
+					var computed: [Identifier<Collection>: [Identifier<Asset>]] = [:]
+					for (id, group) in decoded {
+						let (matchSQL, matchArguments) = try SQL(
+							"SELECT id FROM assets WHERE \(group.sqlPredicate()) ORDER BY id ASC"
+						).build(database)
+						computed[id] = try Identifier<Asset>.fetchAll(
+							database, sql: matchSQL, arguments: matchArguments
+						)
+					}
+					let ordered = try Self.sectionedUnionOrder(
+						of: collection, in: database, matching: matching, computed: computed
+					)
+					return Answer(ids: ordered.map(SubjectID.asset))
 				}
 				// A regular sort key is one flat order over the union's
 				// membership — never sectioned; sorting means sorting. The
 				// subtree rides Collection.subtreeCTE, the concept's one
-				// implementation (ruling 5's union; ghost-safe seed).
-				sql = SQL(sql: Collection.subtreeCTE, arguments: [collection]) + " " + orderedAssets(
+				// implementation (ruling 5's union; ghost-safe seed). With
+				// no smart rows the statement is byte-identical to the
+				// collections round's text (pinned); each smart row adds a
+				// UNION arm — UNION's dedupe replaces the manual arm's own
+				// DISTINCT semantics across arms, and the live filter's
+				// splice wraps the whole membership, so scope-then-filter
+				// (the ruled precedence) holds with no second seam.
+				// PERF: each UNION arm is an unscoped scan of assets'
+				// judgment columns (unindexed — the filter round's note),
+				// re-run on every judgment write while the view is open.
+				// Fine at 40k; trigger: flat smart views measurably
+				// sluggish. Upgrade: index the judgment columns, or merge
+				// the arms into one WHERE with OR.
+				var membership: SQL =
 					"SELECT DISTINCT asset_id FROM collection_members WHERE collection_id IN subtree"
-				)
+				for (_, group) in decoded {
+					membership = membership + " UNION SELECT id FROM assets WHERE \(group.sqlPredicate())"
+				}
+				sql = SQL(sql: Collection.subtreeCTE, arguments: [collection]) + " " + orderedAssets(membership)
 			}
 			let (statement, arguments) = try sql.build(database)
-			return try Identifier<Asset>
+			return Answer(ids: try Identifier<Asset>
 				.fetchAll(database, sql: statement, arguments: arguments)
-				.map(SubjectID.asset)
+				.map(SubjectID.asset))
 
 		case .files:
 			// The filter under the files lens (ruled): a file matches if its
@@ -337,13 +450,17 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 				// Deliberately unbuilt (ruled 2026-09-14): what the files
 				// lens over a collection MEANS — which files, in what order
 				// — is not designed yet (_design/collections.md, ruling 10's
-				// unsettled marker). Empty, never a guess.
-				return []
+				// unsettled marker). Empty, never a guess — smart included:
+				// no probe runs, so the unreadable notice is deliberately
+				// assets-lens-only (a corrupt smart collection under this
+				// lens reads as the same ruled emptiness as every
+				// collection here).
+				return Answer()
 			}
 			let (statement, arguments) = try sql.build(database)
-			return try Identifier<File>
+			return Answer(ids: try Identifier<File>
 				.fetchAll(database, sql: statement, arguments: arguments)
-				.map(SubjectID.file)
+				.map(SubjectID.file))
 		}
 	}
 
@@ -372,9 +489,15 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 	/// appearance), but this is the shape a per-appearance predicate would
 	/// need, so it's pinned here rather than rediscovered (round review,
 	/// finding 11).
+	/// `computed` is the smart nodes' pre-evaluated members (smart-collection
+	/// round): a smart collection has no membership rows, so its block comes
+	/// in whole, already ordered (added). The walk treats it exactly like an
+	/// authored block — first-appearance dedupe and the filter's `matching`
+	/// check apply unchanged.
 	private static func sectionedUnionOrder(
 		of root: Identifier<Collection>, in database: Database,
-		matching: Set<Identifier<Asset>>? = nil
+		matching: Set<Identifier<Asset>>? = nil,
+		computed: [Identifier<Collection>: [Identifier<Asset>]] = [:]
 	) throws -> [Identifier<Asset>] {
 		let subtree = try Collection.fetchAll(
 			database,
@@ -396,6 +519,14 @@ nonisolated struct WorkingSetQuery: Hashable, Sendable {
 		var membersOf: [Identifier<Collection>: [Identifier<Asset>]] = [:]
 		for membership in memberships {
 			membersOf[membership.collectionId, default: []].append(membership.assetId)
+		}
+		// Smart blocks slot in beside the authored ones. The verbs fence
+		// smart collections out of collection_members, so a clash can only
+		// be sideways-written state (predicate AND rows) — appended, not
+		// replaced, so this path answers the same set the flat path's
+		// UNION does (review finding 9); the walk's dedupe handles overlap.
+		for (id, assets) in computed {
+			membersOf[id, default: []].append(contentsOf: assets)
 		}
 
 		var grouped: [Identifier<Collection>: [Collection]] = [:]

@@ -30,6 +30,26 @@ struct StageView: View {
 	}
 
 	@ViewBuilder private var stage: some View {
+		if viewState.predicateUnreadable {
+			// The ruled notice (smart-collection round, 2026-09-18): a
+			// smart collection whose stored predicate can't be decoded
+			// answers empty — but never SILENTLY empty, that reads as data
+			// loss. Corruption today; version skew once the vocabulary
+			// grows past generation 1.
+			// TODO: (smart-collection editor round) a fuller story —
+			// distinguish version-skew ("needs a newer Alexandria") from
+			// corruption, and offer repair/recreate.
+			ContentUnavailableView {
+				Label("Can't Read This Collection's Filter", systemImage: "exclamationmark.triangle")
+			} description: {
+				Text("The saved filter couldn't be read. It may have been created by a newer version of Alexandria.")
+			}
+		} else {
+			modeStage
+		}
+	}
+
+	@ViewBuilder private var modeStage: some View {
 		switch viewState.viewMode {
 		case .grid:
 			GridView(imaging: imaging)

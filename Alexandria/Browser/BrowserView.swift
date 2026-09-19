@@ -260,12 +260,16 @@ struct BrowserView: View {
 	private func collectionRows(
 		_ node: BrowserTree.CollectionNode, parent: Identifier<Collection>?
 	) -> AnyView {
-		let row = Label(node.name, systemImage: "rectangle.stack")
+		// The smart glyph is the one visible kind distinction (LrC's gear
+		// idiom); everything else about the row — select, rename, move,
+		// delete, children — is deliberately kind-blind.
+		let row = Label(node.name, systemImage: node.isSmart ? "sparkles.rectangle.stack" : "rectangle.stack")
 			.frame(maxWidth: .infinity, alignment: .leading)
 			.overlay(SidebarRowShim(configuration: .init(
 				collection: node.id,
 				parent: parent,
 				title: node.name,
+				isSmart: node.isSmart,
 				canSpring: !node.children.isEmpty,
 				catalog: catalog,
 				autoscroll: autoscroll,
