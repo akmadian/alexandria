@@ -19,7 +19,40 @@ struct StatusBar: View {
 			Spacer()
 			
 			if viewState.viewMode == .grid {
-				zoomStepper
+				ControlGroup {
+					Button(
+						"Zoom Out",
+						systemImage: "minus",
+						action: { viewState.setGridColumns(viewState.gridColumns + 1) }
+					)
+					Button(
+						"Zoom In",
+						systemImage: "plus",
+						action: { viewState.setGridColumns(viewState.gridColumns - 1) }
+					)
+				}
+				ControlGroup {
+					Button(
+						"Reverse Sort Direction",
+						systemImage: viewState.arrangement.direction == .ascending ? "arrow.up" : "arrow.down",
+						action: {
+							viewState.setArrangement(viewState.arrangement.reversed)
+						}
+					)
+					Menu(viewState.arrangement.sortKey.rawValue.capitalized) {
+						ForEach(Arrangement.SortKey.allCases) { key in
+							Button {
+								viewState.setArrangement(viewState.arrangement.setSortKey(to: key))
+							} label: {
+								if (viewState.arrangement.sortKey == key) {
+									Label(key.rawValue.capitalized, systemImage: "checkmark")
+								} else {
+									Text(key.rawValue.capitalized)
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		.controlSize(.small)
