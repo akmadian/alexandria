@@ -15,8 +15,10 @@
 //  Collections (collections round, chunk 4): a third section, rows tagged
 //  Source.collection like everything else; the verbs ride context menus
 //  and name prompts, and deleting the viewed subtree retargets to the
-//  library (ruling 14, via the hub). Drag-and-drop (add, re-parent) is
-//  deliberately absent: its own round, by ruling (2026-09-14).
+//  library (ruling 14, via the hub). Drag-and-drop (add, re-parent)
+//  arrived in the drag round (2026-09-18): each collection row carries an
+//  AppKit shim overlay — drop target and drag source both — after the
+//  round's spike showed SwiftUI's own routing drops custom types silently.
 //
 //  Volume rows (volume monitoring round, chunk two): the disclosure label
 //  is VolumeHeader, fed an availability the view derives here from the
@@ -30,6 +32,7 @@
 //
 
 import AppKit
+import Combine
 import SwiftUI
 import GRDB
 import Logging
@@ -104,6 +107,13 @@ struct BrowserView: View {
 	}
 	@State private var pendingDelete: PendingDelete?
 
+	// Drag round (2026-09-18): the shims' UI state — which row a hovering
+	// drag is targeting (the highlight), and the sidebar's one autoscroll
+	// driver, owned here per adapter (never a singleton).
+	@State private var targetedCollection: Identifier<Collection>?
+	@State private var headerTargeted = false
+	@State private var autoscroll = AutoscrollDriver()
+
 	var body: some View {
 		List(selection: selection) {
 			Section("Sources") {
@@ -129,7 +139,7 @@ struct BrowserView: View {
 			}
 			Section {
 				ForEach(model.tree.collections) { root in
-					collectionRows(root)
+					collectionRows(root, parent: nil)
 				}
 			} header: {
 				HStack {
@@ -144,11 +154,23 @@ struct BrowserView: View {
 					.buttonStyle(.plain)
 					.help("New Collection")
 				}
+				// The move-to-root target (drag round): dropping a nested
+				// collection on the section header re-parents it to the top.
+				.overlay(CollectionsHeaderShim(catalog: catalog) { headerTargeted = $0 })
+				.background(headerTargeted ? Color.accentColor.opacity(0.25) : nil)
 			}
 		}
 		.listStyle(.sidebar)
 		.task(id: ObjectIdentifier(catalog.databaseWriter)) {
 			model.start(catalog: catalog)
+		}
+		// The authoritative end-of-drag reset: a shim recycled mid-drag (a
+		// spring-loaded expansion rebuilding rows) can inherit a highlight
+		// it can never clear — the session's end clears unconditionally
+		// (round review, finding 10).
+		.onReceive(NotificationCenter.default.publisher(for: DragContext.didEnd)) { _ in
+			targetedCollection = nil
+			headerTargeted = false
 		}
 		.alert(namingTitle, isPresented: presented($naming), presenting: naming) { naming in
 			TextField("Name", text: $draftName)
@@ -225,14 +247,37 @@ struct BrowserView: View {
 		}
 	}
 
-	// MARK: Collections — rows, verbs, drops (collections round, chunk 4)
+	// MARK: Collections — rows, verbs, drops (collections round chunk 4; drag round 2026-09-18)
 
 	/// One collection row, recursively — same disclosure shape as folders.
-	/// No drag machinery by ruling (2026-09-14): drag-to-add and
-	/// drag-to-re-parent are a future round of their own, opening on the
-	/// prior-art question this chunk paid for.
-	private func collectionRows(_ node: BrowserTree.CollectionNode) -> AnyView {
+	/// Drag machinery (drag round, 2026-09-18): one AppKit shim overlays the
+	/// full-width row content, playing drop target (add, re-parent) and drag
+	/// source (re-parent) both — the mechanism the round's spike settled
+	/// after SwiftUI's routing dropped custom types silently. A clean click
+	/// selects via the shim's callback (the overlay swallows mouse-downs),
+	/// writing the same intent the List selection binding would.
+	private func collectionRows(
+		_ node: BrowserTree.CollectionNode, parent: Identifier<Collection>?
+	) -> AnyView {
 		let row = Label(node.name, systemImage: "rectangle.stack")
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.overlay(SidebarRowShim(configuration: .init(
+				collection: node.id,
+				parent: parent,
+				title: node.name,
+				canSpring: !node.children.isEmpty,
+				catalog: catalog,
+				autoscroll: autoscroll,
+				onSelect: { viewState.setSource(.collection(node.id), titled: node.name) },
+				onSpring: { collapsedCollections.remove(node.id) },
+				onTargeted: { targeted in
+					if targeted {
+						targetedCollection = node.id
+					} else if targetedCollection == node.id {
+						targetedCollection = nil
+					}
+				}
+			)))
 			.tag(Source.collection(node.id))
 			.contextMenu {
 				Button("New Collection Inside") { beginNaming(.create(parent: node.id)) }
@@ -244,16 +289,24 @@ struct BrowserView: View {
 				Divider()
 				Button("Delete\u{2026}", role: .destructive) { prepareDelete(node) }
 			}
-		guard !node.children.isEmpty else { return AnyView(row) }
+		// The drop highlight rides listRowBackground on the RETURNED value:
+		// written inside a DisclosureGroup label the trait never reaches the
+		// row, so parent collections — the spring-loading targets — would
+		// not light up (round review, finding 9).
+		let highlight = targetedCollection == node.id ? Color.accentColor.opacity(0.25) : nil
+		guard !node.children.isEmpty else {
+			return AnyView(row.listRowBackground(highlight))
+		}
 		return AnyView(DisclosureGroup(
 			isExpanded: expansion(of: node.id, in: $collapsedCollections)
 		) {
 			ForEach(node.children) { child in
-				collectionRows(child)
+				collectionRows(child, parent: node.id)
 			}
 		} label: {
 			row
-		})
+		}
+		.listRowBackground(highlight))
 	}
 
 	private var namingTitle: String {

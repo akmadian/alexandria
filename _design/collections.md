@@ -163,8 +163,11 @@ Multiple roots are allowed. Membership is the user's work product
     unsettled marker); the arrangement-picker round (added 2026-09-14:
     no sort UI exists anywhere yet, so manual order is engine-level
     only — the picker, the direction-control disable under manual, and
-    grid drag-to-REORDER are one coherent future round); widening the
-    sidebar filter to cover collections.
+    grid drag-to-REORDER are one coherent future round) [the picker
+    shipped with the toolbar sort controls; grid drag-to-reorder shipped
+    in the drag round 2026-09-18, _design/technical/drag.md — the
+    direction-control disable under manual remains carried]; widening
+    the sidebar filter to cover collections.
 
 ## The approved schema
 
@@ -255,3 +258,7 @@ code can qualify. Accepted for vocabulary fidelity.
    drag-to-re-parent are their own round, opening on the prior-art
    question (onDrop vs declared-type plist vs AppKit-backed outline)
    before any code.
+   [Resolved 2026-09-18: that round ran — _design/technical/drag.md. Its
+   spike rewrote this post-mortem: the undeclared type was the killer
+   (silent in BOTH bridge directions); List rows received AppKit drops
+   fine. The mechanism is an AppKit shim, plain pasteboard types.]

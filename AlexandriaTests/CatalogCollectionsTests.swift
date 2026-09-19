@@ -424,4 +424,89 @@ struct CatalogCollectionsTests {
 		let ghost = try await catalog.deleteCollection(Identifier<Collection>(rawValue: .v7()))
 		#expect(ghost.isEmpty)
 	}
+
+	// MARK: - Drag round: the snapshot reads and the adoption verb (2026-09-18)
+
+	@Test func membershipCountsAnswerPerCollectionForADraggedSet() async throws {
+		let catalog = try makeCatalog()
+		let selects = try await catalog.createCollection(named: "Selects")
+		let picks = try await catalog.createCollection(named: "Picks")
+		let x = try await seedAsset(catalog, at: 1_000)
+		let y = try await seedAsset(catalog, at: 1_001)
+		let z = try await seedAsset(catalog, at: 1_002)
+		try await catalog.addMembers([x, y], to: selects.id)
+		try await catalog.addMembers([y], to: picks.id)
+
+		let counts = try await catalog.membershipCounts(of: [x, y, z])
+		#expect(counts == [selects.id: 2, picks.id: 1])
+		#expect(try await catalog.membershipCounts(of: []).isEmpty)
+	}
+
+	/// The union gate's read: a leaf answers false, a child WITH members
+	/// answers true, and a member-less child keeps reorder live. (It is
+	/// subtree-membership truth, conservatively: a child whose members are
+	/// a subset of the parent's own displays identically yet still gates —
+	/// safe in the refusing direction.)
+	@Test func descendantsContributeMembersAnswersSubtreeMembership() async throws {
+		let catalog = try makeCatalog()
+		let trips = try await catalog.createCollection(named: "Trips")
+		let iceland = try await catalog.createCollection(named: "Iceland", under: trips.id)
+		let asset = try await seedAsset(catalog, at: 1_000)
+		try await catalog.addMembers([asset], to: trips.id)
+
+		#expect(try await catalog.descendantsContributeMembers(of: trips.id) == false)
+		#expect(try await catalog.descendantsContributeMembers(of: iceland.id) == false)
+
+		try await catalog.addMembers([asset], to: iceland.id)
+		#expect(try await catalog.descendantsContributeMembers(of: trips.id) == true)
+	}
+
+	@Test func subtreeReadMirrorsTheVerbFence() async throws {
+		let catalog = try makeCatalog()
+		let a = try await catalog.createCollection(named: "A")
+		let b = try await catalog.createCollection(named: "B", under: a.id)
+		#expect(try await catalog.collectionSubtreeIds(of: a.id) == Set([a.id, b.id]))
+		#expect(try await catalog.collectionSubtreeIds(of: Identifier<Collection>(rawValue: .v7())).isEmpty)
+	}
+
+	@Test func setManualOrderReplacesTheWholeOrderInOneGesture() async throws {
+		let catalog = try makeCatalog()
+		let collection = try await catalog.createCollection(named: "Selects")
+		let x = try await seedAsset(catalog, at: 1_000)
+		let y = try await seedAsset(catalog, at: 1_001)
+		let z = try await seedAsset(catalog, at: 1_002)
+		try await catalog.addMembers([x, y, z], to: collection.id)
+
+		try await catalog.setManualOrder([z, x, y], in: collection.id)
+		#expect(try await memberOrder(catalog, in: collection.id) == [z, x, y])
+
+		// Adoption is repeatable: fresh keys, same fences.
+		try await catalog.setManualOrder([y, z, x], in: collection.id)
+		#expect(try await memberOrder(catalog, in: collection.id) == [y, z, x])
+	}
+
+	/// The exact-cover fence: a subset, a superset, or a duplicate would
+	/// half-scramble a judgment-class ordering — refused whole, nothing
+	/// written (the drag round's adopt path guarantees the cover by
+	/// posture; this is what catches a stale answer).
+	@Test func setManualOrderRefusesAnythingButAnExactMemberCover() async throws {
+		let catalog = try makeCatalog()
+		let collection = try await catalog.createCollection(named: "Selects")
+		let x = try await seedAsset(catalog, at: 1_000)
+		let y = try await seedAsset(catalog, at: 1_001)
+		let stranger = try await seedAsset(catalog, at: 1_002)
+		try await catalog.addMembers([x, y], to: collection.id)
+
+		await #expect(throws: CollectionError.orderedSetMismatch) {
+			try await catalog.setManualOrder([x], in: collection.id)
+		}
+		await #expect(throws: CollectionError.orderedSetMismatch) {
+			try await catalog.setManualOrder([x, y, stranger], in: collection.id)
+		}
+		await #expect(throws: CollectionError.orderedSetMismatch) {
+			try await catalog.setManualOrder([x, y, y], in: collection.id)
+		}
+		// Nothing was written by any refusal.
+		#expect(try await memberOrder(catalog, in: collection.id) == [x, y])
+	}
 }

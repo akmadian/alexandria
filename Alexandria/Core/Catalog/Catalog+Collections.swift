@@ -42,6 +42,12 @@ nonisolated enum CollectionError: Error, Equatable {
 	// — detect, surface, and repair (re-mint the collection's keys) belong
 	// to the integrity round. Don't lose this.
 	case corruptOrderKey(String)
+	/// setManualOrder refusal: the ordered list must cover the collection's
+	/// members exactly — the caller (the drag round's adopt path) derives it
+	/// from an unfiltered, non-union view, so a mismatch is a stale answer
+	/// or a programming error, and a partial rewrite would half-scramble a
+	/// judgment-class ordering.
+	case orderedSetMismatch
 }
 
 extension Collection {
@@ -342,6 +348,104 @@ extension Catalog {
 				sql: "SELECT collection_id FROM collection_members WHERE asset_id = ? ORDER BY collection_id",
 				arguments: [assetId]
 			)
+		}
+	}
+
+	// MARK: - Drag-round reads and the adoption verb (2026-09-18)
+
+	/// The subtree read, public: the drag round's hover snapshot mirrors the
+	/// cycle fence with it (the verb's transaction stays the authority).
+	func collectionSubtreeIds(
+		of id: Identifier<Collection>
+	) async throws -> Set<Identifier<Collection>> {
+		try await reader.read { database in
+			try Self.subtreeIds(of: id, in: database)
+		}
+	}
+
+	/// For a dragged asset set: collection → how many of these assets it
+	/// already holds. Drives the count badge and the zero-add refusal.
+	/// Rides idx_collection_members_asset. Chunked, because a select-all
+	/// drag can exceed SQLite's bound-parameter ceiling
+	/// (SQLITE_MAX_VARIABLE_NUMBER) — and a failed prepare here would be
+	/// swallowed as "snapshot failed", leaving every hover verdict
+	/// optimistic for the whole drag (round review, finding 7).
+	func membershipCounts(
+		of assetIds: [Identifier<Asset>]
+	) async throws -> [Identifier<Collection>: Int] {
+		guard !assetIds.isEmpty else { return [:] }
+		return try await reader.read { database in
+			var counts: [Identifier<Collection>: Int] = [:]
+			let chunkSize = 500
+			for start in stride(from: 0, to: assetIds.count, by: chunkSize) {
+				let chunk = Array(assetIds[start..<min(start + chunkSize, assetIds.count)])
+				let rows = try Row.fetchAll(
+					database,
+					CollectionMember
+						.filter(chunk.contains(CollectionMember.Columns.assetId))
+						.select(CollectionMember.Columns.collectionId, count(CollectionMember.Columns.assetId))
+						.group(CollectionMember.Columns.collectionId)
+				)
+				for row in rows {
+					counts[row[0] as Identifier<Collection>, default: 0] += row[1] as Int
+				}
+			}
+			return counts
+		}
+	}
+
+	/// Whether anything nested below this collection contributes members —
+	/// the display-faithful union gate (ruled: no reorder in a union view).
+	/// A childless or member-less subtree answers false and reorder is live.
+	func descendantsContributeMembers(
+		of id: Identifier<Collection>
+	) async throws -> Bool {
+		try await reader.read { database in
+			let descendants = try Self.subtreeIds(of: id, in: database).subtracting([id])
+			guard !descendants.isEmpty else { return false }
+			return try CollectionMember
+				.filter(descendants.contains(CollectionMember.Columns.collectionId))
+				.fetchCount(database) > 0
+		}
+	}
+
+	/// The adoption verb (drag round, ruled 2026-09-18: a judgment is never
+	/// silently overwritten — this runs only behind the explicit switch
+	/// confirmation): replaces the collection's ENTIRE manual order with
+	/// `ordered`, re-minting every key in one transaction. The list must
+	/// cover the members exactly — the caller derives it from an unfiltered,
+	/// non-union view, so anything else is refused whole rather than
+	/// half-scrambling an ordering.
+	func setManualOrder(
+		_ ordered: [Identifier<Asset>], in collectionId: Identifier<Collection>
+	) async throws {
+		try await databaseWriter.write { database in
+			let members = try Set(Identifier<Asset>.fetchAll(
+				database,
+				sql: "SELECT asset_id FROM collection_members WHERE collection_id = ?",
+				arguments: [collectionId]
+			))
+			guard members == Set(ordered), members.count == ordered.count else {
+				throw CollectionError.orderedSetMismatch
+			}
+			// Vacate every slot first so fresh keys can never transiently
+			// collide with standing ones under the UNIQUE order fence (the
+			// reorderMembers precedent).
+			try CollectionMember
+				.filter(CollectionMember.Columns.collectionId == collectionId)
+				.deleteAll(database)
+			var tail: String?
+			for assetId in ordered {
+				let key = OrderKey.between(tail, nil)
+				try CollectionMember(
+					collectionId: collectionId, assetId: assetId, orderKey: key
+				).insert(database)
+				tail = key
+			}
+			log.debug("manual order adopted", metadata: [
+				"collection": "\(collectionId.rawValue.uuidString)",
+				"members": "\(ordered.count)",
+			])
 		}
 	}
 }

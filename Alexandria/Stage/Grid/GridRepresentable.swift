@@ -34,6 +34,10 @@ struct GridRepresentable: NSViewRepresentable {
 	var onSelectionChange: (Set<SubjectID>) -> Void
 	var onCursorMove: (SubjectID) -> Void
 	var onActivate: () -> Void
+	/// A reorder drop arrived under a non-manual sort (drag round): the
+	/// switch is never silent — GridView presents the confirmation and, on
+	/// yes, runs the adoption verb then the arrangement intent.
+	var onReorderProposal: (PendingReorder) -> Void
 
 	func makeNSView(context: Context) -> NSScrollView {
 		let layout = GridFlowLayout()
@@ -53,6 +57,10 @@ struct GridRepresentable: NSViewRepresentable {
 		collectionView.dataSource = context.coordinator
 		collectionView.delegate = context.coordinator
 		collectionView.prefetchDataSource = context.coordinator
+		// Drag round (2026-09-18): source and reorder destination. The
+		// non-local mask keeps its .none default — intra-app only, by ruling.
+		collectionView.registerForDraggedTypes([DragPayload.assetsType])
+		collectionView.setDraggingSourceOperationMask([.move, .copy], forLocal: true)
 
 		let scrollView = NSScrollView()
 		scrollView.documentView = collectionView
@@ -65,7 +73,8 @@ struct GridRepresentable: NSViewRepresentable {
 		let coordinator = context.coordinator
 		coordinator.configure(catalog: catalog, imaging: imaging)
 		coordinator.callbacks = Coordinator.Callbacks(
-			selection: onSelectionChange, cursor: onCursorMove, activate: onActivate
+			selection: onSelectionChange, cursor: onCursorMove, activate: onActivate,
+			reorderProposal: onReorderProposal
 		)
 		coordinator.apply(columns: columns)
 		coordinator.apply(workingSet: workingSet, answering: answeredQuery)
@@ -91,6 +100,7 @@ struct GridRepresentable: NSViewRepresentable {
 			var selection: (Set<SubjectID>) -> Void = { _ in }
 			var cursor: (SubjectID) -> Void = { _ in }
 			var activate: () -> Void = {}
+			var reorderProposal: (PendingReorder) -> Void = { _ in }
 		}
 
 		var callbacks = Callbacks()
@@ -850,6 +860,201 @@ extension GridRepresentable.Coordinator {
 	}
 }
 
+// MARK: - Drag and drop (drag round, 2026-09-18)
+
+/// The switch confirmation's payload: outlives the drag session so the
+/// dialog can act after the drop is gone. `orderedAssets` is the on-screen
+/// order with the drop applied — what the collection's manual order becomes
+/// on yes (the adoption verb refuses anything but an exact member cover).
+nonisolated struct PendingReorder: Equatable, Sendable {
+	var collection: Identifier<Collection>
+	var orderedAssets: [Identifier<Asset>]
+}
+
+extension GridRepresentable.Coordinator {
+
+	/// The payload mapping (ruled: the payload is ASSETS): an asset subject
+	/// is itself; a file subject is its owning asset, read from the records
+	/// cache. nil — a formation-pending file, or a record not yet resolved —
+	/// refuses that one item's drag (ruled item-level).
+	private func assetId(of subject: SubjectID) -> Identifier<Asset>? {
+		switch subject {
+		case .asset(let id): id
+		case .file: recordsOf[subject]?.file?.assetId
+		}
+	}
+
+	private func assetId(at indexPath: IndexPath) -> Identifier<Asset>? {
+		guard let subject = id(at: indexPath) else { return nil }
+		return assetId(of: subject)
+	}
+
+	/// Working-set-ordered asset ids for a dragged path set, deduplicated —
+	/// two file cells of one asset are ONE dragged asset (first occurrence
+	/// keeps its place, `reorderMembers`' canonical rule), so the badge and
+	/// the zero-add refusal count assets, never cells (round review,
+	/// finding 4).
+	private func orderedAssets(at indexPaths: Set<IndexPath>) -> [Identifier<Asset>] {
+		var seen: Set<Identifier<Asset>> = []
+		return indexPaths.sorted { $0.item < $1.item }
+			.compactMap { assetId(at: $0) }
+			.filter { seen.insert($0).inserted }
+	}
+
+	// MARK: Source
+
+	func collectionView(
+		_ collectionView: NSCollectionView, canDragItemsAt indexPaths: Set<IndexPath>,
+		with event: NSEvent
+	) -> Bool {
+		// The whole cell is the handle (ruled) — that part is native. The
+		// drag starts if ANY dragged cell can name an asset; nameless ones
+		// drop item-level in the writer.
+		indexPaths.contains { assetId(at: $0) != nil }
+	}
+
+	// PERF: a select-all drag mints one NSPasteboardItem + NSDraggingItem
+	// per selected cell, synchronously at mouse-down — at the 40k library
+	// target that is a visible hang before the gesture starts, and the
+	// payload read repeats the cost at drop. Trigger: select-all drags
+	// measurably stall. Upgrade: one list-carrying pasteboard item plus
+	// image-only dragging items (round review, finding 7).
+	func collectionView(
+		_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath
+	) -> (any NSPasteboardWriting)? {
+		guard let asset = assetId(at: indexPath) else { return nil }
+		return DragPayload.assetItem(asset, ordinal: indexPath.item)
+	}
+
+	func collectionView(
+		_ collectionView: NSCollectionView, draggingSession session: NSDraggingSession,
+		willBeginAt screenPoint: NSPoint, forItemsAt indexPaths: Set<IndexPath>
+	) {
+		session.draggingFormation = .stack
+		var facts: DragContext.ReorderFacts?
+		if let query = renderedQuery, query.lens == .assets,
+			case .collection(let viewed) = query.source {
+			facts = DragContext.ReorderFacts(
+				viewedCollection: viewed,
+				isManual: query.arrangement.sortKey == .manual,
+				filterActive: query.filter != nil
+			)
+		}
+		guard let catalog else { return }
+		DragContext.beginAssets(orderedAssets(at: indexPaths), catalog: catalog, reorderFacts: facts)
+	}
+
+	func collectionView(
+		_ collectionView: NSCollectionView, draggingSession session: NSDraggingSession,
+		endedAt screenPoint: NSPoint, dragOperation operation: NSDragOperation
+	) {
+		DragContext.end()
+	}
+
+	// MARK: Destination (reorder)
+
+	private var gapVerdict: DropVerdict? {
+		guard let context = DragContext.current else { return nil }
+		return DragRules.verdict(over: .gridGap, context: context)
+	}
+
+	func collectionView(
+		_ collectionView: NSCollectionView, validateDrop draggingInfo: any NSDraggingInfo,
+		proposedIndexPath: AutoreleasingUnsafeMutablePointer<NSIndexPath>,
+		dropOperation proposedDropOperation: UnsafeMutablePointer<NSCollectionView.DropOperation>
+	) -> NSDragOperation {
+		switch gapVerdict {
+		case .reorderLive, .reorderAdopt:
+			// Always the gap, never ON a cell (ruled; the insertion line is
+			// the one grid drop affordance). AppKit proposes .on over a
+			// cell's middle — retarget to the NEARER gap by cursor position
+			// so the whole surface maps to insertions and no cell half
+			// silently means "insert to my left" (round review, finding 6;
+			// refusing .on outright would leave sliver-thin targets).
+			if proposedDropOperation.pointee == .on {
+				let path = proposedIndexPath.pointee as IndexPath
+				let location = collectionView.convert(draggingInfo.draggingLocation, from: nil)
+				if let frame = collectionView.layoutAttributesForItem(at: path)?.frame,
+					location.x > frame.midX {
+					proposedIndexPath.pointee =
+						NSIndexPath(forItem: path.item + 1, inSection: path.section)
+				}
+				proposedDropOperation.pointee = .before
+			}
+			return .move
+		case .add, .reparent, .refused, nil:
+			return []
+		}
+	}
+
+	func collectionView(
+		_ collectionView: NSCollectionView, acceptDrop draggingInfo: any NSDraggingInfo,
+		indexPath: IndexPath, dropOperation: NSCollectionView.DropOperation
+	) -> Bool {
+		guard case .assets(let dragged)? = DragPayload.read(draggingInfo),
+			!dragged.isEmpty,
+			let query = renderedQuery, case .collection(let collection) = query.source,
+			let facts = DragContext.current?.reorderFacts
+		else { return false }
+		// The verdict was judged against the drag-start facts; the write
+		// must land on the same collection they described. A mid-drag
+		// source change can't happen through the UI today — this fence
+		// keeps that a fact rather than an assumption (round review,
+		// finding 11).
+		guard facts.viewedCollection == collection else {
+			log.error("reorder drop refused: viewed collection changed mid-drag", metadata: [
+				"judged": "\(facts.viewedCollection.rawValue.uuidString)",
+				"current": "\(collection.rawValue.uuidString)",
+			])
+			return false
+		}
+		// The pure math, shared with the adopt path and pinned by tests.
+		let plan = DragRules.reorderPlan(ids: ids, dragged: dragged, dropIndex: indexPath.item)
+		switch gapVerdict {
+		case .reorderLive:
+			guard let catalog else { return false }
+			return DragVerbs.perform(
+				.assets(dragged), verdict: .reorderLive, over: .gridGap,
+				reorderingIn: collection, before: plan.anchor, catalog: catalog
+			)
+		case .reorderAdopt:
+			// Assets lens over a non-union, unfiltered collection, so the
+			// adopted order IS the member set. Nothing writes here: the
+			// confirmation owns the pen (a judgment is never silently
+			// overwritten, ruled).
+			callbacks.reorderProposal(
+				PendingReorder(collection: collection, orderedAssets: plan.adopted)
+			)
+			return true
+		default:
+			return false
+		}
+	}
+
+	// MARK: The cursor label channel (offer hints, ruled-visible refusals)
+
+	/// Called by GridCollectionView's destination overrides on enter AND
+	/// every update (the union snapshot can land mid-hover and change the
+	/// verdict): the hint or refusal rides the drag image while it applies,
+	/// and any other verdict restores — attach and clear are symmetric in
+	/// both directions.
+	func dragHovered(_ info: any NSDraggingInfo, in view: NSView) {
+		guard let context = DragContext.current else { return }
+		switch gapVerdict {
+		case .reorderAdopt:
+			context.attachLabel("Switch to Manual Order…", to: info, in: view)
+		case .refused(let message):
+			context.attachLabel(message, to: info, in: view)
+		case .reorderLive, .add, .reparent, nil:
+			context.restoreLabel(info, in: view)
+		}
+	}
+
+	func dragExited(_ info: any NSDraggingInfo, in view: NSView) {
+		DragContext.current?.restoreLabel(info, in: view)
+	}
+}
+
 // MARK: - Collection view
 
 /// NSCollectionView runs every keystroke through the text key-binding
@@ -869,6 +1074,31 @@ final class GridCollectionView: NSCollectionView {
 			super.keyDown(with: event)
 		} else {
 			nextResponder?.keyDown(with: event)
+		}
+	}
+
+	// Drag round: the delegate protocol has no enter/exit hooks, but the
+	// cursor label (switch hint, ruled-visible refusal) needs them — these
+	// forward to the coordinator around NSCollectionView's own handling.
+	// `updated` re-forwards because the union snapshot can land mid-hover
+	// and upgrade a dark gap into an offer (attach is idempotent per text).
+
+	override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+		let operation = super.draggingEntered(sender)
+		(delegate as? GridRepresentable.Coordinator)?.dragHovered(sender, in: self)
+		return operation
+	}
+
+	override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+		let operation = super.draggingUpdated(sender)
+		(delegate as? GridRepresentable.Coordinator)?.dragHovered(sender, in: self)
+		return operation
+	}
+
+	override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+		super.draggingExited(sender)
+		if let sender {
+			(delegate as? GridRepresentable.Coordinator)?.dragExited(sender, in: self)
 		}
 	}
 }
