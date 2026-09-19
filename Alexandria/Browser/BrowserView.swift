@@ -161,6 +161,7 @@ struct BrowserView: View {
 			}
 		}
 		.listStyle(.sidebar)
+		.environment(\.sidebarRowSize, .small)
 		.task(id: ObjectIdentifier(catalog.databaseWriter)) {
 			model.start(catalog: catalog)
 		}
