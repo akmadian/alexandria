@@ -18,9 +18,7 @@ Major system components yet to be added.
     - Filtering
 - Context Menus
 - Keybind System
-- Context menus
 - COLLECTIONS
-    - Smart Collections
     - Better Collection Addition/ Rename/ Etc Experience
 - Open in external app
 - Deeper macos integration
@@ -77,3 +75,6 @@ Major system components yet to be added.
 ## Styling Tweaks
 - Folder/ collection selection should be neutral color instead of blue?
 - Refine UI element of what is dragged from the grid - right now it's a mini snapshot of the entire cell, probably best to have it just be the image, and smaller.
+
+## PERF
+- Allow usage of more than one thread for import?

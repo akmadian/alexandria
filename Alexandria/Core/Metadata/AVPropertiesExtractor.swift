@@ -21,7 +21,18 @@ private nonisolated let log = Logger(label: "metadata.av")
 /// yield absent fields. A file where every load failed AND nothing was read
 /// throws `unreadableSource` — the image lane's precedent — so a wholly
 /// unreadable container leaves DLQ residue instead of a silent NULL.
+///
+/// Video adds a second read: cameras embed an EXIF block in vendor atoms
+/// AVFoundation cannot see (Fuji's whole camera roster lives there), so an
+/// `ExiftoolReader` answers capture/authorship/location for files with a
+/// video track. Its answers outrank the QuickTime keyspaces where both
+/// speak; its absence changes nothing.
 nonisolated struct AVPropertiesExtractor: MetadataExtracting {
+	/// Camera video carries its EXIF in vendor atoms AVFoundation cannot
+	/// see; the reader answers capture/authorship/location for those.
+	/// Optional capability: absent tool = absent fields, today's behavior.
+	var exiftool: ExiftoolReader = .discovered
+
 	func extract(from url: URL) async throws -> FileMetadata {
 		let asset = AVURLAsset(url: url)
 		var metadata = FileMetadata()
@@ -47,8 +58,10 @@ nonisolated struct AVPropertiesExtractor: MetadataExtracting {
 		metadata.timing = timing
 
 		var media = MediaFacet()
+		var hasVideoTrack = false
 
 		if let videoTrack = await attempt("videoTracks", { try await asset.loadTracks(withMediaType: .video) })?.first {
+			hasVideoTrack = true
 			var visual = VisualFacet()
 			if let (naturalSize, transform) = await attempt("naturalSize", {
 				try await videoTrack.load(.naturalSize, .preferredTransform)
@@ -91,9 +104,15 @@ nonisolated struct AVPropertiesExtractor: MetadataExtracting {
 		metadata.media = media
 
 		let items = await attempt("metadata", { try await asset.load(.metadata) }) ?? []
-		metadata.capture = await captureFacet(asset: asset, items: items)
+		// Embedded EXIF is a camera-video concept: read only when a video
+		// track exists so audio files never pay the spawn. Not counted in
+		// loadFailures — an optional capability's absence must never tip a
+		// file into DLQ residue.
+		let exif = hasVideoTrack ? await exiftool.readEmbeddedExif(from: url) : nil
+		metadata.capture = await captureFacet(asset: asset, items: items, exif: exif)
 		metadata.audio = await audioFacet(items: items)
-		metadata.location = await locationFacet(items: items)
+		metadata.authorship = authorshipFacet(exif: exif)
+		metadata.location = await locationFacet(items: items, exif: exif)
 
 		let normalized = metadata.normalized()
 		if normalized.isEmpty && loadFailures > 0 {
@@ -105,29 +124,73 @@ nonisolated struct AVPropertiesExtractor: MetadataExtracting {
 		return normalized
 	}
 
-	/// The creation event as the container states it. QuickTime's own
+	/// The creation event, best source first. The embedded EXIF block wins
+	/// where it answers — DateTimeOriginal is recording START, wall-clock
+	/// with its own offset field, exactly the photo semantics — and the
+	/// QuickTime keyspaces fill what it leaves unstated. QuickTime's own
 	/// creationdate is an ISO 8601 string WITH zone — parsed as wall-clock +
 	/// offset, matching EXIF semantics exactly, so photos and camera clips
 	/// shot in the same minute sort together. The common-key instant is the
-	/// fallback (AVI etc.): its UTC wall-clock reading, offset unknown.
-	private func captureFacet(asset: AVURLAsset, items: [AVMetadataItem]) async -> CaptureFacet {
+	/// last rung (AVI, Fuji containers): the moov date is written at
+	/// recording END in UTC with the offset unrecoverable — mislabelled by
+	/// hours against photos, which is why EXIF outranks it.
+	private func captureFacet(asset: AVURLAsset, items: [AVMetadataItem], exif: EmbeddedExif?) async -> CaptureFacet {
 		var capture = CaptureFacet()
 
-		let qtDate = AVMetadataItem.metadataItems(
-			from: items, filteredByIdentifier: .quickTimeMetadataCreationDate
-		).first
-		if let text = try? await qtDate?.load(.stringValue),
-		   let (wallClock, offset) = iso8601WallClock(text) {
-			capture.capturedAt = wallClock
-			capture.captureOffset = offset
-		} else if let creationDate = try? await asset.load(.creationDate),
-				  let instant = try? await creationDate.load(.dateValue) {
-			capture.capturedAt = instant
+		if let exif {
+			capture.make = exif.make
+			capture.model = exif.model
+			capture.serialNumber = exif.serialNumber
+			// LensInfo ("55-200mm f/3.5-4.8") stands in when the block has
+			// no LensModel — Fuji video writes only the spec string.
+			capture.lensModel = exif.lensModel ?? exif.lensInfo
+			capture.focalLength = exif.focalLength
+			capture.focalLength35mm = exif.focalLength35mm
+			capture.aperture = exif.fNumber
+			capture.exposureSeconds = exif.exposureTime
+			capture.exposureBias = exif.exposureCompensation
+			capture.iso = exif.iso
+			capture.flash = flashFired(code: exif.flash)
+			capture.exposureProgram = exposureProgramName(code: exif.exposureProgram)
+			capture.meteringMode = meteringModeName(code: exif.meteringMode)
+			capture.whiteBalance = whiteBalanceName(code: exif.whiteBalance)
+			capture.capturedAt = exifWallClockDate(exif.dateTimeOriginal)
+			capture.captureOffset = capture.capturedAt != nil ? exif.offsetTimeOriginal : nil
 		}
 
-		capture.make = await stringValue(items, .quickTimeMetadataMake)
-		capture.model = await stringValue(items, .quickTimeMetadataModel)
+		if capture.capturedAt == nil {
+			let qtDate = AVMetadataItem.metadataItems(
+				from: items, filteredByIdentifier: .quickTimeMetadataCreationDate
+			).first
+			if let text = try? await qtDate?.load(.stringValue),
+			   let (wallClock, offset) = iso8601WallClock(text) {
+				capture.capturedAt = wallClock
+				capture.captureOffset = offset
+			} else if let creationDate = try? await asset.load(.creationDate),
+					  let instant = try? await creationDate.load(.dateValue) {
+				capture.capturedAt = instant
+			}
+		}
+
+		if capture.make == nil { capture.make = await stringValue(items, .quickTimeMetadataMake) }
+		if capture.model == nil { capture.model = await stringValue(items, .quickTimeMetadataModel) }
 		return capture
+	}
+
+	/// Video authorship comes only from the embedded EXIF block; the
+	/// QuickTime keyspaces have no editorial roster. Dual-source by ruling:
+	/// TIFF and IPTC variants side by side, no precedence.
+	private func authorshipFacet(exif: EmbeddedExif?) -> AuthorshipFacet {
+		var authorship = AuthorshipFacet()
+		authorship.tiffArtist = exif?.artist
+		authorship.tiffImageDescription = exif?.imageDescription
+		authorship.tiffCopyright = exif?.copyright
+		authorship.tiffSoftware = exif?.software
+		authorship.iptcCreator = exif?.iptcCreator
+		authorship.iptcCaption = exif?.iptcCaption
+		authorship.iptcTitle = exif?.iptcTitle
+		authorship.iptcCopyright = exif?.iptcCopyright
+		return authorship
 	}
 
 	/// Embedded tags: no common keyspace covers the roster, so each field
@@ -166,13 +229,20 @@ nonisolated struct AVPropertiesExtractor: MetadataExtracting {
 		return nil
 	}
 
-	private func locationFacet(items: [AVMetadataItem]) async -> LocationFacet {
+	private func locationFacet(items: [AVMetadataItem], exif: EmbeddedExif?) async -> LocationFacet {
 		var location = LocationFacet()
 		if let iso6709 = await stringValue(items, .quickTimeMetadataLocationISO6709),
 		   let parsed = parseISO6709(iso6709) {
 			location.latitude = parsed.latitude
 			location.longitude = parsed.longitude
 			location.altitude = parsed.altitude
+		} else if let exif, let latitude = exif.gpsLatitude, let longitude = exif.gpsLongitude {
+			// Gap-fill for cameras that write a GPS IFD in the embedded
+			// EXIF instead of the ISO 6709 key. Composite tags arrive
+			// signed (hemisphere refs folded), the facet's own form.
+			location.latitude = latitude
+			location.longitude = longitude
+			location.altitude = exif.gpsAltitude
 		}
 		return location
 	}

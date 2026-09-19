@@ -121,7 +121,10 @@ nonisolated struct TimingFacet: MetadataFacet {
 nonisolated struct CaptureFacet: MetadataFacet {
 	var make: String?
 	var model: String?
-	var serialNumber: String?    // EXIF BodySerialNumber; MakerNote-only serials wait for the exiftool lane
+	// EXIF BodySerialNumber only. MakerNote serials (Fuji's InternalSerialNumber
+	// blob) are a DIFFERENT quantity — same camera would carry unequal values
+	// across kinds — so they stay out (ruling 2026-09-18).
+	var serialNumber: String?
 	var lensModel: String?
 	var focalLength: Double?     // millimeters
 	var focalLength35mm: Int?    // 35mm-equivalent millimeters

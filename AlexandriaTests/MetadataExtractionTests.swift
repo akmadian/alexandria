@@ -111,6 +111,71 @@ struct MetadataExtractionTests {
 		#expect(metadata.visual == nil)   // evidence decides presence
 		#expect(metadata.media?.audioCodec != nil)
 		#expect(metadata.media?.sampleRate != nil)
+		// No video track ⇒ no exiftool spawn ⇒ no authorship facet. Pins
+		// the ruling that non-video files never pay the subprocess.
+		#expect(metadata.authorship == nil)
+	}
+
+	@Test(.enabled(if: ExiftoolReader.isAvailable))
+	func cameraMovieYieldsEmbeddedExifCaptureAndAuthorship() async throws {
+		// The fixture is a real X-T5 clip truncated at the mdat boundary:
+		// the moov (AV geometry) and Fuji's vendor EXIF atom both survive.
+		// AVFoundation cannot see that atom — these fields exist only if
+		// the exiftool lane read them (video EXIF round, 2026-09-18).
+		let metadata = try await AVPropertiesExtractor()
+			.extract(from: testData.appending(path: "video-fuji-xt5.MOV"))
+		let capture = try #require(metadata.capture)
+		#expect(capture.make == "FUJIFILM")
+		#expect(capture.model == "X-T5")
+		#expect(capture.aperture == 22.0)
+		#expect(capture.iso == 250)
+		#expect(capture.exposureSeconds.map { abs($0 - 1.0 / 60.0) < 0.0001 } == true)
+		#expect(capture.exposureBias == 0)
+		#expect(capture.meteringMode == "Pattern")   // code 5, the image lane's mapping
+		#expect(capture.lensModel == "55-200mm f/3.5-4.8")   // LensInfo stand-in
+		// The fixture DOES carry Fuji's InternalSerialNumber blob — a
+		// different quantity than the body serial, ruled out 2026-09-18.
+		#expect(capture.serialNumber == nil)
+		// Recording START in the camera's wall clock — NOT the container's
+		// end-of-recording UTC instant (21:34:25Z), which mis-sorts clips
+		// hours away from the photos beside them.
+		#expect(capture.capturedAt == exifWallClockDate("2025:09:20 14:33:38"))
+		#expect(capture.captureOffset == "-07:00")
+		let authorship = try #require(metadata.authorship)
+		#expect(authorship.tiffArtist == "ARI MADIAN")
+		#expect(authorship.tiffCopyright == "ALL RIGHTS RESERVED")
+	}
+
+	@Test func embeddedExifDecodeToleratesWhateverScalarKindArrives() throws {
+		// exiftool's JSON typing follows the file, not the tag: a mangled
+		// field must read as "the file doesn't say", never fail the whole
+		// decode. Runs everywhere — no binary, no fixture.
+		let json = """
+		[{"SourceFile":"x", "Make":42, "FNumber":"2.8", "ISO":[400,200],
+		  "SerialNumber":1234567890, "Flash":{"unexpected":true},
+		  "DateTimeOriginal":null, "By-line":["A","B"], "FocalLength":"garbage"}]
+		"""
+		let exif = try #require(try JSONDecoder().decode([EmbeddedExif].self, from: Data(json.utf8)).first)
+		#expect(exif.make == "42")                   // wrong kind still reads as text
+		#expect(exif.fNumber == 2.8)                 // quoted number tolerated
+		#expect(exif.iso == 400)                     // list keys on first element
+		#expect(exif.serialNumber == "1234567890")   // integral render — never "1234567890.0"
+		#expect(exif.flash == nil)                   // object = the file doesn't say
+		#expect(exif.dateTimeOriginal == nil)        // null likewise
+		#expect(exif.focalLength == nil)             // non-numeric text yields no number
+		#expect(exif.iptcCreator == "A")             // IPTC list, firstElement semantics
+	}
+
+	@Test func absentExiftoolDegradesToContainerFacts() async throws {
+		// The reader is an optional capability: without the binary the
+		// extractor behaves exactly as before it existed — container date,
+		// no camera fields, no throw.
+		let extractor = AVPropertiesExtractor(exiftool: ExiftoolReader(binary: nil))
+		let metadata = try await extractor
+			.extract(from: testData.appending(path: "video-fuji-xt5.MOV"))
+		#expect(metadata.capture?.aperture == nil)
+		#expect(metadata.capture?.capturedAt != nil)
+		#expect(metadata.authorship == nil)
 	}
 
 	// MARK: Registry wiring

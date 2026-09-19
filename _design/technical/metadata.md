@@ -55,9 +55,12 @@ inheritance mappings, EAV's failure record).
   key. The blob's NULL-ness carries the yield.
 - **The long tail is never stored.** The catalog stores the queryable/
   displayable surface only; a future on-demand exiftool lane answers the
-  deep view (both major DAM comparables work this way). No exiftool in
-  the import path, ever. The garbage-tag denylist is a *display* filter
-  of that future view, not a storage concept.
+  deep view (both major DAM comparables work this way). Import never
+  stores the arbitrary tag dump — first-class facet fields may come from
+  any reader, exiftool included (re-narrowed by Ari 2026-09-18; the
+  earlier "no exiftool in import, ever" overclaimed the ruling's scope).
+  The garbage-tag denylist is a *display* filter of that future view,
+  not a storage concept.
 - **Promotions stay lazy**: a promoted generated column is minted with
   the capability that reads it, never ahead. `capture_sort` is the only
   one. Filtering of metadata was firmly out of this round's scope.
