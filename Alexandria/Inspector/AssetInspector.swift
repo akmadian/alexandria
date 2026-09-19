@@ -61,10 +61,14 @@ struct AssetInspector: View {
 			// targets the whole selection (ruled 2026-09-14); the
 			// cursor stands in only when nothing is selected.
 			List {
-				VStack(spacing: 10) {
-					LabeledContent("Rating") { StarRating(asset.rating) { rate(viewState.judgmentTargets, $0) } }
-					LabeledContent("Size", value: formatBytesAsHumanReadable(representativeFile.sizeBytes))
-					LabeledContent("Location", value: "\(repFileLocation.volume.name) > \(repFileLocation.folder.name)")
+				Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 10) {
+					GridRow {
+						metadataLabel("Rating")
+						StarRating(asset.rating) { rate(viewState.judgmentTargets, $0) }
+							.frame(maxWidth: .infinity, alignment: .leading)
+					}
+					metadataRow("Size", formatBytesAsHumanReadable(representativeFile.sizeBytes))
+					metadataRow("Location", "\(repFileLocation.volume.name) > \(repFileLocation.folder.name)")
 				}
 
 				Section("Associated Files") {
@@ -106,13 +110,13 @@ struct AssetInspector: View {
 				// Metadata sections ARE the facets (metadata round, 2026-09-17):
 				// an absent facet renders nothing (evidence decides presence);
 				// within a present facet, blank values are fine by ruling. Rows
-				// are curated LabeledContent — order is line order, formatting
-				// is per-field, never reflection.
+				// are curated GridRows — order is line order, formatting is
+				// per-field, never reflection.
 				if let metadataJSON = representativeFile.metadata,
 				   let metadata = FileMetadata(databaseJSON: metadataJSON) {
 					if let capture = metadata.capture {
 						Section("Capture") {
-							VStack(spacing: 8) {
+							Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 8) {
 								metadataRow("Captured", captureTimeDisplay(capture))
 								metadataRow("Camera", [capture.make, capture.model].compactMap(\.self).joined(separator: " "))
 								metadataRow("Serial", capture.serialNumber ?? "")
@@ -131,7 +135,7 @@ struct AssetInspector: View {
 					}
 					if let visual = metadata.visual {
 						Section("Visual") {
-							VStack(spacing: 8) {
+							Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 8) {
 								metadataRow("Dimensions", dimensionsDisplay(visual))
 								metadataRow("Color space", visual.colorSpace ?? "")
 								metadataRow("Color model", visual.colorModel ?? "")
@@ -141,14 +145,14 @@ struct AssetInspector: View {
 					}
 					if let timing = metadata.timing {
 						Section("Timing") {
-							VStack(spacing: 8) {
+							Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 8) {
 								metadataRow("Duration", timing.durationSeconds.map(durationDisplay) ?? "")
 							}
 						}
 					}
 					if let media = metadata.media {
 						Section("Media") {
-							VStack(spacing: 8) {
+							Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 8) {
 								metadataRow("Frame rate", media.frameRate.map { "\(formatDecimal($0)) fps" } ?? "")
 								metadataRow("Video codec", media.videoCodec ?? "")
 								metadataRow("Audio codec", media.audioCodec ?? "")
@@ -159,7 +163,7 @@ struct AssetInspector: View {
 					}
 					if let audio = metadata.audio {
 						Section("Audio") {
-							VStack(spacing: 8) {
+							Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 8) {
 								metadataRow("Album", audio.album ?? "")
 								metadataRow("Track", audio.trackNumber.map(String.init) ?? "")
 								metadataRow("Genre", audio.genre ?? "")
@@ -171,7 +175,7 @@ struct AssetInspector: View {
 						// Dual-source by ruling: TIFF and IPTC shown side by
 						// side, LrC-style, never collapsed.
 						Section("Authorship") {
-							VStack(spacing: 8) {
+							Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 8) {
 								metadataRow("Title (IPTC)", authorship.iptcTitle ?? "")
 								metadataRow("Caption (IPTC)", authorship.iptcCaption ?? "")
 								metadataRow("Creator (IPTC)", authorship.iptcCreator ?? "")
@@ -187,7 +191,7 @@ struct AssetInspector: View {
 						// Facet presence gates the section; blank rows within a
 						// present facet are fine by ruling.
 						Section("Location") {
-							VStack(spacing: 8) {
+							Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 8) {
 								metadataRow("Coordinates", coordinatesDisplay(location))
 								metadataRow("Altitude", location.altitude.map { "\(formatDecimal($0)) m" } ?? "")
 							}
@@ -245,15 +249,23 @@ struct AssetInspector: View {
 		return formatter.string(fromByteCount: Int64(bytes))
 	}
 
+	/// The label column of the inspector's Finder-style center line: labels
+	/// right-justify to it, values left-justify from it. The line's position
+	/// is measured per Grid (the widest label in that section), never fixed.
+	private func metadataLabel(_ label: String) -> some View {
+		Text(label)
+			.foregroundStyle(.secondary)
+			.font(.system(size: 10))
+			.gridColumnAlignment(.trailing)
+	}
+
 	private func metadataRow(_ label: String, _ value: String) -> some View {
-		LabeledContent {
+		GridRow {
+			metadataLabel(label)
 			Text(value)
 				.font(.system(size: 10))
 				.textSelection(.enabled)
-		} label: {
-			Text(label)
-				.foregroundStyle(.secondary)
-				.font(.system(size: 10))
+				.frame(maxWidth: .infinity, alignment: .leading)
 		}
 	}
 

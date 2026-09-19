@@ -72,8 +72,8 @@ Major system components yet to be added.
 - Arrow keys don't work in loupe mode.
 - Collections with child collections aren't union view?
 - View state is not persisted
+- Inspector rows: inter-row spacing between image and video or populated rows/ unpopulated looks different
 
 ## Styling Tweaks
 - Folder/ collection selection should be neutral color instead of blue?
-- Inspector meta rows: label/value joined at middle line shared between sections
 - Refine UI element of what is dragged from the grid - right now it's a mini snapshot of the entire cell, probably best to have it just be the image, and smaller.
