@@ -68,7 +68,9 @@ final class CatalogViewState {
 	/// the viewpoint round's persistence machinery will read and restore.
 	/// Renderer posture like viewMode: changes no question, reloads nothing.
 	private(set) var gridColumns = 5
-	static let gridColumnRange = 2...12
+	/// Upper bound ruled 2026-09-19: 10 for now, marked adjustable — Ari
+	/// suspects even that is too many.
+	static let gridColumnRange = 2...10
 
 	// MARK: Answer — what the observation last delivered
 

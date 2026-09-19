@@ -23,6 +23,10 @@ import Nuke
 import SwiftUI
 import os
 
+/// GridCollectionView's channel; the Coordinator's identically-labeled
+/// instance logger shadows this inside the class, so both write "grid".
+private nonisolated let log = Logger(label: "grid")
+
 struct GridRepresentable: NSViewRepresentable {
 	var workingSet: [SubjectID]
 	var answeredQuery: WorkingSetQuery?
@@ -40,13 +44,7 @@ struct GridRepresentable: NSViewRepresentable {
 	var onReorderProposal: (PendingReorder) -> Void
 
 	func makeNSView(context: Context) -> NSScrollView {
-		let layout = GridFlowLayout()
-		layout.minimumInteritemSpacing = Theme.Grid.spacing
-		layout.minimumLineSpacing = Theme.Grid.spacing
-		layout.sectionInset = NSEdgeInsets(
-			top: Theme.Grid.inset, left: Theme.Grid.inset,
-			bottom: Theme.Grid.inset, right: Theme.Grid.inset
-		)
+		let layout = GridLayout()
 
 		let collectionView = GridCollectionView()
 		collectionView.collectionViewLayout = layout
@@ -110,7 +108,6 @@ struct GridRepresentable: NSViewRepresentable {
 		private var indexOf: [SubjectID: Int] = [:]
 
 		private var renderedQuery: WorkingSetQuery?
-		private var targetColumns = CatalogViewState.gridColumnRange.lowerBound
 		private var lastMirroredCursor: SubjectID?
 		/// Set when the answer was replaced wholesale (new question, rebuild
 		/// after a mode switch): the next mirror reveals the cursor so the
@@ -240,6 +237,9 @@ struct GridRepresentable: NSViewRepresentable {
 				// for a fresh question and on the surviving cursor for a
 				// rebuild.
 				renderedQuery = query
+				// An unconsumed reflow anchor points into the OLD answer;
+				// applying it to this one would open at an arbitrary depth.
+				(collectionView.collectionViewLayout as? GridLayout)?.cancelPendingReflow()
 				resetLoading()
 				reindex(new)
 				collectionView.reloadData()
@@ -251,9 +251,10 @@ struct GridRepresentable: NSViewRepresentable {
 			}
 			guard new != ids else { return }
 			// Same question, new answer: import growth, deletion, a
-			// latestImport takeover. Diff within budget animates; past
-			// budget reloads. Either way the anchor rule holds the viewport
-			// still (contract: a delivery never moves you).
+			// latestImport takeover. Diff within budget applies as targeted
+			// batch ops; past budget reloads. Either way the anchor rule
+			// holds the viewport still (contract: a delivery never moves
+			// you).
 			// PERF: deliveries apply unthrottled; if a real import measures
 			// as UI churn, a trailing-edge delivery ceiling in the hub is
 			// the named upgrade (designed 2026-09-12, deliberately unbuilt).
@@ -384,25 +385,17 @@ struct GridRepresentable: NSViewRepresentable {
 
 		// MARK: Layout
 
+		/// The layout owns the column count (one store; round review,
+		/// finding 8). A zoom is just a geometry change: the anchor and the
+		/// bucket re-evaluation ride the layout's geometry-change mint,
+		/// exactly like a width reflow — the scroll-after-build shape this
+		/// path used to run was the demolished one (finding 3).
 		func apply(columns: Int) {
-			guard columns != targetColumns else { return }
-			let anchor = captureAnchor()
-			targetColumns = columns
-			collectionView?.collectionViewLayout?.invalidateLayout()
-			collectionView?.layoutSubtreeIfNeeded()
-			restoreAnchor(anchor)
-			// The bucket re-evaluation (driven from updateNSView) picks up the
-			// new cell size and re-requests visible cells if the tier changed.
+			guard let layout = collectionView?.collectionViewLayout as? GridLayout,
+				layout.columns != columns else { return }
+			layout.columns = columns
 		}
 
-		private func cellSize(in collectionView: NSCollectionView) -> NSSize {
-			let columns = CGFloat(targetColumns)
-			let available = collectionView.bounds.width
-				- Theme.Grid.inset * 2
-				- Theme.Grid.spacing * (columns - 1)
-			let side = max(Theme.Grid.minimumCellSide, floor(available / columns))
-			return NSSize(width: side, height: side)
-		}
 	}
 }
 
@@ -438,14 +431,7 @@ extension GridRepresentable.Coordinator: NSCollectionViewDataSource {
 	}
 }
 
-extension GridRepresentable.Coordinator: NSCollectionViewDelegateFlowLayout {
-	func collectionView(
-		_ collectionView: NSCollectionView, layout collectionViewLayout: NSCollectionViewLayout,
-		sizeForItemAt indexPath: IndexPath
-	) -> NSSize {
-		cellSize(in: collectionView)
-	}
-
+extension GridRepresentable.Coordinator: NSCollectionViewDelegate {
 	func collectionView(
 		_ collectionView: NSCollectionView, willDisplay item: NSCollectionViewItem,
 		forRepresentedObjectAt indexPath: IndexPath
@@ -732,8 +718,16 @@ extension GridRepresentable.Coordinator {
 		guard thumbnailStore != nil, let collectionView else { return }
 		let bucket = currentBucketValue()
 		guard bucket != currentBucket else { return }
+		let visible = collectionView.indexPathsForVisibleItems()
+		// A tier crossing re-decodes every visible cell — the one resize
+		// event with real decode cost, so it leaves a trace.
+		log.debug("decode bucket changed", metadata: [
+			"from": "\(currentBucket.map { "\($0.pixels)" } ?? "none")",
+			"to": "\(bucket.pixels)",
+			"visible": "\(visible.count)",
+		])
 		currentBucket = bucket
-		for path in collectionView.indexPathsForVisibleItems() {
+		for path in visible {
 			guard let id = id(at: path) else { continue }
 			requestContent(for: id)
 		}
@@ -846,8 +840,7 @@ extension GridRepresentable.Coordinator {
 	}
 
 	private func currentCellSide() -> CGFloat {
-		guard let collectionView else { return Theme.Grid.minimumCellSide }
-		return cellSize(in: collectionView).width
+		(collectionView?.collectionViewLayout as? GridLayout)?.liveCellSide ?? 0
 	}
 
 	private func currentScale() -> CGFloat {
@@ -1077,6 +1070,66 @@ final class GridCollectionView: NSCollectionView {
 		}
 	}
 
+	// Resize fix (2026-09-19, reordered same day): the settle half of the
+	// width-reflow anchor. The scroll lands BEFORE super, so the pass
+	// materializes cells for where the viewport is GOING, not where it was.
+	// The first shape scrolled after super and repaired the staleness with
+	// reconcile passes; deep in a scroll the per-tick jump (rows above ×
+	// row-height delta) exceeds the whole viewport, so "one pass behind"
+	// meant a blank grid for the entire drag (measured 2026-09-19,
+	// coverage probe: 54% viewport coverage at mid-library depth). Scroll-
+	// before-build has no staleness to repair — the reconcile machinery
+	// (per-tick needsLayout, the live-resize gate, viewDidEndLiveResize)
+	// died with it.
+	override func layout() {
+		let gridLayout = collectionViewLayout as? GridLayout
+		// A bounds-change invalidation runs prepare() before this pass, but
+		// a plain one (zoom, backing change) defers it into super.layout()
+		// — after the pre-build scroll would need its mint. Preparing here
+		// is idempotent (an unchanged geometry mints nothing), so every
+		// kind of geometry change has its anchor in hand before the build.
+		gridLayout?.prepare()
+		let target = gridLayout?.takePendingReflowOrigin()
+		let signpost = target.map { _ in Signposts.grid.beginInterval("reflow") }
+		if let target { scrollClip(to: target) }
+		super.layout()
+		if let target, let clipView = enclosingScrollView?.contentView,
+			abs(clipView.bounds.origin.y - target) > 0.5 {
+			// Widening deep in the library: wider cells make taller rows,
+			// so the pre-super scroll can clamp against the OUTGOING
+			// (shorter) document. The frame has grown by now, so land the
+			// rest; the strip this pass built stale is bounded by the
+			// clamp and the next pass covers it.
+			log.debug("reflow re-landed after clamp", metadata: [
+				"target": "\(target)",
+				"clamped": "\(clipView.bounds.origin.y)",
+			])
+			scrollClip(to: target)
+		}
+		if let signpost { Signposts.grid.endInterval("reflow", signpost) }
+		// The one bucket every cell wants can change with the cell size —
+		// keyed to the geometry swap itself, not to whether an anchor was
+		// placed (round review, finding 7).
+		if gridLayout?.takeGeometryChanged() == true {
+			(delegate as? GridRepresentable.Coordinator)?.reevaluateBucket()
+		}
+	}
+
+	/// A 1×↔2× display move changes the pixel grid every edge aligns to
+	/// (and the decode tier) with no width change to invalidate for
+	/// (round review, finding 6). The geometry-change mint then anchors
+	/// and re-buckets like any other reflow.
+	override func viewDidChangeBackingProperties() {
+		super.viewDidChangeBackingProperties()
+		collectionViewLayout?.invalidateLayout()
+	}
+
+	private func scrollClip(to y: CGFloat) {
+		guard let clipView = enclosingScrollView?.contentView else { return }
+		clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: y))
+		enclosingScrollView?.reflectScrolledClipView(clipView)
+	}
+
 	// Drag round: the delegate protocol has no enter/exit hooks, but the
 	// cursor label (switch hint, ruled-visible refusal) needs them — these
 	// forward to the coordinator around NSCollectionView's own handling.
@@ -1100,16 +1153,6 @@ final class GridCollectionView: NSCollectionView {
 		if let sender {
 			(delegate as? GridRepresentable.Coordinator)?.dragExited(sender, in: self)
 		}
-	}
-}
-
-// MARK: - Layout
-
-/// Flow layout that reflows when the viewport's width changes — a window
-/// resize re-asks the delegate for cell sizes, so columns track the pane.
-final class GridFlowLayout: NSCollectionViewFlowLayout {
-	override func shouldInvalidateLayout(forBoundsChange newBounds: NSRect) -> Bool {
-		newBounds.width != collectionView?.bounds.width
 	}
 }
 

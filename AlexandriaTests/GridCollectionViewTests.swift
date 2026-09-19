@@ -41,8 +41,8 @@ struct GridCollectionViewTests {
 	private func makeChain() -> (RecordingParent, GridCollectionView) {
 		let parent = RecordingParent(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
 		let grid = GridCollectionView(frame: parent.bounds)
-		let layout = GridFlowLayout()
-		layout.itemSize = NSSize(width: 100, height: 100)
+		let layout = GridLayout()
+		layout.columns = 3
 		grid.collectionViewLayout = layout
 		grid.isSelectable = true
 		grid.register(GridItem.self, forItemWithIdentifier: GridItem.identifier)

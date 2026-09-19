@@ -113,9 +113,13 @@ nonisolated enum CellProminence {
 			}
 			.font(.caption2)
 			.lineLimit(1)
+			.foregroundStyle(.white.opacity(0.9))
 			.padding(.horizontal, 4)
 			.padding(.vertical, 2)
-			.background(.ultraThinMaterial)
+			// Flat bar, ruled 2026-09-19 (LrC direction): a material here was
+			// ~20 live backdrop blurs re-rendering on every resize tick — the
+			// single biggest on-screen term in the resize flicker.
+			.background(Color.black.opacity(0.5))
 		}
 		.padding(2)
 	}

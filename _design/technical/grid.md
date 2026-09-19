@@ -60,12 +60,30 @@ events. macOS `NSCollectionViewDiffableDataSource` is defective (no
 `difference(from:).inferringMoves()` with a change budget; past budget,
 reload.
 
+**The layout** (RATIFIED 2026-09-19): a custom `NSCollectionViewLayout`
+(`GridLayout`) over pure geometry (`GridGeometry`), with the column
+count as the ONE input — cells absorb the width, gaps are exactly the
+spacing, edges land on the device-pixel grid. Flow layout was removed,
+not patched: its model is the inversion (item size in, count out), and
+its bounds-change invalidation never re-asks the size delegate, so a
+resize reflowed stale sizes (the stretching-gaps bug). Invariant 9's
+"the user keeps their place" is the layout's job: on any geometry
+change (width, columns, backing scale) it mints the scroll origin that
+holds the topmost visible ITEM — a point offset dies with the old row
+heights — and the collection view applies it BEFORE the pass builds
+cells, so the pass materializes the anchored viewport, never one jump
+behind it (at depth the jump exceeds the whole viewport). This
+index-keyed reflow anchor is deliberately separate from the
+coordinator's id-keyed delivery anchor: a reflow moves no items, a
+delivery moves ids.
+
 **The coordinator** owns the bookkeeping no library provides AND drives
 image loading (it is effects + tables; the pure decisions live in
 `GridImaging`, the Nuke calls in `StageImaging`): the one id↔position
 table, same-question-diff vs new-question-replace (keyed on the hub's
-answered query), viewport anchoring across updates (capture topmost
-visible id + offset, restore after apply — invariant 8), the echo-guarded
+answered query), viewport anchoring across DELIVERIES (capture topmost
+visible id + offset, restore after apply — invariant 8; geometry-change
+anchoring lives in the layout, above), the echo-guarded
 selection mirror, cursor reveal, plus the load lifecycle — resolution,
 per-cell request on display, cancel on exit, prefetch, the stamp-watch
 heal, and the atomic paint routed through the id↔position table. This
