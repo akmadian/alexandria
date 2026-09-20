@@ -8,9 +8,10 @@
 //  the coordinator's call, made against the one id↔position table before it
 //  ever calls `show`.
 //
-//  Composition, top to bottom: an interaction root that keeps clicks on
-//  NSCollectionView's native tracking, a hit-test-transparent hosting view,
-//  and the SwiftUI `GridCell` (content + decoration). The pixels stay on
+//  Composition, top to bottom: a plain root view (clicks fall up the
+//  responder chain to NSCollectionView's native tracking; double-click
+//  lives on GridCollectionView), a hit-test-transparent hosting view,
+//  and the SwiftUI `GridCell` (zones + content slot). The pixels stay on
 //  `ThumbnailLeafView` — the image is the leaf layer's `contents`, swapped
 //  inside an actions-disabled CATransaction: an atomic compositor swap that
 //  never erases to the ground and never runs an implicit fade. That is the
@@ -35,8 +36,7 @@ import SwiftUI
 		guard let layer else { return }
 		// The quiet ground shows through until (and in the letterbox bars of)
 		// an aspect-fit thumbnail — fixed geometry from first paint.
-		layer.backgroundColor = Theme.Grid.placeholder.cgColor
-		layer.contentsGravity = .resizeAspect
+		// layer.contentsGravity = .resizeAspect
 	}
 
 	required init?(coder: NSCoder) { fatalError("ThumbnailLeafView is code-only") }
@@ -71,9 +71,6 @@ import SwiftUI
 
 	static let identifier = NSUserInterfaceItemIdentifier("GridItem")
 
-	/// Fires on double-click; the coordinator wires it to loupe activation.
-	var onDoubleClick: (() -> Void)?
-
 	private(set) var representedID: SubjectID?
 
 	private let thumbnail = ThumbnailLeafView()
@@ -88,18 +85,17 @@ import SwiftUI
 	}
 
 	override func loadView() {
-		let container = GridItemInteractionView()
-		container.onDoubleClick = { [weak self] in self?.onDoubleClick?() }
-		let hosting = CellHostingView(rootView: GridCell(state: state, thumbnail: thumbnail))
+		// Plain root: an unhandled mouseDown walks the responder chain to
+		// the collection view, so selection stays native machinery.
+		let container = NSView()
+		let hosting = CellHostingView(rootView: GridCell(state: state, content: thumbnail))
 		hosting.sizingOptions = []
-		hosting.translatesAutoresizingMaskIntoConstraints = false
+		// Fill-parent via autoresizing, not Auto Layout — no constraint
+		// solving per cell in a surface with hundreds of live items (the
+		// grid-resize round's carried "hosting autoresizing lever").
+		hosting.frame = container.bounds
+		hosting.autoresizingMask = [.width, .height]
 		container.addSubview(hosting)
-		NSLayoutConstraint.activate([
-			hosting.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-			hosting.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-			hosting.topAnchor.constraint(equalTo: container.topAnchor),
-			hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-		])
 		view = container
 	}
 
@@ -158,17 +154,3 @@ private final class CellHostingView<Content: View>: NSHostingView<Content> {
 	override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
-/// The item's root view: passes clicks up to NSCollectionView's own tracking
-/// (selection stays native machinery) and surfaces double-clicks.
-@MainActor private final class GridItemInteractionView: NSView {
-	var onDoubleClick: (() -> Void)?
-
-	override func mouseDown(with event: NSEvent) {
-		// Super first: the collection view's selection handling runs before
-		// activation, so a double-click activates the item it just selected.
-		super.mouseDown(with: event)
-		if event.clickCount == 2 {
-			onDoubleClick?()
-		}
-	}
-}

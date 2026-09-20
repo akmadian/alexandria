@@ -440,7 +440,6 @@ extension GridRepresentable.Coordinator: NSCollectionViewDataSource {
 	) -> NSCollectionViewItem {
 		let item = collectionView.makeItem(withIdentifier: GridItem.identifier, for: indexPath)
 		guard let gridItem = item as? GridItem, let id = id(at: indexPath) else { return item }
-		gridItem.onDoubleClick = { [weak self] in self?.callbacks.activate() }
 		gridItem.represent(id)
 		// A fresh or recycled cell learns cursor identity here; a cursor MOVE
 		// between live cells is the mirror's job.
@@ -1106,6 +1105,19 @@ final class GridCollectionView: NSCollectionView {
 		} else {
 			nextResponder?.keyDown(with: event)
 		}
+	}
+
+	// Double-click activation, at the one place clicks already arrive
+	// (item views are plain/hit-test-transparent, so events land here).
+	// Super first: selection tracking runs before activation, so a
+	// double-click activates the item it just selected. Empty space
+	// never activates.
+	override func mouseDown(with event: NSEvent) {
+		super.mouseDown(with: event)
+		guard event.clickCount == 2,
+			indexPathForItem(at: convert(event.locationInWindow, from: nil)) != nil
+		else { return }
+		(delegate as? GridRepresentable.Coordinator)?.callbacks.activate()
 	}
 
 	// Resize fix (2026-09-19, reordered same day): the settle half of the

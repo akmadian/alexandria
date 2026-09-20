@@ -2,19 +2,19 @@
 //  GridCell.swift
 //  Alexandria
 //
-//  The SwiftUI cell (cell round, 2026-09-18): content + decoration, and
-//  nothing else. Content is the thumbnail slot — an AppKit leaf the ITEM
-//  owns, laid out here but painted imperatively by the coordinator, so
-//  pixels never enter SwiftUI's update cycle (the swap-flash fix from the
-//  grid round survives inside the slot untouched). Decoration reads one
-//  doorway, `CellState`, mutated in place across reuse — the cell asks for
-//  nothing and holds no asset, file, or query.
+//  The cell (recomposed 2026-09-20, contact-sheet anatomy): a zoned
+//  container — header decoration, a content slot, prominence styled on the
+//  cell surface and the content frame. The slot mounts a view the ITEM owns
+//  and paints imperatively; the cell only places it and never learns what
+//  it is — thumbnail today, any other content surface tomorrow. Decoration
+//  reads one doorway, `CellState`, mutated in place across reuse — the cell
+//  asks for nothing and holds no asset, file, or query.
 //
-//  This is the bare composition. The metadata-shown mode is a documented
-//  seam: a second body beside `body`, same state, same slot, different
-//  chrome — it must not reopen the container or the item. When faces
-//  diverge by kind (audio glyph, document), the kind switch lands HERE,
-//  once, compiler-exhaustive — never in the coordinator.
+//  Zone contents and styling values are a starting point, not a ratified
+//  composition — Ari's playground (like VolumeHeader). The face switch is
+//  wired pathways with placeholder glyphs; each kind's real face is filled
+//  in as it's designed. The metadata-shown mode remains a documented seam:
+//  a second body, same state, same slot, denser chrome.
 //
 
 import AppKit
@@ -22,7 +22,7 @@ import SwiftUI
 
 /// The cell's four-state, minus hover (deferred until something needs it).
 /// One value, resolved in one place, styled in one place — a restyle or a
-/// new state touches `resolve` and the ring, nothing else.
+/// new state touches `resolve` and the styling switches, nothing else.
 nonisolated enum CellProminence {
 	case idle
 	case selected
@@ -68,90 +68,87 @@ nonisolated enum CellProminence {
 
 @MainActor struct GridCell: View {
 	let state: CellState
-	let thumbnail: ThumbnailLeafView
+	let content: NSView
 
 	var body: some View {
-		ThumbnailSlot(view: thumbnail)
-			.overlay(alignment: .bottom) { decoration }
-			.overlay(ring)
-	}
-
-	/// The decoration row: what the pixels can't say. Composition and
-	/// styling are Ari's playground; the DATA path behind each element is
-	/// fixed (records via the coordinator, position via the id↔position
-	/// table).
-	@ViewBuilder private var decoration: some View {
-		VStack() {
-			HStack() {
+		VStack(spacing: 0) {
+			// Header — starting set: index + filename. Ari's playground.
+			HStack {
 				if let position = state.position {
 					Text("\(position + 1)")
-						.foregroundStyle(.secondary)
 				}
 				Spacer()
-				switch (state.asset?.kind) {
-				case .image: Image(systemName: "photo")
-				case .video: Image(systemName: "video")
-				case .audio: Image(systemName: "waveform")
-				case .document: Image(systemName: "document")
-				case .vector: Image(systemName: "squareshape.controlhandles.on.squareshape.controlhandles")
-				case .project: Image(systemName: "rectangle.stack")
-				case .other: Image(systemName: "document")
-				case .sidecar: Image(systemName: "info")
-				case .none: Image(systemName: "questionmark")
-				}
-			}
-			Spacer()
-			HStack(spacing: 4) {
 				if let name = state.file?.fileStem {
-					Text(name)
-						.truncationMode(.middle)
-				}
-				Spacer(minLength: 0)
-				if let rating = state.asset?.rating, rating > 0 {
-					Text(String(repeating: "★", count: rating))
+					Text(name).truncationMode(.middle)
 				}
 			}
+			.padding(6)
+			.background(cellHeaderColor)
 			.font(.caption2)
 			.lineLimit(1)
-			.foregroundStyle(.white.opacity(0.9))
-			.padding(.horizontal, 4)
-			.padding(.vertical, 2)
-			// Flat bar, ruled 2026-09-19 (LrC direction): a material here was
-			// ~20 live backdrop blurs re-rendering on every resize tick — the
-			// single biggest on-screen term in the resize flicker.
-			.background(Color.black.opacity(0.5))
+
+			// Content slot — placed here, owned by the item, painted elsewhere.
+			ContentSlot(view: content)
+				.padding(6)
+				.overlay {
+					// Face pathways; placeholder glyphs until each kind earns
+					// a real face. `.none` = records not landed yet (quiet
+					// ground); `.image` = the pixels speak for themselves.
+					switch state.asset?.kind {
+					case .none, .image: EmptyView()
+					case .video: Image(systemName: "video")
+					case .audio: Image(systemName: "waveform")
+					case .document: Image(systemName: "document")
+					case .vector: Image(systemName: "squareshape.controlhandles.on.squareshape.controlhandles")
+					case .project: Image(systemName: "rectangle.stack")
+					case .other: Image(systemName: "document")
+					case .sidecar: Image(systemName: "info")
+					}
+				}
 		}
-		.padding(2)
+		.background(cellBackgroundColor)
+		.border(frame.color, width: frame.width)
 	}
 
-	/// The four-state's entire styling, in one spot.
-	@ViewBuilder private var ring: some View {
+	// The four-state's entire styling — these two switches, values in
+	// Theme.Grid. Prominence reads on the cell surface and the content
+	// frame (the LrC construction), not an edge ring.
+	private var cellBackgroundColor: Color {
 		switch state.prominence {
-		case .idle:
-			EmptyView()
+		case .idle: Theme.Grid.cellBackground
+		case .selected: Theme.Grid.cellBackground
+		case .cursor: Theme.Grid.cellCursorBackground
+		}
+	}
+	
+	private var cellHeaderColor: Color {
+		switch state.prominence {
+		case .idle: Theme.Grid.cellHeader
+		case .selected: Theme.Grid.cellBackground
+		case .cursor: Theme.Grid.cellCursorBackground
+		}
+	}
+
+	private var frame: (color: Color, width: CGFloat) {
+		switch state.prominence {
+		case .idle: (.clear, 0)
 		case .selected:
-			Rectangle()
-				.strokeBorder(
-					Color(nsColor: .controlAccentColor).opacity(Theme.Grid.selectedRingOpacity),
-					lineWidth: Theme.Grid.selectedRingWidth
-				)
-		case .cursor:
-			Rectangle()
-				.strokeBorder(
-					Color(nsColor: .controlAccentColor),
-					lineWidth: Theme.Grid.cursorRingWidth
-				)
+			(
+				Color(nsColor: .gray).opacity(Theme.Grid.selectedRingOpacity),
+				Theme.Grid.selectedRingWidth
+			)
+		case .cursor: (Color(nsColor: .white), Theme.Grid.cursorRingWidth)
 		}
 	}
 }
 
-/// The AppKit↔SwiftUI seam, whole: SwiftUI lays out a view it does not own.
-/// The item creates the leaf and the coordinator paints it; this wrapper
-/// only places it.
-private struct ThumbnailSlot: NSViewRepresentable {
-	let view: ThumbnailLeafView
-	func makeNSView(context: Context) -> ThumbnailLeafView { view }
-	func updateNSView(_ nsView: ThumbnailLeafView, context: Context) {}
+/// The AppKit↔SwiftUI seam, whole: mounts the item-owned content view into
+/// the cell's layout. Placement only — the cell never paints it and never
+/// knows its concrete type.
+private struct ContentSlot: NSViewRepresentable {
+	let view: NSView
+	func makeNSView(context: Context) -> NSView { view }
+	func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 // MARK: - Preview
@@ -160,7 +157,7 @@ private struct ThumbnailSlot: NSViewRepresentable {
 private struct GridCellPreview: View {
 	private struct PreviewCell {
 		let state: CellState
-		let thumbnail: ThumbnailLeafView
+		let content: NSView
 	}
 
 	private let cells: [PreviewCell]
@@ -170,9 +167,8 @@ private struct GridCellPreview: View {
 			name: String, ext: String,
 			kind: FileKind = .image,
 			pos: Int,
-			rating: Int? = nil,
-			flag: Asset.Flag? = nil,
-			prominence: CellProminence = .idle
+			prominence: CellProminence = .idle,
+			pixels: String? = nil
 		) -> PreviewCell {
 			let state = CellState()
 			let fileId = Identifier<File>(rawValue: UUID())
@@ -199,22 +195,32 @@ private struct GridCellPreview: View {
 			state.asset = Asset(
 				id: assetId,
 				kind: kind,
-				rating: rating,
-				flag: flag,
+				rating: nil,
+				flag: nil,
 				representativeFileId: fileId
 			)
 			state.position = pos
 			state.prominence = prominence
-			return PreviewCell(state: state, thumbnail: ThumbnailLeafView())
+			let leaf = ThumbnailLeafView()
+			if let pixels, let image = NSImage(contentsOf: fixture(pixels)) {
+				leaf.show(image)
+			}
+			return PreviewCell(state: state, content: leaf)
 		}
 
 		cells = [
-			make(name: "DSC_0482.NEF", ext: "NEF", pos: 0, rating: 5, flag: .pick, prominence: .cursor),
-			make(name: "DSC_0483.NEF", ext: "NEF", pos: 1, rating: 3, prominence: .selected),
-			make(name: "A_Very_Long_Filename_That_Truncates_In_The_Bar.TIFF", ext: "TIFF", pos: 2),
-			make(name: "Interview_Raw_Cut.MOV", ext: "MOV", kind: .video, pos: 3, rating: 2),
+			make(
+				name: "DSC_0482.NEF", ext: "NEF", pos: 0, prominence: .cursor,
+				pixels: "real-jpg_6150009.JPG"),
+			make(
+				name: "DSC_0483.NEF", ext: "NEF", pos: 1, prominence: .selected,
+				pixels: "_6160345-.jpg"),
+			make(
+				name: "A_Very_Long_Filename_That_Truncates.TIFF", ext: "TIFF", pos: 2,
+				pixels: "_6160501-.jpg"),
+			make(name: "Interview_Raw_Cut.MOV", ext: "MOV", kind: .video, pos: 3),
 			make(name: "Ambient_Session.WAV", ext: "WAV", kind: .audio, pos: 4),
-			make(name: "Shoot_Notes.PDF", ext: "PDF", kind: .document, pos: 5, flag: .reject),
+			make(name: "Shoot_Notes.PDF", ext: "PDF", kind: .document, pos: 5),
 		]
 	}
 
@@ -225,7 +231,7 @@ private struct GridCellPreview: View {
 			spacing: 2
 		) {
 			ForEach(cells.indices, id: \.self) { i in
-				GridCell(state: cells[i].state, thumbnail: cells[i].thumbnail)
+				GridCell(state: cells[i].state, content: cells[i].content)
 					.frame(width: side, height: side)
 			}
 		}
@@ -234,7 +240,18 @@ private struct GridCellPreview: View {
 	}
 }
 
+/// repo-root/TestData, resolved from this source file's location — same
+/// trick LoupeView's preview uses. Dev-machine paths never ship.
+private func fixture(_ name: String) -> URL {
+	URL(fileURLWithPath: #filePath)
+		.deletingLastPathComponent()   // Grid/
+		.deletingLastPathComponent()   // Stage/
+		.deletingLastPathComponent()   // Alexandria/
+		.deletingLastPathComponent()   // repo root
+		.appending(path: "TestData")
+		.appending(path: name)
+}
+
 #Preview("Grid Cells") {
 	GridCellPreview()
 }
-
