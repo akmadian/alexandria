@@ -107,3 +107,45 @@ extension Catalog {
 		}
 	}
 }
+
+// MARK: - The judgment door (keybind round, 2026-09-20)
+
+private nonisolated let doorLog = Logger(label: "judgments")
+
+/// Fire-and-forget judgment writes, shared by every judgment door — the
+/// menu's items, the inspector's controls. One implementation of the
+/// pattern: call the verb, discard the returned prior values (undo is a
+/// later chunk), log the failure. The verbs are total: an empty target list
+/// writes nothing.
+///
+/// Each gesture is its own unstructured Task; nothing orders two gestures a
+/// few milliseconds apart (key repeat, "3" then "5"), so the writer sees
+/// them in resume order — FIFO in practice today. When undo lands and
+/// ordering becomes load-bearing, this is where serialization goes.
+extension Catalog {
+	func applyRating(_ ids: [Identifier<Asset>], _ rating: Int?) {
+		Task {
+			do {
+				_ = try await setRating(ids, to: rating)
+			} catch {
+				doorLog.error("rating failed", metadata: [
+					"assets": "\(ids.count)",
+					"error": "\(error)",
+				])
+			}
+		}
+	}
+
+	func applyFlag(_ ids: [Identifier<Asset>], _ flag: Asset.Flag?) {
+		Task {
+			do {
+				_ = try await setFlag(ids, to: flag)
+			} catch {
+				doorLog.error("flagging failed", metadata: [
+					"assets": "\(ids.count)",
+					"error": "\(error)",
+				])
+			}
+		}
+	}
+}

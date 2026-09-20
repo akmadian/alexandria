@@ -942,4 +942,42 @@ struct CatalogViewStateTests {
 		#expect(hub.filter == nil)
 		try await eventually("cleared delivery") { hub.workingSet.count == 1 }
 	}
+
+	/// The source-handoff token (ruled 2026-09-20): bumped when a delivery
+	/// answers a NEW source — never the first answer, never a same-source
+	/// requery (arrangement here standing in for any posture change that
+	/// keeps the source). Also pins hasJudgmentTargets as judgmentTargets'
+	/// cheap twin.
+	@Test func stageClaimTokenBumpsOnSourceChangesOnly() async throws {
+		let context = try await ImportContext.make()
+		try await context.record([
+			context.prepared("/Volumes/Test/Shoot/a.jpg"),
+			context.prepared("/Volumes/Test/Shoot/b.jpg"),
+		])
+		try await context.form()
+
+		let hub = CatalogViewState(catalog: context.catalog)
+		try await eventually("initial delivery") { hub.workingSet.count == 2 }
+		#expect(hub.stageClaimToken == 0)
+
+		hub.setSource(.latestImport)
+		try await eventually("new source answered") { hub.answeredQuery?.source == .latestImport }
+		#expect(hub.stageClaimToken == 1)
+
+		// Same source, different arrangement: a requery, never a steal.
+		hub.setArrangement(hub.arrangement.reversed)
+		try await eventually("requery answered") {
+			hub.answeredQuery?.arrangement == hub.arrangement
+		}
+		#expect(hub.stageClaimToken == 1)
+
+		hub.setSource(.library)
+		try await eventually("library answered") { hub.answeredQuery?.source == .library }
+		#expect(hub.stageClaimToken == 2)
+
+		// The cheap gate agrees with the real derivation, populated or not.
+		#expect(hub.hasJudgmentTargets == !hub.judgmentTargets.isEmpty)
+		hub.setSelection([])
+		#expect(hub.hasJudgmentTargets == !hub.judgmentTargets.isEmpty)
+	}
 }

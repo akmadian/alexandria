@@ -81,4 +81,68 @@ struct GridCollectionViewTests {
 		// routing is the contract here).
 		#expect(parent.received.isEmpty)
 	}
+
+	// MARK: Focus ownership (keybind round, 2026-09-20)
+
+	/// The arming-click bug's pin: attaching the grid to a window whose key
+	/// focus is in limbo (the window itself) makes the grid first responder
+	/// without any click. (This pins the claim's predicate against an
+	/// unshown window; whether LAUNCH genuinely leaves the real, hosted
+	/// window in limbo is verified in-app only — AppKit's key-view-loop
+	/// resolution at makeKeyAndOrderFront is not reproduced here.)
+	@Test func gridClaimsKeyFocusFromLimbo() async throws {
+		let (_, grid) = makeChain()
+		let window = try #require(grid.window)
+		try await eventually("claim") { window.firstResponder === grid }
+	}
+
+	/// The source-handoff's consumer (ruled 2026-09-20): an unhandled token
+	/// claims first responder even from a live pane — the one sanctioned
+	/// steal — marks itself handled, and a handled token never re-fires.
+	/// (What bumps the token, and what must not, is the hub's contract,
+	/// pinned in CatalogViewStateTests.)
+	@Test func unhandledStageClaimStealsFocusForTheGrid() async throws {
+		let (parent, grid) = makeChain()
+		let window = try #require(grid.window)
+		let coordinator = GridRepresentable.Coordinator()
+		coordinator.attach(grid)
+
+		let textView = NSTextView(frame: parent.bounds)
+		parent.addSubview(textView)
+		window.makeFirstResponder(textView)
+
+		var marked: [Int] = []
+		coordinator.stageClaim(token: 1, handled: 0, mark: { marked.append($0) })
+		#expect(marked == [1])
+		try await eventually("steal") { window.firstResponder === grid }
+
+		// A handled token never re-fires: focus given away stays given.
+		window.makeFirstResponder(textView)
+		coordinator.stageClaim(token: 1, handled: 1, mark: { marked.append($0) })
+		try await Task.sleep(for: .milliseconds(100))
+		#expect(marked == [1])
+		#expect(window.firstResponder === textView)
+	}
+
+	/// The other half of the ruling: the claim never steals from a live
+	/// responder — a full-screen or split-view rebuild that re-attaches the
+	/// grid must not yank focus from a pane the user put it in.
+	@Test func gridNeverStealsKeyFocus() async throws {
+		let parent = RecordingParent(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
+		let window = NSWindow(
+			contentRect: parent.frame, styleMask: [.titled],
+			backing: .buffered, defer: false)
+		window.contentView = parent
+		let textView = NSTextView(frame: parent.bounds)
+		parent.addSubview(textView)
+		window.makeFirstResponder(textView)
+
+		let grid = GridCollectionView(frame: parent.bounds)
+		grid.collectionViewLayout = GridLayout()
+		parent.addSubview(grid)
+
+		// The claim is a runloop turn away; give it time to (not) fire.
+		try await Task.sleep(for: .milliseconds(100))
+		#expect(window.firstResponder === textView)
+	}
 }

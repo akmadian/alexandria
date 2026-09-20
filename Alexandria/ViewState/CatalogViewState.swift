@@ -62,6 +62,26 @@ final class CatalogViewState {
 	private(set) var cursor: SubjectID?
 	
 	private(set) var filterBarPresented = false
+	/// Chrome posture like the filter bar, held here so the menu bar and the
+	/// toolbar toggle share one truth (keybind round, 2026-09-20).
+	private(set) var inspectorPresented = true
+
+	/// The source-handoff (ruled 2026-09-20: choosing a source hands the
+	/// keyboard to the stage). Bumped when a delivery answers a NEW source —
+	/// never the first answer, never a same-source requery (filter and
+	/// arrangement changes must not yank focus from the control being
+	/// edited). The active stage renderer observes the bump, claims key
+	/// focus, and marks it handled; handled-state lives HERE, not in a
+	/// renderer, so a renderer minted after the bump (a source chosen while
+	/// the other mode was up) still sees the pending claim (review finding,
+	/// 2026-09-20).
+	private(set) var stageClaimToken = 0
+	@ObservationIgnored private(set) var stageClaimHandledToken = 0
+	@ObservationIgnored private var answeredSource: Source?
+
+	func markStageClaimHandled(_ token: Int) {
+		stageClaimHandledToken = token
+	}
 
 	/// Grid density as target columns (ruled 2026-09-12): UI state that
 	/// should survive between launches lives HERE — the hub is the surface
@@ -144,6 +164,10 @@ final class CatalogViewState {
 	
 	func setFilterBarPresented(_ newValue: Bool) {
 		filterBarPresented = newValue
+	}
+
+	func setInspectorPresented(_ newValue: Bool) {
+		inspectorPresented = newValue
 	}
 
 	/// The posture rule itself is Arrangement.normalized(for:) — pure, and
@@ -264,8 +288,8 @@ final class CatalogViewState {
 	/// are skipped — judgments attach to assets.
 	///
 	/// Derived from position, so it lives beside it: every door into a
-	/// judgment — the inspector's controls, the command runner's keys and
-	/// menu items — reads this one answer rather than re-deriving the rule.
+	/// judgment — the inspector's controls, the menu's keys and items —
+	/// reads this one answer rather than re-deriving the rule.
 	var judgmentTargets: [Identifier<Asset>] {
 		let selected = selection.compactMap { subject -> Identifier<Asset>? in
 			if case .asset(let id) = subject { return id }
@@ -274,6 +298,15 @@ final class CatalogViewState {
 		if !selected.isEmpty { return selected }
 		if case .asset(let id) = cursor { return [id] }
 		return []
+	}
+
+	/// The O(1)-in-practice yes/no for menu validation (short-circuits on
+	/// the first selected asset); judgmentTargets stays the one derivation
+	/// for writes. Same rule, cheaper question.
+	var hasJudgmentTargets: Bool {
+		if selection.contains(where: { if case .asset = $0 { true } else { false } }) { return true }
+		if case .asset = cursor { return true }
+		return false
 	}
 
 	// MARK: The observation
@@ -316,6 +349,10 @@ final class CatalogViewState {
 		workingSet = ids
 		members = Set(ids)
 		answeredQuery = query
+		if let previous = answeredSource, previous != query.source {
+			stageClaimToken += 1
+		}
+		answeredSource = query.source
 		if predicateUnreadable != answer.predicateUnreadable {
 			predicateUnreadable = answer.predicateUnreadable
 			if answer.predicateUnreadable {

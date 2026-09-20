@@ -27,6 +27,14 @@ Ousterhout's design-it-twice.
   sits below the ask. No term of art that isn't load-bearing; load-bearing
   ones get a one-line gloss unless already ratified vocabulary. Ari should
   never have to ask "what does that mean" before he can rule.
+- **Native-surface check**: every candidate piece answers "what does the
+  native/platform surface not offer that this buys?" An answer citing a
+  not-yet-built consumer cuts the piece (CLAUDE.md's simplicity law); a
+  future feature gets a named landing slot in the scope statement, never
+  scaffolding. Re-run the check on the settled shape in phase 4. Per
+  CLAUDE.md's nearest-native law, the scope statement's manifest carries,
+  for each bespoke mechanism, the nearest platform API and a one-line "why
+  it falls short" — an unfillable line kills the mechanism before build.
 
 ## The arc
 

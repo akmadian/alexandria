@@ -64,7 +64,14 @@ struct AssetInspector: View {
 				Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 6, verticalSpacing: 10) {
 					GridRow {
 						metadataLabel("Rating")
-						StarRating(asset.rating) { rate(viewState.judgmentTargets, $0) }
+						// Stepping only when the DISPLAYED asset is the sole
+						// target (review finding, 2026-09-20): the inspector
+						// shows the cursor while writes hit the selection,
+						// and those can diverge — a count check would let a
+						// step from B's displayed rating land on A.
+						StarRating(asset.rating, stepping: viewState.judgmentTargets == [asset.id]) {
+							catalog.applyRating(viewState.judgmentTargets, $0)
+						}
 							.frame(maxWidth: .infinity, alignment: .leading)
 					}
 					metadataRow("Size", formatBytesAsHumanReadable(representativeFile.sizeBytes))
@@ -207,40 +214,6 @@ struct AssetInspector: View {
 	/// The flag control's value: reads the observed record, writes through
 	/// the verb. There is no local state to drift — the observation delivers
 	/// the committed value back.
-	private func flag(of asset: Asset) -> Binding<Asset.Flag?> {
-		Binding(get: { asset.flag }, set: { setFlag($0, on: viewState.judgmentTargets) })
-	}
-
-	// Both verbs return the prior values for undo; undo is a later chunk, so
-	// they are discarded here rather than half-kept.
-
-	private func rate(_ ids: [Identifier<Asset>], _ rating: Int?) {
-		let catalog = catalog
-		Task {
-			do {
-				_ = try await catalog.setRating(ids, to: rating)
-			} catch {
-				log.error("rating failed", metadata: [
-					"assets": "\(ids.count)",
-					"error": "\(error)",
-				])
-			}
-		}
-	}
-
-	private func setFlag(_ flag: Asset.Flag?, on ids: [Identifier<Asset>]) {
-		let catalog = catalog
-		Task {
-			do {
-				_ = try await catalog.setFlag(ids, to: flag)
-			} catch {
-				log.error("flagging failed", metadata: [
-					"assets": "\(ids.count)",
-					"error": "\(error)",
-				])
-			}
-		}
-	}
 	
 	private func formatBytesAsHumanReadable(_ bytes: Int) -> String {
 		let formatter = ByteCountFormatter()

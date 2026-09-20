@@ -52,6 +52,11 @@ Non-negotiables:
 7. **Test coverage vs ratified rulings** — list rulings without a pinning
    test; flag tests asserting implementation detail instead of ratified
    behavior.
+8. **Reinvented platform levers** — for each bespoke mechanism, name the
+   nearest platform API (CLAUDE.md's nearest-native law) and check the
+   "why it falls short" claim actually holds; flag any mechanism the
+   platform already provides (the tell: machinery invented while the
+   problem was in view rather than the platform docs).
 8. **Performance hygiene** — only real issues with a concrete scenario at
    catalog scale (~40k files); don't re-report items already flagged in
    the design doc, but verify code matches what's flagged.

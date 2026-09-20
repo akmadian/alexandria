@@ -33,6 +33,12 @@ struct GridRepresentable: NSViewRepresentable {
 	var selection: Set<SubjectID>
 	var cursor: SubjectID?
 	var columns: Int
+	/// The hub's source-handoff pair (ruled 2026-09-20); the coordinator
+	/// claims key focus on an unhandled bump and marks it handled via
+	/// onStageClaimHandled.
+	var stageClaimToken: Int
+	var stageClaimHandledToken: Int
+	var onStageClaimHandled: (Int) -> Void
 	var catalog: Catalog
 	var imaging: StageImaging
 	var onSelectionChange: (Set<SubjectID>) -> Void
@@ -76,6 +82,9 @@ struct GridRepresentable: NSViewRepresentable {
 		)
 		coordinator.apply(columns: columns)
 		coordinator.apply(workingSet: workingSet, answering: answeredQuery)
+		coordinator.stageClaim(
+			token: stageClaimToken, handled: stageClaimHandledToken,
+			mark: onStageClaimHandled)
 		coordinator.mirror(selection: selection, cursor: cursor)
 		// A zoom (columns) or a window resize (width) can change the one bucket
 		// every cell wants; if it did, visible cells re-request at the new size.
@@ -227,6 +236,26 @@ struct GridRepresentable: NSViewRepresentable {
 		}
 
 		// MARK: Deliveries → screen
+
+		/// The source-handoff's consumer (ruled 2026-09-20): an unhandled
+		/// bump of the hub's stageClaimToken claims key focus for the grid —
+		/// the one sanctioned steal, completing the user's own source
+		/// choice. Handled-state is the HUB's, so this fires correctly even
+		/// when the bump happened while no grid existed (source chosen in
+		/// loupe mode). Marked handled before the deferred claim so a
+		/// re-entrant update can't double-fire.
+		func stageClaim(token: Int, handled: Int, mark: (Int) -> Void) {
+			guard token != handled else { return }
+			mark(token)
+			log.debug("source handoff: grid claims key focus", metadata: [
+				"token": "\(token)",
+			])
+			DispatchQueue.main.async { [weak self] in
+				guard let self, let collectionView = self.collectionView,
+				      let window = collectionView.window else { return }
+				window.makeFirstResponder(collectionView)
+			}
+		}
 
 		func apply(workingSet new: [SubjectID], answering query: WorkingSetQuery?) {
 			guard let collectionView else { return }
@@ -1062,8 +1091,17 @@ extension GridRepresentable.Coordinator {
 /// its native turn. The only thing given up is type-select, which a grid of
 /// thumbnails with no visible text never had a use for.
 final class GridCollectionView: NSCollectionView {
+	// Stage owns key focus by default (keybind round, 2026-09-20): arrows
+	// work from the first frame — launch, grid↔loupe switch, renderer swap —
+	// with no arming click. Limbo-only, so attaching during a full-screen or
+	// split-view rebuild steals nothing from a pane the user focused.
+	override func viewDidMoveToWindow() {
+		super.viewDidMoveToWindow()
+		if window != nil { claimKeyFocusFromLimbo() }
+	}
+
 	override func keyDown(with event: NSEvent) {
-		if event.modifierFlags.contains(.function) {
+		if event.isNavigationKey {
 			super.keyDown(with: event)
 		} else {
 			nextResponder?.keyDown(with: event)

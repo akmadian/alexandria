@@ -39,6 +39,56 @@ struct LoupeView: View {
 	}
 }
 
+// MARK: - Keyboard
+
+/// The loupe's key surface (keybind round, 2026-09-20): the stage-surface
+/// contract's minimal claimant until the loupe round builds the real viewer.
+/// Claims focus from limbo, walks the cursor on arrows, and lets every other
+/// key bubble to the menu. Attached by StageView behind the whole loupe
+/// branch, so arrows work in the offline/empty postures too.
+struct LoupeKeyHost: NSViewRepresentable {
+	var onStep: (Int) -> Void
+
+	func makeNSView(context: Context) -> LoupeKeyView {
+		let view = LoupeKeyView()
+		view.onStep = onStep
+		return view
+	}
+
+	func updateNSView(_ view: LoupeKeyView, context: Context) {
+		view.onStep = onStep
+	}
+}
+
+final class LoupeKeyView: NSView {
+	var onStep: (Int) -> Void = { _ in }
+
+	override var acceptsFirstResponder: Bool { true }
+
+	override func viewDidMoveToWindow() {
+		super.viewDidMoveToWindow()
+		if window != nil { claimKeyFocusFromLimbo() }
+	}
+
+	/// Navigation keys are interpreted here (a plain NSView doesn't route
+	/// them to the move* selectors on its own); everything else takes
+	/// super's DEFAULT path, which already forwards up the responder chain —
+	/// unlike the grid, this view has no key-binding machinery to dodge, so
+	/// there is nothing to hand-roll (review finding, 2026-09-20).
+	override func keyDown(with event: NSEvent) {
+		if event.isNavigationKey {
+			interpretKeyEvents([event])
+		} else {
+			super.keyDown(with: event)
+		}
+	}
+
+	override func moveLeft(_ sender: Any?) { onStep(-1) }
+	override func moveRight(_ sender: Any?) { onStep(1) }
+	override func moveUp(_ sender: Any?) { onStep(-1) }
+	override func moveDown(_ sender: Any?) { onStep(1) }
+}
+
 // MARK: - Preview
 
 // LoupeView's body is entirely @Query-driven, so a live catalog is needed to

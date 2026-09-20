@@ -26,6 +26,7 @@ import SwiftUI
 /// either at the call site.
 struct StarRating: View {
 	private let value: Int?
+	private let stepping: Bool
 	private let onSet: ((Int?) -> Void)?
 
 	@State private var hover: Int?
@@ -33,8 +34,15 @@ struct StarRating: View {
 
 	/// `onSet == nil` is display-only. Supplying it makes the control editable;
 	/// it fires with the new rating (`nil` when the user unrates).
-	init(_ value: Int?, onSet: ((Int?) -> Void)? = nil) {
+	///
+	/// `stepping` gates the RELATIVE edits — arrow keys and the accessibility
+	/// increment. Pass false when the write lands on multiple assets: a step
+	/// is computed from the one displayed value, so over a mixed-rating
+	/// selection it would collapse every asset to displayed±1 (ruled
+	/// 2026-09-20). Absolute edits (clicks, digits) stay available.
+	init(_ value: Int?, stepping: Bool = true, onSet: ((Int?) -> Void)? = nil) {
 		self.value = value
+		self.stepping = stepping
 		self.onSet = onSet
 	}
 
@@ -67,21 +75,19 @@ struct StarRating: View {
 		.onKeyPress { press in
 			guard isEditable else { return .ignored }
 			switch press.key {
-			case .leftArrow, .downArrow: step(-1); return .handled
-			case .rightArrow, .upArrow: step(1); return .handled
+			case .leftArrow, .downArrow:
+				return resolve(Self.arrowOutcome(from: committed, by: -1, stepping: stepping))
+			case .rightArrow, .upArrow:
+				return resolve(Self.arrowOutcome(from: committed, by: 1, stepping: stepping))
 			default:
-				// Digit keys set directly; 0 unrates.
-				guard let n = press.characters.first?.wholeNumberValue, (0...5).contains(n)
-				else { return .ignored }
-				onSet?(n == 0 ? nil : n)
-				return .handled
+				return resolve(Self.digitOutcome(press.characters.first))
 			}
 		}
 		.accessibilityElement(children: .ignore)
 		.accessibilityLabel("Rating")
 		.accessibilityValue(committed == 0 ? "Unrated" : "\(committed) of 5 stars")
 		.accessibilityAdjustableAction { direction in
-			guard isEditable else { return }
+			guard isEditable, stepping else { return }
 			switch direction {
 			case .increment: step(1)
 			case .decrement: step(-1)
@@ -90,11 +96,41 @@ struct StarRating: View {
 		}
 	}
 
-	/// Move the rating by `delta`, clamped to 1...5; stepping below 1 unrates.
-	/// Shared by the arrow keys and the accessibility adjustable action.
-	private func step(_ delta: Int) {
+	/// What a key writes — pure, so the ruled behaviors pin without a view
+	/// (ruled 2026-09-20): arrows are RELATIVE and gated by `stepping`;
+	/// digits are ABSOLUTE (0 unrates) and never gated. `.ignored` falls
+	/// through to the responder chain.
+	nonisolated enum KeyOutcome: Equatable {
+		case ignored
+		case set(Int?)
+	}
+
+	nonisolated static func arrowOutcome(from committed: Int, by delta: Int, stepping: Bool) -> KeyOutcome {
+		stepping ? .set(stepped(from: committed, by: delta)) : .ignored
+	}
+
+	nonisolated static func digitOutcome(_ character: Character?) -> KeyOutcome {
+		guard let n = character?.wholeNumberValue, (0...5).contains(n) else { return .ignored }
+		return .set(n == 0 ? nil : n)
+	}
+
+	/// Stepping from `committed` by `delta`, clamped to 1...5; below 1
+	/// unrates.
+	nonisolated static func stepped(from committed: Int, by delta: Int) -> Int? {
 		let next = committed + delta
-		onSet?(next < 1 ? nil : min(next, 5))
+		return next < 1 ? nil : min(next, 5)
+	}
+
+	private func resolve(_ outcome: KeyOutcome) -> KeyPress.Result {
+		switch outcome {
+		case .ignored: return .ignored
+		case .set(let value): onSet?(value); return .handled
+		}
+	}
+
+	/// The accessibility adjustable action's shared step.
+	private func step(_ delta: Int) {
+		onSet?(Self.stepped(from: committed, by: delta))
 	}
 
 	@ViewBuilder

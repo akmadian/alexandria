@@ -54,14 +54,37 @@ struct StageView: View {
 		case .grid:
 			GridView(imaging: imaging)
 		case .loupe:
-			switch viewState.cursor {
-			case .asset(let id):
-				LoupeView(id: id)
-			case .file:
-				ContentUnavailableView("No file loupe yet", systemImage: "doc")
-			case nil:
-				ContentUnavailableView("Nothing Selected", systemImage: "info")
-			}
+			loupe.background { LoupeKeyHost(onStep: stepLoupeCursor) }
 		}
+	}
+
+	@ViewBuilder private var loupe: some View {
+		switch viewState.cursor {
+		case .asset(let id):
+			LoupeView(id: id)
+		case .file:
+			ContentUnavailableView("No file loupe yet", systemImage: "doc")
+		case nil:
+			ContentUnavailableView("Nothing Selected", systemImage: "info")
+		}
+	}
+
+	/// Loupe navigation (keybind round, 2026-09-20): arrows walk the working
+	/// set. The new position is selected as well as cursored — the same thing
+	/// the grid's native arrow handling does — so judgments follow the eye.
+	private func stepLoupeCursor(_ delta: Int) {
+		let workingSet = viewState.workingSet
+		guard !workingSet.isEmpty else { return }
+		// PERF: linear cursor lookup per keystroke; the loupe round's real
+		// navigation owns an index if this shows up at working-set depth.
+		guard let cursor = viewState.cursor, let index = workingSet.firstIndex(of: cursor) else {
+			viewState.setSelection([workingSet[0]])
+			viewState.moveCursor(to: workingSet[0])
+			return
+		}
+		let target = index + delta
+		guard workingSet.indices.contains(target) else { return }
+		viewState.setSelection([workingSet[target]])
+		viewState.moveCursor(to: workingSet[target])
 	}
 }

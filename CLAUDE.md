@@ -52,6 +52,14 @@ instinct, or old-repo convention conflicts with this repo's files, this repo win
   marker so it can't silently return.
 - Machinery earns its place: no speculative fields, no interfaces with one
   implementation, no config for constants. Deletion over addition.
+- Simplest native shape wins (ratified 2026-09-20): each piece answers "what
+  does the native surface not offer that this buys?" — an answer citing a
+  not-yet-built consumer cuts the piece. "Future-ready" means known roadmap
+  features have a named landing slot, never scaffolding built early;
+  abstraction is extracted at the round that consumes it.
+- Every bespoke mechanism in a scope statement names the nearest platform API
+  and why it falls short (ratified 2026-09-20); a mechanism that can't name
+  its nearest-native is not ready to propose.
 - One concept, one implementation: before hand-writing a query or algorithm
   the codebase already answers, find the canonical implementation and reuse
   it; when composition truly forces a copy, it preserves the canonical

@@ -9,7 +9,6 @@ import SwiftUI
 
 struct ShellView: View {
 	@Environment(CatalogViewState.self) private var viewState
-	@State private var inspectorPresented = true
 
 	var body: some View {
 		NavigationSplitView {
@@ -23,7 +22,7 @@ struct ShellView: View {
 				.navigationTitle(viewState.sourceTitle)
 				.toolbar { stageToolbar }
 		}
-		.inspector(isPresented: $inspectorPresented) {
+		.inspector(isPresented: inspectorPresented) {
 			InspectorView()
 				.inspectorColumnWidth(
 					min: Theme.Pane.inspectorMinimumWidth,
@@ -48,12 +47,14 @@ struct ShellView: View {
 				}
 				.toggleStyle(.button)
 				Menu {
+					// No chords here: chords are declared in MainMenu and
+					// nowhere else (keybind round, 2026-09-20).
 					Button("Zoom In", systemImage: "plus.magnifyingglass") {
 						viewState.setGridColumns(viewState.gridColumns - 1)
-					}.keyboardShortcut("+", modifiers: .command)
+					}
 					Button("Zoom Out", systemImage: "minus.magnifyingglass") {
 						viewState.setGridColumns(viewState.gridColumns + 1)
-					}.keyboardShortcut("-", modifiers: .command)
+					}
 					
 					Divider()
 					
@@ -87,7 +88,7 @@ struct ShellView: View {
 	@ToolbarContentBuilder private var inspectorToolbar: some ToolbarContent {
 		ToolbarItem(placement: .automatic) {
 			Button("Toggle Inspector", systemImage: "sidebar.trailing") {
-				inspectorPresented.toggle()
+				viewState.setInspectorPresented(!viewState.inspectorPresented)
 			}
 		}
 	}
@@ -103,6 +104,13 @@ struct ShellView: View {
 		Binding (
 			get: { viewState.filterBarPresented },
 			set: { viewState.setFilterBarPresented($0) }
+		)
+	}
+
+	private var inspectorPresented: Binding<Bool> {
+		Binding (
+			get: { viewState.inspectorPresented },
+			set: { viewState.setInspectorPresented($0) }
 		)
 	}
 }

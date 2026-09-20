@@ -35,6 +35,13 @@ final class ImportService {
 		self.catalog = catalog
 	}
 
+	/// One executing run at a time (ruled 2026-09-18); lingering finished
+	/// runs don't count. startImport's guard and the menu's validation share
+	/// this one predicate.
+	var isImporting: Bool {
+		runs.values.contains(where: { !$0.isFinished })
+	}
+
 	/// The lingering check/alert's dismiss — removal IS the state change.
 	/// A folder whose latest import is still unfinished then degrades to
 	/// the tree-fed resume badge; nothing strands.
@@ -54,7 +61,7 @@ final class ImportService {
 		// TODO: when concurrency lands, a second import against the same
 		// network share warns ("running a second may make both slower")
 		// instead of refusing outright.
-		guard !startInFlight, !runs.values.contains(where: { !$0.isFinished }) else {
+		guard !startInFlight, !isImporting else {
 			log.info("Import refused: one already running", metadata: [
 				"source": "\(folderUrl.path())",
 			])
