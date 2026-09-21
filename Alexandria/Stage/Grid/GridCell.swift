@@ -2,19 +2,24 @@
 //  GridCell.swift
 //  Alexandria
 //
-//  The cell (recomposed 2026-09-20, contact-sheet anatomy): a zoned
-//  container — header decoration, a content slot, prominence styled on the
-//  cell surface and the content frame. The slot mounts a view the ITEM owns
-//  and paints imperatively; the cell only places it and never learns what
-//  it is — thumbnail today, any other content surface tomorrow. Decoration
-//  reads one doorway, `CellState`, mutated in place across reuse — the cell
-//  asks for nothing and holds no asset, file, or query.
+//  The cell (value architecture, 2026-09-20): a pure function of one
+//  immutable value. `CellModel` is everything the cell shows — records,
+//  decoded pixels, prominence — and data flows one way: the coordinator
+//  computes it, the item assigns it, SwiftUI diffs it. There is no
+//  observable doorway, no paint seam, no reuse contract beyond "assign
+//  the empty value".
+//
+//  The model carries DATA, never views: NSImage is the cacheable decoded-
+//  pixel container (the pipeline's product), wrapped by `Image(nsImage:)`
+//  at render time. Content per kind is a view-builder branch — a future
+//  in-cell experience (video playback) is a model field plus a branch,
+//  measured precedent: the leaf-vs-SwiftUI spike (2026-09-20) showed no
+//  frame cost to whole-value diffing at fast-scroll scale.
 //
 //  Zone contents and styling values are a starting point, not a ratified
-//  composition — Ari's playground (like VolumeHeader). The face switch is
-//  wired pathways with placeholder glyphs; each kind's real face is filled
-//  in as it's designed. The metadata-shown mode remains a documented seam:
-//  a second body, same state, same slot, denser chrome.
+//  composition — Ari's playground (like VolumeHeader). The metadata-shown
+//  mode remains a documented seam: a second body, same model, denser
+//  chrome.
 //
 
 import AppKit
@@ -40,97 +45,132 @@ nonisolated enum CellProminence {
 	}
 }
 
-/// The one doorway for non-pixel cell state. The item mutates it in place
-/// on selection changes and reuse; SwiftUI observes. Never recreated for a
-/// recycled cell — that in-place update is what keeps a reconfigure at one
-/// cheap body evaluation.
-///
-/// Metadata crosses as canonical records (ruled 2026-09-18): the cell is a
-/// schema consumer like the inspector, no translation layer. The
-/// coordinator batch-fills these — the cell still asks for nothing.
-@MainActor @Observable final class CellState {
-	var prominence: CellProminence = .idle
+/// Everything the cell shows, as one value. Metadata crosses as canonical
+/// records (ruled 2026-09-18): the cell is a schema consumer like the
+/// inspector, no translation layer.
+nonisolated struct CellModel: Equatable {
 	/// Zero-based slot in the working set; the coordinator refreshes it
 	/// after a delivery, since a diff shifts positions without reconfigure.
-	var position: Int?
+	var position: Int? = nil
 	/// nil for file subjects, and for asset subjects until resolution lands.
-	var asset: Asset?
+	var asset: Asset? = nil
 	/// The representative file (or the file subject itself); nil = file-less.
-	var file: File?
+	var file: File? = nil
+	/// Decoded pixels from the imaging pipeline; nil = quiet ground.
+	/// Compared by reference — same object, same pixels.
+	var thumbnail: NSImage? = nil
+	var prominence: CellProminence = .idle
 
-	func clear() {
-		prominence = .idle
-		position = nil
-		asset = nil
-		file = nil
+	static let empty = CellModel()
+
+	static func == (lhs: CellModel, rhs: CellModel) -> Bool {
+		lhs.position == rhs.position
+			&& lhs.asset == rhs.asset
+			&& lhs.file == rhs.file
+			&& lhs.thumbnail === rhs.thumbnail
+			&& lhs.prominence == rhs.prominence
 	}
 }
 
 @MainActor struct GridCell: View {
-	let state: CellState
-	let content: NSView
+	let model: CellModel
 
 	var body: some View {
 		VStack(spacing: 0) {
-			// Header — starting set: index + filename. Ari's playground.
-			HStack {
-				if let position = state.position {
-					Text("\(position + 1)")
-				}
-				Spacer()
-				if let name = state.file?.fileStem {
-					Text(name).truncationMode(.middle)
-				}
-			}
-			.padding(6)
-			.background(cellHeaderColor)
-			.font(.caption2)
-			.lineLimit(1)
-
-			// Content slot — placed here, owned by the item, painted elsewhere.
-			ContentSlot(view: content)
-				.padding(6)
-				.overlay {
-					// Face pathways; placeholder glyphs until each kind earns
-					// a real face. `.none` = records not landed yet (quiet
-					// ground); `.image` = the pixels speak for themselves.
-					switch state.asset?.kind {
-					case .none, .image: EmptyView()
-					case .video: Image(systemName: "video")
-					case .audio: Image(systemName: "waveform")
-					case .document: Image(systemName: "document")
-					case .vector: Image(systemName: "squareshape.controlhandles.on.squareshape.controlhandles")
-					case .project: Image(systemName: "rectangle.stack")
-					case .other: Image(systemName: "document")
-					case .sidecar: Image(systemName: "info")
+			VStack(spacing: 0) { // HEADER
+				HStack {
+					if let position = model.position {
+						Text("\(position + 1)")
+					}
+					Spacer()
+					if let name = model.file?.fileStem {
+						Text(name)
+							.truncationMode(.middle)
 					}
 				}
+				.foregroundStyle(.black)
+				.font(.footnote)
+				.padding(0)
+				HStack {
+					Text("BL")
+					Spacer()
+					Text("BR")
+				}
+				.padding(0)
+				.foregroundStyle(.black)
+				.font(.footnote)
+			}
+			.padding(.horizontal, Theme.Grid.cellContentPadding)
+			.padding(.vertical, Theme.Grid.cellContentPadding / 2)
+			.background(headerColor)
+			.lineLimit(1)
+			
+			Divider()
+
+			content
+				.frame(maxWidth: .infinity, maxHeight: .infinity)
+				.padding(Theme.Grid.cellContentPadding)
 		}
-		.background(cellBackgroundColor)
+		.background(backgroundColor)
 		.border(frame.color, width: frame.width)
 	}
 
-	// The four-state's entire styling — these two switches, values in
+	/// Content per kind: pixels for visual kinds, placeholder glyphs for
+	/// the rest until each earns a real presentation. `nil` kind = records
+	/// not landed yet (quiet ground — the cell background shows through).
+	@ViewBuilder private var content: some View {
+		switch model.asset?.kind {
+		case .none, .image, .video: thumbnail
+		case .audio: glyph("waveform")
+		case .document: glyph("document")
+		case .vector: glyph("squareshape.controlhandles.on.squareshape.controlhandles")
+		case .project: glyph("rectangle.stack")
+		case .other: glyph("document")
+		case .sidecar: glyph("info")
+		}
+	}
+
+	@ViewBuilder private var thumbnail: some View {
+		if let pixels = model.thumbnail {
+			Image(nsImage: pixels)
+				.resizable()
+				.aspectRatio(contentMode: .fit)
+				.border(.black, width: 1)
+		} else {
+			// Quiet ground, in the cell's own surface color. MUST be spatial:
+			// an EmptyView here ignores the frame modifier entirely and the
+			// cell background collapses to the header strip (fast-scroll bug,
+			// 2026-09-20) — geometry is fixed from first paint, with or
+			// without pixels (grid.md invariant).
+			backgroundColor
+		}
+	}
+
+	private func glyph(_ name: String) -> some View {
+		Image(systemName: name)
+	}
+
+	// The four-state's entire styling — these switches, values in
 	// Theme.Grid. Prominence reads on the cell surface and the content
 	// frame (the LrC construction), not an edge ring.
-	private var cellBackgroundColor: Color {
-		switch state.prominence {
+	private var backgroundColor: Color {
+		switch model.prominence {
 		case .idle: Theme.Grid.cellBackground
-		case .selected: Theme.Grid.cellBackground
+		case .selected: Theme.Grid.cellHeaderColor
 		case .cursor: Theme.Grid.cellCursorBackground
 		}
 	}
-	
-	private var cellHeaderColor: Color {
-		switch state.prominence {
-		case .idle: Theme.Grid.cellHeader
-		case .selected: Theme.Grid.cellBackground
+
+	private var headerColor: Color {
+		switch model.prominence {
+		case .idle: Theme.Grid.cellHeaderColor
+		case .selected: Theme.Grid.cellHeaderColor
 		case .cursor: Theme.Grid.cellCursorBackground
 		}
 	}
 
 	private var frame: (color: Color, width: CGFloat) {
-		switch state.prominence {
+		switch model.prominence {
 		case .idle: (.clear, 0)
 		case .selected:
 			(
@@ -142,25 +182,11 @@ nonisolated enum CellProminence {
 	}
 }
 
-/// The AppKit↔SwiftUI seam, whole: mounts the item-owned content view into
-/// the cell's layout. Placement only — the cell never paints it and never
-/// knows its concrete type.
-private struct ContentSlot: NSViewRepresentable {
-	let view: NSView
-	func makeNSView(context: Context) -> NSView { view }
-	func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
 // MARK: - Preview
 
 @MainActor
 private struct GridCellPreview: View {
-	private struct PreviewCell {
-		let state: CellState
-		let content: NSView
-	}
-
-	private let cells: [PreviewCell]
+	private let models: [CellModel]
 
 	init() {
 		func make(
@@ -169,46 +195,43 @@ private struct GridCellPreview: View {
 			pos: Int,
 			prominence: CellProminence = .idle,
 			pixels: String? = nil
-		) -> PreviewCell {
-			let state = CellState()
+		) -> CellModel {
 			let fileId = Identifier<File>(rawValue: UUID())
 			let assetId = Identifier<Asset>(rawValue: UUID())
-			state.file = File(
-				id: fileId,
-				folderId: Identifier(rawValue: UUID()),
-				assetId: assetId,
-				importId: Identifier(rawValue: UUID()),
-				name: name,
-				nameKey: name.lowercased(),
-				fileStem: String(name.dropLast(ext.count + 1)),
-				fileExtension: ext,
-				kind: kind,
-				sizeBytes: 24_385_024,
-				modifiedAt: Date(timeIntervalSinceReferenceDate: 0),
-				contentHash: nil,
-				missing: false,
-				metadata: nil,
-				metadataVersion: 0,
-				thumbnailAt: nil,
-				formationRule: nil
+			return CellModel(
+				position: pos,
+				asset: Asset(
+					id: assetId,
+					kind: kind,
+					rating: nil,
+					flag: nil,
+					representativeFileId: fileId
+				),
+				file: File(
+					id: fileId,
+					folderId: Identifier(rawValue: UUID()),
+					assetId: assetId,
+					importId: Identifier(rawValue: UUID()),
+					name: name,
+					nameKey: name.lowercased(),
+					fileStem: String(name.dropLast(ext.count + 1)),
+					fileExtension: ext,
+					kind: kind,
+					sizeBytes: 24_385_024,
+					modifiedAt: Date(timeIntervalSinceReferenceDate: 0),
+					contentHash: nil,
+					missing: false,
+					metadata: nil,
+					metadataVersion: 0,
+					thumbnailAt: nil,
+					formationRule: nil
+				),
+				thumbnail: pixels.flatMap { NSImage(contentsOf: fixture($0)) },
+				prominence: prominence
 			)
-			state.asset = Asset(
-				id: assetId,
-				kind: kind,
-				rating: nil,
-				flag: nil,
-				representativeFileId: fileId
-			)
-			state.position = pos
-			state.prominence = prominence
-			let leaf = ThumbnailLeafView()
-			if let pixels, let image = NSImage(contentsOf: fixture(pixels)) {
-				leaf.show(image)
-			}
-			return PreviewCell(state: state, content: leaf)
 		}
 
-		cells = [
+		models = [
 			make(
 				name: "DSC_0482.NEF", ext: "NEF", pos: 0, prominence: .cursor,
 				pixels: "real-jpg_6150009.JPG"),
@@ -221,6 +244,9 @@ private struct GridCellPreview: View {
 			make(name: "Interview_Raw_Cut.MOV", ext: "MOV", kind: .video, pos: 3),
 			make(name: "Ambient_Session.WAV", ext: "WAV", kind: .audio, pos: 4),
 			make(name: "Shoot_Notes.PDF", ext: "PDF", kind: .document, pos: 5),
+			// Pixels not landed yet (the fast-scroll state): the ground must
+			// hold the cell's full extent — this is the collapse-bug canary.
+			make(name: "DSC_0484.NEF", ext: "NEF", pos: 6),
 		]
 	}
 
@@ -228,14 +254,14 @@ private struct GridCellPreview: View {
 		let side: CGFloat = 160
 		LazyVGrid(
 			columns: Array(repeating: SwiftUI.GridItem(.fixed(side), spacing: 2), count: 3),
-			spacing: 2
+			spacing: Theme.Grid.interCellSpacing
 		) {
-			ForEach(cells.indices, id: \.self) { i in
-				GridCell(state: cells[i].state, content: cells[i].content)
+			ForEach(models.indices, id: \.self) { i in
+				GridCell(model: models[i])
 					.frame(width: side, height: side)
 			}
 		}
-		.padding(2)
+		.padding(Theme.Grid.inset)
 		.background(Color(nsColor: .windowBackgroundColor))
 	}
 }

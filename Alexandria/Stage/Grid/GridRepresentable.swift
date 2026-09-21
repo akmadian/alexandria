@@ -408,7 +408,7 @@ struct GridRepresentable: NSViewRepresentable {
 				guard let id = id(at: path),
 					let item = collectionView.item(at: path) as? GridItem,
 					item.representedID == id else { continue }
-				item.display(position: path.item)
+				item.model.position = path.item
 			}
 		}
 
@@ -441,14 +441,16 @@ extension GridRepresentable.Coordinator: NSCollectionViewDataSource {
 		let item = collectionView.makeItem(withIdentifier: GridItem.identifier, for: indexPath)
 		guard let gridItem = item as? GridItem, let id = id(at: indexPath) else { return item }
 		gridItem.represent(id)
+		// The whole model in one assignment: position from the table,
+		// records from the cache (nil until resolution lands — the resolve
+		// push catches the cell up). Model FIRST, cursor after — the cursor
+		// write resolves prominence onto the model it finds.
+		let records = recordsOf[id]
+		gridItem.model = CellModel(
+			position: indexPath.item, asset: records?.asset, file: records?.file)
 		// A fresh or recycled cell learns cursor identity here; a cursor MOVE
 		// between live cells is the mirror's job.
 		gridItem.isCursor = id == lastMirroredCursor
-		// Decoration data: position from the table, records from the cache
-		// (nil until resolution lands — the resolve push catches the cell up).
-		gridItem.display(position: indexPath.item)
-		let records = recordsOf[id]
-		gridItem.display(asset: records?.asset, file: records?.file)
 		// A recycled slot must not show its previous id's pixels. Paint from
 		// cache immediately if we have anything (so a reload/scope-change of
 		// already-seen content never blanks), otherwise the quiet ground.
@@ -588,16 +590,16 @@ extension GridRepresentable.Coordinator {
 	func paintFromCacheOrPlaceholder(_ id: SubjectID, into item: GridItem) {
 		guard let imaging, let thumbnailStore, let file = representativeFileId(of: id) else {
 			shownBucket[id] = nil
-			item.showPlaceholder()
+			item.model.thumbnail = nil
 			return
 		}
 		let url = thumbnailStore.url(for: file)
 		if let cached = imaging.cachedImage(file: file, fileURL: url, ladder: ThumbnailStore.decodeLadder) {
 			shownBucket[id] = cached.bucket
-			item.show(cached.image)
+			item.model.thumbnail = cached.image
 		} else {
 			shownBucket[id] = nil
-			item.showPlaceholder()
+			item.model.thumbnail = nil
 		}
 	}
 
@@ -610,7 +612,7 @@ extension GridRepresentable.Coordinator {
 		shownBucket[id] = bucket
 		guard let collectionView, let path = indexPath(of: id),
 			let item = collectionView.item(at: path) as? GridItem else { return }
-		item.show(image)
+		item.model.thumbnail = image
 	}
 
 	private func stopLoading(_ id: SubjectID) {
@@ -702,7 +704,8 @@ extension GridRepresentable.Coordinator {
 			guard let records = recordsOf[id], let path = indexPath(of: id),
 				let item = collectionView.item(at: path) as? GridItem,
 				item.representedID == id else { continue }
-			item.display(asset: records.asset, file: records.file)
+			item.model.asset = records.asset
+			item.model.file = records.file
 		}
 	}
 

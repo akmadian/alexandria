@@ -62,3 +62,7 @@ nonisolated struct File: Identifiable, CatalogRecord {
 		static let formationRule = Column(CodingKeys.formationRule)
 	}
 }
+
+// Value equality (synthesized): the record is plain stored fields, and
+// consumers holding one as display state (the grid cell's model) diff by it.
+nonisolated extension File: Equatable {}

@@ -39,7 +39,7 @@ nonisolated struct GridGeometry: Equatable {
 
 	init(
 		columns: Int, width: CGFloat, scale rawScale: CGFloat,
-		spacing: CGFloat = Theme.Grid.spacing, inset: CGFloat = Theme.Grid.inset
+		spacing: CGFloat = Theme.Grid.interCellSpacing, inset: CGFloat = Theme.Grid.inset
 	) {
 		let scale = max(rawScale, 1)
 		self.columns = max(columns, 1)

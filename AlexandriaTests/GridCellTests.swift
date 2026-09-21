@@ -46,28 +46,24 @@ struct GridCellTests {
 		)
 	}
 
-	/// The reuse-reset contract: recycling wipes the WHOLE doorway — records,
-	/// position, prominence — and the native selection flags, so no state
-	/// from id A can decorate id B.
-	@Test @MainActor func prepareForReuseResetsTheWholeDoorway() {
+	/// The reuse-reset contract: recycling assigns the empty model and
+	/// resets the native selection flags, so no state from id A can
+	/// decorate id B.
+	@Test @MainActor func prepareForReuseResetsTheWholeModel() {
 		let item = GridItem()
 		_ = item.view  // loadView: hosting + chrome mounted, off-window
 		item.represent(.asset(.mint()))
-		item.display(position: 41)
-		item.display(
-			asset: Asset(id: .mint(), kind: .image, rating: 3, flag: .pick, representativeFileId: nil),
-			file: nil
+		item.model = CellModel(
+			position: 41,
+			asset: Asset(id: .mint(), kind: .image, rating: 3, flag: .pick, representativeFileId: nil)
 		)
 		item.isSelected = true
 		item.isCursor = true
-		#expect(item.state.prominence == .cursor)
+		#expect(item.model.prominence == .cursor)
 
 		item.prepareForReuse()
 		#expect(item.representedID == nil)
-		#expect(item.state.position == nil)
-		#expect(item.state.asset == nil)
-		#expect(item.state.file == nil)
-		#expect(item.state.prominence == .idle)
+		#expect(item.model == .empty)
 		#expect(item.isSelected == false)
 		#expect(item.isCursor == false)
 	}

@@ -100,7 +100,7 @@ struct GridLayoutTests {
 		#expect(after[0].width > widthBefore)
 		// …and every gap is still exactly the spacing.
 		for column in 1..<4 {
-			#expect(after[column].minX - after[column - 1].maxX == Theme.Grid.spacing)
+			#expect(after[column].minX - after[column - 1].maxX == Theme.Grid.interCellSpacing)
 		}
 	}
 

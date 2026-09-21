@@ -1,0 +1,7 @@
+- Sole imperative ownership of the app commands menu
+- Fullscreen and lights out view modes are NSWindow machinery.
+- Buys potential future loupe-on-second display more easily with an NSWindow on an NSScreen
+- Deeper macos integration, file type registryation and open with, etc, come through the app delegate.
+- Real quit hooks - allows us to delay or refuse termination, quitting during a running import can end the crawl cleanly and flush the catalog instead of dying mid write.
+- Deterministic startup path root -> menu -> window -> initial focus
+- Splash screen?
